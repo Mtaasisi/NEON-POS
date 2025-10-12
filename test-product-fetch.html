@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Product Fetch</title>
+    <script type="module">
+        // Test database connection and product fetching
+        import { neon } from 'https://esm.sh/@neondatabase/serverless';
+        
+        const DATABASE_URL = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
+        
+        const sql = neon(DATABASE_URL);
+        
+        async function testFetch() {
+            console.log('🔍 Testing product fetch...');
+            
+            try {
+                const products = await sql`
+                    SELECT 
+                        p.id,
+                        p.name,
+                        p.unit_price,
+                        p.stock_quantity,
+                        c.name as category_name
+                    FROM lats_products p
+                    LEFT JOIN lats_categories c ON p.category_id = c.id
+                    WHERE p.is_active = true
+                    ORDER BY p.created_at DESC
+                    LIMIT 10
+                `;
+                
+                console.log('✅ Products fetched:', products.length);
+                console.log('Products:', products);
+                
+                // Display on page
+                document.getElementById('result').innerHTML = `
+                    <h2>✅ Success! Found ${products.length} products</h2>
+                    <pre>${JSON.stringify(products, null, 2)}</pre>
+                `;
+            } catch (error) {
+                console.error('❌ Error:', error);
+                document.getElementById('result').innerHTML = `
+                    <h2>❌ Error</h2>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+        
+        // Run test when page loads
+        window.addEventListener('load', testFetch);
+    </script>
+</head>
+<body>
+    <h1>Product Fetch Test</h1>
+    <div id="result">Loading...</div>
+</body>
+</html>
+

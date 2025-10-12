@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Product Creation Test Report</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px;
+      text-align: center;
+    }
+    .header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+    .status {
+      display: inline-block;
+      padding: 10px 30px;
+      border-radius: 50px;
+      font-size: 1.2em;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    .status.passed {
+      background: #10b981;
+      color: white;
+    }
+    .status.failed {
+      background: #ef4444;
+      color: white;
+    }
+    .content {
+      padding: 40px;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .section h2 {
+      color: #667eea;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 3px solid #667eea;
+    }
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .step {
+      background: #f3f4f6;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .step-icon {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+    .step-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .screenshots {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .screenshot {
+      border: 3px solid #e5e7eb;
+      border-radius: 10px;
+      overflow: hidden;
+      transition: transform 0.3s;
+    }
+    .screenshot:hover {
+      transform: scale(1.05);
+      border-color: #667eea;
+    }
+    .screenshot img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .error-box {
+      background: #fee;
+      border-left: 5px solid #ef4444;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    .info-box {
+      background: #f0f9ff;
+      border-left: 5px solid #3b82f6;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    pre {
+      background: #1f2937;
+      color: #10b981;
+      padding: 15px;
+      border-radius: 10px;
+      overflow-x: auto;
+      font-size: 0.9em;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .meta-item {
+      background: #f9fafb;
+      padding: 15px;
+      border-radius: 10px;
+      border-left: 4px solid #667eea;
+    }
+    .meta-label {
+      font-size: 0.9em;
+      color: #6b7280;
+      margin-bottom: 5px;
+    }
+    .meta-value {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #1f2937;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🧪 Product Creation Test Report</h1>
+      <p>10/9/2025, 12:50:09 PM</p>
+      <div class="status failed">
+        ❌ FAILED
+      </div>
+    </div>
+    
+    <div class="content">
+      <div class="section">
+        <h2>📊 Test Summary</h2>
+        <div class="meta">
+          <div class="meta-item">
+            <div class="meta-label">Screenshots</div>
+            <div class="meta-value">200</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Errors</div>
+            <div class="meta-value">19</div>
+          </div>
+          <div class="meta-item">
+            <div class="meta-label">Console Errors</div>
+            <div class="meta-value">172</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>📝 Test Steps</h2>
+        <div class="steps">
+          <div class="step">
+            <div class="step-icon">✅</div>
+            <div class="step-title">Login</div>
+          </div>
+          <div class="step">
+            <div class="step-icon">✅</div>
+            <div class="step-title">Navigation</div>
+          </div>
+          <div class="step">
+            <div class="step-icon">✅</div>
+            <div class="step-title">Form Fill</div>
+          </div>
+          <div class="step">
+            <div class="step-icon">✅</div>
+            <div class="step-title">Image Upload</div>
+          </div>
+          <div class="step">
+            <div class="step-icon">❌</div>
+            <div class="step-title">Submission</div>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="section">
+        <h2>💬 Result Message</h2>
+        <div class="info-box">
+          Result unclear - please check screenshots
+        </div>
+      </div>
+      
+
+      
+      <div class="section">
+        <h2>❌ Errors (19)</h2>
+        
+          <div class="error-box">
+            <strong>Error 1: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.729Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 2: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.729Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 3: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.729Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 4: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.729Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 5: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.730Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 6: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.730Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 7: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.734Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 8: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.735Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 9: network</strong><br>
+            <pre>{
+  "type": "network",
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "timestamp": "2025-10-09T09:50:10.735Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 10: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"user_id\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"54\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:41.374Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 11: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"user_id\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"54\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:41.374Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 12: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"expected_return_date\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"185\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:41.391Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 13: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"expected_return_date\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"185\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:42.283Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 14: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"expected_return_date\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"185\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:55.958Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 15: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"user_id\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"54\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:55.960Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 16: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"user_id\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"54\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:55.974Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 17: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"expected_return_date\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"185\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:56.618Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 18: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"user_id\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"54\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:56.898Z"
+}</pre>
+          </div>
+        
+          <div class="error-box">
+            <strong>Error 19: http</strong><br>
+            <pre>{
+  "type": "http",
+  "status": 400,
+  "url": "https://api.c-2.us-east-1.aws.neon.tech/sql",
+  "body": "{\"message\":\"column \\\"expected_return_date\\\" does not exist\",\"code\":\"42703\",\"detail\":null,\"hint\":null,\"position\":\"185\",\"internalPosition\":null,\"internalQuery\":null,\"severity\":\"ERROR\",\"where\":null,\"table\":null,\"column\":null,\"schema\":null,\"dataType\":null,\"constraint\":null,\"file\":\"parse_relation.c\",\"line\":\"3716\",\"routine\":\"errorMissingColumn\"}",
+  "timestamp": "2025-10-09T09:50:57.200Z"
+}</pre>
+          </div>
+        
+      </div>
+      
+
+      <div class="section">
+        <h2>📸 Screenshots</h2>
+        <p>All 200 screenshots are saved in the <code>./test-screenshots-product-creation</code> directory.</p>
+        <p style="margin-top: 10px; color: #6b7280;">
+          Screenshots are automatically captured at each step and whenever errors occur.
+          Check the directory for detailed visual debugging information.
+        </p>
+      </div>
+
+      <div class="section">
+        <h2>🔧 Test Data</h2>
+        <pre>{
+  "name": "Test Headphones 1760003409158",
+  "category": "accessories",
+  "condition": "new",
+  "sku": "TEST-HP-1760003409158",
+  "description": "Premium wireless headphones with noise cancellation. Auto-test product.",
+  "price": 299.99,
+  "costPrice": 150,
+  "stockQuantity": 10,
+  "minStockLevel": 2,
+  "imagePath": "/Users/mtaasisi/Downloads/FIGS/23.png"
+}</pre>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

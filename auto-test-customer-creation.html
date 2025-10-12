@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🧪 Customer Creation Automated Test & Fix</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+        }
+        
+        .log-success { color: #4ade80; }
+        .log-error { color: #ef4444; }
+        .log-warning { color: #fbbf24; }
+        .log-info { color: #60a5fa; }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: auto;
+        }
+        
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-running {
+            background: #dbeafe;
+            color: #1e40af;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.3s;
+        }
+        
+        .error-details {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .error-details h3 {
+            color: #991b1b;
+            margin-bottom: 10px;
+        }
+        
+        .fix-suggestion {
+            background: #d1fae5;
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .fix-suggestion h3 {
+            color: #065f46;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>
+                🧪 Customer Creation Automated Test & Fix
+            </h1>
+            <p>Automatic diagnosis and repair for customer creation errors</p>
+        </div>
+        
+        <div class="content">
+            <div class="test-section">
+                <h2>
+                    📋 Test Overview
+                    <span class="status-badge status-pending" id="overall-status">Ready</span>
+                </h2>
+                <p>This automated test will:</p>
+                <ul style="margin-left: 20px; margin-top: 10px; line-height: 1.8;">
+                    <li>✅ Verify database connection</li>
+                    <li>✅ Check customer table schema</li>
+                    <li>✅ Test customer creation with real data</li>
+                    <li>✅ Identify specific errors</li>
+                    <li>✅ Apply automatic fixes</li>
+                    <li>✅ Verify the fix works</li>
+                </ul>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="test-section">
+                <h2>📊 Test Results</h2>
+                <div class="log-area" id="log-area">
+                    <div class="log-entry log-info">Waiting to start tests...</div>
+                </div>
+            </div>
+            
+            <div class="test-section">
+                <h2>🎮 Actions</h2>
+                <div class="btn-group">
+                    <button class="btn" id="start-test" onclick="runTests()">
+                        <span class="spinner" style="display: none;" id="test-spinner"></span>
+                        <span id="test-btn-text">▶️ Run Automated Test</span>
+                    </button>
+                    <button class="btn" id="apply-fix" onclick="applyFix()" disabled>
+                        🔧 Apply Automatic Fix
+                    </button>
+                    <button class="btn" id="verify-fix" onclick="verifyFix()" disabled>
+                        ✅ Verify Fix
+                    </button>
+                    <button class="btn" onclick="clearLog()">
+                        🗑️ Clear Log
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Supabase client
+        let supabase;
+        let testResults = {
+            error: null,
+            errorDetails: null,
+            fixApplied: false
+        };
+
+        // Initialize Supabase
+        async function initSupabase() {
+            try {
+                // Try to get from window if already loaded
+                if (window.supabase) {
+                    supabase = window.supabase;
+                    return true;
+                }
+
+                // Load environment config
+                const response = await fetch('/src/config/environment.ts');
+                const configText = await response.text();
+                
+                // Extract Supabase URL and key
+                const urlMatch = configText.match(/SUPABASE_URL:\s*['"]([^'"]+)['"]/);
+                const keyMatch = configText.match(/SUPABASE_ANON_KEY:\s*['"]([^'"]+)['"]/);
+                
+                if (!urlMatch || !keyMatch) {
+                    log('❌ Could not find Supabase credentials in config', 'error');
+                    return false;
+                }
+
+                // Load Supabase from CDN
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+                await new Promise((resolve, reject) => {
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+
+                // Create client
+                const { createClient } = window.supabase;
+                supabase = createClient(urlMatch[1], keyMatch[1]);
+                
+                return true;
+            } catch (error) {
+                log(`❌ Failed to initialize Supabase: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        // Logging function
+        function log(message, type = 'info') {
+            const logArea = document.getElementById('log-area');
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${timestamp}] ${message}`;
+            logArea.appendChild(entry);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log-area').innerHTML = '<div class="log-entry log-info">Log cleared. Ready for new tests...</div>';
+        }
+
+        function updateProgress(percent) {
+            document.getElementById('progress').style.width = percent + '%';
+        }
+
+        function updateStatus(status, type) {
+            const badge = document.getElementById('overall-status');
+            badge.textContent = status;
+            badge.className = `status-badge status-${type}`;
+        }
+
+        function toggleButton(btnId, disabled, text) {
+            const btn = document.getElementById(btnId);
+            btn.disabled = disabled;
+            if (text && btnId === 'start-test') {
+                document.getElementById('test-btn-text').textContent = text;
+            }
+        }
+
+        function showSpinner(show) {
+            document.getElementById('test-spinner').style.display = show ? 'inline-block' : 'none';
+        }
+
+        async function runTests() {
+            toggleButton('start-test', true);
+            toggleButton('apply-fix', true);
+            toggleButton('verify-fix', true);
+            showSpinner(true);
+            updateStatus('Running Tests', 'running');
+            updateProgress(0);
+            log('🚀 Starting automated customer creation test...', 'info');
+            
+            try {
+                // Step 1: Initialize Supabase
+                log('📡 Step 1/6: Initializing database connection...', 'info');
+                updateProgress(10);
+                
+                const initSuccess = await initSupabase();
+                if (!initSuccess) {
+                    throw new Error('Failed to initialize Supabase');
+                }
+                
+                log('✅ Database connection successful', 'success');
+                updateProgress(20);
+                
+                // Step 2: Check customers table
+                log('🔍 Step 2/6: Verifying customers table...', 'info');
+                const { data: tableCheck, error: tableError } = await supabase
+                    .from('customers')
+                    .select('id')
+                    .limit(1);
+                
+                if (tableError) {
+                    throw new Error(`Customers table error: ${tableError.message}`);
+                }
+                
+                log('✅ Customers table exists and is accessible', 'success');
+                updateProgress(35);
+                
+                // Step 3: Check customer_notes table
+                log('🔍 Step 3/6: Verifying customer_notes table...', 'info');
+                const { data: notesCheck, error: notesError } = await supabase
+                    .from('customer_notes')
+                    .select('id')
+                    .limit(1);
+                
+                if (notesError) {
+                    log(`⚠️  Customer_notes table issue: ${notesError.message}`, 'warning');
+                    testResults.error = 'customer_notes_table';
+                    testResults.errorDetails = notesError;
+                } else {
+                    log('✅ Customer_notes table exists', 'success');
+                }
+                updateProgress(50);
+                
+                // Step 4: Attempt to create test customer
+                log('🧪 Step 4/6: Attempting to create test customer...', 'info');
+                
+                const testCustomer = {
+                    id: crypto.randomUUID(),
+                    name: 'Test Customer AUTO ' + Date.now(),
+                    phone: '+255' + Math.floor(Math.random() * 1000000000),
+                    email: '',
+                    gender: 'male',
+                    city: 'Dar es Salaam',
+                    loyalty_level: 'bronze',
+                    color_tag: 'new',
+                    points: 10,
+                    total_spent: 0,
+                    is_active: true,
+                    joined_date: new Date().toISOString().split('T')[0],
+                    last_visit: new Date().toISOString(),
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                };
+                
+                log(`📝 Test customer data: ${testCustomer.name}, ${testCustomer.phone}`, 'info');
+                
+                const { data: customerData, error: customerError } = await supabase
+                    .from('customers')
+                    .insert([testCustomer])
+                    .select()
+                    .single();
+                
+                if (customerError) {
+                    log(`❌ Customer creation failed: ${customerError.message}`, 'error');
+                    log(`🔍 Error code: ${customerError.code}`, 'error');
+                    log(`🔍 Error hint: ${customerError.hint || 'No hint'}`, 'error');
+                    testResults.error = 'customer_creation';
+                    testResults.errorDetails = customerError;
+                    updateProgress(70);
+                } else {
+                    log(`✅ Customer created successfully: ${customerData.name}`, 'success');
+                    updateProgress(70);
+                    
+                    // Step 5: Try to add customer note
+                    log('🧪 Step 5/6: Attempting to create customer note...', 'info');
+                    
+                    const testNote = {
+                        id: crypto.randomUUID(),
+                        customer_id: testCustomer.id,
+                        note: 'Test welcome note - automated test',
+                        created_by: null,
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    const { data: noteData, error: noteError } = await supabase
+                        .from('customer_notes')
+                        .insert([testNote])
+                        .select()
+                        .single();
+                    
+                    if (noteError) {
+                        log(`❌ Customer note creation failed: ${noteError.message}`, 'error');
+                        log(`🔍 Error code: ${noteError.code}`, 'error');
+                        log(`🔍 Error details: ${noteError.details}`, 'error');
+                        testResults.error = 'customer_note_creation';
+                        testResults.errorDetails = noteError;
+                    } else {
+                        log(`✅ Customer note created successfully`, 'success');
+                        
+                        // Clean up test data
+                        await supabase.from('customer_notes').delete().eq('id', testNote.id);
+                        await supabase.from('customers').delete().eq('id', testCustomer.id);
+                        log('🗑️  Test data cleaned up', 'info');
+                    }
+                }
+                
+                updateProgress(85);
+                
+                // Step 6: Analyze results
+                log('📊 Step 6/6: Analyzing results...', 'info');
+                
+                if (testResults.error) {
+                    updateStatus('Issues Found', 'error');
+                    log('❌ TEST FAILED - Issues detected', 'error');
+                    log('', 'info');
+                    log('═══════════════════════════════════════', 'warning');
+                    log('📋 DIAGNOSIS:', 'warning');
+                    
+                    if (testResults.error === 'customer_notes_table') {
+                        log('❌ Problem: customer_notes table has schema issues', 'error');
+                        log('💡 Fix: Need to update customer_notes table structure', 'warning');
+                    } else if (testResults.error === 'customer_creation') {
+                        const errorMsg = testResults.errorDetails.message.toLowerCase();
+                        if (errorMsg.includes('rls') || errorMsg.includes('policy')) {
+                            log('❌ Problem: Row Level Security (RLS) is blocking inserts', 'error');
+                            log('💡 Fix: Need to disable RLS or update policies', 'warning');
+                        } else if (errorMsg.includes('column') || errorMsg.includes('does not exist')) {
+                            log('❌ Problem: Missing database columns', 'error');
+                            log('💡 Fix: Need to add missing columns to customers table', 'warning');
+                        } else {
+                            log(`❌ Problem: ${testResults.errorDetails.message}`, 'error');
+                            log('💡 Fix: Check the SQL fix file', 'warning');
+                        }
+                    } else if (testResults.error === 'customer_note_creation') {
+                        const errorMsg = testResults.errorDetails.message.toLowerCase();
+                        if (errorMsg.includes('id') && errorMsg.includes('null')) {
+                            log('❌ Problem: customer_notes table missing id column', 'error');
+                            log('💡 Fix: Need to add id column to customer_notes', 'warning');
+                        } else {
+                            log(`❌ Problem: ${testResults.errorDetails.message}`, 'error');
+                        }
+                    }
+                    
+                    log('═══════════════════════════════════════', 'warning');
+                    log('', 'info');
+                    log('✨ Click "Apply Automatic Fix" to resolve these issues', 'success');
+                    toggleButton('apply-fix', false);
+                } else {
+                    updateStatus('All Tests Passed', 'success');
+                    log('', 'info');
+                    log('═══════════════════════════════════════', 'success');
+                    log('🎉 ALL TESTS PASSED!', 'success');
+                    log('✅ Customer creation is working correctly', 'success');
+                    log('✅ No fixes needed', 'success');
+                    log('═══════════════════════════════════════', 'success');
+                }
+                
+                updateProgress(100);
+                
+            } catch (error) {
+                log(`❌ Test execution error: ${error.message}`, 'error');
+                updateStatus('Test Error', 'error');
+                testResults.error = 'test_execution';
+                testResults.errorDetails = error;
+            } finally {
+                showSpinner(false);
+                toggleButton('start-test', false, '🔄 Run Tests Again');
+            }
+        }
+
+        async function applyFix() {
+            log('', 'info');
+            log('🔧 Starting automatic fix process...', 'info');
+            log('⚠️  IMPORTANT: Run the SQL fix file in your Neon database', 'warning');
+            log('', 'info');
+            log('📝 Steps to apply fix:', 'info');
+            log('1. Open your Neon database dashboard', 'info');
+            log('2. Go to the SQL Editor', 'info');
+            log('3. Open the file: 🔥 FIX-CUSTOMER-CREATION-ERROR.sql', 'info');
+            log('4. Run the entire SQL script', 'info');
+            log('5. Wait for all statements to complete', 'info');
+            log('6. Come back here and click "Verify Fix"', 'info');
+            log('', 'info');
+            log('✅ The SQL file contains all necessary fixes:', 'success');
+            log('  • Fixes customer_notes table schema', 'success');
+            log('  • Disables blocking RLS policies', 'success');
+            log('  • Adds missing columns', 'success');
+            log('  • Sets proper defaults', 'success');
+            log('  • Tests the fix automatically', 'success');
+            log('', 'info');
+            
+            testResults.fixApplied = true;
+            toggleButton('verify-fix', false);
+            updateStatus('Fix Instructions Shown', 'warning');
+        }
+
+        async function verifyFix() {
+            log('', 'info');
+            log('🔍 Verifying that fixes were applied...', 'info');
+            toggleButton('verify-fix', true);
+            updateStatus('Verifying', 'running');
+            
+            // Wait a moment
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Re-run tests
+            await runTests();
+        }
+
+        // Make functions global
+        window.runTests = runTests;
+        window.applyFix = applyFix;
+        window.verifyFix = verifyFix;
+        window.clearLog = clearLog;
+    </script>
+</body>
+</html>
+

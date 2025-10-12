@@ -1,0 +1,13 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# SPA redirect rule - this is crucial for React Router to work
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
