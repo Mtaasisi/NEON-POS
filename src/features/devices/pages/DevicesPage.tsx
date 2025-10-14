@@ -63,7 +63,7 @@ const DevicesPage: React.FC = () => {
     deleteDevice = devicesContext?.deleteDevice || null;
     addDevice = devicesContext?.addDevice || null;
   } catch (error) {
-    console.warn('Devices context not available:', error);
+    // Silently handle - context may not be available during HMR
   }
   
   // State management

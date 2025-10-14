@@ -274,7 +274,6 @@ const EnhancedExcelImportModal: React.FC<EnhancedExcelImportModalProps> = ({
     
     // Referral source mapping
     const referralMap: { [key: string]: string } = {
-      'instagram': 'Instagram',
       'mtandaoni': 'Social Media',
       'physically': 'Walk-in',
       'recommendation': 'Friend',
@@ -972,7 +971,7 @@ const EnhancedExcelImportModal: React.FC<EnhancedExcelImportModalProps> = ({
 John Doe,+255712345678,+255712345678,male,Dar es Salaam,Regular customer prefers phone calls,bronze,new,3,15,social media,123 Main Street Dar es Salaam,1234567890123456,Jane Smith,50000,100,true,john.doe@email.com,https://example.com/profile.jpg
 Jane Smith,+255723456789,+255723456789,female,Arusha,VIP customer very satisfied,silver,vip,6,22,recommendation,456 Business Ave Arusha,2345678901234567,Mike Johnson,75000,150,true,jane.smith@email.com,
 Mike Johnson,+255734567890,+255734567890,male,Mwanza,Regular customer,gold,new,12,5,physically,789 Home Road Mwanza,3456789012345678,Alice Brown,100000,200,true,mike.johnson@email.com,
-Alice Brown,+255745678901,+255745678901,female,Dodoma,Social media customer,platinum,purchased,9,10,instagram,321 Social Street Dodoma,4567890123456789,John Doe,150000,300,true,alice.brown@email.com,`;
+Alice Brown,+255745678901,+255745678901,female,Dodoma,Social media customer,platinum,purchased,9,10,facebook,321 Social Street Dodoma,4567890123456789,John Doe,150000,300,true,alice.brown@email.com,`;
     
     // Add BOM for Excel compatibility
     const BOM = '\uFEFF';

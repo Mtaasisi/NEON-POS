@@ -108,10 +108,11 @@ export const useDynamicDataStore = create<DynamicDataStore>((set, get) => ({
       // Update customer data
       const updatedCustomers = state.customers.map(customer => {
         if (customer.id === sale.customerId) {
-          const pointsEarned = Math.floor(sale.total / 1000); // 1 point per 1000 KES
+          const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0; // ✅ FIX: Ensure numeric type
+          const pointsEarned = Math.floor(saleTotal / 1000); // 1 point per 1000 KES
           return {
             ...customer,
-            totalSpent: customer.totalSpent + sale.total,
+            totalSpent: customer.totalSpent + saleTotal,
             orders: customer.orders + 1,
             points: customer.points + pointsEarned,
             lastPurchase: sale.date.split('T')[0]

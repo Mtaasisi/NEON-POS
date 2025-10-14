@@ -221,6 +221,11 @@ export interface Customer {
   // Initial notes from form (stored in database)
   initialNotes?: string;
   createdBy?: string; // Staff user ID who registered this customer
+  // Branch tracking (customers are shared, but we track which branch created them)
+  branchId?: string; // Current branch assignment (for branch isolation)
+  branchName?: string; // Current branch name for display
+  createdByBranchId?: string; // Branch that originally created this customer
+  createdByBranchName?: string; // Branch name for display
   // Additional database fields
   locationDescription?: string;
   nationalId?: string;

@@ -57,14 +57,34 @@ export class LiveInventoryService {
         console.log('🔍 [LiveInventoryService] Fetching live inventory metrics...');
       }
       
+      // Get current branch from localStorage
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      console.log('🏪 [LiveInventoryService] Current branch:', currentBranchId);
+      
+      // Build queries with COMPLETE ISOLATION
+      let productsQuery = supabase
+        .from('lats_products')
+        .select('id, name, is_active, branch_id, is_shared');
+      
+      let variantsQuery = supabase
+        .from('lats_product_variants')
+        .select('id, product_id, quantity, cost_price, unit_price, min_quantity, branch_id, is_shared');
+      
+      // 🔒 COMPLETE ISOLATION: Only show data from current branch OR shared items
+      if (currentBranchId) {
+        console.log('🔒 [LiveInventoryService] ISOLATED MODE - Filtering by branch:', currentBranchId);
+        // Include shared products and products from current branch
+        productsQuery = productsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+        // Include shared variants and variants from current branch  
+        variantsQuery = variantsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+      } else {
+        console.log('⚠️ [LiveInventoryService] No branch selected - showing all data');
+      }
+      
       // Fetch products and variants separately (Neon doesn't support PostgREST relationship syntax)
       const [productsResult, variantsResult] = await Promise.allSettled([
-        supabase
-          .from('lats_products')
-          .select('id, name, is_active'),
-        supabase
-          .from('lats_product_variants')
-          .select('id, product_id, quantity, cost_price, unit_price, min_quantity')
+        productsQuery,
+        variantsQuery
       ]);
 
       if (productsResult.status === 'rejected') {

@@ -157,7 +157,6 @@ const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
     
     // Referral source mapping
     const referralMap: { [key: string]: string } = {
-      'instagram': 'Instagram',
       'mtandaoni': 'Social Media',
       'physically': 'Walk-in',
       'recommendation': 'Friend',

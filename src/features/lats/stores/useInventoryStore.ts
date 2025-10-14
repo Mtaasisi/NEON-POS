@@ -19,6 +19,7 @@ import { latsEventBus, LatsEventType } from '../lib/data/eventBus';
 import { latsAnalyticsService as latsAnalytics } from '../lib/analytics';
 import { supabase } from '../../../lib/supabaseClient';
 import { processLatsData, processCategoriesOnly, processProductsOnly, processSuppliersOnly, validateDataIntegrity, emergencyDataCleanup } from '../lib/dataProcessor';
+import { productCacheService } from '../../../lib/productCacheService';
 import { categoryService } from '../lib/categoryService';
 import { 
   getActiveSuppliers as getActiveSuppliersApi, 
@@ -191,7 +192,7 @@ export const useInventoryStore = create<InventoryState>()(
       isSuppliersLoading: false,
       lastDataLoadTime: 0,
 
-      // Cache management
+      // Cache management - Increased cache duration for better POS performance
       dataCache: {
         categories: null,
         suppliers: null,
@@ -201,7 +202,7 @@ export const useInventoryStore = create<InventoryState>()(
         spareParts: null,
       },
       cacheTimestamp: 0,
-      CACHE_DURATION: 5 * 60 * 1000, // 5 minutes
+      CACHE_DURATION: 10 * 60 * 1000, // 10 minutes (increased for POS performance)
 
       categories: [],
       suppliers: [],
@@ -266,20 +267,22 @@ export const useInventoryStore = create<InventoryState>()(
 
       deselectAllProducts: () => set({ selectedProducts: [] }),
       
-      // Force refresh products (useful when new products are added)
+      // Force refresh products (useful when new products are added or stock changes)
       forceRefreshProducts: async () => {
         console.log('🔄 [useInventoryStore] Force refreshing products...');
         const state = get();
         
-        // Clear all caches to ensure fresh data
+        // Clear all caches and reset loading state to ensure fresh data
         set({
           dataCache: { ...state.dataCache, products: null },
           cacheTimestamp: 0,
-          products: [] // Clear current products to show loading state
+          products: [], // Clear current products to show loading state
+          isDataLoading: false, // Reset loading state to allow refresh
+          isLoading: false
         });
         
-        // Load fresh data
-        await state.loadProducts({ page: 1, limit: 100 });
+        // Load fresh data with force=true to bypass loading check
+        await get().loadProducts({ page: 1, limit: 200 }, true);
         console.log('✅ [useInventoryStore] Products force refreshed');
       },
 
@@ -707,11 +710,11 @@ export const useInventoryStore = create<InventoryState>()(
       },
 
       // Products
-      loadProducts: async (filters?: any) => {
+      loadProducts: async (filters?: any, force = false) => {
         const state = get();
 
-        // Prevent multiple simultaneous loads
-        if (state.isDataLoading) {
+        // Prevent multiple simultaneous loads (unless forced)
+        if (state.isDataLoading && !force) {
           console.log('🔍 [useInventoryStore] Products already loading, skipping...');
           return;
         }
@@ -721,44 +724,35 @@ export const useInventoryStore = create<InventoryState>()(
         // Ensure filters has default pagination values
         const safeFilters = {
           page: 1,
-          limit: 100, // Increased from 50 to 100 to show more products
+          limit: 200, // Increased to 200 for POS - most shops won't have more than this
           ...filters
         };
 
-        // Check cache if no filters applied and cache is valid
-        // Temporarily disabled to test supplier data loading and ensure fresh data
-        if (false && !filters && state.isCacheValid('products')) {
-          console.log('🔍 [useInventoryStore] Using cached products (supplier data may be outdated)');
+        // 🚀 SUPER OPTIMIZED: Try localStorage cache first (instant load!)
+        if (!filters) {
+          const cachedProducts = productCacheService.getProducts();
+          if (cachedProducts && cachedProducts.length > 0) {
+            console.log(`⚡ [useInventoryStore] Using localStorage cache (${cachedProducts.length} products)`);
+            set({ products: cachedProducts, isLoading: false });
+            return;
+          }
+        }
 
+        // 🚀 OPTIMIZED: Re-enabled memory cache with 10-minute expiry
+        if (!filters && state.isCacheValid('products')) {
+          console.log('⚡ [useInventoryStore] Using memory cache (valid for 10 min)');
           set({ products: state.dataCache.products || [] });
           return;
         }
         
-        // Force clear cache when loading products to ensure fresh data
-        console.log('🔄 [useInventoryStore] Clearing product cache to ensure fresh data');
-        set({ 
-          dataCache: { ...state.dataCache, products: null },
-          cacheTimestamp: 0 
-        });
+        console.log('🔍 [useInventoryStore] Cache expired or filtered request, loading from database...');
         
-        console.log('🔍 [useInventoryStore] Cache check result:', {
-          hasFilters: !!filters,
-          isCacheValid: state.isCacheValid('products'),
-          cacheDisabled: true,
-          willLoadFromProvider: true
-        });
-
-        console.log('🔍 [useInventoryStore] Cache status:', {
-          isCacheValid: state.isCacheValid('products'),
-          cacheTimestamp: state.cacheTimestamp,
-          currentTime: Date.now(),
-          cacheAge: Date.now() - state.cacheTimestamp
-        });
+        const startTime = Date.now();
         set({ isLoading: true, error: null, isDataLoading: true });
         
-        // Add timeout to prevent infinite loading
+        // Add timeout to prevent infinite loading (45 seconds to account for Neon cold starts)
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Products loading timeout after 30 seconds')), 30000);
+          setTimeout(() => reject(new Error('Products loading timeout after 45 seconds')), 45000);
         });
         
         try {
@@ -769,6 +763,15 @@ export const useInventoryStore = create<InventoryState>()(
             provider.getProducts(safeFilters),
             timeoutPromise
           ]);
+          
+          const loadTime = Date.now() - startTime;
+          
+          // Detect potential cold start (Neon database waking up)
+          if (loadTime > 10000) {
+            console.warn(`⚠️ [useInventoryStore] Slow database response (${loadTime}ms) - possible cold start`);
+          } else {
+            console.log(`✅ [useInventoryStore] Products loaded in ${loadTime}ms`);
+          }
 
           if (response.ok) {
             // Handle paginated response structure
@@ -789,7 +792,7 @@ export const useInventoryStore = create<InventoryState>()(
               currentPage: response.data?.page || 1,
               totalItems: response.data?.total || processedProducts.length,
               totalPages: response.data?.totalPages || 1,
-              itemsPerPage: response.data?.limit || 100 // Increased from 50 to 100
+              itemsPerPage: response.data?.limit || 200 // Increased to 200 for POS
             };
 
             
@@ -831,6 +834,8 @@ export const useInventoryStore = create<InventoryState>()(
             // Only cache if no filters applied
             if (!filters) {
               get().updateCache('products', processedProducts);
+              // 🚀 ALSO save to localStorage for instant loads!
+              productCacheService.saveProducts(processedProducts);
             }
             
             latsAnalytics.track('products_loaded', { 
@@ -1756,10 +1761,10 @@ latsEventBus.subscribeToAll((event) => {
       break;
       
     case 'lats:stock.updated':
-      // Only reload if not already loading and cache is stale
-      if (!store.isCacheValid('products')) {
-        store.loadProducts();
-      }
+      // Force refresh products when stock is updated (critical for POS)
+      // This ensures stock levels are always up-to-date after sales
+      console.log('🔄 [useInventoryStore] Stock updated - forcing product refresh...');
+      store.forceRefreshProducts();
       if (!store.isCacheValid('stockMovements')) {
         store.loadStockMovements();
       }

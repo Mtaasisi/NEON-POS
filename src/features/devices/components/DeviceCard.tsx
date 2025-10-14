@@ -66,7 +66,7 @@ const DeviceCard: React.FC<DeviceCardProps> = React.memo(({
     const devicesContext = useDevices();
     getDeviceOverdueStatus = devicesContext?.getDeviceOverdueStatus || null;
   } catch (error) {
-    console.warn('Devices context not available:', error);
+    // Silently handle - context may not be available during HMR
   }
   
   // Add state for technician quick actions

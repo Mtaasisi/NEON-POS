@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import { useAuth } from '../../../../context/AuthContext';
 
 interface MobilePOSLayoutProps {
   // Cart data
@@ -61,6 +62,7 @@ const MobilePOSLayout: React.FC<MobilePOSLayoutProps> = ({
   isProcessingPayment,
   hasSelectedCustomer
 }) => {
+  const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'products' | 'cart' | 'customers' | 'settings'>('products');
   const [showCartSheet, setShowCartSheet] = useState(false);
   const [showSearchSheet, setShowSearchSheet] = useState(false);
@@ -429,16 +431,19 @@ const MobilePOSLayout: React.FC<MobilePOSLayoutProps> = ({
             <div className="space-y-3">
               <h3 className="text-lg font-bold text-gray-900 mb-3">Customer Care Tools</h3>
               
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onToggleSettings();
-                }}
-                className="w-full py-3 bg-blue-500 text-white font-semibold rounded-xl active:bg-blue-600 transition-colors flex items-center justify-center gap-2 touch-button"
-              >
-                <Settings size={18} />
-                POS Settings
-              </button>
+              {/* POS Settings - Show only for admin users */}
+              {currentUser?.role === 'admin' && (
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    onToggleSettings();
+                  }}
+                  className="w-full py-3 bg-blue-500 text-white font-semibold rounded-xl active:bg-blue-600 transition-colors flex items-center justify-center gap-2 touch-button"
+                >
+                  <Settings size={18} />
+                  POS Settings
+                </button>
+              )}
               
               <button
                 onClick={() => {

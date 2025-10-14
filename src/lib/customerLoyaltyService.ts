@@ -108,14 +108,10 @@ class CustomerLoyaltyService {
       const offset = (page - 1) * pageSize;
       const totalPages = Math.ceil((totalCustomerCount || 0) / pageSize);
 
-      // Fetch customers for current page
+      // Start with simple query (without joins) for better reliability
       let query = supabase
         .from('customers')
-        .select(`
-          *,
-          customer_payments(*),
-          devices(*)
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
 
@@ -131,14 +127,19 @@ class CustomerLoyaltyService {
       const { data: customers, error } = await query;
 
       if (error) {
-        console.error('Error fetching loyalty customers:', error);
+        console.error('❌ Error fetching loyalty customers:', {
+          message: error.message || 'Unknown error',
+          details: error.details || 'No details',
+          hint: error.hint || 'No hint',
+          code: error.code || 'No code'
+        });
         return {
           customers: [],
-          totalCount: 0,
+          totalCount: totalCustomerCount || 0,
           currentPage: page,
-          totalPages: 0,
+          totalPages,
           hasNextPage: false,
-          hasPreviousPage: false
+          hasPreviousPage: page > 1
         };
       }
 
@@ -157,18 +158,6 @@ class CustomerLoyaltyService {
 
       // Transform customer data
       const loyaltyCustomers = customers.map((customer: any) => {
-        // Calculate orders count from payments and devices
-        const paymentOrders = customer.customer_payments?.length || 0;
-        const deviceOrders = customer.devices?.length || 0;
-        const totalOrders = paymentOrders + deviceOrders;
-
-        // Get last purchase date
-        const lastPayment = customer.customer_payments?.[0]?.payment_date;
-        const lastDevice = customer.devices?.[0]?.created_at;
-        const lastPurchase = lastPayment && lastDevice 
-          ? new Date(lastPayment) > new Date(lastDevice) ? lastPayment : lastDevice
-          : lastPayment || lastDevice || customer.last_visit;
-
         return {
           id: customer.id,
           name: customer.name || 'Unknown Customer',
@@ -178,8 +167,8 @@ class CustomerLoyaltyService {
           tier: this.mapLoyaltyLevel(customer.loyalty_level),
           totalSpent: customer.total_spent || 0,
           joinDate: customer.joined_date || customer.created_at,
-          lastPurchase: lastPurchase || customer.last_visit || customer.created_at,
-          orders: totalOrders,
+          lastPurchase: customer.last_purchase || customer.last_visit || customer.created_at,
+          orders: customer.total_orders || 0,
           status: customer.is_active ? 'active' : 'inactive',
           loyaltyLevel: customer.loyalty_level || 'bronze',
           lastVisit: customer.last_visit || customer.created_at,
@@ -212,8 +201,15 @@ class CustomerLoyaltyService {
         hasNextPage,
         hasPreviousPage
       };
-    } catch (error) {
-      console.error('Error fetching loyalty customers with pagination:', error);
+    } catch (error: any) {
+      console.error('❌ Error fetching loyalty customers with pagination:', {
+        message: error?.message || error?.toString() || 'Unknown error',
+        stack: error?.stack || 'No stack trace',
+        name: error?.name || 'Unknown error type',
+        errorObject: error
+      });
+      
+      // Return empty result set instead of failing
       return {
         customers: [],
         totalCount: 0,
@@ -347,7 +343,14 @@ class CustomerLoyaltyService {
   // Calculate loyalty metrics
   async calculateLoyaltyMetrics(): Promise<LoyaltyMetrics> {
     try {
-      // Get total count from database directly
+      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      console.log('🎯 [LoyaltyMetrics] Configuration:');
+      console.log('   - Current Branch ID:', currentBranchId || '❌ NOT SET');
+      console.log('   - 🌐 CUSTOMERS: SHARED ACROSS ALL BRANCHES');
+
+      // Get total count from database directly (ALL CUSTOMERS)
       const { count: totalCustomerCount, error: countError } = await supabase
         .from('customers')
         .select('id', { count: 'exact', head: true });
@@ -364,7 +367,7 @@ class CustomerLoyaltyService {
         };
       }
 
-      // Get all customers for metrics calculation
+      // Get all customers for metrics calculation (ALL CUSTOMERS)
       const { data: allCustomers, error: customersError } = await supabase
         .from('customers')
         .select('points, loyalty_level, is_active, total_spent')
@@ -404,8 +407,11 @@ class CustomerLoyaltyService {
       const vipCustomers = (allCustomers || []).filter(c => c.loyalty_level === 'platinum').length;
       const activeCustomers = (allCustomers || []).filter(c => c.is_active).length;
       
-      // Calculate total revenue from all completed sales
-      const totalSpent = (allSales || []).reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+      // Calculate total revenue from all sales (lats_sales table doesn't have branch_id)
+      // Note: Currently calculating total revenue across all branches since sales aren't branch-specific
+      const totalSpent = (allSales || []).reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0);
+      
+      console.log('💰 Total loyalty sales revenue calculated:', totalSpent);
 
       console.log(`📊 Calculated metrics: ${totalCustomers} total customers, ${totalPoints} total points, ${vipCustomers} VIP customers, ${activeCustomers} active customers, ${totalSpent} total revenue`);
 

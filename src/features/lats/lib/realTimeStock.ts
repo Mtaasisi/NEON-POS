@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient';
+import { getCurrentBranchId } from '../../../lib/branchAwareApi';
 
 export interface StockLevel {
   productId: string;
@@ -19,7 +20,7 @@ export class RealTimeStockService {
   private static instance: RealTimeStockService;
   private stockCache: ProductStockLevels = {};
   private cacheTimestamp: number = 0;
-  private readonly CACHE_DURATION = 30000; // 30 seconds
+  private readonly CACHE_DURATION = 60000; // 60 seconds (increased for POS performance)
 
   private constructor() {}
 
@@ -62,11 +63,26 @@ export class RealTimeStockService {
         console.log('🔍 [RealTimeStockService] Fetching stock levels for:', uncachedIds);
       }
 
-      // Fetch variants for the uncached products
-      const { data: variants, error } = await supabase
+      // Get current branch ID for filtering
+      const currentBranchId = getCurrentBranchId();
+      
+      console.log('🏪 [RealTimeStockService] Current branch ID:', currentBranchId);
+      
+      // Fetch variants for the uncached products, filtered by current branch
+      let query = supabase
         .from('lats_product_variants')
         .select('id, product_id, sku, variant_name, quantity')
         .in('product_id', uncachedIds);
+
+      // Apply branch filter if branch ID exists
+      if (currentBranchId) {
+        console.log('✅ [RealTimeStockService] Applying branch filter:', currentBranchId);
+        query = query.eq('branch_id', currentBranchId);
+      } else {
+        console.log('⚠️ [RealTimeStockService] No branch filter - showing all stock');
+      }
+
+      const { data: variants, error } = await query;
 
       if (error) {
         console.error('❌ [RealTimeStockService] Error fetching stock levels:', error);
@@ -102,9 +118,12 @@ export class RealTimeStockService {
       Object.assign(this.stockCache, stockLevels);
       this.cacheTimestamp = now;
 
-      if (import.meta.env.MODE === 'development') {
-        console.log('📦 [RealTimeStockService] Stock levels fetched:', stockLevels);
-      }
+      // Log stock summary per product
+      console.log('📦 [RealTimeStockService] Stock levels fetched:');
+      Object.entries(stockLevels).forEach(([productId, levels]) => {
+        const totalStock = levels.reduce((sum, level) => sum + level.quantity, 0);
+        console.log(`   Product ${productId.substring(0, 8)}...: ${totalStock} units (${levels.length} variants)`);
+      });
 
       // Merge cached and fresh results
       return { ...cachedResults, ...stockLevels };
@@ -140,11 +159,25 @@ export class RealTimeStockService {
         console.log('🔍 [RealTimeStockService] Fetching stock for SKU:', sku);
       }
 
-      const { data: variant, error } = await supabase
+      // Get current branch ID for filtering
+      const currentBranchId = getCurrentBranchId();
+      
+      console.log('🏪 [RealTimeStockService] SKU lookup - Current branch ID:', currentBranchId);
+
+      let query = supabase
         .from('lats_product_variants')
         .select('id, product_id, sku, variant_name, quantity')
-        .eq('sku', sku)
-        .single();
+        .eq('sku', sku);
+
+      // Apply branch filter if branch ID exists
+      if (currentBranchId) {
+        console.log('✅ [RealTimeStockService] SKU lookup - Applying branch filter:', currentBranchId);
+        query = query.eq('branch_id', currentBranchId);
+      } else {
+        console.log('⚠️ [RealTimeStockService] SKU lookup - No branch filter');
+      }
+
+      const { data: variant, error } = await query.single();
 
       if (error || !variant) {
         return null;

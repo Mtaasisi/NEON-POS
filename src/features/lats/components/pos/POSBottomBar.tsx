@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { BarChart3, Users, FileText, Settings, RefreshCw, Clock, Maximize2, Minimize2 } from 'lucide-react';
+import { useAuth } from '../../../../context/AuthContext';
 
 interface POSBottomBarProps {
   onViewAnalytics: () => void;
@@ -20,6 +21,7 @@ const POSBottomBar: React.FC<POSBottomBarProps> = ({
   onRefreshData,
   className = ''
 }) => {
+  const { currentUser } = useAuth();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -106,13 +108,16 @@ const POSBottomBar: React.FC<POSBottomBarProps> = ({
               </button>
             )}
 
-            <button
-              onClick={onSettings}
-              className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              title="Settings"
-            >
-              <Settings size={16} />
-            </button>
+            {/* Settings - Show only for admin users */}
+            {currentUser?.role === 'admin' && (
+              <button
+                onClick={onSettings}
+                className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                title="Settings"
+              >
+                <Settings size={16} />
+              </button>
+            )}
 
             <button
               onClick={toggleFullscreen}

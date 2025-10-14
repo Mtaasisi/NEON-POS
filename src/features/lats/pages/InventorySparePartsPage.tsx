@@ -237,6 +237,12 @@ const InventorySparePartsPage: React.FC = () => {
   // Filter and sort spare parts
   const filteredSpareParts = React.useMemo(() => {
     const filtered = spareParts.filter(part => {
+      // Exclude sample products (products with 'sample', 'test', or 'dummy' in the name)
+      const name = part.name.toLowerCase();
+      if (name.includes('sample') || name.includes('test') || name.includes('dummy')) {
+        return false;
+      }
+
       const matchesSearch = part.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            part.part_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            part.description?.toLowerCase().includes(searchTerm.toLowerCase());

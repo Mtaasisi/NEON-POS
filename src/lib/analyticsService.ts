@@ -449,12 +449,19 @@ export const analyticsService = {
   // Fallback function to get customer statistics directly from customers table
   async getCustomerStatsDirect(): Promise<CustomerStats | null> {
     try {
+      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      console.log('📈 [Analytics] Configuration:');
+      console.log('   - Current Branch ID:', currentBranchId || '❌ NOT SET');
+      console.log('   - 🌐 CUSTOMERS: SHARED ACROSS ALL BRANCHES');
+
       // Get current date info
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const startOfMonthISO = startOfMonth.toISOString();
       
-      // Fetch all customers
+      // Fetch all customers (ALL CUSTOMERS)
       const { data: customers, error } = await supabase
         .from('customers')
         .select('id, created_at, last_visit, is_active, total_spent, points');
@@ -485,8 +492,24 @@ export const analyticsService = {
         c.last_visit && new Date(c.last_visit) >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
       ).length;
       
-      const totalSpent = customers.reduce((sum, c) => sum + (c.total_spent || 0), 0);
-      const avgSpent = total > 0 ? totalSpent / total : 0;
+      // Calculate revenue for current branch only (BRANCH-SPECIFIC REVENUE)
+      let totalSpent = 0;
+      let avgSpent = 0;
+      
+      if (currentBranchId) {
+        console.log('💰 Calculating analytics revenue for current branch:', currentBranchId);
+        
+        // Filter customers by current branch for revenue calculation
+        const branchCustomers = customers.filter(c => c.branch_id === currentBranchId);
+        totalSpent = branchCustomers.reduce((sum, c) => sum + (c.total_spent || 0), 0);
+        avgSpent = branchCustomers.length > 0 ? totalSpent / branchCustomers.length : 0;
+        
+        console.log('💰 Branch analytics revenue calculated:', totalSpent);
+      } else {
+        console.warn('⚠️  No branch selected for analytics revenue - will be 0');
+        totalSpent = 0;
+        avgSpent = 0;
+      }
 
       return {
         total,

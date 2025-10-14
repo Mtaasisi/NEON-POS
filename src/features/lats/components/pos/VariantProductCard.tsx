@@ -41,6 +41,7 @@ interface VariantProductCardProps {
   primaryColor?: 'blue' | 'orange' | 'green' | 'purple';
   actionText?: string;
   allowOutOfStockSelection?: boolean; // For purchase orders where we want to allow selecting out-of-stock products
+  realTimeStockData?: Map<string, number>; // Pre-fetched stock data to avoid N+1 queries
 }
 
 const VariantProductCard: React.FC<VariantProductCardProps> = ({
@@ -60,13 +61,15 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
   className = '',
   primaryColor = 'blue',
   actionText = 'Add to Cart',
-  allowOutOfStockSelection = false
+  allowOutOfStockSelection = false,
+  realTimeStockData
 }) => {
   // Add error state for React refresh issues
   const [hasError, setHasError] = useState(false);
 
-  // Real-time stock state
-  const [realTimeStock, setRealTimeStock] = useState<Map<string, number>>(new Map());
+  // Real-time stock state - use prop if provided, otherwise create local state
+  const [localRealTimeStock, setLocalRealTimeStock] = useState<Map<string, number>>(new Map());
+  const realTimeStock = realTimeStockData || localRealTimeStock;
   const [isLoadingStock, setIsLoadingStock] = useState(false);
   const [lastStockUpdate, setLastStockUpdate] = useState<Date | null>(null);
 
@@ -91,8 +94,13 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
     setHasError(false);
   }, []);
 
-  // Fetch real-time stock when component mounts (with debouncing)
+  // Only fetch real-time stock if no pre-fetched data is provided
   useEffect(() => {
+    // Skip if stock data is provided from parent (to prevent N+1 queries)
+    if (realTimeStockData) {
+      return;
+    }
+    
     if (product?.id) {
       // Add a small delay to prevent multiple rapid requests
       const timer = setTimeout(() => {
@@ -101,7 +109,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
       
       return () => clearTimeout(timer);
     }
-  }, [product?.id]);
+  }, [product?.id, realTimeStockData]);
 
   // Theme configuration based on primaryColor
   const getThemeConfig = () => {
@@ -214,9 +222,9 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
     return `$${prices[0].toFixed(2)}`;
   };
 
-  // Fetch real-time stock data
+  // Fetch real-time stock data (only used if no pre-fetched data provided)
   const fetchRealTimeStock = async () => {
-    if (!product?.id) return;
+    if (!product?.id || realTimeStockData) return;
     
     try {
       setIsLoadingStock(true);
@@ -231,7 +239,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
         stockMap.set(productId, totalStock);
       });
       
-      setRealTimeStock(stockMap);
+      setLocalRealTimeStock(stockMap);
       setLastStockUpdate(new Date());
     } catch (error) {
       console.error('❌ Error fetching real-time stock:', error);

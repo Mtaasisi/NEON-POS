@@ -50,14 +50,24 @@ const PaymentAccountManagement: React.FC = () => {
     requires_account_number: false
   });
 
-  // Format currency
-  const formatMoney = (amount: number) => {
+  // Format currency with NaN protection
+  const formatMoney = (amount: number | undefined | null) => {
+    const safeAmount = Number(amount);
+    if (!isFinite(safeAmount) || isNaN(safeAmount)) {
+      return new Intl.NumberFormat('en-TZ', {
+        style: 'currency',
+        currency: 'TZS',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(0);
+    }
+    
     return new Intl.NumberFormat('en-TZ', {
       style: 'currency',
       currency: 'TZS',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount);
+    }).format(safeAmount);
   };
 
   // Filter accounts by currency
@@ -70,9 +80,18 @@ const PaymentAccountManagement: React.FC = () => {
   const summaryStats = React.useMemo(() => {
     const totalAccounts = filteredAccounts.length;
     const activeAccounts = filteredAccounts.filter(account => account.is_active).length;
-    const totalBalance = filteredAccounts.reduce((sum, account) => sum + account.balance, 0);
-    const totalReceived = filteredAccounts.reduce((sum, account) => sum + account.totalReceived, 0);
-    const totalSpent = filteredAccounts.reduce((sum, account) => sum + account.totalSpent, 0);
+    const totalBalance = filteredAccounts.reduce((sum, account) => {
+      const balance = Number(account.balance);
+      return sum + (isNaN(balance) ? 0 : balance);
+    }, 0);
+    const totalReceived = filteredAccounts.reduce((sum, account) => {
+      const received = Number(account.totalReceived);
+      return sum + (isNaN(received) ? 0 : received);
+    }, 0);
+    const totalSpent = filteredAccounts.reduce((sum, account) => {
+      const spent = Number(account.totalSpent);
+      return sum + (isNaN(spent) ? 0 : spent);
+    }, 0);
     
     // Group by account type
     const accountTypes = filteredAccounts.reduce((acc, account) => {
@@ -86,6 +105,7 @@ const PaymentAccountManagement: React.FC = () => {
       totalBalance,
       totalReceived,
       totalSpent,
+      netFlow: totalReceived - totalSpent, // Add net flow calculation
       accountTypes
     };
   }, [filteredAccounts]);
@@ -115,16 +135,26 @@ const PaymentAccountManagement: React.FC = () => {
             .select('transaction_type, amount')
             .eq('account_id', account.id);
 
+          // Transaction types that increase balance (money in)
           const totalReceived = allTransactions
-            ?.filter(t => t.transaction_type === 'payment_received')
+            ?.filter(t => t.transaction_type === 'payment_received' || t.transaction_type === 'transfer_in')
             .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
+          // Transaction types that decrease balance (money out)
           const totalSpent = allTransactions
-            ?.filter(t => t.transaction_type === 'payment_made' || t.transaction_type === 'expense')
+            ?.filter(t => 
+              t.transaction_type === 'payment_made' || 
+              t.transaction_type === 'expense' || 
+              t.transaction_type === 'transfer_out'
+            )
             .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+
+          // Calculate actual balance from transactions
+          const calculatedBalance = totalReceived - totalSpent;
 
           return {
             ...account,
+            balance: calculatedBalance, // Use calculated balance instead of database balance
             recentTransactions: transactions || [],
             totalReceived,
             totalSpent
@@ -369,7 +399,7 @@ const PaymentAccountManagement: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-orange-600">Net Flow</p>
-              <p className="text-2xl font-bold text-orange-900">{formatMoney(summaryStats.totalReceived - summaryStats.totalSpent)}</p>
+              <p className="text-2xl font-bold text-orange-900">{formatMoney(summaryStats.netFlow)}</p>
             </div>
             <div className="p-3 bg-orange-500 rounded-lg">
               <BarChart3 className="w-6 h-6 text-white" />
@@ -420,11 +450,8 @@ const PaymentAccountManagement: React.FC = () => {
               <div className="text-3xl font-bold text-gray-900">
                 {formatMoney(account.balance)}
               </div>
-              <div className="text-sm text-gray-500 flex items-center gap-2">
+              <div className="text-sm text-gray-500">
                 <span>Current Balance</span>
-                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                  {account.currency || 'TZS'}
-                </span>
               </div>
             </div>
 
@@ -436,7 +463,6 @@ const PaymentAccountManagement: React.FC = () => {
                   <span className="text-xs font-medium">Received</span>
                 </div>
                 <div className="text-sm font-semibold text-green-700">{formatMoney(account.totalReceived)}</div>
-                <div className="text-xs text-green-600">{account.currency || 'TZS'}</div>
               </div>
               <div className="p-3 bg-red-50 rounded-lg">
                 <div className="flex items-center gap-1 text-red-600 mb-1">
@@ -444,7 +470,6 @@ const PaymentAccountManagement: React.FC = () => {
                   <span className="text-xs font-medium">Spent</span>
                 </div>
                 <div className="text-sm font-semibold text-red-700">{formatMoney(account.totalSpent)}</div>
-                <div className="text-xs text-red-600">{account.currency || 'TZS'}</div>
               </div>
             </div>
 
@@ -462,9 +487,11 @@ const PaymentAccountManagement: React.FC = () => {
                         </div>
                       </div>
                       <div className={`text-xs font-medium ${
-                        transaction.transaction_type === 'payment_received' ? 'text-green-600' : 'text-red-600'
+                        transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
                       }`}>
-                        {transaction.transaction_type === 'payment_received' ? '+' : '-'}
+                        {transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' ? '+' : '-'}
                         {formatMoney(transaction.amount)}
                       </div>
                     </div>

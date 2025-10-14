@@ -8,12 +8,27 @@ import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import CustomerCareDashboard from '../components/dashboards/CustomerCareDashboard';
 import BarcodeScanner from '../../devices/components/BarcodeScanner';
 import { DeviceStatus, Device } from '../../../types';
+import { debugCustomerCareDashboard } from '../../../utils/customerCareDashboardDebug';
 
 const CustomerCareDashboardPage: React.FC = () => {
   const { currentUser } = useAuth();
   const { devices, loading: devicesLoading } = useDevices();
   const { customers, loading: customersLoading } = useCustomers();
   const { userGoals, loading: goalsLoading } = useUserGoals();
+  
+  // 🔍 DEBUG: Log component mount and expose debug utility
+  useEffect(() => {
+    console.log('🎯 CustomerCareDashboardPage mounted at:', new Date().toISOString());
+    console.log('👤 Current User:', currentUser ? { id: currentUser.id, email: currentUser.email, role: currentUser.role } : 'Not authenticated');
+    
+    // Expose debug function to window for easy access
+    if (typeof window !== 'undefined') {
+      (window as any).debugCustomerCareDashboard = debugCustomerCareDashboard;
+      console.log('');
+      console.log('💡 Debug Tip: Run window.debugCustomerCareDashboard() in console for comprehensive diagnostics');
+      console.log('');
+    }
+  }, []);
   
   // Error handling
   const { handleError, withErrorHandling } = useErrorHandler({
@@ -54,12 +69,59 @@ const CustomerCareDashboardPage: React.FC = () => {
   // Loading state
   const loading = devicesLoading || customersLoading || goalsLoading;
 
-  // Error handling for data loading
+  // 🔍 DEBUG: Track loading states
   useEffect(() => {
+    console.log('📊 Loading States:', {
+      devicesLoading,
+      customersLoading,
+      goalsLoading,
+      overallLoading: loading,
+      timestamp: new Date().toISOString()
+    });
+  }, [devicesLoading, customersLoading, goalsLoading, loading]);
+
+  // 🔍 DEBUG: Track devices data
+  useEffect(() => {
+    console.log('📱 Devices Data Update:', {
+      totalDevices: devices.length,
+      devicesLoading,
+      deviceStatuses: devices.reduce((acc, device) => {
+        acc[device.status] = (acc[device.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      timestamp: new Date().toISOString()
+    });
+    
     if (devices.length === 0 && !devicesLoading) {
-      console.warn('No devices loaded for customer care dashboard');
+      console.warn('⚠️ No devices loaded for customer care dashboard');
+    } else if (devices.length > 0) {
+      console.log('✅ Devices loaded successfully:', devices.length);
     }
   }, [devices, devicesLoading]);
+
+  // 🔍 DEBUG: Track customers data
+  useEffect(() => {
+    console.log('👥 Customers Data Update:', {
+      totalCustomers: customers.length,
+      customersLoading,
+      timestamp: new Date().toISOString()
+    });
+    
+    if (customers.length === 0 && !customersLoading) {
+      console.warn('⚠️ No customers loaded for customer care dashboard');
+    } else if (customers.length > 0) {
+      console.log('✅ Customers loaded successfully:', customers.length);
+    }
+  }, [customers, customersLoading]);
+
+  // 🔍 DEBUG: Track user goals data
+  useEffect(() => {
+    console.log('🎯 User Goals Data Update:', {
+      goalsCount: userGoals?.length || 0,
+      goalsLoading,
+      timestamp: new Date().toISOString()
+    });
+  }, [userGoals, goalsLoading]);
 
   return (
     <PageErrorWrapper pageName="Customer Care Dashboard" showDetails={true}>

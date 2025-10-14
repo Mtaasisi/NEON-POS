@@ -35,64 +35,8 @@ import { useInventoryStore } from '../stores/useInventoryStore';
 import { format } from '../lib/format';
 import { latsEventBus } from '../lib/data/eventBus';
 // import { runDatabaseDiagnostics } from '../lib/databaseDiagnostics'; // Temporarily disabled - file missing
-import { useCyclingLoadingMessage } from '../../../hooks/useCyclingLoadingMessage';
 import { LiveInventoryService, LiveInventoryMetrics } from '../lib/liveInventoryService';
 import { Category, Supplier, StockMovement, Product } from '../types/inventory';
-
-
-// Loading Progress Indicator Component
-const LoadingProgressIndicator: React.FC<{ progress: any }> = ({ progress }) => {
-  const totalSteps = 6;
-  const completedSteps = Object.values(progress).filter(Boolean).length;
-  const percentage = Math.round((completedSteps / totalSteps) * 100);
-  
-  // Cycling loading messages for inventory
-  const { currentMessage } = useCyclingLoadingMessage({
-    enabled: completedSteps < totalSteps,
-    interval: 2000,
-    messages: [
-      { text: "Loading inventory data...", icon: "📦", color: "text-blue-600" },
-      { text: "Fetching product categories...", icon: "📁", color: "text-green-600" },
-      { text: "Syncing supplier information...", icon: "🏢", color: "text-purple-600" },
-      { text: "Loading supplier data...", icon: "🏢", color: "text-orange-600" },
-      { text: "Calculating stock levels...", icon: "📊", color: "text-teal-600" },
-      { text: "Preparing analytics...", icon: "📈", color: "text-indigo-600" },
-      { text: "Almost ready...", icon: "🎯", color: "text-pink-600" }
-    ]
-  });
-
-  return (
-    <div className="fixed top-4 right-4 z-50 bg-white/90 backdrop-blur-sm rounded-lg p-4 shadow-lg border border-gray-200">
-      <div className="flex items-center space-x-3">
-        <div className="w-8 h-8">
-          <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-        </div>
-        <div className="flex-1">
-          <div className={`text-sm font-medium ${currentMessage.color || 'text-gray-700'}`}>
-            {currentMessage.icon} {currentMessage.text}
-          </div>
-          <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
-            <div 
-              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-              style={{ width: `${percentage}%` }}
-            ></div>
-          </div>
-          <div className="text-xs text-gray-500 mt-1">{completedSteps}/{totalSteps} steps</div>
-        </div>
-      </div>
-      <div className="mt-2 space-y-1">
-        {Object.entries(progress).map(([key, loaded]) => (
-          <div key={key} className="flex items-center space-x-2 text-xs">
-            <div className={`w-2 h-2 rounded-full ${loaded ? 'bg-green-500' : 'bg-gray-300'}`}></div>
-            <span className={`${loaded ? 'text-green-600' : 'text-gray-500'}`}>
-              {key.charAt(0).toUpperCase() + key.slice(1)}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
 
 // Tab types
 type TabType = 'inventory' | 'purchase-orders' | 'analytics' | 'settings';
@@ -528,6 +472,12 @@ const UnifiedInventoryPage: React.FC = () => {
   const filteredProducts = useMemo(() => {
     let filtered = products;
 
+    // Exclude sample products (products with 'sample', 'test', or 'dummy' in the name)
+    filtered = filtered.filter(product => {
+      const name = product.name.toLowerCase();
+      return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
+    });
+
     // Apply search filter with enhanced variant search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -771,8 +721,6 @@ const UnifiedInventoryPage: React.FC = () => {
 
   return (
     <PageErrorBoundary pageName="Unified Inventory Management" showDetails={true}>
-      {/* Loading Progress Indicator */}
-      {isDataLoading && <LoadingProgressIndicator progress={loadingProgress} />}
       
       {/* Keyboard Shortcuts Help */}
       <div className="fixed bottom-4 right-4 z-40 group">

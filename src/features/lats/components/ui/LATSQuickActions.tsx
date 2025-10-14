@@ -125,11 +125,11 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'integration'
   },
   {
-    id: 'whatsapp-hub',
-    name: 'WhatsApp Manager',
-    description: 'Comprehensive WhatsApp connection management',
+    id: 'whatsapp-chat',
+    name: 'WhatsApp Chat',
+    description: 'Send and receive WhatsApp messages',
     icon: MessageSquare,
-    path: '/lats/whatsapp-connection-manager',
+    path: '/lats/whatsapp-chat',
     color: 'from-green-500 to-green-600',
     category: 'integration'
   },

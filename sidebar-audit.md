@@ -38,7 +38,7 @@
 21. ✅ /finance/payments - Payment Management
 
 ### Communication:
-22. ✅ /lats/whatsapp-hub - WhatsApp
+22. ✅ /lats/whatsapp-chat - WhatsApp
 23. ✅ /sms - SMS
 24. ✅ /instagram/dm - Instagram
 

@@ -197,7 +197,13 @@ class PurchaseOrderPaymentService {
 
       // Check if account has sufficient balance (handle currency conversion)
       let requiredAmount = data.amount;
-      let accountBalance = paymentAccount.balance;
+      let accountBalance = paymentAccount.balance || 0;
+      
+      // Validate that balance is a valid number
+      if (isNaN(accountBalance) || accountBalance === null || accountBalance === undefined) {
+        console.warn('⚠️ Invalid account balance detected, defaulting to 0');
+        accountBalance = 0;
+      }
       
       // If currencies don't match, we need to handle currency conversion
       if (paymentAccount.currency !== data.currency) {
@@ -247,9 +253,21 @@ class PurchaseOrderPaymentService {
         }
       }
       
+      // CRITICAL: Check if account has sufficient balance
+      console.log(`💰 Balance check: Available=${accountBalance}, Required=${requiredAmount}`);
+      
       if (accountBalance < requiredAmount) {
-        throw new Error(`Insufficient balance. Available: ${paymentAccount.currency} ${accountBalance.toLocaleString()}, Required: ${paymentAccount.currency} ${requiredAmount.toLocaleString()}`);
+        const shortfall = requiredAmount - accountBalance;
+        throw new Error(
+          `❌ Insufficient balance in ${paymentAccount.name}!\n` +
+          `Available: ${paymentAccount.currency} ${accountBalance.toLocaleString()}\n` +
+          `Required: ${paymentAccount.currency} ${requiredAmount.toLocaleString()}\n` +
+          `Shortfall: ${paymentAccount.currency} ${shortfall.toLocaleString()}\n` +
+          `Please add funds to the account or use a different payment method.`
+        );
       }
+      
+      console.log(`✅ Sufficient balance confirmed: ${accountBalance} >= ${requiredAmount}`);
 
       // Create payment record - use a valid user ID from auth_users table
       // Get a valid user ID from auth_users table to satisfy the foreign key constraint
@@ -296,10 +314,13 @@ class PurchaseOrderPaymentService {
       }
 
       // Update finance account balance (deduct converted amount)
+      const newBalance = accountBalance - requiredAmount;
+      console.log(`💳 Deducting payment: ${accountBalance} - ${requiredAmount} = ${newBalance}`);
+      
       const { error: balanceError } = await supabase
         .from('finance_accounts')
         .update({ 
-          balance: accountBalance - requiredAmount,
+          balance: newBalance,
           updated_at: new Date().toISOString()
         })
         .eq('id', data.paymentAccountId);
@@ -310,11 +331,15 @@ class PurchaseOrderPaymentService {
         // In a production system, you might want to implement a rollback mechanism
         console.warn('⚠️ Payment recorded but account balance not updated. Manual reconciliation may be required.');
       } else {
-        console.log(`✅ Account balance updated: ${accountBalance} - ${requiredAmount} = ${accountBalance - requiredAmount}`);
+        console.log(`✅ Account balance updated successfully: ${newBalance}`);
       }
 
-      // Note: Finance transaction tracking can be added later if needed
-      // For now, the payment record and account balance update provide sufficient tracking
+      // Create expense record (the database trigger will handle this automatically)
+      // But we log it here for visibility
+      console.log(`📊 Expense will be automatically tracked via database trigger`);
+      console.log(`   - Category: Purchase Orders`);
+      console.log(`   - Amount: ${requiredAmount}`);
+      console.log(`   - Account: ${paymentAccount.name}`);
 
       console.log('✅ Purchase order payment created successfully:', paymentRecord);
       return paymentRecord;

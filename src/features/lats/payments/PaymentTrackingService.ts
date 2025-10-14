@@ -232,6 +232,7 @@ export class PaymentTrackingService {
         .from('payment_transactions')
         .select('*')
         .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
         .limit(limit);
 
       if (error) {
@@ -239,7 +240,14 @@ export class PaymentTrackingService {
         return [];
       }
 
-      return data || [];
+      // Ensure data is sorted by created_at descending (most recent first)
+      const sortedData = (data || []).sort((a, b) => {
+        const dateA = new Date(a.created_at).getTime();
+        const dateB = new Date(b.created_at).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
+
+      return sortedData;
     } catch (error) {
       console.error('Error fetching recent transactions:', error);
       // Return mock data if table doesn't exist

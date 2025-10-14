@@ -46,7 +46,6 @@ interface Supplier {
   phone?: string;
   phone2?: string;
   whatsapp?: string;
-  instagram?: string;
   wechat_id?: string;
   city?: string;
   country?: string;

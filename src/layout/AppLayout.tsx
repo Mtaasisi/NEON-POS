@@ -4,69 +4,43 @@ import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
 import { useCustomers } from '../context/CustomersContext';
 import { useBusinessInfo } from '../hooks/useBusinessInfo';
+import { useTheme } from '../context/ThemeContext';
 
 import AddCustomerModal from '../features/customers/components/forms/AddCustomerModal';
 import TopBar from '../features/shared/components/TopBar';
 import GlobalSearchShortcut from '../features/shared/components/GlobalSearchShortcut';
 
-import AdHeader from '../features/shared/components/AdHeader';
 import ActivityCounter from '../features/shared/components/ui/ActivityCounter';
 import {
   LayoutDashboard, 
   LogOut, 
-  Menu, 
   Smartphone, 
-  X, 
   Settings,
   Users,
   User, 
   ChevronRight as ChevronRightIcon,
-  ChevronLeft,
-  ChevronRight,
   MessageCircle,
-  RotateCcw,
   BarChart2,
   CreditCard,
-  Monitor,
-  FileText,
-  Building,
-  DollarSign,
   Stethoscope,
-  Plus,
-  Receipt,
-  Sparkles,
   Package,
-  TestTube,
   ShoppingCart,
   Calendar,
   Briefcase,
   UserCheck,
-  TrendingUp,
-  Smartphone as MobileIcon,
   Clock,
-  Upload,
-  Download,
-  Home, 
-  BarChart3, 
   Shield, 
-  Database,
-  MapPin,
-  Layers,
-  Brain,
   Wrench,
-  CalendarDays,
   Star,
-  ClipboardList,
-  Wifi,
-  Instagram,
-  Truck,
-  Phone
+  Phone,
+  ArrowRightLeft
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
 
 const AppLayout: React.FC = () => {
   const { currentUser, logout } = useAuth();
+  const { isDark } = useTheme();
   
   // Safely access context hooks with error handling
   let devices: any[] = [];
@@ -76,18 +50,20 @@ const AppLayout: React.FC = () => {
     const devicesContext = useDevices();
     devices = devicesContext?.devices || [];
   } catch (error) {
-    console.warn('Devices context not available:', error);
+    // Silently handle - context may not be available during HMR
+    devices = [];
   }
   
   try {
     const customersContext = useCustomers();
     customers = customersContext?.customers || [];
   } catch (error) {
-    console.warn('Customers context not available:', error);
+    // Silently handle - context may not be available during HMR
+    customers = [];
   }
   
   // Get business info from settings
-  const { businessInfo, loading: loadingBusinessInfo } = useBusinessInfo();
+  const { businessInfo } = useBusinessInfo();
   
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
@@ -188,39 +164,10 @@ const AppLayout: React.FC = () => {
     return null;
   }
 
-  // Check if item has unread activity
-  const hasUnreadActivity = (path: string, count?: number) => {
-    if (!count || count <= 0) return false;
-    return !readItems.has(path);
-  };
-
   // Get unread count for an item
   const getUnreadCount = (path: string, count?: number) => {
     if (!count || count <= 0) return 0;
     return readItems.has(path) ? 0 : count;
-  };
-
-  // Clear all read statuses (for testing or resetting)
-  const clearAllReadStatuses = () => {
-    setReadItems(new Set());
-    localStorage.removeItem('navReadItems');
-  };
-
-  // Get total unread count across all navigation items
-  const getTotalUnreadCount = () => {
-    return navItems.reduce((total, item) => {
-      return total + getUnreadCount(item.path, item.count);
-    }, 0);
-  };
-
-  // Mark all navigation items as read
-  const markAllAsRead = () => {
-    const allPaths = navItems.map(item => item.path);
-    setReadItems(prev => {
-      const newSet = new Set([...prev, ...allPaths]);
-      localStorage.setItem('navReadItems', JSON.stringify([...newSet]));
-      return newSet;
-    });
   };
 
   const getNavItems = () => {
@@ -320,6 +267,13 @@ const AppLayout: React.FC = () => {
         roles: ['admin'],
         count: 0
       },
+      {
+        path: '/lats/stock-transfers',
+        label: 'Stock Transfers',
+        icon: <ArrowRightLeft size={20} />,
+        roles: ['admin'],
+        count: 0
+      },
 
       // People Management
       {
@@ -333,7 +287,7 @@ const AppLayout: React.FC = () => {
         path: '/attendance',
         label: 'Attendance',
         icon: <Clock size={20} />,
-        roles: ['admin', 'manager', 'technician'],
+        roles: ['admin', 'manager'],
         count: 0
       },
 
@@ -358,21 +312,14 @@ const AppLayout: React.FC = () => {
         path: '/lats/sales-reports',
         label: 'Sales Reports',
         icon: <BarChart2 size={20} />,
-        roles: ['admin', 'customer-care'],
-        count: 0
-      },
-      {
-        path: '/finance',
-        label: 'Finance',
-        icon: <DollarSign size={20} />,
         roles: ['admin'],
         count: 0
       },
       {
-        path: '/finance/payments',
+        path: '/payments',
         label: 'Payments',
         icon: <CreditCard size={20} />,
-        roles: ['admin', 'customer-care'],
+        roles: ['admin'],
         count: 0
       },
       {
@@ -385,7 +332,7 @@ const AppLayout: React.FC = () => {
 
       // Communication
       {
-        path: '/lats/whatsapp-hub',
+        path: '/lats/whatsapp-chat',
         label: 'WhatsApp',
         icon: <MessageCircle size={20} />,
         roles: ['admin', 'customer-care'],
@@ -395,13 +342,6 @@ const AppLayout: React.FC = () => {
         path: '/sms',
         label: 'SMS',
         icon: <Phone size={20} />,
-        roles: ['admin', 'customer-care'],
-        count: 0
-      },
-      {
-        path: '/instagram/dm',
-        label: 'Instagram',
-        icon: <Instagram size={20} />,
         roles: ['admin', 'customer-care'],
         count: 0
       },
@@ -421,20 +361,13 @@ const AppLayout: React.FC = () => {
         roles: ['admin'],
         count: 0
       },
-      {
-        path: '/audit-logs',
-        label: 'Audit Logs',
-        icon: <FileText size={20} />,
-        roles: ['admin'],
-        count: 0
-      },
       
       // Settings
       {
         path: '/settings',
         label: 'Settings',
         icon: <Settings size={20} />,
-        roles: ['admin', 'customer-care', 'technician'],
+        roles: ['admin'],
         count: 0
       }
     ];
@@ -476,11 +409,12 @@ const AppLayout: React.FC = () => {
       <div
         className={`
           fixed top-0 bottom-0 left-0 z-40 w-64 md:w-72 
-          bg-white/80 backdrop-blur-xl border-r border-white/30 shadow-xl
+          ${isDark ? 'bg-slate-900/95' : 'bg-white/80'} backdrop-blur-xl 
+          ${isDark ? 'border-slate-700/50' : 'border-white/30'} border-r shadow-xl
           transition-all duration-500 transform
           ${isMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} 
           ${isNavCollapsed ? 'md:w-[5.5rem]' : 'md:w-72'}
-          sidebar-hover
+          sidebar-hover sidebar-bg
         `}
         onMouseEnter={() => {
           if (window.innerWidth >= 768 && isNavCollapsed) setIsNavCollapsed(false);
@@ -492,7 +426,8 @@ const AppLayout: React.FC = () => {
         <div className="flex flex-col h-full">
           {/* Sidebar Header */}
           <div className={`
-            p-6 border-b border-white/20 flex items-center bg-white/20
+            p-6 ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-b flex items-center 
+            ${isDark ? 'bg-slate-900/40' : 'bg-white/20'}
             ${isNavCollapsed ? 'justify-center' : ''}
           `}>
             <div className="flex items-center gap-3 w-full">
@@ -515,11 +450,11 @@ const AppLayout: React.FC = () => {
               
               {/* Business Name and Info */}
               <div className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''} min-w-0 flex-1`}>
-                <h1 className="font-bold text-xl text-gray-900 truncate">
+                <h1 className={`font-bold text-xl truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
                   {businessInfo?.name || 'My Store'}
                 </h1>
                 {businessInfo?.address && (
-                  <p className="text-sm text-gray-600 truncate">{businessInfo.address}</p>
+                  <p className={`text-sm truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{businessInfo.address}</p>
                 )}
               </div>
             </div>
@@ -537,8 +472,12 @@ const AppLayout: React.FC = () => {
                         flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-300
                         ${isNavCollapsed ? 'justify-center' : ''}
                         ${location.pathname === item.path
-                          ? 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-blue-700 font-medium shadow-sm backdrop-blur-sm border border-blue-200/30'
-                          : 'text-gray-700 hover:bg-white/40 hover:text-gray-900'
+                          ? isDark 
+                            ? 'bg-gradient-to-r from-blue-600/20 to-indigo-600/20 text-blue-400 font-medium shadow-sm backdrop-blur-sm border border-blue-500/30'
+                            : 'bg-gradient-to-r from-blue-500/10 to-indigo-500/10 text-blue-700 font-medium shadow-sm backdrop-blur-sm border border-blue-200/30'
+                          : isDark
+                            ? 'text-gray-300 hover:bg-slate-800/60 hover:text-white'
+                            : 'text-gray-700 hover:bg-white/40 hover:text-gray-900'
                         }
                       `}
                       onClick={() => {
@@ -547,7 +486,10 @@ const AppLayout: React.FC = () => {
                       }}
                     >
                     <span className={`
-                      ${location.pathname === item.path ? 'text-blue-600' : 'text-blue-500'}
+                      ${location.pathname === item.path 
+                        ? isDark ? 'text-blue-400' : 'text-blue-600' 
+                        : isDark ? 'text-gray-400' : 'text-blue-500'
+                      }
                       ${isNavCollapsed ? 'w-8 h-8 flex items-center justify-center' : ''}
                       relative
                     `}>
@@ -576,7 +518,7 @@ const AppLayout: React.FC = () => {
                     
                       {location.pathname === item.path && (
                         <ChevronRightIcon size={16} className={`
-                          ml-auto text-blue-500
+                          ml-auto ${isDark ? 'text-blue-400' : 'text-blue-500'}
                           ${isNavCollapsed ? 'md:hidden' : ''}
                         `} />
                       )}
@@ -584,9 +526,12 @@ const AppLayout: React.FC = () => {
                     
                     {/* Hover tooltip - only show when sidebar is collapsed */}
                     {isNavCollapsed && (
-                      <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-white/95 backdrop-blur-sm border border-gray-200/50 text-gray-700 text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50">
+                      <div className={`absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 
+                        ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} 
+                        backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                         {item.label}
-                        <div className="absolute right-full top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent border-r-white/95"></div>
+                        <div className={`absolute right-full top-1/2 transform -translate-y-1/2 w-0 h-0 border-t-4 border-b-4 border-r-4 border-transparent 
+                          ${isDark ? 'border-r-slate-800/95' : 'border-r-white/95'}`}></div>
                       </div>
                     )}
                   </div>
@@ -596,19 +541,19 @@ const AppLayout: React.FC = () => {
           </nav>
           
           {/* User Profile & Logout */}
-          <div className={`${isNavCollapsed ? 'p-2' : 'p-4'} border-t border-white/20`}>
+          <div className={`${isNavCollapsed ? 'p-2' : 'p-4'} ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-t`}>
             <div className={`
               flex items-center gap-3 p-2 rounded-lg
-              bg-gradient-to-br from-gray-100 to-gray-50
+              ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900' : 'bg-gradient-to-br from-gray-100 to-gray-50'}
               backdrop-blur-sm mb-4 
               ${isNavCollapsed ? 'justify-center' : ''}
             `}>
-              <div className="p-2 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 text-white shadow-lg">
+              <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg">
                 <User size={20} />
               </div>
               <div className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''} min-w-0 flex-1`}>
-                <p className="font-medium text-gray-900 truncate">{currentUser.name}</p>
-                <p className="text-sm text-gray-600 capitalize truncate">{currentUser.role.replace('-', ' ')}</p>
+                <p className={`font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{currentUser.name}</p>
+                <p className={`text-sm capitalize truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{currentUser.role.replace('-', ' ')}</p>
               </div>
             </div>
             

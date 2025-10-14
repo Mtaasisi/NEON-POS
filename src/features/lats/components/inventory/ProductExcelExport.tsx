@@ -195,7 +195,7 @@ const ProductExcelExport: React.FC = () => {
             
             // Stock movement data
             lastStockMovement: lastStockMovement ? {
-              type: lastStockMovement.type,
+              movement_type: lastStockMovement.movement_type,
               quantity: lastStockMovement.quantity,
               reason: lastStockMovement.reason,
               date: lastStockMovement.created_at
@@ -273,7 +273,7 @@ const ProductExcelExport: React.FC = () => {
               
               // Stock movement data
               lastStockMovement: lastStockMovement ? {
-                type: lastStockMovement.type,
+                movement_type: lastStockMovement.movement_type,
                 quantity: lastStockMovement.quantity,
                 reason: lastStockMovement.reason,
                 date: lastStockMovement.created_at
@@ -376,7 +376,7 @@ const ProductExcelExport: React.FC = () => {
           `"${new Date(product.updatedAt).toLocaleDateString()}"`,
           
           // Stock Movement Information
-          `"${(product.lastStockMovement?.type || '').replace(/"/g, '""')}"`,
+          `"${(product.lastStockMovement?.movement_type || '').replace(/"/g, '""')}"`,
           product.lastStockMovement?.quantity || 0,
           `"${(product.lastStockMovement?.reason || '').replace(/"/g, '""')}"`,
           `"${(product.lastStockMovement?.date || '').replace(/"/g, '""')}"`

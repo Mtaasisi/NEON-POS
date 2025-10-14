@@ -41,7 +41,7 @@ const TechnicianDashboard: React.FC<TechnicianDashboardProps> = React.memo(({
     const devicesContext = useDevices();
     getOverdueDevices = devicesContext?.getOverdueDevices || null;
   } catch (error) {
-    console.warn('Devices context not available during HMR:', error);
+    // Silently handle - context may not be available during HMR
   }
   
   const { getGoalProgress } = useUserGoals();

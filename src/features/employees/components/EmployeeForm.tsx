@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
+import BranchSelector from '../../../components/BranchSelector';
 import { X, Save, UserPlus, Edit } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -21,6 +22,7 @@ interface Employee {
   skills: string[];
   manager?: string;
   location?: string;
+  branchId?: string; // ✨ NEW - Branch assignment
 }
 
 interface EmployeeFormProps {
@@ -36,6 +38,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   onClose,
   onSave
 }) => {
+  const today = new Date();
+  const defaultHireDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  
   const [formData, setFormData] = useState<Employee>({
     firstName: '',
     lastName: '',
@@ -43,14 +48,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     phone: '',
     position: '',
     department: '',
-    hireDate: '',
+    hireDate: defaultHireDate,
     salary: 0,
     status: 'active',
     performance: 3,
     attendance: 100,
     skills: [],
     manager: '',
-    location: ''
+    location: '',
+    branchId: '' // ✨ NEW
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -60,6 +66,9 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     if (employee) {
       setFormData(employee);
     } else {
+      const today = new Date();
+      const formattedDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
       setFormData({
         firstName: '',
         lastName: '',
@@ -67,14 +76,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         phone: '',
         position: '',
         department: '',
-        hireDate: new Date().toISOString().split('T')[0],
+        hireDate: formattedDate,
         salary: 0,
         status: 'active',
         performance: 3,
         attendance: 100,
         skills: [],
         manager: '',
-        location: ''
+        location: '',
+        branchId: '' // ✨ NEW
       });
     }
     setErrors({});
@@ -115,6 +125,10 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
 
     if (formData.salary <= 0) {
       newErrors.salary = 'Salary must be greater than 0';
+    }
+
+    if (!formData.branchId?.trim()) {
+      newErrors.branchId = 'Branch/Store is required';
     }
 
     setErrors(newErrors);
@@ -398,16 +412,28 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Location
+                  Work Location (Optional)
                 </label>
                 <input
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Enter work location"
+                  placeholder="City or specific location"
                 />
               </div>
+            </div>
+
+            {/* Branch/Store Assignment */}
+            <div>
+              <BranchSelector
+                label="Assigned Branch/Store"
+                value={formData.branchId}
+                onChange={(branchId) => setFormData(prev => ({ ...prev, branchId }))}
+                placeholder="Select employee's branch"
+                required
+                error={errors.branchId}
+              />
             </div>
 
             {/* Skills */}

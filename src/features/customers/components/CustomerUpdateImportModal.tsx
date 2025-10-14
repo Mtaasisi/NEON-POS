@@ -124,7 +124,6 @@ const CustomerUpdateImportModal: React.FC<CustomerUpdateImportModalProps> = Reac
     
     // Map common variations
     const referralMap: { [key: string]: string } = {
-      'instagram': 'Instagram',
       'facebook': 'Facebook',
       'twitter': 'Twitter',
       'tiktok': 'TikTok',
@@ -660,7 +659,7 @@ const CustomerUpdateImportModal: React.FC<CustomerUpdateImportModalProps> = Reac
   // Function to download template
   const downloadTemplate = () => {
     const template = `Name,Email,Phone,Gender,City,WhatsApp,Notes,Loyalty Level,Color Tag,Referral Source,Location Description,National ID,Referred By,Birth Month,Birth Day
-John Doe,john@example.com,+255123456789,male,Dar es Salaam,+255123456789,New customer notes,bronze,normal,Instagram,City Center,123456789,John Smith,January,15
+John Doe,john@example.com,+255123456789,male,Dar es Salaam,+255123456789,New customer notes,bronze,normal,Facebook,City Center,123456789,John Smith,January,15
 Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another customer,bronze,vip,Friend,Suburb Area,987654321,Jane Doe,March,22`;
     
     const blob = new Blob([template], { type: 'text/csv' });

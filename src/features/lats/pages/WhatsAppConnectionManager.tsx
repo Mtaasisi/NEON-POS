@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { FiPlus, FiRefreshCw, FiTrash2, FiEdit3, FiPhone, FiWifi, FiWifiOff, FiSettings, FiMaximize2, FiX, FiLogOut, FiCamera, FiKey } from 'react-icons/fi';
+import { FiPlus, FiRefreshCw, FiTrash2, FiEdit3, FiPhone, FiWifi, FiWifiOff, FiSettings, FiMaximize2, FiX, FiLogOut, FiCamera, FiKey, FiSave } from 'react-icons/fi';
 
 import { useWhatsApp } from '../../../context/WhatsAppContext';
 import { toast } from 'react-hot-toast';
 import { WhatsAppApiService, SendMessageResponse } from '../../../services/whatsappApiService';
+import { greenApiSettingsService, GreenApiSettings } from '../../../services/greenApiSettingsService';
+
+// Import Green API Settings Components
+import GeneralSettingsSection from '../components/settings/GeneralSettingsSection';
+import WebhookSettingsSection from '../components/settings/WebhookSettingsSection';
+import MessageSettingsSection from '../components/settings/MessageSettingsSection';
+import NotificationSettingsSection from '../components/settings/NotificationSettingsSection';
+import SecuritySettingsSection from '../components/settings/SecuritySettingsSection';
+import StatusSettingsSection from '../components/settings/StatusSettingsSection';
 
 interface WhatsAppInstance {
   id: string;
@@ -75,6 +84,13 @@ const WhatsAppConnectionManager: React.FC = () => {
   const [newApiToken, setNewApiToken] = useState<string>('');
   const [profileFile, setProfileFile] = useState<File | null>(null);
   const [wsConnection, setWsConnection] = useState<WebSocket | null>(null);
+  
+  // Green API Settings states
+  const [greenApiSettings, setGreenApiSettings] = useState<GreenApiSettings>({});
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<string>('general');
+  const [selectedInstanceForSettings, setSelectedInstanceForSettings] = useState<WhatsAppInstance | null>(null);
 
   // New instance form state
   const [newInstance, setNewInstance] = useState({
@@ -575,11 +591,90 @@ const WhatsAppConnectionManager: React.FC = () => {
     }
   };
 
-  // Function to open settings modal
+  // Function to open settings modal with full Green API settings
   const openSettingsModal = async (instance: WhatsAppInstance) => {
     setSelectedInstanceId(instance.instance_id);
+    setSelectedInstanceForSettings(instance);
     setShowSettingsModal(true);
-    await loadInstanceSettings(instance.instance_id);
+    await loadGreenApiSettings(instance);
+  };
+
+  // Load Green API Settings
+  const loadGreenApiSettings = async (instance: WhatsAppInstance) => {
+    try {
+      setSettingsLoading(true);
+      console.log('🔍 Loading Green API settings for instance:', instance.instance_id);
+
+      // Try loading from database first
+      let currentSettings = await greenApiSettingsService.loadSettingsFromDatabase(instance.instance_id);
+
+      if (currentSettings) {
+        console.log('✅ Settings loaded from database');
+        setGreenApiSettings(currentSettings);
+      } else {
+        // Load from Green API
+        console.log('📝 Loading settings from Green API...');
+        try {
+          currentSettings = await greenApiSettingsService.getSettings(
+            instance.instance_id,
+            instance.api_token
+          );
+          setGreenApiSettings(currentSettings);
+
+          // Save to database for future use
+          await greenApiSettingsService.saveSettingsToDatabase(instance.instance_id, currentSettings);
+        } catch (error: any) {
+          console.warn('⚠️ Could not load settings from Green API, using defaults');
+          currentSettings = greenApiSettingsService.getDefaultSettings();
+          setGreenApiSettings(currentSettings);
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Error loading Green API settings:', error);
+      const defaultSettings = greenApiSettingsService.getDefaultSettings();
+      setGreenApiSettings(defaultSettings);
+      toast.error('Using default settings');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  // Save Green API Settings
+  const saveGreenApiSettings = async () => {
+    if (!selectedInstanceForSettings) return;
+
+    try {
+      setSavingSettings(true);
+      console.log('💾 Saving Green API settings...');
+
+      // Validate settings
+      const validation = greenApiSettingsService.validateSettings(greenApiSettings);
+      if (!validation.isValid) {
+        toast.error(`Invalid settings: ${validation.errors.join(', ')}`);
+        return;
+      }
+
+      // Save to Green API
+      await greenApiSettingsService.setSettings(
+        selectedInstanceForSettings.instance_id,
+        selectedInstanceForSettings.api_token,
+        greenApiSettings
+      );
+
+      // Save to database
+      await greenApiSettingsService.saveSettingsToDatabase(
+        selectedInstanceForSettings.instance_id, 
+        greenApiSettings
+      );
+
+      toast.success('✅ Settings saved successfully!');
+      setShowSettingsModal(false);
+    } catch (error: any) {
+      console.error('❌ Error saving settings:', error);
+      toast.error(`Failed to save settings: ${error.message}`);
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   // Function to handle edit instance
@@ -875,11 +970,11 @@ const WhatsAppConnectionManager: React.FC = () => {
                       </button>
                       <button
                         onClick={() => openSettingsModal(instance)}
-                        title="Open advanced settings and management options"
-                        className="px-4 py-2 bg-gray-50 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-100 transition-all duration-200 flex items-center justify-center border border-gray-200"
+                        title="Configure Green API settings - Webhooks, Messages, Security & More"
+                        className="px-4 py-2 bg-green-50 text-green-700 text-sm font-medium rounded-lg hover:bg-green-100 transition-all duration-200 flex items-center justify-center border border-green-200"
                       >
                         <FiSettings className="w-4 h-4 mr-2" />
-                        Settings
+                        Green API
                       </button>
                     </div>
                   </div>
@@ -1330,185 +1425,192 @@ const WhatsAppConnectionManager: React.FC = () => {
         </div>
       )}
 
-      {/* Settings Modal */}
-      {showSettingsModal && selectedInstanceId && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="relative bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+      {/* Green API Settings Modal - Full Featured */}
+      {showSettingsModal && selectedInstanceForSettings && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             {/* Modal Header */}
-            <div className="relative bg-gradient-to-r from-purple-600 to-purple-700 px-8 py-6 flex-shrink-0">
-              <div className="relative flex items-center">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mr-4">
-                  <FiSettings className="w-6 h-6 text-white" />
+            <div className="relative bg-gradient-to-r from-green-500 to-green-600 px-8 py-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <FiSettings size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Green API Settings</h2>
+                    <p className="text-green-100 mt-1">
+                      Configure {selectedInstanceForSettings.instance_name || selectedInstanceForSettings.instance_id}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-white">Settings</h2>
-                  <p className="text-purple-100 mt-1">Configure {selectedInstanceId}</p>
-                </div>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200"
+                >
+                  <FiX size={24} />
+                </button>
               </div>
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className="absolute top-4 right-4 p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
             </div>
 
-            {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-8">
-              {/* Message Settings */}
-              <div className="bg-gradient-to-r from-green-50 to-green-100 rounded-2xl p-6 border border-green-200">
-                <h3 className="text-lg font-bold text-green-800 mb-4 flex items-center">
-                  <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center mr-3">
-                    <FiPhone className="w-4 h-4 text-white" />
-                  </div>
-                  Message Settings
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Mark Messages as Read</label>
-                    <select
-                      value={settings[selectedInstanceId]?.mark_incoming_messages_readed || ''}
-                      onChange={(e) => setSettings(prev => ({ ...prev, [selectedInstanceId]: { ...prev[selectedInstanceId], mark_incoming_messages_readed: e.target.value } }))}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-200"
-                    >
-                      <option value="">Choose option</option>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Send Delay (ms)</label>
-                    <input
-                      type="number"
-                      value={settings[selectedInstanceId]?.delay_send_messages_milliseconds || ''}
-                      onChange={(e) => setSettings(prev => ({ ...prev, [selectedInstanceId]: { ...prev[selectedInstanceId], delay_send_messages_milliseconds: parseInt(e.target.value, 10) || 0 } }))}
-                      className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:outline-none focus:ring-4 focus:ring-green-200 focus:border-green-500 transition-all duration-200"
-                      placeholder="1000"
-                    />
+            {/* Settings Tabs */}
+            <div className="border-b border-gray-200 bg-gray-50">
+              <div className="flex overflow-x-auto">
+                {[
+                  { id: 'general', label: 'General', icon: FiSettings },
+                  { id: 'webhooks', label: 'Webhooks', icon: FiWifi },
+                  { id: 'messages', label: 'Messages', icon: FiPhone },
+                  { id: 'notifications', label: 'Notifications', icon: FiPhone },
+                  { id: 'security', label: 'Security', icon: FiKey },
+                  { id: 'status', label: 'Status', icon: FiWifi }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveSettingsTab(tab.id)}
+                    className={`flex items-center gap-2 px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                      activeSettingsTab === tab.id
+                        ? 'border-green-500 text-green-600 bg-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <tab.icon size={16} />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Settings Content */}
+            <div className="flex-1 overflow-y-auto p-8">
+              {settingsLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <FiRefreshCw className="animate-spin mx-auto h-8 w-8 text-green-500 mb-4" />
+                    <p className="text-gray-600">Loading settings...</p>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <>
+                  {activeSettingsTab === 'general' && (
+                    <GeneralSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'webhooks' && (
+                    <WebhookSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'messages' && (
+                    <MessageSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'notifications' && (
+                    <NotificationSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'security' && (
+                    <SecuritySettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'status' && (
+                    <StatusSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                </>
+              )}
 
-              {/* Instance Management Actions */}
-              <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl p-6 border border-blue-200">
-                <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center">
-                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mr-3">
-                    <FiSettings className="w-4 h-4 text-white" />
-                  </div>
-                  Management
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <button
-                    onClick={() => {
-                      const instance = instances.find(i => i.instance_id === selectedInstanceId);
-                      if (instance) {
-                        setSelectedInstanceForProfile(instance);
+              {/* Quick Actions */}
+              {!settingsLoading && (
+                <div className="mt-8 pt-8 border-t border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-900 mb-4">Instance Management</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <button
+                      onClick={() => {
+                        setSelectedInstanceForProfile(selectedInstanceForSettings);
                         setShowProfileModal(true);
                         setShowSettingsModal(false);
-                      }
-                    }}
-                    title="Upload and set a new profile picture for this WhatsApp instance"
-                    className="p-4 bg-white rounded-xl border border-indigo-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all duration-200 text-left group"
-                  >
-                    <div className="flex items-center mb-2">
-                      <FiCamera className="w-5 h-5 text-indigo-600 mr-2" />
-                      <span className="font-semibold text-indigo-800">Profile</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Update profile picture</p>
-                  </button>
+                      }}
+                      className="p-4 bg-white border border-indigo-200 hover:border-indigo-300 hover:bg-indigo-50 rounded-xl transition-all duration-200 text-left"
+                    >
+                      <div className="flex items-center mb-2">
+                        <FiCamera className="w-5 h-5 text-indigo-600 mr-2" />
+                        <span className="font-semibold text-indigo-800">Profile Picture</span>
+                      </div>
+                      <p className="text-sm text-gray-600">Update profile picture</p>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      const instance = instances.find(i => i.instance_id === selectedInstanceId);
-                      if (instance) {
-                        setSelectedInstanceForAuthCode(instance);
+                    <button
+                      onClick={() => {
+                        setSelectedInstanceForAuthCode(selectedInstanceForSettings);
                         setShowAuthCodeModal(true);
                         setShowSettingsModal(false);
-                      }
-                    }}
-                    title="Get authorization code for this WhatsApp instance from a phone number"
-                    className="p-4 bg-white rounded-xl border border-yellow-200 hover:border-yellow-300 hover:bg-yellow-50 transition-all duration-200 text-left group"
-                  >
-                    <div className="flex items-center mb-2">
-                      <FiKey className="w-5 h-5 text-yellow-600 mr-2" />
-                      <span className="font-semibold text-yellow-800">Auth Code</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Get authorization code</p>
-                  </button>
+                      }}
+                      className="p-4 bg-white border border-yellow-200 hover:border-yellow-300 hover:bg-yellow-50 rounded-xl transition-all duration-200 text-left"
+                    >
+                      <div className="flex items-center mb-2">
+                        <FiKey className="w-5 h-5 text-yellow-600 mr-2" />
+                        <span className="font-semibold text-yellow-800">Auth Code</span>
+                      </div>
+                      <p className="text-sm text-gray-600">Get authorization code</p>
+                    </button>
 
-                  <button
-                    onClick={() => {
-                      const instance = instances.find(i => i.instance_id === selectedInstanceId);
-                      if (instance) {
-                        setSelectedInstanceForApiToken(instance);
-                        setShowApiTokenModal(true);
+                    <button
+                      onClick={() => {
                         setShowSettingsModal(false);
-                      }
-                    }}
-                    title="Update the API token for this WhatsApp instance"
-                    className="p-4 bg-white rounded-xl border border-green-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200 text-left group"
-                  >
-                    <div className="flex items-center mb-2">
-                      <FiKey className="w-5 h-5 text-green-600 mr-2" />
-                      <span className="font-semibold text-green-800">Token</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Update API token</p>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const instance = instances.find(i => i.instance_id === selectedInstanceId);
-                      if (instance) {
-                        setShowSettingsModal(false);
-                        rebootInstance(instance);
-                      }
-                    }}
-                    title="Restart this WhatsApp instance to refresh connection"
-                    className="p-4 bg-white rounded-xl border border-orange-200 hover:border-orange-300 hover:bg-orange-50 transition-all duration-200 text-left group"
-                  >
-                    <div className="flex items-center mb-2">
-                      <FiRefreshCw className="w-5 h-5 text-orange-600 mr-2" />
-                      <span className="font-semibold text-orange-800">Reboot</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Restart instance</p>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const instance = instances.find(i => i.instance_id === selectedInstanceId);
-                      if (instance) {
-                        setShowSettingsModal(false);
-                        logoutInstance(instance);
-                      }
-                    }}
-                    title="Logout this WhatsApp instance and disconnect from WhatsApp"
-                    className="p-4 bg-white rounded-xl border border-red-200 hover:border-red-300 hover:bg-red-50 transition-all duration-200 text-left group"
-                  >
-                    <div className="flex items-center mb-2">
-                      <FiLogOut className="w-5 h-5 text-red-600 mr-2" />
-                      <span className="font-semibold text-red-800">Logout</span>
-                    </div>
-                    <p className="text-sm text-gray-600">Logout from WhatsApp</p>
-                  </button>
+                        rebootInstance(selectedInstanceForSettings);
+                      }}
+                      className="p-4 bg-white border border-orange-200 hover:border-orange-300 hover:bg-orange-50 rounded-xl transition-all duration-200 text-left"
+                    >
+                      <div className="flex items-center mb-2">
+                        <FiRefreshCw className="w-5 h-5 text-orange-600 mr-2" />
+                        <span className="font-semibold text-orange-800">Reboot</span>
+                      </div>
+                      <p className="text-sm text-gray-600">Restart instance</p>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-            
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+
+            {/* Modal Footer */}
+            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex justify-end gap-4">
               <button
                 onClick={() => setShowSettingsModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="px-6 py-3 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  saveInstanceSettings(selectedInstanceId);
-                  setShowSettingsModal(false);
-                }}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                onClick={saveGreenApiSettings}
+                disabled={savingSettings || settingsLoading}
+                className="px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-medium hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                Save Settings
+                {savingSettings ? (
+                  <>
+                    <FiRefreshCw size={18} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <FiSave size={18} />
+                    Save Settings
+                  </>
+                )}
               </button>
             </div>
           </div>

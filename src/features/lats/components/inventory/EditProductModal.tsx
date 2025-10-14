@@ -119,25 +119,6 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     }
   });
 
-  // Don't render if modal is not open
-  if (!isOpen) {
-    return null;
-  }
-
-  // Show loading state if required data is not available
-  if (isLoading || !product) {
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <div className="flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <span className="ml-2">Loading product data...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   const selectedLocationId = watch('storeLocationId');
 
   // Load store locations and shelves
@@ -235,9 +216,9 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               description: fetchedProduct.description || '',
               sku: fetchedProduct.sku,
               barcode: fetchedProduct.barcode || '',
-              categoryId: fetchedProduct.categoryId,
+              categoryId: fetchedProduct.categoryId || '',  // ✅ FIXED: Use empty string instead of null/undefined
 
-              supplierId: fetchedProduct.supplierId || null,
+              supplierId: fetchedProduct.supplierId || '',  // ✅ FIXED: Use empty string instead of null
               condition: fetchedProduct.condition || 'new',
               storeLocationId: '', // Will be set based on shelf lookup
               storeShelf: fetchedProduct.storeShelf || '',
@@ -284,6 +265,26 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       console.error('Error finding location for shelf:', error);
     }
   };
+
+  // ✅ FIXED: Conditional returns AFTER all hooks to comply with Rules of Hooks
+  // Don't render if modal is not open
+  if (!isOpen) {
+    return null;
+  }
+
+  // Show loading state if required data is not available
+  if (isLoading || !product) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span className="ml-2">Loading product data...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Handle tag input
   const handleTagInputKeyPress = (e: React.KeyboardEvent) => {

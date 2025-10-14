@@ -362,8 +362,8 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                 <span className="text-xs sm:text-sm font-medium hidden sm:inline">Exit</span>
               </button>
 
-              {/* Settings - Show when available */}
-              {onSettings && (
+              {/* Settings - Show only for admin users */}
+              {onSettings && currentUser?.role === 'admin' && (
                 <button
                   onClick={() => {
                     playClickSound();

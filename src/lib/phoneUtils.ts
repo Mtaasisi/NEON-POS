@@ -90,24 +90,24 @@ export function matchesPhoneSearch(customerPhone: string, searchTerm: string): b
 
 /**
  * Formats a phone number for display
- * Converts to local format (0XXXXXXXXX) for better readability
+ * Converts to international format (+255XXXXXXXXX) - removes leading 0 if present
  */
 export function formatPhoneForDisplay(phone: string): string {
   const cleaned = cleanPhoneNumber(phone);
   
-  // If it's an international format, convert to local
-  if (cleaned.startsWith('255') && cleaned.length === 12) {
-    return convertToLocalFormat(cleaned);
-  }
-  
-  // If it's already in local format, return as is
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
+  // If it's already in international format with +, return as is
+  if (cleaned.startsWith('+255') && cleaned.length === 13) {
     return cleaned;
   }
   
-  // If it has +255, convert to local format
-  if (cleaned.startsWith('+255') && cleaned.length === 13) {
-    return convertToLocalFormat(cleaned.substring(1));
+  // If it's in international format without +, add it
+  if (cleaned.startsWith('255') && cleaned.length === 12) {
+    return `+${cleaned}`;
+  }
+  
+  // If it's in local format (0XXXXXXXXX), convert to international (removes the 0)
+  if (cleaned.startsWith('0') && cleaned.length === 10) {
+    return `+255${cleaned.substring(1)}`;
   }
   
   // Return as is if format is unclear

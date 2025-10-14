@@ -52,6 +52,28 @@ class GeminiService {
       requestCount: 0,
       maxRequestsPerMinute: this.maxRequestsPerMinute
     });
+
+    // Try to load from database
+    this.loadApiKeyFromDatabase();
+  }
+
+  /**
+   * Fetch Gemini API key from database
+   */
+  private async loadApiKeyFromDatabase(): Promise<void> {
+    try {
+      const { getIntegration } = await import('../lib/integrationsApi');
+      const integration = await getIntegration('GEMINI_AI');
+      
+      if (integration && integration.is_enabled && integration.credentials?.api_key) {
+        this.apiKey = integration.credentials.api_key;
+        console.log('✅ Gemini API key loaded from database');
+      } else if (!this.apiKey) {
+        console.warn('⚠️ Gemini API key not found in database or environment');
+      }
+    } catch (error) {
+      console.warn('⚠️ Error fetching Gemini credentials from database:', error);
+    }
   }
 
   setApiKey(key: string) {

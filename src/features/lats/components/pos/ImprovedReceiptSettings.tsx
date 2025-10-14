@@ -2,7 +2,7 @@
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
 import { 
   Receipt, Printer, FileText, Settings, Image, Calendar,
-  ChevronDown, ChevronUp, Save, RotateCcw
+  ChevronDown, ChevronUp, Save, RotateCcw, MessageCircle, Eye
 } from 'lucide-react';
 import { ToggleSwitch, NumberInput, TextInput, Select } from './UniversalFormComponents';
 import { useReceiptSettings } from '../../../../hooks/usePOSSettings';
@@ -360,6 +360,192 @@ const ImprovedReceiptSettings = forwardRef<ReceiptSettingsTabRef>((props, ref) =
                 checked={settings.enable_sms_receipt}
                 onChange={(checked) => handleSettingChange('enable_sms_receipt', checked)}
               />
+            </div>
+          </CollapsibleSection>
+
+          {/* WhatsApp PDF & Receipt Sharing */}
+          <CollapsibleSection
+            title="WhatsApp PDF & Receipt Sharing"
+            icon={<MessageCircle className="w-5 h-5 text-green-600" />}
+          >
+            <div className="space-y-6">
+              {/* Info Banner */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <MessageCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                  <div>
+                    <h4 className="font-medium text-green-900 mb-1">WhatsApp PDF Receipts</h4>
+                    <p className="text-sm text-green-700">
+                      Send beautifully formatted PDF receipts directly to customers' WhatsApp
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* WhatsApp PDF Settings */}
+              <div className="space-y-4">
+                <ToggleSwitch
+                  label="Enable WhatsApp PDF Receipts"
+                  checked={settings.enable_whatsapp_pdf}
+                  onChange={(checked) => handleSettingChange('enable_whatsapp_pdf', checked)}
+                  description="Allow sending receipts as PDF via WhatsApp"
+                />
+
+                {settings.enable_whatsapp_pdf && (
+                  <>
+                    {/* Auto-send vs Manual */}
+                    <div className="pl-6 space-y-4 border-l-2 border-green-300">
+                      <div>
+                        <ToggleSwitch
+                          label="Auto-send PDF after payment"
+                          checked={settings.whatsapp_pdf_auto_send}
+                          onChange={(checked) => handleSettingChange('whatsapp_pdf_auto_send', checked)}
+                          description={settings.whatsapp_pdf_auto_send 
+                            ? "✅ PDF will be sent automatically" 
+                            : "Manual: Staff clicks 'Send PDF' button"}
+                        />
+                      </div>
+
+                      {/* Show Preview Option */}
+                      <ToggleSwitch
+                        label="Show preview before sending"
+                        checked={settings.whatsapp_pdf_show_preview}
+                        onChange={(checked) => handleSettingChange('whatsapp_pdf_show_preview', checked)}
+                        description="Allow staff to review PDF before sending"
+                      />
+
+                      {/* PDF Format Options */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          PDF Format
+                        </label>
+                        <Select
+                          label=""
+                          value={settings.whatsapp_pdf_format || 'a4'}
+                          onChange={(value) => handleSettingChange('whatsapp_pdf_format', value)}
+                          options={[
+                            { value: 'a4', label: 'A4 (210 x 297 mm) - Standard' },
+                            { value: 'letter', label: 'Letter (216 x 279 mm) - US Standard' },
+                            { value: 'thermal', label: 'Thermal (80mm width)' },
+                          ]}
+                        />
+                      </div>
+
+                      {/* PDF Quality */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          PDF Quality
+                        </label>
+                        <Select
+                          label=""
+                          value={settings.whatsapp_pdf_quality || 'standard'}
+                          onChange={(value) => handleSettingChange('whatsapp_pdf_quality', value)}
+                          options={[
+                            { value: 'high', label: 'High Quality (larger file)' },
+                            { value: 'standard', label: 'Standard Quality (recommended)' },
+                            { value: 'compressed', label: 'Compressed (smaller file)' },
+                          ]}
+                        />
+                      </div>
+
+                      {/* Include Options */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                          Include in PDF
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <ToggleSwitch
+                            label="Business Logo"
+                            checked={settings.whatsapp_pdf_include_logo ?? true}
+                            onChange={(checked) => handleSettingChange('whatsapp_pdf_include_logo', checked)}
+                          />
+                          <ToggleSwitch
+                            label="Item Images"
+                            checked={settings.whatsapp_pdf_include_images ?? false}
+                            onChange={(checked) => handleSettingChange('whatsapp_pdf_include_images', checked)}
+                          />
+                          <ToggleSwitch
+                            label="QR Code"
+                            checked={settings.whatsapp_pdf_include_qr ?? true}
+                            onChange={(checked) => handleSettingChange('whatsapp_pdf_include_qr', checked)}
+                          />
+                          <ToggleSwitch
+                            label="Barcode"
+                            checked={settings.whatsapp_pdf_include_barcode ?? false}
+                            onChange={(checked) => handleSettingChange('whatsapp_pdf_include_barcode', checked)}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Accompanying Message */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          WhatsApp Message (sent with PDF)
+                        </label>
+                        <textarea
+                          value={settings.whatsapp_pdf_message || 'Thank you for your purchase! Please find your receipt attached.'}
+                          onChange={(e) => handleSettingChange('whatsapp_pdf_message', e.target.value)}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="Message sent with PDF..."
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          This message will be sent along with the PDF receipt
+                        </p>
+                      </div>
+
+                      {/* Preview Button */}
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                        onClick={() => {
+                          // TODO: Implement PDF preview
+                          alert('PDF Preview coming soon!');
+                        }}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Preview PDF Receipt
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Other Sharing Options */}
+              <div className="border-t border-gray-200 pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Other Sharing Options
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <ToggleSwitch
+                    label="Enable Email PDF"
+                    checked={settings.enable_email_pdf ?? true}
+                    onChange={(checked) => handleSettingChange('enable_email_pdf', checked)}
+                  />
+                  <ToggleSwitch
+                    label="Enable Print PDF"
+                    checked={settings.enable_print_pdf ?? true}
+                    onChange={(checked) => handleSettingChange('enable_print_pdf', checked)}
+                  />
+                  <ToggleSwitch
+                    label="Enable Download PDF"
+                    checked={settings.enable_download_pdf ?? true}
+                    onChange={(checked) => handleSettingChange('enable_download_pdf', checked)}
+                  />
+                  <ToggleSwitch
+                    label="Show Share Button"
+                    checked={settings.show_share_button ?? true}
+                    onChange={(checked) => handleSettingChange('show_share_button', checked)}
+                  />
+                </div>
+              </div>
+
+              {/* Tips */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-xs text-blue-700">
+                  💡 <strong>Tip:</strong> WhatsApp PDF is great for professional invoices. For quick confirmations, use WhatsApp Text (in Notifications tab).
+                </p>
+              </div>
             </div>
           </CollapsibleSection>
 

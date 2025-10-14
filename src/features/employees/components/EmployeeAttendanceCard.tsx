@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import SecureAttendanceVerification from './SecureAttendanceVerification';
+import LeaveRequestModal from './LeaveRequestModal';
 import { Clock, CheckCircle, AlertTriangle, Calendar, LogIn, LogOut, Shield } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAttendanceSettings } from '../../../hooks/useAttendanceSettings';
+import { employeeService } from '../../../services/employeeService';
 
 interface EmployeeAttendanceCardProps {
   employeeId: string;
@@ -39,12 +41,19 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
     checkOut?: string;
     status: 'not-started' | 'checked-in' | 'checked-out';
   }>({ status: 'not-started' });
+  const [isLoading, setIsLoading] = useState(true);
+  const [showLeaveRequestModal, setShowLeaveRequestModal] = useState(false);
 
   const [showSecurityVerification, setShowSecurityVerification] = useState(false);
 
   // Use attendance settings if no office location is provided
   const effectiveOfficeLocation = officeLocation || attendanceSettings.offices[0];
   const effectiveOfficeNetworks = officeNetworks || attendanceSettings.offices[0]?.networks || [];
+
+  // Load today's attendance on mount
+  useEffect(() => {
+    loadTodayAttendance();
+  }, [employeeId]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -54,6 +63,41 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  const loadTodayAttendance = async () => {
+    try {
+      setIsLoading(true);
+      const attendance = await employeeService.getTodayAttendance(employeeId);
+      
+      if (attendance) {
+        const checkInTime = attendance.checkInTime 
+          ? new Date(attendance.checkInTime).toTimeString().split(' ')[0]
+          : undefined;
+        const checkOutTime = attendance.checkOutTime 
+          ? new Date(attendance.checkOutTime).toTimeString().split(' ')[0]
+          : undefined;
+
+        let status: 'not-started' | 'checked-in' | 'checked-out' = 'not-started';
+        if (checkInTime && checkOutTime) {
+          status = 'checked-out';
+        } else if (checkInTime) {
+          status = 'checked-in';
+        }
+
+        setTodayAttendance({
+          checkIn: checkInTime,
+          checkOut: checkOutTime,
+          status
+        });
+      } else {
+        setTodayAttendance({ status: 'not-started' });
+      }
+    } catch (error) {
+      console.error('Failed to load today\'s attendance:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleCheckIn = () => {
     // Check if attendance is enabled
     if (!attendanceSettings.enabled) {
@@ -61,9 +105,9 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
       return;
     }
 
-    // If security verification is required, show verification first
+    // If security verification is required (location, wifi, or photo), show verification first
     if (effectiveOfficeLocation && effectiveOfficeNetworks && 
-        (attendanceSettings.requireLocation || attendanceSettings.requireWifi)) {
+        (attendanceSettings.requireLocation || attendanceSettings.requireWifi || attendanceSettings.requirePhoto)) {
       setShowSecurityVerification(true);
       return;
     }
@@ -72,17 +116,27 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
     performCheckIn();
   };
 
-  const performCheckIn = () => {
-    const now = new Date();
-    const timeString = now.toTimeString().split(' ')[0];
-    
-    setTodayAttendance({
-      checkIn: timeString,
-      status: 'checked-in'
-    });
-    
-    onCheckIn(employeeId, timeString);
-    toast.success('Successfully checked in!');
+  const performCheckIn = async () => {
+    try {
+      const now = new Date();
+      const timeString = now.toTimeString().split(' ')[0];
+      
+      // Optimistically update UI
+      setTodayAttendance({
+        checkIn: timeString,
+        status: 'checked-in'
+      });
+      
+      // Call parent handler which persists to database
+      await onCheckIn(employeeId, timeString);
+      
+      // Reload from database to ensure sync
+      await loadTodayAttendance();
+    } catch (error) {
+      console.error('Check-in failed:', error);
+      // Revert optimistic update on error
+      await loadTodayAttendance();
+    }
   };
 
   const handleSecurityVerificationComplete = () => {
@@ -95,18 +149,28 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
     toast.error('Security verification failed. Please try again.');
   };
 
-  const handleCheckOut = () => {
-    const now = new Date();
-    const timeString = now.toTimeString().split(' ')[0];
-    
-    setTodayAttendance(prev => ({
-      ...prev,
-      checkOut: timeString,
-      status: 'checked-out'
-    }));
-    
-    onCheckOut(employeeId, timeString);
-    toast.success('Successfully checked out!');
+  const handleCheckOut = async () => {
+    try {
+      const now = new Date();
+      const timeString = now.toTimeString().split(' ')[0];
+      
+      // Optimistically update UI
+      setTodayAttendance(prev => ({
+        ...prev,
+        checkOut: timeString,
+        status: 'checked-out'
+      }));
+      
+      // Call parent handler which persists to database
+      await onCheckOut(employeeId, timeString);
+      
+      // Reload from database to ensure sync
+      await loadTodayAttendance();
+    } catch (error) {
+      console.error('Check-out failed:', error);
+      // Revert optimistic update on error
+      await loadTodayAttendance();
+    }
   };
 
   const formatTime = (time: Date) => {
@@ -143,38 +207,43 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
   return (
     <>
       <GlassCard className="p-6">
-        <div className="text-center space-y-4">
-          {/* Header */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{employeeName}</h3>
-            <p className="text-sm text-gray-600">Employee ID: {employeeId}</p>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span className="ml-3 text-gray-600">Loading attendance...</span>
           </div>
+        ) : (
+          <div className="text-center space-y-4">
+            {/* Header */}
+            <div>
+              <h3 className="text-3xl font-bold text-gray-900">{employeeName}</h3>
+            </div>
 
-          {/* Current Time */}
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <Clock size={20} className="text-blue-600" />
-              <span className="text-sm font-medium text-gray-700">Current Time</span>
+            {/* Current Time */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Clock size={20} className="text-blue-600" />
+                <span className="text-sm font-medium text-gray-700">Current Time</span>
+              </div>
+              <div className="text-2xl font-mono font-bold text-gray-900">
+                {formatTime(currentTime)}
+              </div>
+              <div className="text-sm text-gray-500 mt-1">
+                {currentTime.toLocaleDateString('en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </div>
             </div>
-            <div className="text-2xl font-mono font-bold text-gray-900">
-              {formatTime(currentTime)}
-            </div>
-            <div className="text-sm text-gray-500 mt-1">
-              {currentTime.toLocaleDateString('en-US', {
-                weekday: 'long',
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })}
-            </div>
-          </div>
 
-          {/* Status */}
-          <div className={`flex items-center justify-center gap-2 ${getStatusColor()}`}>
-            {todayAttendance.status === 'checked-in' && <CheckCircle size={20} />}
-            {todayAttendance.status === 'checked-out' && <AlertTriangle size={20} />}
-            <span className="font-medium">{getStatusText()}</span>
-          </div>
+            {/* Status */}
+            <div className={`flex items-center justify-center gap-2 ${getStatusColor()}`}>
+              {todayAttendance.status === 'checked-in' && <CheckCircle size={20} />}
+              {todayAttendance.status === 'checked-out' && <AlertTriangle size={20} />}
+              <span className="font-medium">{getStatusText()}</span>
+            </div>
 
           {/* Attendance Times */}
           {(todayAttendance.checkIn || todayAttendance.checkOut) && (
@@ -243,12 +312,14 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
                 size="sm"
                 icon={<Clock size={16} />}
                 className="text-gray-600"
+                onClick={() => setShowLeaveRequestModal(true)}
               >
                 Request Leave
               </GlassButton>
             </div>
           </div>
-        </div>
+          </div>
+        )}
       </GlassCard>
 
       {/* Security Verification Modal */}
@@ -264,6 +335,19 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
             />
           </div>
         </div>
+      )}
+
+      {/* Leave Request Modal */}
+      {showLeaveRequestModal && (
+        <LeaveRequestModal
+          employeeId={employeeId}
+          employeeName={employeeName}
+          onClose={() => setShowLeaveRequestModal(false)}
+          onSuccess={() => {
+            setShowLeaveRequestModal(false);
+            toast.success('Leave request submitted successfully');
+          }}
+        />
       )}
     </>
   );

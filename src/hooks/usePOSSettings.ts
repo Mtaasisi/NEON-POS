@@ -119,7 +119,22 @@ const defaultReceiptSettings: ReceiptSettings = {
   show_footer_message: true,
   footer_message: 'Thank you for your business!',
   show_return_policy: false,
-  return_policy_text: 'Returns accepted within 7 days with receipt'
+  return_policy_text: 'Returns accepted within 7 days with receipt',
+  // WhatsApp PDF Settings (NEW)
+  enable_whatsapp_pdf: true,
+  whatsapp_pdf_auto_send: false,
+  whatsapp_pdf_show_preview: true,
+  whatsapp_pdf_format: 'a4',
+  whatsapp_pdf_quality: 'standard',
+  whatsapp_pdf_include_logo: true,
+  whatsapp_pdf_include_images: false,
+  whatsapp_pdf_include_qr: true,
+  whatsapp_pdf_include_barcode: false,
+  whatsapp_pdf_message: 'Thank you for your purchase! Please find your receipt attached.',
+  enable_email_pdf: true,
+  enable_print_pdf: true,
+  enable_download_pdf: true,
+  show_share_button: true
 };
 
 const defaultBarcodeScannerSettings: BarcodeScannerSettings = {

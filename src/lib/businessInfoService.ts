@@ -15,9 +15,8 @@ class BusinessInfoService {
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   /**
-   * Get business information from general_settings or lats_pos_general_settings
-   * Automatically detects which table naming convention is being used
-   * Falls back to default values if not configured
+   * Get business information from lats_pos_general_settings
+   * Single source of truth for all business information across the app
    */
   async getBusinessInfo(): Promise<BusinessInfo> {
     // Return cached info if still valid
@@ -27,33 +26,12 @@ class BusinessInfoService {
     }
 
     try {
-      // Try both possible table names
-      let data = null;
-      let error = null;
-      
-      // Try general_settings first
-      const result1 = await supabase
-        .from('general_settings')
+      // @ts-ignore - Neon query builder implements thenable interface
+      const { data, error } = await supabase
+        .from('lats_pos_general_settings')
         .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
         .limit(1)
         .single();
-      
-      if (!result1.error && result1.data) {
-        data = result1.data;
-      } else {
-        // Try lats_pos_general_settings
-        const result2 = await supabase
-          .from('lats_pos_general_settings')
-          .select('business_name, business_address, business_phone, business_email, business_website, business_logo')
-          .limit(1)
-          .single();
-        
-        if (!result2.error && result2.data) {
-          data = result2.data;
-        } else {
-          error = result2.error;
-        }
-      }
 
       if (!error && data) {
         this.cachedInfo = {
@@ -65,10 +43,17 @@ class BusinessInfoService {
           logo: data.business_logo || null
         };
         this.cacheTimestamp = now;
+        
+        console.log('📋 Business Info Loaded:', {
+          name: this.cachedInfo.name,
+          hasLogo: !!this.cachedInfo.logo,
+          logoLength: this.cachedInfo.logo?.length || 0
+        });
+        
         return this.cachedInfo;
       }
     } catch (err) {
-      console.warn('⚠️ Could not load business info from database:', err);
+      console.warn('⚠️ Could not load business info from lats_pos_general_settings:', err);
     }
 
     // Fallback to defaults
@@ -81,6 +66,7 @@ class BusinessInfoService {
       logo: null
     };
 
+    console.log('⚠️ Using default business info (database not configured)');
     return defaultInfo;
   }
 
@@ -93,8 +79,7 @@ class BusinessInfoService {
   }
 
   /**
-   * Update business information
-   * Automatically detects which table to update
+   * Update business information in lats_pos_general_settings
    */
   async updateBusinessInfo(info: Partial<BusinessInfo>): Promise<boolean> {
     try {
@@ -107,61 +92,35 @@ class BusinessInfoService {
         business_logo: info.logo
       };
 
-      // Try to find which table exists and has data
-      const { tableName, id } = await this.getCurrentSettingsTable();
-      
-      if (!tableName || !id) {
-        console.error('No settings table found');
-        return false;
-      }
-
-      const { error } = await supabase
-        .from(tableName)
-        .update(updateData)
-        .eq('id', id);
-
-      if (error) throw error;
-
-      // Clear cache to force refresh
-      this.clearCache();
-      return true;
-    } catch (err) {
-      console.error('Failed to update business info:', err);
-      return false;
-    }
-  }
-
-  /**
-   * Get current settings table name and ID (helper method)
-   * Returns which table exists and has data
-   */
-  private async getCurrentSettingsTable(): Promise<{ tableName: string | null; id: string | null }> {
-    try {
-      // Try general_settings first
-      const result1 = await supabase
-        .from('general_settings')
-        .select('id')
-        .limit(1)
-        .single();
-      
-      if (!result1.error && result1.data) {
-        return { tableName: 'general_settings', id: result1.data.id };
-      }
-
-      // Try lats_pos_general_settings
-      const result2 = await supabase
+      // @ts-ignore - Neon query builder implements thenable interface
+      // Get the first record from lats_pos_general_settings
+      const { data: existing } = await supabase
         .from('lats_pos_general_settings')
         .select('id')
         .limit(1)
         .single();
       
-      if (!result2.error && result2.data) {
-        return { tableName: 'lats_pos_general_settings', id: result2.data.id };
+      if (!existing) {
+        console.error('No settings record found in lats_pos_general_settings');
+        return false;
       }
 
-      return { tableName: null, id: null };
-    } catch {
-      return { tableName: null, id: null };
+      // @ts-ignore - Neon query builder implements thenable interface
+      const { error } = await supabase
+        .from('lats_pos_general_settings')
+        .update(updateData)
+        .eq('id', existing.id);
+
+      if (error) throw error;
+
+      // Clear cache to force refresh
+      this.clearCache();
+      
+      console.log('✅ Business info updated successfully');
+      return true;
+    } catch (err) {
+      console.error('Failed to update business info:', err);
+      return false;
     }
   }
 }

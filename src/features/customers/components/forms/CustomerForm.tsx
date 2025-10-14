@@ -1,5 +1,5 @@
 import React, { ReactNode, useState, useEffect, useRef, useMemo } from 'react';
-import { User, Phone, Mail, MapPin, Tag, Check, RefreshCw, X, ArrowLeft, AlertTriangle, ChevronDown, Users, UserCheck, Facebook, Instagram, Music, Globe, CreditCard, Newspaper, Search, Building, Calendar, HelpCircle } from 'lucide-react';
+import { User, Phone, Mail, MapPin, Tag, Check, RefreshCw, X, ArrowLeft, AlertTriangle, ChevronDown, Users, UserCheck, Facebook, Music, Globe, CreditCard, Newspaper, Search, Building, Calendar, HelpCircle } from 'lucide-react';
 // import FloatingActionBar from '../ui/FloatingActionBar';
 // import { addCustomer } from '../../../services/customer.services'; // Not used in this context
 import { supabase } from '../../../../lib/supabaseClient';
@@ -183,7 +183,6 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
     { label: 'Friend', icon: <Users className="w-5 h-5" />, color: 'green' },
     { label: 'Walk-in', icon: <UserCheck className="w-5 h-5" />, color: 'orange' },
     { label: 'Facebook', icon: <Facebook className="w-5 h-5" />, color: 'blue' },
-    { label: 'Instagram', icon: <Instagram className="w-5 h-5" />, color: 'pink' },
     { label: 'Tiktok', icon: <Music className="w-5 h-5" />, color: 'gray' },
     { label: 'Website', icon: <Globe className="w-5 h-5" />, color: 'teal' },
     { label: 'Business Card', icon: <CreditCard className="w-5 h-5" />, color: 'yellow' },

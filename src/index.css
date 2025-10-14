@@ -18,6 +18,34 @@
   display: none; /* WebKit */
 }
 
+/* Custom POS Products Scrollbar - Visible and Smooth */
+.pos-products-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.pos-products-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.pos-products-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.pos-products-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.pos-products-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* Custom CSS Variables */
 :root {
   --glass-bg: rgba(255, 255, 255, 0.1);
@@ -71,29 +99,253 @@
 }
 
 .theme-dark {
-  --bg-primary: radial-gradient(ellipse at center, #1e293b 0%, #334155 40%, #475569 80%, #64748b 100%);
-  --bg-secondary: #1e293b;
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --card-bg: rgba(30, 41, 59, 0.8);
-  --card-border: rgba(255, 255, 255, 0.1);
-  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
-  --glass-bg: rgba(30, 41, 59, 0.3);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-}
-
-.theme-dark-cards {
   --bg-primary: radial-gradient(ellipse at center, #0f172a 0%, #1e293b 40%, #334155 80%, #475569 100%);
   --bg-secondary: #1e293b;
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
-  --card-bg: rgba(51, 65, 85, 0.95);
-  --card-border: rgba(255, 255, 255, 0.2);
-  --card-shadow: 0 8px 25px -5px rgba(0, 0, 0, 0.4);
-  --glass-bg: rgba(51, 65, 85, 0.4);
-  --glass-border: rgba(255, 255, 255, 0.2);
+  --card-bg: rgba(30, 41, 59, 0.9);
+  --card-border: rgba(148, 163, 184, 0.2);
+  --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(30, 41, 59, 0.5);
+  --glass-border: rgba(148, 163, 184, 0.2);
   --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+  --sidebar-bg: rgba(15, 23, 42, 0.95);
+  --topbar-bg: rgba(15, 23, 42, 0.9);
+  --hover-bg: rgba(59, 130, 246, 0.1);
+  --active-bg: rgba(59, 130, 246, 0.15);
+  --border-color: rgba(148, 163, 184, 0.15);
+}
+
+.theme-dark-cards {
+  --bg-primary: radial-gradient(ellipse at center, #0a0f1e 0%, #0f172a 40%, #1e293b 80%, #334155 100%);
+  --bg-secondary: #0f172a;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --card-bg: rgba(51, 65, 85, 0.98);
+  --card-border: rgba(148, 163, 184, 0.25);
+  --card-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.6);
+  --glass-bg: rgba(51, 65, 85, 0.6);
+  --glass-border: rgba(148, 163, 184, 0.25);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+  --sidebar-bg: rgba(10, 15, 30, 0.98);
+  --topbar-bg: rgba(10, 15, 30, 0.95);
+  --hover-bg: rgba(59, 130, 246, 0.12);
+  --active-bg: rgba(59, 130, 246, 0.2);
+  --border-color: rgba(148, 163, 184, 0.2);
+}
+
+/* Dark Theme Specific Utilities */
+.theme-dark .text-gray-900,
+.theme-dark-cards .text-gray-900 {
+  color: #f8fafc !important;
+}
+
+.theme-dark .text-gray-800,
+.theme-dark-cards .text-gray-800 {
+  color: #f1f5f9 !important;
+}
+
+.theme-dark .text-gray-700,
+.theme-dark-cards .text-gray-700 {
+  color: #e2e8f0 !important;
+}
+
+.theme-dark .text-gray-600,
+.theme-dark-cards .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+.theme-dark .text-gray-500,
+.theme-dark-cards .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+.theme-dark .text-gray-400,
+.theme-dark-cards .text-gray-400 {
+  color: #64748b !important;
+}
+
+/* Fix black text colors in dark mode */
+.theme-dark .text-black,
+.theme-dark-cards .text-black {
+  color: #f8fafc !important;
+}
+
+/* Fix slate text colors in dark mode */
+.theme-dark .text-slate-900,
+.theme-dark-cards .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+.theme-dark .text-slate-800,
+.theme-dark-cards .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+.theme-dark .text-slate-700,
+.theme-dark-cards .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+/* Background colors */
+.theme-dark .bg-white,
+.theme-dark-cards .bg-white {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+}
+
+.theme-dark .bg-gray-50,
+.theme-dark-cards .bg-gray-50 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+.theme-dark .bg-gray-100,
+.theme-dark-cards .bg-gray-100 {
+  background-color: rgba(30, 41, 59, 0.6) !important;
+}
+
+.theme-dark .bg-gray-200,
+.theme-dark-cards .bg-gray-200 {
+  background-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+/* Border colors */
+.theme-dark .border-gray-300,
+.theme-dark-cards .border-gray-300 {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+.theme-dark .border-gray-200,
+.theme-dark-cards .border-gray-200 {
+  border-color: rgba(148, 163, 184, 0.15) !important;
+}
+
+.theme-dark .border-gray-100,
+.theme-dark-cards .border-gray-100 {
+  border-color: rgba(148, 163, 184, 0.1) !important;
+}
+
+.theme-dark .border-white\/20,
+.theme-dark .border-white\/30,
+.theme-dark-cards .border-white\/20,
+.theme-dark-cards .border-white\/30 {
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+
+/* Sidebar Dark Theme Styling */
+.theme-dark .sidebar-bg,
+.theme-dark-cards .sidebar-bg {
+  background: var(--sidebar-bg) !important;
+  backdrop-filter: blur(20px);
+}
+
+/* Topbar Dark Theme Styling */
+.theme-dark .topbar,
+.theme-dark-cards .topbar {
+  background: var(--topbar-bg) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+/* Glass Card Dark Theme */
+.theme-dark .glass,
+.theme-dark-cards .glass {
+  background: var(--glass-bg) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Input and Form Elements in Dark Mode */
+.theme-dark input,
+.theme-dark textarea,
+.theme-dark select,
+.theme-dark-cards input,
+.theme-dark-cards textarea,
+.theme-dark-cards select {
+  background-color: rgba(30, 41, 59, 0.6) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+.theme-dark input::placeholder,
+.theme-dark textarea::placeholder,
+.theme-dark-cards input::placeholder,
+.theme-dark-cards textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Dropdown and Select Options */
+.theme-dark option,
+.theme-dark-cards option {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* Table elements in dark mode */
+.theme-dark table,
+.theme-dark-cards table {
+  color: #e2e8f0 !important;
+}
+
+.theme-dark th,
+.theme-dark-cards th {
+  color: #f1f5f9 !important;
+  background-color: rgba(30, 41, 59, 0.8) !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+.theme-dark td,
+.theme-dark-cards td {
+  color: #e2e8f0 !important;
+  border-color: rgba(148, 163, 184, 0.15) !important;
+}
+
+/* Links in dark mode */
+.theme-dark a:not(.btn),
+.theme-dark-cards a:not(.btn) {
+  color: #60a5fa !important;
+}
+
+.theme-dark a:not(.btn):hover,
+.theme-dark-cards a:not(.btn):hover {
+  color: #93c5fd !important;
+}
+
+/* Paragraph and span elements */
+.theme-dark p,
+.theme-dark span:not([class*="bg-"]):not([class*="text-white"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-red"]):not([class*="text-yellow"]),
+.theme-dark-cards p,
+.theme-dark-cards span:not([class*="bg-"]):not([class*="text-white"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-red"]):not([class*="text-yellow"]) {
+  color: inherit;
+}
+
+/* Headings in dark mode */
+.theme-dark h1,
+.theme-dark h2,
+.theme-dark h3,
+.theme-dark h4,
+.theme-dark h5,
+.theme-dark h6,
+.theme-dark-cards h1,
+.theme-dark-cards h2,
+.theme-dark-cards h3,
+.theme-dark-cards h4,
+.theme-dark-cards h5,
+.theme-dark-cards h6 {
+  color: #f8fafc;
+}
+
+/* Label elements in dark mode */
+.theme-dark label,
+.theme-dark-cards label {
+  color: #e2e8f0 !important;
+}
+
+/* Ensure modals and overlays work in dark mode */
+.theme-dark .modal,
+.theme-dark .overlay,
+.theme-dark-cards .modal,
+.theme-dark-cards .overlay {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  color: #f1f5f9 !important;
 }
 
 /* Global Styles */
@@ -174,7 +426,16 @@ body {
   background-repeat: no-repeat;
   background-size: cover;
   position: relative;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background 0.5s ease, color 0.3s ease;
+}
+
+/* Dark Theme Background Wallpapers */
+.theme-dark {
+  background: radial-gradient(ellipse at center, #0f172a 0%, #1e293b 30%, #334155 60%, #1e293b 100%);
+}
+
+.theme-dark-cards {
+  background: radial-gradient(ellipse at center, #020617 0%, #0f172a 30%, #1e293b 60%, #0f172a 100%);
 }
 
 body::before {
@@ -191,6 +452,49 @@ body::before {
   );
   pointer-events: none;
   animation: highlight-pulse 4s ease-in-out infinite;
+}
+
+/* Dark theme overlay with subtle highlights */
+.theme-dark body::before,
+.theme-dark-cards body::before {
+  background: radial-gradient(circle at 50% 20%, 
+    rgba(59, 130, 246, 0.1) 0%, 
+    rgba(99, 102, 241, 0.05) 30%, 
+    transparent 70%
+  );
+}
+
+/* Add subtle animated stars/particles for dark mode */
+.theme-dark::after,
+.theme-dark-cards::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(2px 2px at 20% 30%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(2px 2px at 60% 70%, rgba(255, 255, 255, 0.2), transparent),
+    radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.25), transparent),
+    radial-gradient(1px 1px at 80% 10%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(2px 2px at 90% 60%, rgba(255, 255, 255, 0.15), transparent),
+    radial-gradient(1px 1px at 33% 80%, rgba(255, 255, 255, 0.2), transparent),
+    radial-gradient(1px 1px at 15% 90%, rgba(255, 255, 255, 0.25), transparent);
+  background-size: 200% 200%;
+  pointer-events: none;
+  opacity: 0.4;
+  animation: drift 20s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes drift {
+  0%, 100% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
 }
 
 code {
@@ -728,5 +1032,34 @@ body {
     transform: scale(1.1);
     opacity: 0.8;
   }
+}
+
+/* Inventory Alerts Notification Animations */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-shrink {
+  animation: shrink 10s linear;
 }
 

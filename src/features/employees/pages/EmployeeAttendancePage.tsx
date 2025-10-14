@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
@@ -7,10 +7,12 @@ import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import EmployeeAttendanceCard from '../components/EmployeeAttendanceCard';
 import { 
   Clock, Calendar, TrendingUp, Activity, 
-  CheckCircle, AlertTriangle, CalendarDays, BarChart3
+  CheckCircle, AlertTriangle, CalendarDays, BarChart3, AlertCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { mainOffice } from '../config/officeConfig';
+import { employeeService } from '../../../services/employeeService';
+import { useAttendanceSettings } from '../../../hooks/useAttendanceSettings';
 
 interface AttendanceRecord {
   id: string;
@@ -25,100 +27,112 @@ interface AttendanceRecord {
 const EmployeeAttendancePage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { settings: attendanceSettings, loading: settingsLoading } = useAttendanceSettings();
   
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceRecord[]>([]);
+  const [currentEmployeeId, setCurrentEmployeeId] = useState<string | null>(null);
+  const [currentEmployeeName, setCurrentEmployeeName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'today' | 'history' | 'stats'>('today');
 
-  // Mock data loading
+  // Load data from database
   useEffect(() => {
     const loadData = async () => {
+      if (!currentUser) {
+        console.log('[Attendance] No current user, skipping data load');
+        return;
+      }
+      
+      console.log('[Attendance] Loading data for user:', currentUser.id, currentUser.email);
       setIsLoading(true);
+      setError(null);
       try {
-        // Mock attendance history for the current employee
-        const mockHistory: AttendanceRecord[] = [
-          {
-            id: '1',
-            date: '2024-01-20',
-            checkIn: '08:00:00',
-            checkOut: '17:00:00',
-            status: 'present',
-            hours: 9
-          },
-          {
-            id: '2',
-            date: '2024-01-19',
-            checkIn: '08:15:00',
-            checkOut: '17:30:00',
-            status: 'late',
-            hours: 9.25
-          },
-          {
-            id: '3',
-            date: '2024-01-18',
-            checkIn: '07:45:00',
-            checkOut: '17:00:00',
-            status: 'present',
-            hours: 9.25
-          },
-          {
-            id: '4',
-            date: '2024-01-17',
-            checkIn: '08:00:00',
-            checkOut: '16:30:00',
-            status: 'half-day',
-            hours: 8.5
-          },
-          {
-            id: '5',
-            date: '2024-01-16',
-            checkIn: '08:00:00',
-            checkOut: '17:00:00',
-            status: 'present',
-            hours: 9
-          }
-        ];
+        // Find employee record for current user using direct user ID lookup
+        const currentEmployee = await employeeService.getEmployeeByUserId(currentUser.id);
+        
+        if (currentEmployee) {
+          console.log('[Attendance] Found employee record:', currentEmployee.id, `${currentEmployee.firstName} ${currentEmployee.lastName}`);
+          
+          // Set the current employee ID and name
+          setCurrentEmployeeId(currentEmployee.id);
+          // ✅ Use full_name from users table instead of employee firstName/lastName
+          setCurrentEmployeeName(currentUser.fullName || currentUser.full_name || `${currentEmployee.firstName} ${currentEmployee.lastName}`);
+          
+          // Load attendance history for the current employee
+          const attendance = await employeeService.getAttendanceByEmployeeId(currentEmployee.id, 30);
+          console.log('[Attendance] Loaded attendance records:', attendance.length);
+          
+          const formattedHistory: AttendanceRecord[] = attendance.map(att => ({
+            id: att.id,
+            date: att.attendanceDate,
+            checkIn: att.checkInTime ? new Date(att.checkInTime).toLocaleTimeString('en-US', { hour12: false }) : undefined,
+            checkOut: att.checkOutTime ? new Date(att.checkOutTime).toLocaleTimeString('en-US', { hour12: false }) : undefined,
+            status: att.status,
+            hours: Number(att.totalHours) || 0,
+            notes: att.notes
+          }));
 
-        setAttendanceHistory(mockHistory);
+          setAttendanceHistory(formattedHistory);
+        } else {
+          console.warn('[Attendance] No employee record found for user:', currentUser.id, currentUser.email);
+          setError('Employee record not found. Please contact your administrator to link your account to an employee profile.');
+        }
       } catch (error) {
+        console.error('[Attendance] Failed to load attendance history:', error);
+        setError('Failed to load attendance data. Please try again.');
         toast.error('Failed to load attendance history');
       } finally {
         setIsLoading(false);
       }
     };
-
-    loadData();
-  }, []);
-
-  const handleCheckIn = (employeeId: string, time: string) => {
-    const today = new Date().toISOString().split('T')[0];
-    const newRecord: AttendanceRecord = {
-      id: Date.now().toString(),
-      date: today,
-      checkIn: time,
-      status: 'present',
-      hours: 0
-    };
     
-    setAttendanceHistory(prev => [newRecord, ...prev]);
+    loadData();
+  }, [currentUser]);
+
+  const reloadAttendance = useCallback(async () => {
+    if (!currentUser) return;
+    
+    try {
+      // Use direct user ID lookup for better performance
+      const currentEmployee = await employeeService.getEmployeeByUserId(currentUser.id);
+      
+      if (currentEmployee) {
+        const attendance = await employeeService.getAttendanceByEmployeeId(currentEmployee.id, 30);
+        
+        const formattedHistory: AttendanceRecord[] = attendance.map(att => ({
+          id: att.id,
+          date: att.attendanceDate,
+          checkIn: att.checkInTime ? new Date(att.checkInTime).toLocaleTimeString('en-US', { hour12: false }) : undefined,
+          checkOut: att.checkOutTime ? new Date(att.checkOutTime).toLocaleTimeString('en-US', { hour12: false }) : undefined,
+          status: att.status,
+          hours: Number(att.totalHours) || 0,
+          notes: att.notes
+        }));
+
+        setAttendanceHistory(formattedHistory);
+      }
+    } catch (error) {
+      console.error('Failed to reload attendance:', error);
+    }
+  }, [currentUser]);
+
+  const handleCheckIn = async (employeeId: string, time: string) => {
+    try {
+      await employeeService.checkIn(employeeId);
+      await reloadAttendance();
+    } catch (error) {
+      console.error('Check-in failed:', error);
+    }
   };
 
-  const handleCheckOut = (employeeId: string, time: string) => {
-    const today = new Date().toISOString().split('T')[0];
-    setAttendanceHistory(prev => prev.map(record => {
-      if (record.date === today && record.checkIn && !record.checkOut) {
-        const checkIn = new Date(`2000-01-01T${record.checkIn}`);
-        const checkOut = new Date(`2000-01-01T${time}`);
-        const hours = (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60);
-        
-        return {
-          ...record,
-          checkOut: time,
-          hours: Math.max(0, hours)
-        };
-      }
-      return record;
-    }));
+  const handleCheckOut = async (employeeId: string, time: string) => {
+    try {
+      await employeeService.checkOut(employeeId);
+      await reloadAttendance();
+    } catch (error) {
+      console.error('Check-out failed:', error);
+    }
   };
 
   const getTodayRecord = () => {
@@ -128,7 +142,7 @@ const EmployeeAttendancePage: React.FC = () => {
 
   const getStats = () => {
     const totalDays = attendanceHistory.length;
-    const presentDays = attendanceHistory.filter(r => r.status === 'present').length;
+    const presentDays = attendanceHistory.filter(r => r.status === 'present' || r.status === 'late').length;
     const lateDays = attendanceHistory.filter(r => r.status === 'late').length;
     const totalHours = attendanceHistory.reduce((sum, r) => sum + r.hours, 0);
     const avgHours = totalDays > 0 ? totalHours / totalDays : 0;
@@ -143,7 +157,43 @@ const EmployeeAttendancePage: React.FC = () => {
     };
   };
 
-  if (isLoading) {
+  const getMonthlyCalendarData = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    const calendarData = [];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const record = attendanceHistory.find(r => r.date === dateStr);
+      calendarData.push({
+        day,
+        dateStr,
+        hasAttendance: !!record,
+        status: record?.status
+      });
+    }
+    return calendarData;
+  };
+
+  const calculateTodayHours = (todayRecord: AttendanceRecord | undefined) => {
+    if (!todayRecord || !todayRecord.checkIn) return 0;
+    
+    if (todayRecord.checkOut) {
+      return todayRecord.hours;
+    }
+    
+    // Calculate hours worked so far today
+    const checkInTime = new Date(`2000-01-01T${todayRecord.checkIn}`);
+    const now = new Date();
+    const currentTime = new Date(`2000-01-01T${now.toTimeString().split(' ')[0]}`);
+    const diffMs = currentTime.getTime() - checkInTime.getTime();
+    const hours = diffMs / (1000 * 60 * 60);
+    return Math.max(0, hours);
+  };
+
+  if (isLoading || settingsLoading) {
     return (
       <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-center h-64">
@@ -154,7 +204,36 @@ const EmployeeAttendancePage: React.FC = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center gap-4 mb-6">
+          <BackButton to="/dashboard" />
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">My Attendance</h1>
+            <p className="text-gray-600 mt-1">Manage your daily check-ins and view history</p>
+          </div>
+        </div>
+        <GlassCard className="p-6">
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Attendance</h3>
+            <p className="text-gray-600 mb-6 max-w-md">{error}</p>
+            <GlassButton
+              onClick={() => window.location.reload()}
+              className="bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Try Again
+            </GlassButton>
+          </div>
+        </GlassCard>
+      </div>
+    );
+  }
+
   const stats = getStats();
+  const todayRecord = getTodayRecord();
+  const monthlyCalendar = getMonthlyCalendarData();
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -212,12 +291,57 @@ const EmployeeAttendancePage: React.FC = () => {
         </button>
       </div>
 
+      {/* Attendance Settings Info */}
+      {activeTab === 'today' && !attendanceSettings.enabled && (
+        <GlassCard className="p-4 bg-yellow-50 border-yellow-200">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600" />
+            <div>
+              <p className="font-medium text-yellow-900">Attendance System Disabled</p>
+              <p className="text-sm text-yellow-700">Contact administrator to enable attendance tracking.</p>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* Verification Methods Info */}
+      {activeTab === 'today' && attendanceSettings.enabled && (
+        <GlassCard className="p-4 bg-blue-50 border-blue-200">
+          <div className="flex items-center gap-3 mb-2">
+            <Clock className="w-5 h-5 text-blue-600" />
+            <p className="font-medium text-blue-900">Active Verification Methods</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {attendanceSettings.requireLocation && (
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                📍 Location
+              </span>
+            )}
+            {attendanceSettings.requireWifi && (
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                📶 WiFi
+              </span>
+            )}
+            {attendanceSettings.requirePhoto && (
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                📷 Photo
+              </span>
+            )}
+            {!attendanceSettings.requireLocation && !attendanceSettings.requireWifi && !attendanceSettings.requirePhoto && (
+              <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                No verification required
+              </span>
+            )}
+          </div>
+        </GlassCard>
+      )}
+
       {/* Today's Attendance */}
       {activeTab === 'today' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <EmployeeAttendanceCard
-            employeeId={currentUser?.id || '1'}
-            employeeName={`${currentUser?.firstName || 'John'} ${currentUser?.lastName || 'Doe'}`}
+            employeeId={currentEmployeeId || ''}
+            employeeName={currentEmployeeName || 'Loading...'}
             onCheckIn={handleCheckIn}
             onCheckOut={handleCheckOut}
             officeLocation={mainOffice.location}
@@ -226,20 +350,47 @@ const EmployeeAttendancePage: React.FC = () => {
           
           <GlassCard className="p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Summary</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-600">Status:</span>
-                <span className="font-medium text-green-600">Present</span>
+            {todayRecord ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-600">Status:</span>
+                  <span className={`font-medium capitalize ${
+                    todayRecord.status === 'present' ? 'text-green-600' :
+                    todayRecord.status === 'late' ? 'text-yellow-600' :
+                    todayRecord.status === 'absent' ? 'text-red-600' :
+                    'text-orange-600'
+                  }`}>
+                    {todayRecord.status}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-600">Check In:</span>
+                  <span className="font-mono font-medium">
+                    {todayRecord.checkIn || 'Not checked in'}
+                  </span>
+                </div>
+                {todayRecord.checkOut && (
+                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="text-gray-600">Check Out:</span>
+                    <span className="font-mono font-medium">
+                      {todayRecord.checkOut}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-600">Hours Worked:</span>
+                  <span className="font-medium">
+                    {calculateTodayHours(todayRecord).toFixed(1)} hours
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-600">Check In:</span>
-                <span className="font-mono font-medium">08:00:00</span>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Calendar className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">No attendance recorded for today</p>
+                <p className="text-xs mt-1">Please check in to start tracking</p>
               </div>
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-gray-600">Hours Worked:</span>
-                <span className="font-medium">9.0 hours</span>
-              </div>
-            </div>
+            )}
           </GlassCard>
         </div>
       )}
@@ -248,67 +399,78 @@ const EmployeeAttendancePage: React.FC = () => {
       {activeTab === 'history' && (
         <GlassCard className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Attendance History</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Check In</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Check Out</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Hours</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendanceHistory.map((record) => (
-                  <tr key={record.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <p className="font-medium text-gray-900">
-                        {new Date(record.date).toLocaleDateString()}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {new Date(record.date).toLocaleDateString('en-US', { weekday: 'short' })}
-                      </p>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1">
-                        <Clock size={14} className="text-gray-400" />
-                        <span className="text-sm text-gray-600">
-                          {record.checkIn || 'Not checked in'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1">
-                        <Clock size={14} className="text-gray-400" />
-                        <span className="text-sm text-gray-600">
-                          {record.checkOut || 'Not checked out'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        record.status === 'present' ? 'bg-green-100 text-green-800' :
-                        record.status === 'absent' ? 'bg-red-100 text-red-800' :
-                        record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-orange-100 text-orange-800'
-                      }`}>
-                        {record.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-1">
-                        <span className="text-sm font-medium text-gray-900">{record.hours}h</span>
-                        {record.hours >= 8 && (
-                          <CheckCircle size={14} className="text-green-500" />
-                        )}
-                      </div>
-                    </td>
+          {attendanceHistory.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Date</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Check In</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Check Out</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Hours</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {attendanceHistory.map((record) => (
+                    <tr key={record.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <p className="font-medium text-gray-900">
+                          {new Date(record.date).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {new Date(record.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                        </p>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <Clock size={14} className="text-gray-400" />
+                          <span className="text-sm text-gray-600">
+                            {record.checkIn || 'Not checked in'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <Clock size={14} className="text-gray-400" />
+                          <span className="text-sm text-gray-600">
+                            {record.checkOut || 'Not checked out'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
+                          record.status === 'present' ? 'bg-green-100 text-green-800' :
+                          record.status === 'absent' ? 'bg-red-100 text-red-800' :
+                          record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-orange-100 text-orange-800'
+                        }`}>
+                          {record.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <span className="text-sm font-medium text-gray-900">
+                            {typeof record.hours === 'number' ? record.hours.toFixed(1) : '0.0'}h
+                          </span>
+                          {record.hours >= 8 && (
+                            <CheckCircle size={14} className="text-green-500" />
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              <CalendarDays className="w-16 h-16 mx-auto mb-4 opacity-50" />
+              <h4 className="text-lg font-semibold text-gray-900 mb-2">No Attendance History</h4>
+              <p className="text-sm">You haven't recorded any attendance yet.</p>
+              <p className="text-xs mt-1">Check in today to start tracking your attendance!</p>
+            </div>
+          )}
         </GlassCard>
       )}
 
@@ -368,33 +530,57 @@ const EmployeeAttendancePage: React.FC = () => {
           </div>
 
           <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Overview</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Monthly Overview - {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </h3>
             <div className="grid grid-cols-7 gap-2">
-              {Array.from({ length: 31 }, (_, i) => {
-                const day = i + 1;
-                const hasAttendance = Math.random() > 0.3; // Mock data
+              {monthlyCalendar.map((dayData) => {
+                const isToday = dayData.dateStr === new Date().toISOString().split('T')[0];
                 return (
                   <div
-                    key={day}
-                    className={`aspect-square rounded-lg flex items-center justify-center text-xs font-medium ${
-                      hasAttendance 
-                        ? 'bg-green-100 text-green-800' 
+                    key={dayData.day}
+                    className={`aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-all ${
+                      isToday 
+                        ? 'ring-2 ring-blue-500 ring-offset-1' 
+                        : ''
+                    } ${
+                      dayData.hasAttendance 
+                        ? dayData.status === 'present' 
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                          : dayData.status === 'late'
+                          ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                          : dayData.status === 'absent'
+                          ? 'bg-red-100 text-red-800 hover:bg-red-200'
+                          : 'bg-orange-100 text-orange-800 hover:bg-orange-200'
                         : 'bg-gray-100 text-gray-400'
                     }`}
+                    title={dayData.hasAttendance ? `${dayData.status} on ${dayData.dateStr}` : 'No attendance record'}
                   >
-                    {day}
+                    {dayData.day}
                   </div>
                 );
               })}
             </div>
-            <div className="flex items-center gap-4 mt-4 text-sm">
+            <div className="flex flex-wrap items-center gap-4 mt-4 text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-100 rounded"></div>
+                <div className="w-3 h-3 bg-green-100 rounded border border-green-300"></div>
                 <span>Present</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gray-100 rounded"></div>
+                <div className="w-3 h-3 bg-yellow-100 rounded border border-yellow-300"></div>
+                <span>Late</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-red-100 rounded border border-red-300"></div>
+                <span>Absent</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-gray-100 rounded border border-gray-300"></div>
                 <span>No Record</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-white rounded border-2 border-blue-500"></div>
+                <span>Today</span>
               </div>
             </div>
           </GlassCard>

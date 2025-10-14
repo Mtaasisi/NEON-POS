@@ -194,7 +194,14 @@ const CustomerFinancialSummary: React.FC = () => {
 
                 {/* Payment Details */}
                 <div className="space-y-2">
-                  {customer.payments.map((payment: any) => (
+                  {customer.payments
+                    .sort((a: any, b: any) => {
+                      // Sort by payment date descending (most recent first)
+                      const dateA = new Date(a.payment_date || a.created_at).getTime();
+                      const dateB = new Date(b.payment_date || b.created_at).getTime();
+                      return dateB - dateA;
+                    })
+                    .map((payment: any) => (
                     <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">

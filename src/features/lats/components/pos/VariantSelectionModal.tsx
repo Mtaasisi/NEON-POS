@@ -37,9 +37,9 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
   const thumbnail = getProductThumbnail();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-0">
-      {/* Make the modal fill the entire page */}
-      <div className="bg-white rounded-xl shadow-2xl w-full h-full overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+      {/* Modal container with reasonable sizing */}
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
         <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 border-b border-blue-200">
           <div className="flex items-center justify-between">

@@ -32,7 +32,7 @@ const GlobalSearchPage: React.FC = () => {
     const devicesContext = useDevices();
     devices = devicesContext?.devices || [];
   } catch (error) {
-    console.warn('Devices context not available during HMR:', error);
+    // Silently handle - context may not be available during HMR
   }
   
   const { customers } = useCustomers();

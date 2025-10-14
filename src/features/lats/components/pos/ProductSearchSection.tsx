@@ -7,6 +7,7 @@ import { useAuth } from '../../../../context/AuthContext';
 import { rbacManager, type UserRole } from '../../lib/rbac';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import { RealTimeStockService } from '../../lib/realTimeStock';
 
 interface Product {
   id: string;
@@ -112,6 +113,45 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   
   // Body scroll lock for categories popup
   useBodyScrollLock(showCategoriesPopup);
+
+  // Real-time stock data for all products (BATCH FETCH to avoid N+1 queries)
+  const [realTimeStockData, setRealTimeStockData] = useState<Map<string, number>>(new Map());
+  const [isLoadingStock, setIsLoadingStock] = useState(false);
+
+  // Batch fetch stock data for all products when products change
+  useEffect(() => {
+    const fetchAllStockData = async () => {
+      if (!products || products.length === 0) return;
+      
+      try {
+        setIsLoadingStock(true);
+        const productIds = products.map(p => p.id);
+        
+        // Batch fetch stock for ALL products at once
+        const stockService = RealTimeStockService.getInstance();
+        const stockLevels = await stockService.getStockLevels(productIds);
+        
+        // Convert to Map for easy lookup
+        const stockMap = new Map<string, number>();
+        Object.entries(stockLevels).forEach(([productId, levels]) => {
+          const totalStock = levels.reduce((sum, level) => sum + level.quantity, 0);
+          stockMap.set(productId, totalStock);
+        });
+        
+        setRealTimeStockData(stockMap);
+        
+        if (import.meta.env.MODE === 'development') {
+          console.log(`✅ [ProductSearchSection] Batch fetched stock for ${productIds.length} products in ONE query`);
+        }
+      } catch (error) {
+        console.error('❌ [ProductSearchSection] Error fetching batch stock:', error);
+      } finally {
+        setIsLoadingStock(false);
+      }
+    };
+
+    fetchAllStockData();
+  }, [products]);
 
   // Handle search input change
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,8 +277,8 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   const displayProducts = sortedProducts;
 
   return (
-    <div className="flex-1 overflow-hidden flex flex-col">
-      <GlassCard className="p-6 h-full flex flex-col">
+    <div className="h-full flex flex-col">
+      <GlassCard className="p-6 h-full flex flex-col overflow-hidden">
         {/* Fixed Search Section */}
         <div className="flex-shrink-0 mb-4">
           {/* Main Search and Quick Filters */}
@@ -438,7 +478,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
 
 
         {/* Products Grid - Scrollable */}
-        <div className="flex-1 overflow-y-auto scrollbar-transparent">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden pos-products-scroll" style={{ minHeight: 0 }}>
           {displayProducts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 pb-4">
               {displayProducts.map((product) => (
@@ -446,6 +486,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                   key={product.id}
                   product={product}
                   onAddToCart={onAddToCart}
+                  realTimeStockData={realTimeStockData}
                 />
               ))}
             </div>

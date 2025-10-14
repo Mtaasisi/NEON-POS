@@ -1947,6 +1947,7 @@ const CustomersPage = () => {
                   </th>
                   <th className="text-left py-4 px-4 font-medium text-gray-700">Customer</th>
                   <th className="text-left py-4 px-4 font-medium text-gray-700">Contact</th>
+                  <th className="text-left py-4 px-4 font-medium text-gray-700">Branch</th>
                   <th className="text-left py-4 px-4 font-medium text-gray-700">Devices</th>
                   <th className="text-right py-4 px-4 font-medium text-gray-700">Total Spent</th>
                   <th className="text-center py-4 px-4 font-medium text-gray-700">Loyalty</th>
@@ -2006,6 +2007,14 @@ const CustomersPage = () => {
                               <span>{customer.birthMonth} {customer.birthDay}</span>
                             </div>
                           )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span className="text-sm text-gray-700 font-medium">
+                            {customer.branchName}
+                          </span>
                         </div>
                       </td>
                       <td className="py-4 px-4">
@@ -2144,6 +2153,10 @@ const CustomersPage = () => {
                 </div>
                 <h3 className="font-semibold text-gray-900">{customer.name}</h3>
                 <p className="text-sm text-gray-600 mb-1">{customer.city}</p>
+                <div className="flex items-center gap-1 text-xs text-gray-600 mb-1">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span>{customer.branchName}</span>
+                </div>
                 <div className="flex items-center gap-2 text-sm mb-1">
                   <Phone className="w-4 h-4 text-blue-500" />
                   <span className="text-blue-600 font-medium">{customer.phone}</span>
@@ -2338,6 +2351,10 @@ const CustomersPage = () => {
         isOpen={showAddCustomerModal}
         onClose={() => setShowAddCustomerModal(false)}
         onCustomerCreated={(customer) => {
+          // Add the new customer to the top of the list immediately
+          setCustomers(prevCustomers => [customer, ...prevCustomers]);
+          setTotalCount(prev => prev + 1);
+          
           setShowAddCustomerModal(false);
           setSelectedCustomer(customer);
           setShowCustomerDetailModal(true);

@@ -1,0 +1,49 @@
+================================================================================
+  ⚡ APPLY PO PAYMENT SPENDING FIX - QUICK INSTRUCTIONS
+================================================================================
+
+STEP 1: Open Neon Dashboard
+----------------------------
+1. Go to: https://console.neon.tech/
+2. Log in to your account
+3. Select your database project
+4. Click "SQL Editor" in the left sidebar
+
+STEP 2: Copy the SQL Fix
+----------------------------
+1. Open file: FIX-PO-PAYMENT-SPENDING-TRACKING.sql
+2. Press Ctrl+A (select all)
+3. Press Ctrl+C (copy)
+
+STEP 3: Paste and Run
+----------------------------
+1. In the Neon SQL Editor, paste the SQL (Ctrl+V)
+2. Click the "Run" button (or press Ctrl+Enter)
+3. Wait 5-10 seconds for it to complete
+
+STEP 4: Verify Success
+----------------------------
+You should see output like:
+
+✅ PO PAYMENT SPENDING TRACKING ENABLED
+Total Completed PO Payments: XX
+Tracked as Expenses: XX
+Total Amount: XXX TZS
+
+🔄 TRIGGERS ACTIVE:
+  ✅ PO Payments → Expenses (auto-track)
+  ✅ PO Payments → Account Transactions (auto-track)
+
+STEP 5: Test It
+----------------------------
+1. Refresh your POS app browser (Ctrl+Shift+R)
+2. Go to Spending/Expense Reports
+3. Look for "Purchase Orders" category
+4. ✅ All PO payments should now be visible!
+
+================================================================================
+DONE! Your PO payments will now show up in spending reports! 🎉
+================================================================================
+
+Questions? Check the file: PO-PAYMENT-SPENDING-ISSUE-FIXED.md
+

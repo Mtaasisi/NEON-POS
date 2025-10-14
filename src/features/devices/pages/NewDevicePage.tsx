@@ -164,7 +164,7 @@ const DeviceIntakeUnifiedPage: React.FC = () => {
     const devicesContext = useDevices();
     addDevice = devicesContext?.addDevice || null;
   } catch (error) {
-    console.warn('Devices context not available during HMR:', error);
+    // Silently handle - context may not be available during HMR
   }
   
   const { currentUser } = useAuth();
@@ -815,6 +815,9 @@ IMPORTANT INSTRUCTIONS:
     clearAllErrors();
     
     try {
+      // 🏪 Get current branch ID for branch isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
       const { data, error } = await supabase
         .from('customers')
         .insert([{
@@ -828,7 +831,9 @@ IMPORTANT INSTRUCTIONS:
           points: 0,
           totalSpent: 0,
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          branch_id: currentBranchId, // 🔒 Set branch_id for branch isolation
+          created_by_branch_id: currentBranchId // 🔒 Track which branch created this customer
         }])
         .select()
         .single();

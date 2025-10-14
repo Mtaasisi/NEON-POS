@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
+import { useTheme } from '../../../context/ThemeContext';
 import GlassCard from '../components/ui/GlassCard';
 import GlassButton from '../components/ui/GlassButton';
 import { PageErrorWrapper } from '../components/PageErrorWrapper';
@@ -26,6 +27,7 @@ import { dashboardService, DashboardStats } from '../../../services/dashboardSer
 
 const DashboardPage: React.FC = () => {
   const { currentUser } = useAuth();
+  const { isDark } = useTheme();
   const navigate = useNavigate();
   
   // Error handling
@@ -179,7 +181,7 @@ const DashboardPage: React.FC = () => {
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+                <h1 className={`text-3xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Dashboard</h1>
                 {dashboardStats?.unreadNotifications > 0 && (
                   <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
                     <Bell size={12} />
@@ -188,10 +190,10 @@ const DashboardPage: React.FC = () => {
                 )}
               </div>
               <div className="flex items-center gap-4 mt-1">
-                <p className="text-gray-600">
+                <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>
                   Welcome back, {currentUser?.name || currentUser?.email || 'User'}
                 </p>
-                <span className="text-xs text-gray-500">
+                <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                   Last updated: {lastRefresh.toLocaleTimeString()}
                 </span>
               </div>
@@ -241,7 +243,7 @@ const DashboardPage: React.FC = () => {
           <GlassCard className="p-8">
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600">Loading comprehensive dashboard...</span>
+              <span className={`ml-3 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Loading comprehensive dashboard...</span>
             </div>
           </GlassCard>
         )}

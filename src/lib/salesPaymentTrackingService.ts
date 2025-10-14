@@ -142,6 +142,9 @@ class SalesPaymentTrackingService {
     console.log('🔍 SalesPaymentTrackingService: Fetching sales payments...');
     
     try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      
       // Build the query with proper joins
       let query = supabase
         .from('lats_sales')
@@ -159,6 +162,7 @@ class SalesPaymentTrackingService {
           created_at,
           updated_at,
           notes,
+          branch_id,
           customers(
             id,
             name,
@@ -187,6 +191,12 @@ class SalesPaymentTrackingService {
           )
         `)
         .order('created_at', { ascending: false });
+      
+      // 🔒 COMPLETE ISOLATION: Only show sales from current branch
+      if (currentBranchId) {
+        console.log('🔒 [SalesPaymentTracking] Filtering by branch:', currentBranchId);
+        query = query.eq('branch_id', currentBranchId);
+      }
 
       // Apply filters
       if (filter.startDate && filter.endDate) {

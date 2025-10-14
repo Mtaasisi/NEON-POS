@@ -321,14 +321,14 @@ export class QualityCheckService {
         .from('purchase_order_quality_check_items')
         .select(`
           *,
-          criteria:quality_check_criteria(*),
-          purchase_order_item:lats_purchase_order_items(
+          criteria:quality_check_criteria!criteria_id(*),
+          purchase_order_item:lats_purchase_order_items!purchase_order_item_id(
             id,
             product_id,
             variant_id,
             quantity,
-            product:lats_products(name, sku),
-            variant:lats_product_variants(name, sku)
+            product:lats_products!product_id(name, sku),
+            variant:lats_product_variants!variant_id(name, sku)
           )
         `)
         .eq('quality_check_id', qualityCheckId)

@@ -85,17 +85,19 @@ function normalizeColorTag(colorTag: string): 'new' | 'vip' | 'complainer' | 'pu
 // Pagination function
 export async function fetchCustomersPaginated(page: number = 1, pageSize: number = 50) {
   try {
-    console.log(`📄 Fetching customers page ${page} with size ${pageSize}`);
+    console.log(`📄 Fetching customers page ${page} with size ${pageSize} (SHARED ACROSS ALL BRANCHES)`);
     
     const offset = (page - 1) * pageSize;
     
-    const { data, error, count } = await supabase
+    const query = supabase
       .from('customers')
       .select(`
-        id, name, email, phone, created_at
+        id, name, email, phone, created_at, branch_id, is_shared, created_by_branch_name
       `, { count: 'exact' })
       .range(offset, offset + pageSize - 1)
       .order('created_at', { ascending: false });
+    
+    const { data, error, count } = await query;
     
     if (error) {
       console.error('❌ Error fetching paginated customers:', error);
@@ -103,11 +105,34 @@ export async function fetchCustomersPaginated(page: number = 1, pageSize: number
     }
     
     if (data) {
+      // Fetch branch names separately since custom client doesn't support joins
+      let branchNames: Record<string, string> = {};
+      try {
+        const branchIds = [...new Set(data.map((c: any) => c.branch_id).filter(Boolean))];
+        if (branchIds.length > 0) {
+          const branchQuery = supabase
+            .from('store_locations')
+            .select('id, name')
+            .in('id', branchIds);
+          
+          const branchResult = await branchQuery;
+          if (branchResult.data) {
+            branchNames = branchResult.data.reduce((acc: any, branch: any) => {
+              acc[branch.id] = branch.name;
+              return acc;
+            }, {});
+          }
+        }
+      } catch (branchError) {
+        console.warn('⚠️ Could not fetch branch names:', branchError);
+      }
+
       const processedCustomers = data.map(customer => ({
         ...customer,
         // Map database fields to application interface
         joined_date: customer.created_at,
         colorTag: normalizeColorTag(customer.color_tag || 'new'),
+        branchName: branchNames[customer.branch_id] || customer.created_by_branch_name || 'Unknown Branch',
         customerNotes: [],
         customerPayments: [],
         devices: [],

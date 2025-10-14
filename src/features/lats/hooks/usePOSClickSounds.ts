@@ -59,17 +59,7 @@ export const usePOSClickSounds = (config: Partial<POSClickSoundsConfig> = {}) =>
   const finalConfig = { ...settingsConfig, ...config };
 
   const playSound = useCallback((soundType: POSClickSoundType) => {
-    const timestamp = new Date().toISOString().split('T')[1];
-    console.log(`\n🔔 ═══════════════════════════════════════════════════`);
-    console.log(`🔔 SOUND EVENT @ ${timestamp}`);
-    console.log(`🔔 Type: ${soundType}`);
-    console.log(`🔔 Config - Enabled: ${finalConfig.enabled}`);
-    console.log(`🔔 Config - ${soundType} enabled: ${finalConfig.sounds[soundType === 'cart-add' ? 'cartAdd' : soundType] ?? 'unknown'}`);
-    console.log(`🔔 ═══════════════════════════════════════════════════`);
-    
     if (!finalConfig.enabled) {
-      console.error('❌ SOUND BLOCKED: Sounds globally disabled in config');
-      console.log(`🔔 ═══════════════════════════════════════════════════\n`);
       return;
     }
 
@@ -78,71 +68,41 @@ export const usePOSClickSounds = (config: Partial<POSClickSoundsConfig> = {}) =>
       switch (soundType) {
         case 'click':
           if (finalConfig.sounds.click) {
-            console.log('✅ SOUND ALLOWED: Click sounds enabled, calling SoundManager...');
-            SoundManager.playClickSound().catch(e => {
-              console.error('❌ SOUND FAILED: Click sound error:', e);
-              console.log(`🔔 ═══════════════════════════════════════════════════\n`);
-            });
-          } else {
-            console.error('❌ SOUND BLOCKED: Click sounds disabled in config');
-            console.log(`🔔 ═══════════════════════════════════════════════════\n`);
+            SoundManager.playClickSound().catch(() => {});
           }
           break;
         case 'cart-add':
           if (finalConfig.sounds.cartAdd) {
-            console.log('✅ SOUND ALLOWED: Cart-add sounds enabled, calling SoundManager...');
             try {
               SoundManager.playCartAddSound();
             } catch (e) {
-              console.error('❌ SOUND FAILED: Cart add sound error:', e);
-              console.log(`🔔 ═══════════════════════════════════════════════════\n`);
+              // Silent catch
             }
-          } else {
-            console.error('❌ SOUND BLOCKED: Cart sounds disabled in config');
-            console.log(`🔔 ═══════════════════════════════════════════════════\n`);
           }
           break;
         case 'payment':
           if (finalConfig.sounds.payment) {
-            console.log('✅ SOUND ALLOWED: Payment sounds enabled, calling SoundManager...');
-            SoundManager.playPaymentSound().catch(e => {
-              console.error('❌ SOUND FAILED: Payment sound error:', e);
-              console.log(`🔔 ═══════════════════════════════════════════════════\n`);
-            });
-          } else {
-            console.error('❌ SOUND BLOCKED: Payment sounds disabled in config');
-            console.log(`🔔 ═══════════════════════════════════════════════════\n`);
+            SoundManager.playPaymentSound().catch(() => {});
           }
           break;
         case 'delete':
           if (finalConfig.sounds.delete) {
-            console.log('✅ SOUND ALLOWED: Delete sounds enabled, calling SoundManager...');
-            SoundManager.playDeleteSound().catch(e => {
-              console.error('❌ SOUND FAILED: Delete sound error:', e);
-              console.log(`🔔 ═══════════════════════════════════════════════════\n`);
-            });
-          } else {
-            console.error('❌ SOUND BLOCKED: Delete sounds disabled in config');
-            console.log(`🔔 ═══════════════════════════════════════════════════\n`);
+            SoundManager.playDeleteSound().catch(() => {});
           }
           break;
         case 'success':
           if (finalConfig.sounds.success) {
-            SoundManager.playSuccessSound().catch(e => console.error('Success sound error:', e));
+            SoundManager.playSuccessSound().catch(() => {});
           }
           break;
         case 'error':
           if (finalConfig.sounds.error) {
-            SoundManager.playErrorSound().catch(e => console.error('Error sound error:', e));
+            SoundManager.playErrorSound().catch(() => {});
           }
           break;
-        default:
-          console.error(`❌ SOUND BLOCKED: Unknown sound type: ${soundType}`);
-          console.log(`🔔 ═══════════════════════════════════════════════════\n`);
       }
     } catch (error) {
-      console.error('❌ SOUND FAILED: Sound playback exception:', error);
-      console.log(`🔔 ═══════════════════════════════════════════════════\n`);
+      // Silent catch - don't log in production
     }
   }, [finalConfig]);
 

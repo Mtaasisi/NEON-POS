@@ -16,6 +16,7 @@ const DEFAULT_OPTIONS: FormatOptions = {
 
 /**
  * Format a number as currency
+ * Shows real values with corruption warning if unrealistic
  */
 export function money(
   amount: number, 
@@ -23,16 +24,36 @@ export function money(
 ): string {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   
+  const realAmount = amount || 0;
+  
+  // Safety check: Detect unrealistic amounts (log but show real value)
+  const MAX_REALISTIC_AMOUNT = 1_000_000_000_000; // 1 trillion
+  const isCorrupt = Math.abs(realAmount) > MAX_REALISTIC_AMOUNT;
+  
+  if (isCorrupt) {
+    console.warn(`⚠️ CORRUPT DATA - Unrealistic amount: ${realAmount}`);
+  }
+  
+  // Safety check: Handle NaN and Infinity
+  if (!isFinite(realAmount)) {
+    console.warn(`⚠️ Invalid amount detected: ${amount}. Showing as 0.`);
+    return `${opts.currency} 0 ⚠️ INVALID`;
+  }
+  
   try {
-    return new Intl.NumberFormat(opts.locale, {
+    const formatted = new Intl.NumberFormat(opts.locale, {
       style: 'currency',
       currency: opts.currency,
       minimumFractionDigits: opts.minimumFractionDigits,
       maximumFractionDigits: opts.maximumFractionDigits
-    }).format(amount);
+    }).format(realAmount);
+    
+    // Add corruption indicator if amount is unrealistic
+    return isCorrupt ? `${formatted} ⚠️ CORRUPT` : formatted;
   } catch (error) {
     // Fallback formatting
-    return `${opts.currency} ${amount.toFixed(opts.maximumFractionDigits || 2)}`;
+    const formatted = `${opts.currency} ${realAmount.toFixed(opts.maximumFractionDigits || 2)}`;
+    return isCorrupt ? `${formatted} ⚠️ CORRUPT` : formatted;
   }
 }
 

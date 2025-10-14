@@ -2,6 +2,7 @@ import React, { useEffect, useState, lazy, Suspense } from 'react';
 // HMR Test - This comment should appear when you save
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { BranchProvider } from './context/BranchContext';
 import { DevicesProvider, useDevices } from './context/DevicesContext';
 import { CustomersProvider, useCustomers } from './context/CustomersContext';
 import { UserGoalsProvider } from './context/UserGoalsContext';
@@ -63,16 +64,13 @@ import DynamicImportErrorBoundary from './features/shared/components/DynamicImpo
 import UrlValidatedRoute from './components/UrlValidatedRoute';
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
 const AdminManagementPage = lazy(() => import('./features/admin/pages/AdminManagementPage'));
+const IntegrationsTestPage = lazy(() => import('./features/admin/pages/IntegrationsTestPage'));
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
 const UnifiedSupplierManagementPage = lazy(() => import('./features/settings/pages/UnifiedSupplierManagementPage'));
 import { SuppliersProvider } from './context/SuppliersContext';
 import { WhatsAppProvider } from './context/WhatsAppContext';
 const SMSControlCenterPage = lazy(() => import('./features/sms/pages/SMSControlCenterPage'));
 const EnhancedPaymentManagementPage = lazy(() => import('./features/payments/pages/EnhancedPaymentManagementPage'));
-
-const AuditLogsPage = lazy(() => import('./features/admin/pages/AuditLogsPage'));
-const FinanceManagementPage = lazy(() => import('./features/finance/pages/FinanceManagementPage'));
-
 const EmployeeManagementPage = lazy(() => import('./features/employees/pages/EmployeeManagementPage'));
 const EmployeeAttendancePage = lazy(() => import('./features/employees/pages/EmployeeAttendancePage'));
 
@@ -83,9 +81,6 @@ const BusinessManagementPage = lazy(() => import('./features/business/pages/Busi
 const MobileOptimizationPage = lazy(() => import('./features/mobile/pages/MobileOptimizationPage'));
 const GlobalSearchPage = lazy(() => import('./features/shared/pages/GlobalSearchPage'));
 const ProductAdGeneratorPage = lazy(() => import('./features/shared/pages/ProductAdGeneratorPage'));
-
-// Instagram Module
-const InstagramDMPage = lazy(() => import('./features/instagram/pages/InstagramDMPage'));
 
 const CategoryManagementPage = lazy(() => import('./features/settings/pages/CategoryManagementPage'));
 const StoreLocationManagementPage = lazy(() => import('./features/settings/pages/StoreLocationManagementPage'));
@@ -103,11 +98,10 @@ const PurchaseOrdersPage = lazy(() => import('./features/lats/pages/PurchaseOrde
 const POcreate = lazy(() => import('./features/lats/pages/POcreate'));
 const PurchaseOrderDetailPage = lazy(() => import('./features/lats/pages/PurchaseOrderDetailPage'));
 const InventorySparePartsPage = lazy(() => import('./features/lats/pages/InventorySparePartsPage'));
-const PaymentHistoryPage = lazy(() => import('./features/lats/pages/PaymentHistoryPage'));
+const StockTransferPage = lazy(() => import('./features/lats/pages/StockTransferPage'));
 
 const SalesReportsPage = lazy(() => import('./features/lats/pages/SalesReportsPage'));
 const CustomerLoyaltyPage = lazy(() => import('./features/lats/pages/CustomerLoyaltyPage'));
-const PaymentTrackingPage = lazy(() => import('./features/lats/pages/PaymentTrackingPage'));
 
 // Purchase Orders Module Pages
 const ShippedItemsPage = lazy(() => import('./features/lats/pages/ShippedItemsPage'));
@@ -127,15 +121,19 @@ const StorageRoomManagementPage = lazy(() => import('./features/lats/pages/Stora
 const StorageRoomDetailPage = lazy(() => import('./features/lats/pages/StorageRoomDetailPage'));
 
 const WhatsAppConnectionManager = lazy(() => import('./features/lats/pages/WhatsAppConnectionManager'));
-const WhatsAppSettingsPage = lazy(() => import('./features/lats/pages/WhatsAppSettingsPage'));
 const WhatsAppChatPage = lazy(() => import('./features/lats/pages/WhatsAppChatPage'));
-const WhatsAppHubPage = lazy(() => import('./features/lats/pages/WhatsAppHubPage'));
-const WhatsAppTemplatesPage = lazy(() => import('./features/lats/pages/WhatsAppTemplatesPage'));
-const WhatsAppBulkPage = lazy(() => import('./features/lats/pages/WhatsAppBulkPage'));
-const WhatsAppAnalyticsPage = lazy(() => import('./features/lats/pages/WhatsAppAnalyticsPage'));
 const BluetoothPrinterPage = lazy(() => import('./pages/BluetoothPrinterPage'));
 
 const AITrainingManagerPage = lazy(() => import('./pages/AITrainingManagerPage'));
+
+// Previously unlinked pages - now added for testing
+const TechnicianDashboardPage = lazy(() => import('./features/shared/pages/TechnicianDashboardPage'));
+const CustomerCareDashboardPage = lazy(() => import('./features/shared/pages/CustomerCareDashboardPage'));
+const DashboardPage = lazy(() => import('./features/shared/pages/DashboardPage'));
+const BulkSMSPage = lazy(() => import('./features/sms/pages/BulkSMSPage'));
+const SMSLogsPage = lazy(() => import('./features/sms/pages/SMSLogsPage'));
+const SMSSettingsPage = lazy(() => import('./features/sms/pages/SMSSettingsPage'));
+const IntegrationSettingsPage = lazy(() => import('./features/settings/pages/IntegrationSettingsPage'));
 
 import { initializeDatabaseCheck } from './lib/databaseUtils';
 import { reminderService } from './lib/reminderService';
@@ -529,6 +527,29 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </Suspense>
           } />
 
+          {/* Alternative Dashboard Views - Previously Unlinked */}
+          <Route path="/dashboard/admin" element={
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <DashboardPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          <Route path="/dashboard/technician" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'technician']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <TechnicianDashboardPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          <Route path="/dashboard/customer-care" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <CustomerCareDashboardPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+
           {/* Product Ad Generator */}
           <Route path="/ad-generator" element={
             <ErrorBoundary fallback={DynamicImportErrorFallback}>
@@ -630,8 +651,40 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           } />
 
           <Route path="/settings" element={<Navigate to="/admin-settings" replace />} />
+          
+          {/* SMS Module Routes - Now Complete */}
           <Route path="/sms" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SMSControlCenterPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/sms/bulk" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <BulkSMSPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          <Route path="/sms/logs" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <SMSLogsPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          <Route path="/sms/settings" element={
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <SMSSettingsPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          
           <Route path="/admin-settings" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><AdminSettingsPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/integration-settings" element={
+            <RoleProtectedRoute allowedRoles={['admin']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <IntegrationSettingsPage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
+          <Route path="/integrations-test" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><IntegrationsTestPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/admin-management" element={
             <RoleProtectedRoute allowedRoles={['admin']}>
               <Suspense fallback={<DynamicPageLoader />}>
@@ -646,21 +699,8 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
               </Suspense>
             </RoleProtectedRoute>
           } />
-          <Route path="/audit-logs" element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <AuditLogsPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
-          <Route path="/finance" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><FinanceManagementPage /></Suspense></RoleProtectedRoute>} />
-          
-          {/* Enhanced Payment Management Routes - All consolidated into one page */}
-          <Route path="/finance/payments" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/finance/payments/reconciliation" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/finance/payments/providers" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/finance/payments/security" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/finance/payments/automation" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
+          {/* Payment Management - Single consolidated page */}
+          <Route path="/payments" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
           
           {/* Appointment Management Routes */}
           <Route path="/appointments" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care', 'technician']}><Suspense fallback={<DynamicPageLoader />}><UnifiedAppointmentPage /></Suspense></RoleProtectedRoute>} />
@@ -676,6 +716,13 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* Employee Management Routes */}
           <Route path="/employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><EmployeeManagementPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/employees/attendance" element={
+            <RoleProtectedRoute allowedRoles={['admin', 'manager']}>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <EmployeeAttendancePage />
+              </Suspense>
+            </RoleProtectedRoute>
+          } />
           <Route path="/attendance" element={
             <RoleProtectedRoute allowedRoles={['admin', 'manager']}>
               <Suspense fallback={<DynamicPageLoader />}>
@@ -780,7 +827,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
 
           <Route path="/lats/sales-reports" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SalesReportsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/loyalty" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><CustomerLoyaltyPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/lats/payments" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PaymentTrackingPage /></Suspense></RoleProtectedRoute>} />
 
           <Route path="/lats/purchase-orders" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrdersPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/purchase-order/create" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><POcreate /></Suspense></RoleProtectedRoute>} />
@@ -788,6 +834,9 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           <Route path="/lats/purchase-orders/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrderDetailPage editMode={true} /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/purchase-orders/shipped-items" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><ShippedItemsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/purchase-orders/suppliers" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><SuppliersManagementPage /></Suspense></RoleProtectedRoute>} />
+          
+          {/* Stock Transfer Route */}
+          <Route path="/lats/stock-transfers" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><StockTransferPage /></Suspense></RoleProtectedRoute>} />
 
           <Route path="/lats/spare-parts" element={
             <UrlValidatedRoute enableImageUrlValidation={true} enableUrlLogging={false}>
@@ -799,22 +848,10 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </UrlValidatedRoute>
           } />
           
-          {/* Payment routes */}
-          <Route path="/lats/payment-history" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><PaymentHistoryPage /></Suspense></RoleProtectedRoute>} />
-
-          
 
         {/* WhatsApp Module Routes */}
-        <Route path="/lats/whatsapp-hub" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppHubPage /></Suspense></RoleProtectedRoute>} />
-        <Route path="/lats/whatsapp-connection-manager" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppConnectionManager /></Suspense></RoleProtectedRoute>} />
         <Route path="/lats/whatsapp-chat" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppChatPage /></Suspense></RoleProtectedRoute>} />
-        <Route path="/lats/whatsapp-settings/:instanceId" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppSettingsPage /></Suspense></RoleProtectedRoute>} />
-        <Route path="/lats/whatsapp-templates" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppTemplatesPage /></Suspense></RoleProtectedRoute>} />
-        <Route path="/lats/whatsapp-bulk" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppBulkPage /></Suspense></RoleProtectedRoute>} />
-        <Route path="/lats/whatsapp-analytics" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppAnalyticsPage /></Suspense></RoleProtectedRoute>} />
-
-        {/* Instagram DM Route */}
-        <Route path="/instagram/dm" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><InstagramDMPage /></Suspense></RoleProtectedRoute>} />
+        <Route path="/lats/whatsapp-connection-manager" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppConnectionManager /></Suspense></RoleProtectedRoute>} />
 
         {/* Bluetooth Printer Management Route */}
         <Route path="/bluetooth-printer" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><BluetoothPrinterPage /></Suspense></RoleProtectedRoute>} />
@@ -956,9 +993,10 @@ function App() {
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ThemeProvider>
           <AuthProvider>
-            <ErrorProvider>
-              {/* <RepairProvider> */}
-              <DevicesProvider>
+            <BranchProvider>
+              <ErrorProvider>
+                {/* <RepairProvider> */}
+                <DevicesProvider>
                 <CustomersProvider>
                   <UserGoalsProvider>
                     <PaymentsProvider>
@@ -984,9 +1022,10 @@ function App() {
                   </PaymentsProvider>
                 </UserGoalsProvider>
               </CustomersProvider>
-            </DevicesProvider>
-            {/* </RepairProvider> */}
-            </ErrorProvider>
+              </DevicesProvider>
+              {/* </RepairProvider> */}
+              </ErrorProvider>
+            </BranchProvider>
           </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>

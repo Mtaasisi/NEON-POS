@@ -3,6 +3,13 @@ import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import { MapPin, Compass, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { googleMapsService } from '../../../lib/googleMapsService';
 
+// Extend Window interface for Google Maps
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
 interface Office {
   name: string;
   lat: number;
@@ -58,27 +65,21 @@ const OfficeMap: React.FC<OfficeMapProps> = ({
     if (!isMapLoaded || !mapContainer || offices.length === 0) return;
 
     try {
-      // Verify Google Maps API is properly loaded
-      if (!googleMapsService.isReady()) {
-        console.error('❌ Google Maps API not available');
+      // Verify Google Maps API is properly loaded with Map constructor
+      if (!googleMapsService.isReady() || !window.google?.maps?.Map) {
+        console.error('❌ Google Maps API not available or Map constructor not ready');
         return;
       }
 
-      const googleMaps = googleMapsService.getGoogleMaps();
-
       const center = offices[0] ? { lat: offices[0].lat, lng: offices[0].lng } : { lat: -3.359178, lng: 36.661366 };
 
-      const newMap = new googleMaps.Map(mapContainer, {
+      const newMap = new window.google.maps.Map(mapContainer, {
         center,
         zoom: 13,
-        mapTypeId: googleMaps.MapTypeId.ROADMAP,
-        styles: [
-          {
-            featureType: 'poi',
-            elementType: 'labels',
-            stylers: [{ visibility: 'off' }]
-          }
-        ]
+        mapTypeId: 'roadmap',
+        mapId: 'DEMO_MAP_ID' // Required for AdvancedMarkerElement
+        // Note: Custom styles are not supported when using mapId
+        // Styles must be configured in Google Cloud Console
       });
 
       setMap(newMap);
@@ -93,16 +94,18 @@ const OfficeMap: React.FC<OfficeMapProps> = ({
     if (!map || !isMapLoaded) return;
 
     try {
-      // Verify Google Maps API is properly loaded
-      if (!googleMapsService.isReady()) {
-        console.error('❌ Google Maps API not available for markers');
+      // Verify Google Maps API is properly loaded with marker library
+      if (!googleMapsService.isReady() || !window.google?.maps?.marker) {
+        console.error('❌ Google Maps API or marker library not available');
         return;
       }
 
-      const googleMaps = googleMapsService.getGoogleMaps();
-
       // Clear existing markers and circles
-      markers.forEach(marker => marker.setMap(null));
+      markers.forEach(marker => {
+        if (marker.map) {
+          marker.map = null; // AdvancedMarkerElement uses .map property
+        }
+      });
       circles.forEach(circle => circle.setMap(null));
 
       const newMarkers: any[] = [];
@@ -110,28 +113,24 @@ const OfficeMap: React.FC<OfficeMapProps> = ({
 
       offices.forEach((office, index) => {
         try {
-          // Create marker
-          const marker = new googleMaps.Marker({
+          // Create marker with new AdvancedMarkerElement API
+          const pinBackground = new window.google.maps.marker.PinElement({
+            background: selectedOffice?.name === office.name ? '#3B82F6' : '#EF4444',
+            borderColor: '#FFFFFF',
+            glyphColor: '#FFFFFF',
+            glyph: (index + 1).toString(),
+            scale: 1.2
+          });
+
+          const marker = new window.google.maps.marker.AdvancedMarkerElement({
             position: { lat: office.lat, lng: office.lng },
             map,
             title: office.name,
-            label: {
-              text: (index + 1).toString(),
-              color: 'white',
-              fontWeight: 'bold'
-            },
-            icon: {
-              path: googleMaps.SymbolPath.CIRCLE,
-              scale: 12,
-              fillColor: selectedOffice?.name === office.name ? '#3B82F6' : '#EF4444',
-              fillOpacity: 1,
-              strokeColor: '#FFFFFF',
-              strokeWeight: 2
-            }
+            content: pinBackground.element
           });
 
       // Create info window
-      const infoWindow = new googleMaps.InfoWindow({
+      const infoWindow = new window.google.maps.InfoWindow({
         content: `
           <div style="padding: 8px; max-width: 250px;">
             <h3 style="margin: 0 0 8px 0; color: #1F2937; font-weight: bold;">${office.name}</h3>
@@ -151,9 +150,12 @@ const OfficeMap: React.FC<OfficeMapProps> = ({
         `
       });
 
-      // Add click listener
+      // Add click listener (AdvancedMarkerElement uses 'gmp-click' event)
       marker.addListener('click', () => {
-        infoWindow.open(map, marker);
+        infoWindow.open({
+          map,
+          anchor: marker
+        });
         if (onOfficeSelect) {
           onOfficeSelect(office);
         }
@@ -163,7 +165,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({
 
       // Create circle for radius
       if (showRadius) {
-        const circle = new googleMaps.Circle({
+        const circle = new window.google.maps.Circle({
           strokeColor: selectedOffice?.name === office.name ? '#3B82F6' : '#EF4444',
           strokeOpacity: 0.8,
           strokeWeight: 2,
@@ -187,7 +189,7 @@ const OfficeMap: React.FC<OfficeMapProps> = ({
     // Fit bounds to show all offices
     if (offices.length > 1) {
       try {
-        const bounds = new googleMaps.LatLngBounds();
+        const bounds = new window.google.maps.LatLngBounds();
         offices.forEach(office => {
           bounds.extend({ lat: office.lat, lng: office.lng });
         });

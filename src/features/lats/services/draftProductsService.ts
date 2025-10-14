@@ -75,8 +75,8 @@ class DraftProductsService {
         .from('lats_shipping_cargo_items')
         .select(`
           *,
-          product:lats_products(*),
-          purchase_order_item:lats_purchase_order_items(*)
+          product:lats_products!product_id(*),
+          purchase_order_item:lats_purchase_order_items!purchase_order_item_id(*)
         `)
         .eq('shipping_id', shippingId)
         .order('created_at', { ascending: true });
@@ -339,15 +339,15 @@ class DraftProductsService {
           description,
           notes,
           purchase_order_item_id,
-          product:lats_products(
+          product:lats_products!product_id(
             *,
-            category:lats_categories(*),
-            supplier:lats_suppliers(*),
-            variants:lats_product_variants(*)
+            category:lats_categories!category_id(*),
+            supplier:lats_suppliers!supplier_id(*),
+            variants:lats_product_variants!product_id(*)
           ),
-          purchase_order_item:lats_purchase_order_items(
+          purchase_order_item:lats_purchase_order_items!purchase_order_item_id(
             *,
-            purchase_order:lats_purchase_orders(
+            purchase_order:lats_purchase_orders!purchase_order_id(
               currency,
               exchange_rate,
               base_currency

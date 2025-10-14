@@ -65,222 +65,275 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({ isOpe
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60] p-4">
-      <GlassCard className="max-w-4xl w-full max-h-[90vh] overflow-y-auto p-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-50 rounded-xl">
-              <Receipt className="w-8 h-8 text-blue-600" />
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 pt-16 animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[85vh] overflow-hidden animate-slideUp">
+        {/* Modern Gradient Header */}
+        <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 px-8 py-6 text-white">
+          <div className="absolute inset-0 bg-black/10"></div>
+          <div className="relative flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
+                  <Receipt className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Transaction Details</h2>
+                  <p className="text-blue-100 text-sm mt-1">Complete payment information</p>
+                </div>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-800">Transaction Details</h2>
-              <p className="text-base text-gray-600">Complete payment information</p>
-            </div>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg transition-all flex items-center justify-center group"
+            >
+              <X className="w-5 h-5 text-white group-hover:rotate-90 transition-transform duration-300" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Transaction Overview */}
-        <div className="mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Amount Card */}
-            <div className="p-6 bg-gradient-to-br from-green-50 to-emerald-100 rounded-xl border border-green-200">
-              <div className="flex items-center gap-3 mb-3">
-                <DollarSign className="w-6 h-6 text-green-600" />
-                <span className="text-sm font-medium text-green-700">Transaction Amount</span>
-              </div>
-              <div className="text-3xl font-bold text-green-900 mb-2">{formatMoney(transaction.amount)}</div>
-              <div className="text-sm text-green-600">
-                {transaction.soldItems && transaction.soldItems.length > 0 
-                  ? `${transaction.soldItems.length} item${transaction.soldItems.length !== 1 ? 's' : ''} sold`
-                  : 'Payment processed'
-                }
-              </div>
-            </div>
-
-            {/* Status Card */}
-            <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl border border-blue-200">
-              <div className="flex items-center gap-3 mb-3">
-                {getStatusIcon(transaction.status)}
-                <span className="text-sm font-medium text-blue-700">Status</span>
-              </div>
-              <div className="text-xl font-bold text-blue-900 mb-2 capitalize">{transaction.status}</div>
-              <div className="text-sm text-blue-600">Payment status</div>
-            </div>
-
-            {/* Method Card */}
-            <div className="p-6 bg-gradient-to-br from-purple-50 to-violet-100 rounded-xl border border-purple-200">
-              <div className="flex items-center gap-3 mb-3">
-                <CreditCard className="w-6 h-6 text-purple-600" />
-                <span className="text-sm font-medium text-purple-700">Payment Method</span>
-              </div>
-              <div className="text-xl font-bold text-purple-900 mb-2">{transaction.paymentMethod}</div>
-              <div className="text-sm text-purple-600">How payment was made</div>
-            </div>
+          
+          {/* Status Badge in Header */}
+          <div className="relative mt-4">
+            <span className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-full border-2 ${getStatusColor(transaction.status)}`}>
+              {getStatusIcon(transaction.status)}
+              {transaction.status.toUpperCase()}
+            </span>
           </div>
         </div>
 
-        {/* Detailed Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Transaction Information */}
-          <div className="space-y-6">
-            <div className="p-6 bg-white rounded-xl border border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Hash className="w-5 h-5 text-blue-600" />
-                Transaction Information
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-sm font-medium text-gray-600">Transaction ID</span>
-                  <span className="text-sm font-mono text-gray-900">{transaction.transactionId}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-sm font-medium text-gray-600">Reference</span>
-                  <span className="text-sm font-mono text-gray-900">{transaction.reference}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-sm font-medium text-gray-600">Date & Time</span>
-                  <span className="text-sm text-gray-900">{new Date(transaction.timestamp).toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-sm font-medium text-gray-600">Source</span>
-                  <span className="text-sm text-gray-900 capitalize">{transaction.source}</span>
-                </div>
-                {transaction.deviceName && (
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm font-medium text-gray-600">Device</span>
-                    <span className="text-sm text-gray-900">📱 {transaction.deviceName}</span>
-                  </div>
-                )}
-                {transaction.fees && (
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm font-medium text-gray-600">Transaction Fees</span>
-                    <span className="text-sm text-gray-900">{formatMoney(transaction.fees)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center py-2">
-                  <span className="text-sm font-medium text-gray-600">Status</span>
-                  <span className={`inline-flex items-center gap-1 px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(transaction.status)}`}>
-                    {getStatusIcon(transaction.status)}
-                    {transaction.status}
-                  </span>
-                </div>
+        {/* Scrollable Content */}
+        <div className="overflow-y-auto max-h-[calc(85vh-180px)] px-8 py-6 bg-gray-50">
+          {/* Amount Highlight Card */}
+          <div className="bg-gradient-to-br from-emerald-500 via-teal-600 to-cyan-600 rounded-2xl p-8 text-white shadow-xl relative overflow-hidden mb-6">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
+            <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full -ml-24 -mb-24"></div>
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-3">
+                <DollarSign className="w-6 h-6" />
+                <span className="text-sm font-medium opacity-90">Transaction Amount</span>
               </div>
-            </div>
-
-            {/* Customer Information */}
-            <div className="p-6 bg-white rounded-xl border border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <User className="w-5 h-5 text-green-600" />
-                Customer Information
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                  <span className="text-sm font-medium text-gray-600">Customer Name</span>
-                  <span className="text-sm font-semibold text-gray-900">{transaction.customerName}</span>
-                </div>
-                {transaction.customerPhone && (
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm font-medium text-gray-600">Phone Number</span>
-                    <span className="text-sm text-gray-900 flex items-center gap-1">
-                      <Phone className="w-4 h-4" />
-                      {transaction.customerPhone}
-                    </span>
-                  </div>
-                )}
-                {transaction.customerEmail && (
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span className="text-sm font-medium text-gray-600">Email</span>
-                    <span className="text-sm text-gray-900 flex items-center gap-1">
-                      <Mail className="w-4 h-4" />
-                      {transaction.customerEmail}
-                    </span>
-                  </div>
-                )}
-                {transaction.customerAddress && (
-                  <div className="flex justify-between items-start py-2 border-b border-gray-100">
-                    <span className="text-sm font-medium text-gray-600">Address</span>
-                    <span className="text-sm text-gray-900 flex items-start gap-1 text-right">
-                      <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      {transaction.customerAddress}
-                    </span>
-                  </div>
-                )}
-                {transaction.customerId && (
-                  <div className="flex justify-between items-center py-2">
-                    <span className="text-sm font-medium text-gray-600">Customer ID</span>
-                    <span className="text-sm font-mono text-gray-900">{transaction.customerId}</span>
-                  </div>
+              <div className="text-5xl font-bold mb-2">
+                {formatMoney(transaction.amount)}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-sm font-medium">
+                  {transaction.paymentMethod}
+                </span>
+                {transaction.soldItems && transaction.soldItems.length > 0 && (
+                  <span className="text-sm opacity-75">• {transaction.soldItems.length} item{transaction.soldItems.length !== 1 ? 's' : ''} sold</span>
                 )}
               </div>
             </div>
-
-
           </div>
 
-          {/* Additional Details */}
-          <div className="space-y-6">
-
-
-            {/* Transaction Timeline */}
-            <div className="p-6 bg-white rounded-xl border border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-orange-600" />
-                Transaction Timeline
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                  <div className="flex-1">
-                    <div className="text-sm font-medium text-gray-900">Payment Initiated</div>
-                    <div className="text-xs text-gray-600">{new Date(transaction.timestamp).toLocaleString()}</div>
+          {/* Detailed Information */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Transaction Information */}
+            <div className="space-y-5">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Hash className="w-5 h-5 text-blue-600" />
+                  Transaction Information
+                </h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Hash className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-500 mb-1">Transaction ID</div>
+                      <div className="font-mono text-sm font-semibold text-gray-900 break-all">{transaction.transactionId}</div>
+                    </div>
                   </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-5 h-5 text-green-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-500 mb-1">Reference</div>
+                      <div className="font-mono text-sm font-semibold text-gray-900 break-all">{transaction.reference}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Calendar className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-500 mb-1">Date & Time</div>
+                      <div className="text-sm font-semibold text-gray-900">{new Date(transaction.timestamp).toLocaleString()}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Activity className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-500 mb-1">Source</div>
+                      <div className="text-sm font-semibold text-gray-900 capitalize">{transaction.source}</div>
+                    </div>
+                  </div>
+
+                  {transaction.deviceName && (
+                    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Smartphone className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Device</div>
+                        <div className="text-sm font-semibold text-gray-900">📱 {transaction.deviceName}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {transaction.fees > 0 && (
+                    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                      <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <TrendingDown className="w-5 h-5 text-red-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Transaction Fees</div>
+                        <div className="text-sm font-semibold text-gray-900">{formatMoney(transaction.fees)}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                {transaction.status === 'completed' && (
-                  <div className="flex items-start gap-3">
-                    <div className="w-3 h-3 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">Payment Completed</div>
-                      <div className="text-xs text-gray-600">{new Date(transaction.timestamp).toLocaleString()}</div>
+              </div>
+
+              {/* Customer Information */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <User className="w-5 h-5 text-blue-600" />
+                  Customer Information
+                </h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="flex items-start gap-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
+                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <User className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-medium text-gray-500 mb-1">Customer Name</div>
+                      <div className="font-semibold text-gray-900">{transaction.customerName}</div>
                     </div>
                   </div>
-                )}
-                {transaction.status === 'pending' && (
-                  <div className="flex items-start gap-3">
-                    <div className="w-3 h-3 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">Payment Pending</div>
-                      <div className="text-xs text-gray-600">Awaiting confirmation</div>
+
+                  {transaction.customerPhone && (
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
+                      <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Phone className="w-5 h-5 text-teal-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Phone Number</div>
+                        <div className="font-semibold text-gray-900">{transaction.customerPhone}</div>
+                      </div>
                     </div>
-                  </div>
-                )}
-                {transaction.status === 'failed' && (
-                  <div className="flex items-start gap-3">
-                    <div className="w-3 h-3 bg-red-500 rounded-full mt-2 flex-shrink-0"></div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">Payment Failed</div>
-                      <div className="text-xs text-gray-600">{transaction.failureReason || 'Transaction failed'}</div>
+                  )}
+
+                  {transaction.customerEmail && (
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
+                      <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Mail className="w-5 h-5 text-indigo-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Email Address</div>
+                        <div className="font-semibold text-gray-900 break-all">{transaction.customerEmail}</div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {transaction.customerAddress && (
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
+                      <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <MapPin className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Address</div>
+                        <div className="font-semibold text-gray-900">{transaction.customerAddress}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {transaction.customerId && (
+                    <div className="flex items-start gap-3 p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl">
+                      <div className="w-10 h-10 bg-cyan-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Hash className="w-5 h-5 text-cyan-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Customer ID</div>
+                        <div className="font-mono text-sm font-semibold text-gray-900">{transaction.customerId}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Sold Items */}
-            <div className="p-6 bg-white rounded-xl border border-gray-200">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Package className="w-5 h-5 text-blue-600" />
-                Sold Items
-                {transaction.soldItems && (
-                  <span className="text-sm text-gray-600">({transaction.soldItems.length})</span>
-                )}
-              </h3>
+            {/* Additional Details */}
+            <div className="space-y-5">
+              {/* Transaction Timeline */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  Transaction Timeline
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center gap-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl">
+                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Clock className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs font-medium text-gray-500 mb-1">Payment Initiated</div>
+                      <div className="text-sm font-semibold text-gray-900">{new Date(transaction.timestamp).toLocaleString()}</div>
+                    </div>
+                  </div>
+
+                  {transaction.status === 'completed' && (
+                    <div className="flex items-center gap-4 p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl">
+                      <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <CheckCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Payment Completed</div>
+                        <div className="text-sm font-semibold text-gray-900">{new Date(transaction.timestamp).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {transaction.status === 'pending' && (
+                    <div className="flex items-center gap-4 p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl">
+                      <div className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Clock className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Payment Pending</div>
+                        <div className="text-sm font-semibold text-gray-900">Awaiting confirmation</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {transaction.status === 'failed' && (
+                    <div className="flex items-center gap-4 p-3 bg-gradient-to-r from-red-50 to-rose-50 rounded-xl">
+                      <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0">
+                        <XCircle className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-gray-500 mb-1">Payment Failed</div>
+                        <div className="text-sm font-semibold text-gray-900">{transaction.failureReason || 'Transaction failed'}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sold Items */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <Package className="w-5 h-5 text-blue-600" />
+                  Sold Items
+                  {transaction.soldItems && (
+                    <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">{transaction.soldItems.length}</span>
+                  )}
+                </h3>
               
               {transaction.soldItems && transaction.soldItems.length > 0 ? (
                 <div className="space-y-3">
@@ -373,51 +426,64 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({ isOpe
             )}
           </div>
         </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-4 mt-8">
-          <GlassButton
-            onClick={onClose}
-            variant="secondary"
-            className="flex-1 py-4 text-lg font-semibold"
-          >
-            Close
-          </GlassButton>
-          <GlassButton
-            onClick={() => {
-              // Print transaction details
-              const printContent = `
-                Transaction Details
-                ===================
-                Transaction ID: ${transaction.transactionId}
-                Customer: ${transaction.customerName}
-                Amount: ${formatMoney(transaction.amount)}
-                Method: ${transaction.paymentMethod}
-                Status: ${transaction.status}
-                Date: ${new Date(transaction.timestamp).toLocaleString()}
-                Reference: ${transaction.reference}
-              `;
-              const printWindow = window.open('', '_blank');
-              if (printWindow) {
-                printWindow.document.write(`
-                  <html>
-                    <head><title>Transaction ${transaction.transactionId}</title></head>
-                    <body style="font-family: monospace; font-size: 12px; line-height: 1.4;">
-                      <pre>${printContent}</pre>
-                    </body>
-                  </html>
-                `);
-                printWindow.document.close();
-                printWindow.print();
-              }
-            }}
-            className="flex-1 py-4 text-lg font-semibold bg-gradient-to-r from-blue-500 to-indigo-600 text-white flex items-center justify-center gap-2"
-          >
-            <Printer className="w-5 h-5" />
-            Print Details
-          </GlassButton>
         </div>
-      </GlassCard>
+
+        {/* Modern Footer with Action Buttons */}
+        <div className="bg-white border-t border-gray-200 px-8 py-6">
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Hash className="w-4 h-4" />
+              <span>Transaction:</span>
+              <span className="font-mono font-semibold text-gray-900 bg-gray-100 px-3 py-1 rounded-lg">
+                {transaction.transactionId}
+              </span>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  // Print transaction details
+                  const printContent = `
+                    Transaction Details
+                    ===================
+                    Transaction ID: ${transaction.transactionId}
+                    Customer: ${transaction.customerName}
+                    Amount: ${formatMoney(transaction.amount)}
+                    Method: ${transaction.paymentMethod}
+                    Status: ${transaction.status}
+                    Date: ${new Date(transaction.timestamp).toLocaleString()}
+                    Reference: ${transaction.reference}
+                  `;
+                  const printWindow = window.open('', '_blank');
+                  if (printWindow) {
+                    printWindow.document.write(`
+                      <html>
+                        <head><title>Transaction ${transaction.transactionId}</title></head>
+                        <body style="font-family: monospace; font-size: 12px; line-height: 1.4;">
+                          <pre>${printContent}</pre>
+                        </body>
+                      </html>
+                    `);
+                    printWindow.document.close();
+                    printWindow.print();
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-sm hover:shadow-md font-medium text-sm"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print</span>
+              </button>
+              
+              <button
+                onClick={onClose}
+                className="px-6 py-2.5 bg-gradient-to-r from-gray-700 to-gray-800 text-white rounded-xl hover:from-gray-800 hover:to-gray-900 transition-all shadow-sm hover:shadow-md font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -1366,3 +1432,39 @@ const PaymentTrackingModal: React.FC<PaymentTrackingModalProps> = ({ isOpen, onC
 
 export default PaymentTrackingModal;
 
+// Add animation styles
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .animate-fadeIn {
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  .animate-slideUp {
+    animation: slideUp 0.3s ease-out;
+  }
+`;
+
+if (typeof document !== 'undefined' && !document.getElementById('transaction-modal-animations')) {
+  style.id = 'transaction-modal-animations';
+  document.head.appendChild(style);
+}

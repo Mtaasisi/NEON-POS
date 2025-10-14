@@ -39,6 +39,9 @@ interface POSCartSectionProps {
   dynamicPricingEnabled?: boolean;
   totalAmount: number;
   discountAmount: number;
+  discountPercentage?: number;
+  taxAmount: number;
+  taxRate: number;
   finalAmount: number;
   onEditCustomer?: (customer: Customer) => void;
 }
@@ -58,9 +61,14 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   dynamicPricingEnabled = false,
   totalAmount,
   discountAmount,
+  discountPercentage = 0,
+  taxAmount,
+  taxRate,
   finalAmount,
   onEditCustomer
 }) => {
+  // Calculate total item count
+  const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const { playClickSound, playPaymentSound, playDeleteSound } = usePOSClickSounds();
 
   return (
@@ -205,8 +213,9 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
         {cartItems.length > 0 && (
           <div className="flex-shrink-0 border-t border-gray-200 pt-4 space-y-3">
             <div className="space-y-2">
+              {/* Subtotal with item count */}
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Subtotal:</span>
+                <span className="text-gray-600">Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'}):</span>
                 <span className="font-medium">TZS {totalAmount.toLocaleString()}</span>
               </div>
               
@@ -219,7 +228,9 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                         <Percent className="w-4 h-4 text-green-600" />
                       </div>
                       <div>
-                        <div className="text-sm font-medium text-green-800">Discount Applied</div>
+                        <div className="text-sm font-medium text-green-800">
+                          Discount Applied {discountPercentage > 0 && `(${discountPercentage}%)`}
+                        </div>
                         <div className="text-xs text-green-600">-TZS {discountAmount.toLocaleString()}</div>
                       </div>
                     </div>
@@ -261,12 +272,29 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                   </button>
                 )}
               </div>
+
+              {/* Tax/VAT Line */}
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Tax (VAT {taxRate}%):</span>
+                <span className="font-medium">TZS {taxAmount.toLocaleString()}</span>
+              </div>
               
+              {/* Total */}
               <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-2">
                 <span>Total:</span>
                 <span className="text-green-600">TZS {finalAmount.toLocaleString()}</span>
               </div>
             </div>
+
+            {/* Customer Selection Warning */}
+            {!selectedCustomer && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-amber-800">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                  <span className="font-medium">Please select a customer to proceed</span>
+                </div>
+              </div>
+            )}
 
             {/* Process Payment Button */}
             <button

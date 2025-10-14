@@ -137,7 +137,7 @@ class InventoryService {
         .insert({
           product_id: productId,
           variant_id: variant.id,
-          type: 'in',
+          movement_type: 'in',
           quantity: quantity,
           previous_quantity: variant.quantity,
           new_quantity: variant.quantity + quantity,
@@ -220,7 +220,7 @@ class InventoryService {
         .insert({
           product_id: product.id,
           variant_id: defaultVariantResult.variantId,
-          type: 'in',
+          movement_type: 'in',
           quantity: box.quantity,
           previous_quantity: 0,
           new_quantity: box.quantity,

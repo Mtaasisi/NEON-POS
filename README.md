@@ -134,9 +134,30 @@ node auto-fix-database.mjs
 node auto-fix-now.mjs
 ```
 
+### Fix Customer Data Corruption
+
+If customer `total_spent` values appear unrealistic (very large or negative numbers):
+
+```bash
+# Automated fix with detailed reporting
+node run-fix-corrupt-customers.mjs
+```
+
+Or run the SQL fix directly in Neon console:
+```bash
+psql $DATABASE_URL -f FIX-CORRUPTED-TOTAL-SPENT-NOW.sql
+```
+
+This fix will:
+- 🔍 Identify customers with corrupted `total_spent` values (> 1 trillion TZS or negative)
+- 🔧 Recalculate correct totals from actual completed sales
+- ✅ Update customer points based on corrected spending
+- 📊 Provide before/after verification reports
+
 ### Common SQL Fixes
 
 The project includes many pre-built SQL fixes for common issues:
+- `FIX-CORRUPTED-TOTAL-SPENT-NOW.sql` - Fix customer total_spent corruption
 - `QUICK-FIX-400.sql` - Fix 400 errors
 - `FIX-400-ERRORS-COMPLETE.sql` - Comprehensive 400 error fixes
 - `FIX-PAYMENT-SYSTEM.sql` - Payment system fixes
@@ -198,6 +219,15 @@ node apply-fix-simple.mjs
 ```
 
 Or check `🎯 FIX-400-ERRORS-GUIDE.md` for detailed solutions.
+
+### Customer Total Spent Shows Unrealistic Values
+
+If you see customers with extremely high or negative `total_spent` values:
+```bash
+node run-fix-corrupt-customers.mjs
+```
+
+This will recalculate all customer totals from actual sales data.
 
 ### Database Connection Issues
 

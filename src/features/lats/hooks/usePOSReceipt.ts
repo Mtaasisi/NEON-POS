@@ -144,23 +144,23 @@ export const usePOSReceipt = () => {
     receipt.items.forEach(item => {
       const itemName = item.variantName ? `${item.productName} (${item.variantName})` : item.productName;
       content += `${item.quantity}x ${itemName}\n`;
-      content += `  ${formatMoney(item.unitPrice)} TZS each\n`;
-      content += `  ${formatMoney(item.totalPrice)} TZS\n\n`;
+      content += `  ${formatMoney(item.unitPrice)} each\n`;
+      content += `  ${formatMoney(item.totalPrice)}\n\n`;
     });
 
     // Totals
     content += '-'.repeat(40) + '\n';
-    content += `Subtotal: ${formatMoney(receipt.subtotal)} TZS\n`;
+    content += `Subtotal: ${formatMoney(receipt.subtotal)}\n`;
     
     if (receiptTemplate.showTax && receipt.tax > 0) {
-      content += `Tax (18%): ${formatMoney(receipt.tax)} TZS\n`;
+      content += `Tax (18%): ${formatMoney(receipt.tax)}\n`;
     }
     
     if (receipt.discount > 0) {
-      content += `Discount: -${formatMoney(receipt.discount)} TZS\n`;
+      content += `Discount: -${formatMoney(receipt.discount)}\n`;
     }
     
-    content += `TOTAL: ${formatMoney(receipt.total)} TZS\n`;
+    content += `TOTAL: ${formatMoney(receipt.total)}\n`;
     content += '\n';
 
     // Payment method

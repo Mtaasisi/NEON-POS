@@ -63,6 +63,7 @@ interface Sale {
   user_id: string;  // Changed from created_by to user_id
   sold_by?: string;
   created_at: string;
+  branch_id?: string;  // 🔒 Branch isolation
   lats_sale_items?: any[];
   subtotal?: number;
   discount?: number;
@@ -160,9 +161,8 @@ const SalesReportsPage: React.FC = () => {
   // Check if user can view profit information
   const canViewProfit = useMemo(() => {
     if (!currentUser) return false;
-    return currentUser.role === 'admin' || 
-           currentUser.role === 'manager' || 
-           currentUser.role === 'owner';
+    // Only admins can view profit information
+    return currentUser.role === 'admin';
   }, [currentUser]);
 
   // Calculate summary metrics
@@ -329,9 +329,9 @@ const SalesReportsPage: React.FC = () => {
   // Check if user has permission to confirm transactions
   const canConfirmTransactions = useMemo(() => {
     if (!currentUser) return false;
+    // Use RBAC to check permissions, or allow admin as fallback
     return rbacManager.hasPermission(currentUser.role, 'reports', 'confirm-transactions') || 
-           currentUser.role === 'admin' || 
-           currentUser.role === 'manager';
+           currentUser.role === 'admin';
   }, [currentUser]);
 
   // Fetch user names for cashier display
@@ -367,6 +367,11 @@ const SalesReportsPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      // 🔒 Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      
+      console.log('🏪 Current Branch ID:', currentBranchId);
+
       // Calculate date range based on selected period
       const endDate = new Date();
       const startDate = new Date();
@@ -397,44 +402,37 @@ const SalesReportsPage: React.FC = () => {
         }
       }
 
-      // For debugging: also try without date filters to see if there are any sales at all
-      if (selectedPeriod === '7d') {
-        console.log('🔍 Also checking for any sales without date filter...');
-        const { data: allSales, error: allSalesError } = await supabase
-          .from('lats_sales')
-          .select('id, sale_number, created_at')
-          .limit(5);
-        
-        if (!allSalesError && allSales) {
-          console.log('📊 Found sales in database:', allSales);
-        } else {
-          console.log('❌ No sales found or error:', allSalesError);
-        }
-      }
-
       console.log('🔍 Fetching sales for period:', selectedPeriod, 'from', startDate.toISOString(), 'to', endDate.toISOString());
 
-      // Try a much simpler query first - just get all sales and filter in JavaScript
-      // This avoids the complex date filter that's causing the 400 error
-      // Now including the newly added customer columns and user information
-      // FIXED QUERY - Using only columns that actually exist in the database
+      // Build query with branch filter
+      let query = supabase
+        .from('lats_sales')
+        .select(`
+          id,
+          sale_number,
+          customer_id,
+          customer_name,
+          total_amount,
+          payment_method,
+          status,
+          user_id,
+          sold_by,
+          created_at,
+          branch_id
+        `)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      // 🔒 APPLY BRANCH FILTER FOR ISOLATION
+      if (currentBranchId) {
+        console.log('🔒 APPLYING BRANCH FILTER:', currentBranchId);
+        query = query.eq('branch_id', currentBranchId);
+      } else {
+        console.log('⚠️ NO BRANCH FILTER - SHOWING ALL SALES');
+      }
+
       const salesResult = await safeQuery(
-        () => supabase
-          .from('lats_sales')
-          .select(`
-            id,
-            sale_number,
-            customer_id,
-            customer_name,
-            total_amount,
-            payment_method,
-            status,
-            user_id,
-            sold_by,
-            created_at
-          `)
-          .order('created_at', { ascending: false })
-          .limit(200),
+        () => query,
         () => SupabaseErrorHandler.createLatsSalesListFallbackQuery(supabase, 200)
       );
 
@@ -893,9 +891,13 @@ const SalesReportsPage: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      console.log('🔍 Fetching all sales without date filter...');
+      // 🔒 Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
 
-      const { data: salesData, error: salesError } = await supabase
+      console.log('🔍 Fetching all sales for branch:', currentBranchId);
+
+      // Build query with branch filter
+      let query = supabase
         .from('lats_sales')
         .select(`
           id,
@@ -907,10 +909,21 @@ const SalesReportsPage: React.FC = () => {
           status,
           user_id,
           sold_by,
-          created_at
+          created_at,
+          branch_id
         `)
         .order('created_at', { ascending: false })
         .limit(100);
+
+      // 🔒 APPLY BRANCH FILTER FOR ISOLATION
+      if (currentBranchId) {
+        console.log('🔒 APPLYING BRANCH FILTER:', currentBranchId);
+        query = query.eq('branch_id', currentBranchId);
+      } else {
+        console.log('⚠️ NO BRANCH FILTER - SHOWING ALL SALES');
+      }
+
+      const { data: salesData, error: salesError } = await query;
 
       // Fetch sale items for each sale
       if (!salesError && salesData && salesData.length > 0) {

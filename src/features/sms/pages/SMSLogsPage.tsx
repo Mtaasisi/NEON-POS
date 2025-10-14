@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 
@@ -15,6 +15,27 @@ interface SMSLog {
   cost?: number;
 }
 
+// Calculate SMS units and character info
+const calculateSMSInfo = (message: string) => {
+  const charCount = message.length;
+  
+  // Check if message contains Unicode characters
+  const hasUnicode = /[^\x00-\x7F]/.test(message);
+  
+  // Standard SMS: 160 chars for GSM-7, 70 chars for Unicode
+  const charsPerSMS = hasUnicode ? 70 : 160;
+  
+  // Calculate number of SMS units needed
+  const smsUnits = Math.ceil(charCount / charsPerSMS);
+  
+  return {
+    charCount,
+    smsUnits,
+    charsPerSMS,
+    encoding: hasUnicode ? 'Unicode' : 'GSM-7'
+  };
+};
+
 const SMSLogsPage: React.FC = () => {
   const [logs, setLogs] = useState<SMSLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,9 +43,21 @@ const SMSLogsPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedLog, setSelectedLog] = useState<SMSLog | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pricePerSMS, setPricePerSMS] = useState<number>(() => {
+    const saved = localStorage.getItem('sms_price_per_unit');
+    return saved ? parseFloat(saved) : 50; // Default 50 TZS per SMS
+  });
+  const [showPriceInput, setShowPriceInput] = useState(false);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     fetchSMSLogs();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   const fetchSMSLogs = async () => {
@@ -114,10 +147,17 @@ const SMSLogsPage: React.FC = () => {
       });
 
       console.log('🔧 Valid logs after filtering:', validLogs.length);
-      setLogs(validLogs);
+      
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setLogs(validLogs);
+      }
     } catch (err: any) {
       // Handle case where entire response object is thrown
       console.log('🚨 Exception caught in fetchSMSLogs:', err);
+      
+      // Only update state if component is still mounted
+      if (!isMountedRef.current) return;
       
       if (err?.error && err?.data !== undefined) {
         const error = err.error;
@@ -135,7 +175,10 @@ const SMSLogsPage: React.FC = () => {
         setError(`Unable to load SMS logs. Please try again later.`);
       }
     } finally {
-      setLoading(false);
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -187,20 +230,33 @@ const SMSLogsPage: React.FC = () => {
     const delivered = logs.filter(log => log && log.status === 'delivered').length;
     const failed = logs.filter(log => log && log.status === 'failed').length;
     const pending = logs.filter(log => log && log.status === 'pending').length;
-    const totalCost = logs.reduce((sum, log) => {
-      if (!log) return sum;
-      const cost = typeof log.cost === 'string' ? parseFloat(log.cost) : log.cost;
-      return sum + (cost || 0);
-    }, 0);
+    
+    // Calculate total cost based on SMS units
+    let totalCost = 0;
+    let totalSMSUnits = 0;
+    
+    logs.forEach(log => {
+      if (!log || !log.message) return;
+      const smsInfo = calculateSMSInfo(log.message);
+      totalSMSUnits += smsInfo.smsUnits;
+      totalCost += smsInfo.smsUnits * pricePerSMS;
+    });
 
-    return { total, sent, delivered, failed, pending, totalCost };
+    return { total, sent, delivered, failed, pending, totalCost, totalSMSUnits };
   };
 
   const stats = getStats();
+  
+  // Save price per SMS to localStorage when it changes
+  const updatePricePerSMS = (newPrice: number) => {
+    setPricePerSMS(newPrice);
+    localStorage.setItem('sms_price_per_unit', newPrice.toString());
+    toast.success(`Price per SMS updated to ${newPrice} TZS`);
+  };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="min-h-screen p-6">
         <div className="max-w-6xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <div className="animate-pulse">
@@ -219,7 +275,7 @@ const SMSLogsPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="min-h-screen p-6">
         <div className="max-w-6xl mx-auto">
           <div className="bg-white rounded-lg shadow-lg p-8">
             <div className="text-center">
@@ -240,7 +296,7 @@ const SMSLogsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+    <div className="min-h-screen p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -248,8 +304,62 @@ const SMSLogsPage: React.FC = () => {
           <p className="text-gray-600">View and monitor all SMS activity</p>
         </div>
 
+        {/* Price per SMS Setting */}
+        <div className="bg-white rounded-lg shadow-lg p-4 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="text-sm font-medium text-gray-700">Price per SMS Unit:</div>
+              {showPriceInput ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={pricePerSMS}
+                    onChange={(e) => setPricePerSMS(parseFloat(e.target.value) || 0)}
+                    className="w-24 px-3 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoFocus
+                  />
+                  <span className="text-sm text-gray-600">TZS</span>
+                  <button
+                    onClick={() => {
+                      updatePricePerSMS(pricePerSMS);
+                      setShowPriceInput(false);
+                    }}
+                    className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPricePerSMS(parseFloat(localStorage.getItem('sms_price_per_unit') || '50'));
+                      setShowPriceInput(false);
+                    }}
+                    className="px-3 py-1 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold text-blue-600">{pricePerSMS} TZS</span>
+                  <button
+                    onClick={() => setShowPriceInput(true)}
+                    className="text-blue-600 hover:text-blue-800 text-sm"
+                  >
+                    ✏️ Edit
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="text-sm text-gray-500">
+              💡 This price is used to calculate the cost for each SMS based on message length
+            </div>
+          </div>
+        </div>
+
         {/* Statistics */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
             <div className="text-sm text-gray-600">Total SMS</div>
@@ -271,7 +381,11 @@ const SMSLogsPage: React.FC = () => {
             <div className="text-sm text-gray-600">Pending</div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
-            <div className="text-2xl font-bold text-purple-600">{(Number(stats.totalCost) || 0).toFixed(0)}</div>
+            <div className="text-2xl font-bold text-indigo-600">{stats.totalSMSUnits}</div>
+            <div className="text-sm text-gray-600">SMS Units</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-2xl font-bold text-purple-600">{(Number(stats.totalCost) || 0).toLocaleString()}</div>
             <div className="text-sm text-gray-600">Total Cost (TZS)</div>
           </div>
         </div>
@@ -326,6 +440,9 @@ const SMSLogsPage: React.FC = () => {
                     Message
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Chars / Units
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Sent At
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -340,6 +457,9 @@ const SMSLogsPage: React.FC = () => {
                 {filteredLogs.map((log) => {
                   if (!log || !log.id) return null;
                   
+                  const smsInfo = calculateSMSInfo(log.message || '');
+                  const calculatedCost = smsInfo.smsUnits * pricePerSMS;
+                  
                   return (
                     <tr key={log.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -353,11 +473,20 @@ const SMSLogsPage: React.FC = () => {
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                         {log.message || 'N/A'}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{smsInfo.charCount} chars</span>
+                          <span className="text-xs text-gray-500">{smsInfo.smsUnits} unit{smsInfo.smsUnits > 1 ? 's' : ''}</span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {log.sent_at ? formatDate(log.sent_at) : (log.created_at ? formatDate(log.created_at) : 'N/A')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {log.cost ? `${log.cost} TZS` : '-'}
+                        <div className="flex flex-col">
+                          <span className="font-medium">{calculatedCost} TZS</span>
+                          <span className="text-xs text-gray-500">{smsInfo.encoding}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button
@@ -425,90 +554,130 @@ const SMSLogsPage: React.FC = () => {
         </div>
 
         {/* SMS Log Details Modal */}
-        {selectedLog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">SMS Details</h3>
-                  <button
-                    onClick={() => setSelectedLog(null)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Status</label>
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedLog.status || 'unknown')}`}>
-                      {getStatusIcon(selectedLog.status || 'unknown')} {selectedLog.status || 'unknown'}
-                    </span>
+        {selectedLog && (() => {
+          const smsInfo = calculateSMSInfo(selectedLog.message || '');
+          const calculatedCost = smsInfo.smsUnits * pricePerSMS;
+          
+          return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">SMS Details</h3>
+                    <button
+                      onClick={() => setSelectedLog(null)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Phone Number</label>
-                    <p className="text-sm text-gray-900">{selectedLog.phone_number || 'N/A'}</p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Message</label>
-                    <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-900 whitespace-pre-wrap">
-                      {selectedLog.message || 'N/A'}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Created At</label>
-                      <p className="text-sm text-gray-900">{selectedLog.created_at ? formatDate(selectedLog.created_at) : 'N/A'}</p>
+                      <label className="block text-sm font-medium text-gray-700">Status</label>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedLog.status || 'unknown')}`}>
+                        {getStatusIcon(selectedLog.status || 'unknown')} {selectedLog.status || 'unknown'}
+                      </span>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Sent At</label>
-                      <p className="text-sm text-gray-900">
-                        {selectedLog.sent_at ? formatDate(selectedLog.sent_at) : 'Not sent'}
-                      </p>
-                    </div>
-                  </div>
 
-                  {selectedLog.sent_by && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Sent By</label>
-                      <p className="text-sm text-gray-900">{selectedLog.sent_by}</p>
+                      <label className="block text-sm font-medium text-gray-700">Phone Number</label>
+                      <p className="text-sm text-gray-900">{selectedLog.recipient_phone || 'N/A'}</p>
                     </div>
-                  )}
 
-                  {selectedLog.device_id && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">Device ID</label>
-                      <p className="text-sm text-gray-900">{selectedLog.device_id}</p>
-                    </div>
-                  )}
-
-                  {selectedLog.cost && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Cost</label>
-                      <p className="text-sm text-gray-900">{selectedLog.cost} TZS</p>
-                    </div>
-                  )}
-
-                  {selectedLog.error_message && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Error Message</label>
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
-                        {selectedLog.error_message}
+                      <label className="block text-sm font-medium text-gray-700">Message</label>
+                      <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-900 whitespace-pre-wrap">
+                        {selectedLog.message || 'N/A'}
                       </div>
                     </div>
-                  )}
 
+                    {/* SMS Analytics Section */}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-3">📊 SMS Analytics</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600">Character Count</label>
+                          <p className="text-lg font-bold text-gray-900">{smsInfo.charCount}</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600">SMS Units</label>
+                          <p className="text-lg font-bold text-gray-900">{smsInfo.smsUnits}</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600">Encoding</label>
+                          <p className="text-sm font-medium text-gray-900">{smsInfo.encoding}</p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600">Chars per SMS</label>
+                          <p className="text-sm font-medium text-gray-900">{smsInfo.charsPerSMS}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Cost Calculation */}
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">💰 Cost Calculation</h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Price per SMS Unit:</span>
+                          <span className="font-medium text-gray-900">{pricePerSMS} TZS</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">SMS Units Used:</span>
+                          <span className="font-medium text-gray-900">{smsInfo.smsUnits}</span>
+                        </div>
+                        <div className="border-t border-green-300 pt-2 flex justify-between">
+                          <span className="font-semibold text-gray-900">Total Cost:</span>
+                          <span className="text-lg font-bold text-green-700">{calculatedCost} TZS</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Created At</label>
+                        <p className="text-sm text-gray-900">{selectedLog.created_at ? formatDate(selectedLog.created_at) : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Sent At</label>
+                        <p className="text-sm text-gray-900">
+                          {selectedLog.sent_at ? formatDate(selectedLog.sent_at) : 'Not sent'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {selectedLog.sent_by && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Sent By</label>
+                        <p className="text-sm text-gray-900">{selectedLog.sent_by}</p>
+                      </div>
+                    )}
+
+                    {selectedLog.device_id && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Device ID</label>
+                        <p className="text-sm text-gray-900">{selectedLog.device_id}</p>
+                      </div>
+                    )}
+
+                    {selectedLog.error_message && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Error Message</label>
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+                          {selectedLog.error_message}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

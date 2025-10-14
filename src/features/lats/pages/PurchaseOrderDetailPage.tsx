@@ -250,15 +250,23 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
         
         // Fix order status if needed (for existing orders created before auto-status logic)
         if (currentUser?.id && response.data?.id) {
-          const fixResult = await PurchaseOrderService.fixOrderStatusIfNeeded(response.data.id, currentUser.id);
-          if (fixResult.statusChanged) {
-            console.log('✅ Order status automatically corrected:', fixResult.message);
-            // Reload the order to get the updated status
-            const { getPurchaseOrder: getPO } = useInventoryStore.getState();
-            const updatedResponse = await getPO(id);
-            if (updatedResponse.ok && updatedResponse.data) {
-              setPurchaseOrder(updatedResponse.data);
+          try {
+            const fixResult = await PurchaseOrderService.fixOrderStatusIfNeeded(response.data.id, currentUser.id);
+            if (fixResult.success && fixResult.statusChanged) {
+              console.log('✅ Order status automatically corrected:', fixResult.message);
+              // Reload the order to get the updated status
+              const { getPurchaseOrder: getPO } = useInventoryStore.getState();
+              const updatedResponse = await getPO(id);
+              if (updatedResponse.ok && updatedResponse.data) {
+                setPurchaseOrder(updatedResponse.data);
+              }
+            } else if (!fixResult.success) {
+              console.warn('⚠️ Could not auto-fix order status:', fixResult.message);
+              // Don't block the page load - this is a non-critical operation
             }
+          } catch (error) {
+            console.error('⚠️ Error during auto-fix order status (non-critical):', error);
+            // Don't block the page load - this is a non-critical operation
           }
         }
       } else {
@@ -1258,6 +1266,12 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       
       // Reload purchase order to reflect payment changes
       await loadPurchaseOrder();
+      
+      // Force reload the entire page to refresh all account balances
+      // This ensures the UI shows updated balances immediately
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
     } catch (error) {
       console.error('Error processing payment:', error);
       toast.error('Failed to process payment. Please try again.');

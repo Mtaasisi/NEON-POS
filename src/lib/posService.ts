@@ -43,10 +43,19 @@ class POSService {
     try {
       console.log('💾 Saving POS sale to database...', { saleData, itemCount: saleItems.length });
 
-      // Insert the sale first
+      // 🔒 Get current branch for sale assignment
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      console.log('🏪 [POSService.saveSale] Assigning sale to branch:', currentBranchId);
+
+      // Insert the sale first with branch_id
+      const saleWithBranch = {
+        ...saleData,
+        branch_id: currentBranchId  // 🔒 Assign to current branch
+      };
+
       const { data: sale, error: saleError } = await supabase
         .from('lats_sales')
-        .insert([saleData])
+        .insert([saleWithBranch])
         .select()
         .single();
 
@@ -140,7 +149,10 @@ class POSService {
   // Get recent sales
   async getRecentSales(limit: number = 10): Promise<{ success: boolean; sales?: POSSale[]; error?: string }> {
     try {
-      const { data: sales, error } = await supabase
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      let query = supabase
         .from('lats_sales')
         .select(`
           *,
@@ -152,6 +164,13 @@ class POSService {
         `)
         .order('created_at', { ascending: false })
         .limit(limit);
+      
+      // 🔒 COMPLETE ISOLATION: Only show sales from current branch
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: sales, error } = await query;
 
       if (error) {
         console.warn('Complex POS service recent sales query failed, trying simpler query:', error.message);

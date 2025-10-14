@@ -23,6 +23,34 @@ class GoogleMapsService {
     return GoogleMapsService.instance;
   }
 
+  /**
+   * Fetch Google Maps API key from database first, then fall back to env variable
+   */
+  private async getApiKey(): Promise<string | null> {
+    try {
+      // Try to get from database first
+      const { getIntegration } = await import('./integrationsApi');
+      const integration = await getIntegration('GOOGLE_MAPS');
+      
+      if (integration && integration.is_enabled && integration.credentials?.api_key) {
+        console.log('✅ Google Maps API key loaded from database');
+        return integration.credentials.api_key;
+      }
+      
+      // Fall back to environment variable
+      const envKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+      if (envKey) {
+        console.log('✅ Google Maps API key loaded from environment');
+        return envKey;
+      }
+      
+      return null;
+    } catch (error) {
+      console.warn('⚠️ Error fetching Google Maps credentials from database, using env variable:', error);
+      return import.meta.env.VITE_GOOGLE_MAPS_API_KEY || null;
+    }
+  }
+
   async load(config: GoogleMapsConfig = {}): Promise<void> {
     // If already loaded, return immediately
     if (this.isLoaded) {
@@ -44,9 +72,10 @@ class GoogleMapsService {
     this.isLoading = true;
     this.error = null;
 
-    this.loadPromise = new Promise((resolve, reject) => {
+    this.loadPromise = new Promise(async (resolve, reject) => {
       try {
-        const apiKey = config.apiKey || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+        // Get API key from config, database, or environment
+        const apiKey = config.apiKey || await this.getApiKey();
         
         if (!apiKey || apiKey === 'YOUR_API_KEY') {
           const error = 'Google Maps API key not configured. Please set VITE_GOOGLE_MAPS_API_KEY environment variable.';
@@ -57,22 +86,16 @@ class GoogleMapsService {
           return;
         }
 
-        const libraries = config.libraries || ['geometry'];
+        const libraries = config.libraries || ['geometry', 'marker'];
         const version = config.version || 'weekly';
         
         const script = document.createElement('script');
-        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libraries.join(',')}&v=${version}`;
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=${libraries.join(',')}&v=${version}&loading=async`;
         script.async = true;
         script.defer = true;
         
-        script.onload = () => {
-          console.log('✅ Google Maps API loaded successfully');
-          this.isLoaded = true;
-          this.isLoading = false;
-          resolve();
-        };
-        
         script.onerror = (error) => {
+          clearTimeout(timeout);
           const errorMsg = 'Failed to load Google Maps API script';
           console.error('❌', errorMsg, error);
           this.error = errorMsg;
@@ -91,10 +114,21 @@ class GoogleMapsService {
 
         script.onload = () => {
           clearTimeout(timeout);
-          console.log('✅ Google Maps API loaded successfully');
-          this.isLoaded = true;
-          this.isLoading = false;
-          resolve();
+          
+          // Wait for the actual Google Maps API to be fully initialized
+          const checkGoogleMapsReady = () => {
+            if (window.google?.maps?.Map && window.google?.maps?.marker) {
+              console.log('✅ Google Maps API loaded successfully');
+              this.isLoaded = true;
+              this.isLoading = false;
+              resolve();
+            } else {
+              // Check again after a short delay
+              setTimeout(checkGoogleMapsReady, 50);
+            }
+          };
+          
+          checkGoogleMapsReady();
         };
 
         document.head.appendChild(script);
@@ -110,7 +144,7 @@ class GoogleMapsService {
   }
 
   isReady(): boolean {
-    return this.isLoaded && !!(window.google && window.google.maps);
+    return this.isLoaded && !!(window.google?.maps?.Map && window.google?.maps?.marker);
   }
 
   getError(): string | null {

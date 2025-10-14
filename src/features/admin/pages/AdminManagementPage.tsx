@@ -150,11 +150,11 @@ const AdminManagementPage: React.FC = () => {
       category: 'communication'
     },
     {
-      id: 'whatsapp-hub',
-      title: 'WhatsApp Hub',
-      description: 'Centralized WhatsApp messaging and management',
+      id: 'whatsapp-chat',
+      title: 'WhatsApp Chat',
+      description: 'Send and receive WhatsApp messages',
       icon: <MessageCircle size={24} />,
-      path: '/lats/whatsapp-connection-manager',
+      path: '/lats/whatsapp-chat',
       color: 'from-green-500 to-green-600',
       category: 'communication'
     },

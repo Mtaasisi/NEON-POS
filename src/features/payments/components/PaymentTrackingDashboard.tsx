@@ -4,14 +4,13 @@ import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import SearchBar from '../../shared/components/ui/SearchBar';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
-import PaymentDetailsViewer from './PaymentDetailsViewer';
 import { 
   CreditCard, DollarSign, TrendingUp, BarChart3, Wallet, 
   RefreshCw, ChevronRight, Download, Activity, ArrowUpDown,
   Filter, Search, Calendar, FileText, Bell, Settings, Eye, EyeOff,
   Package, Users, Building, Smartphone, Clock, CheckCircle,
   AlertTriangle, TrendingDown, ArrowUpRight, ArrowDownRight, X,
-  LayoutGrid, List, TestTube
+  LayoutGrid, List, TestTube, PieChartIcon
 } from 'lucide-react';
 import {
   LineChart,
@@ -112,10 +111,6 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
   const [topCustomersByPayments, setTopCustomersByPayments] = useState<any[]>([]);
   const [paymentTrendsByHour, setPaymentTrendsByHour] = useState<any[]>([]);
   const [failedPaymentAnalysis, setFailedPaymentAnalysis] = useState<any[]>([]);
-  
-  // Payment details modal state
-  const [selectedTransactionId, setSelectedTransactionId] = useState<string | null>(null);
-  const [showPaymentDetails, setShowPaymentDetails] = useState(false);
 
   // Chart data preparation with comprehensive database integration
   const chartData = useMemo(() => {
@@ -138,16 +133,25 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
     ];
 
     const methodTotals = allPayments.reduce((acc, payment) => {
-      const method = payment.method || payment.payment_method || 'unknown';
+      // Extract method from multiple possible locations including metadata
+      const method = payment.method || 
+                    payment.payment_method || 
+                    payment.metadata?.method ||
+                    payment.metadata?.payment_method ||
+                    'unknown';
       if (!acc[method]) {
         acc[method] = { total: 0, count: 0 };
       }
-      acc[method].total += payment.amount || payment.total_amount || 0;
+      const paymentAmount = Number(payment.amount || payment.total_amount || 0);
+      acc[method].total += isNaN(paymentAmount) ? 0 : paymentAmount;
       acc[method].count += 1;
       return acc;
     }, {} as Record<string, { total: number; count: number }>);
 
-    const totalAmount = Object.values(methodTotals).reduce((sum, method) => sum + method.total, 0);
+    const totalAmount = Object.values(methodTotals).reduce((sum, method) => {
+      const methodTotal = Number(method.total);
+      return sum + (isNaN(methodTotal) ? 0 : methodTotal);
+    }, 0);
     
     const methodsData = Object.entries(methodTotals).map(([method, data]) => {
       // Ensure method is a string and handle null/undefined cases
@@ -164,35 +168,51 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
 
     // Enhanced payment status data from all sources
     const statusTotals = allPayments.reduce((acc, payment) => {
-      const status = payment.status || payment.payment_status || 'unknown';
-      if (!acc[status]) {
-        acc[status] = { total: 0, count: 0 };
+      const rawStatus = payment.status || payment.payment_status || 'unknown';
+      // Normalize status to lowercase for consistent aggregation
+      const status = String(rawStatus).toLowerCase();
+      
+      // Map 'success' to 'completed' for consistency
+      const normalizedStatus = status === 'success' ? 'completed' : status;
+      
+      if (!acc[normalizedStatus]) {
+        acc[normalizedStatus] = { total: 0, count: 0 };
       }
-      acc[status].total += payment.amount || payment.total_amount || 0;
-      acc[status].count += 1;
+      const paymentAmount = Number(payment.amount || payment.total_amount || 0);
+      acc[normalizedStatus].total += isNaN(paymentAmount) ? 0 : paymentAmount;
+      acc[normalizedStatus].count += 1;
       return acc;
     }, {} as Record<string, { total: number; count: number }>);
+
+    // Debug logging
+    if (allPayments.length > 0) {
+      console.log('📊 Payment Status Aggregation:', {
+        totalPayments: allPayments.length,
+        statusTotals,
+        sampleStatuses: allPayments.slice(0, 5).map(p => p.status || p.payment_status)
+      });
+    }
 
     const statusData = [
       {
         status: 'Completed',
-        amount: statusTotals.completed?.total || metrics.completedAmount,
-        count: statusTotals.completed?.count || payments.filter(p => p.status === 'completed').length,
+        amount: statusTotals.completed?.total || 0,
+        count: statusTotals.completed?.count || 0,
         color: '#10B981'
       },
       {
         status: 'Pending',
-        amount: statusTotals.pending?.total || metrics.pendingAmount,
-        count: statusTotals.pending?.count || payments.filter(p => p.status === 'pending').length,
+        amount: statusTotals.pending?.total || 0,
+        count: statusTotals.pending?.count || 0,
         color: '#F59E0B'
       },
       {
         status: 'Failed',
-        amount: statusTotals.failed?.total || metrics.failedAmount,
-        count: statusTotals.failed?.count || payments.filter(p => p.status === 'failed').length,
+        amount: statusTotals.failed?.total || 0,
+        count: statusTotals.failed?.count || 0,
         color: '#EF4444'
       }
-    ];
+    ].filter(item => item.amount > 0 || item.count > 0); // Only show statuses with data
 
     // Monthly trends data for additional insights
     const monthlyData = monthlyTrends.map(trend => ({
@@ -287,6 +307,7 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         financeAccountsData,
         enhancedTransactionsData,
         currencyData,
+        currencyStatsData,
         // Additional database queries for comprehensive data
         customerPaymentsData,
         purchaseOrderPaymentsData,
@@ -315,6 +336,7 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         financeAccountService.getActiveFinanceAccounts(),
         enhancedPaymentService.getPaymentTransactionsForAccount('all', 1000, 0),
         currencyService.getCurrenciesUsedInPayments(),
+        currencyService.getCurrencyStatistics(),
         
         // Additional comprehensive database queries with error handling
         supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
@@ -468,18 +490,226 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         console.error('Failed to fetch payment providers:', allPaymentProvidersData.reason);
       }
 
+      // Process currency statistics for charts
+      if (currencyStatsData.status === 'fulfilled') {
+        const currencyStats = currencyStatsData.value;
+        
+        // Handle empty statistics gracefully
+        if (Object.keys(currencyStats).length === 0) {
+          console.log('ℹ️ No currency statistics data available (this is normal if using single currency)');
+          setCurrencyUsageStats([]);
+        } else {
+          const currencyArray = Object.entries(currencyStats).map(([currency_code, stats]: [string, any]) => ({
+            currency_code,
+            total_amount: stats.totalAmount || 0,
+            transaction_count: stats.count || 0,
+            percentage: 0 // Will be calculated below
+          }));
+          
+          const totalCurrencyAmount = currencyArray.reduce((sum, c) => sum + c.total_amount, 0);
+          currencyArray.forEach(c => {
+            c.percentage = totalCurrencyAmount > 0 ? (c.total_amount / totalCurrencyAmount) * 100 : 0;
+          });
+          
+          setCurrencyUsageStats(currencyArray);
+          console.log(`✅ Processed ${currencyArray.length} currency statistics`);
+        }
+      } else {
+        console.warn('⚠️ Currency statistics unavailable (dashboard will work without it)');
+        setCurrencyUsageStats([]);
+      }
+
+      // Generate analytics from all collected payment data
+      const allPaymentsList = [
+        ...(paymentsData.status === 'fulfilled' ? paymentsData.value : []),
+        ...(customerPaymentsData.status === 'fulfilled' ? (customerPaymentsData.value.data || []) : []),
+        ...(purchaseOrderPaymentsData.status === 'fulfilled' ? (purchaseOrderPaymentsData.value.data || []) : []),
+        ...(paymentTransactionsData.status === 'fulfilled' ? (paymentTransactionsData.value.data || []) : [])
+      ];
+
+      console.log(`📊 Processing analytics from ${allPaymentsList.length} total payments`);
+
+      // Generate hourly trends
+      const hourlyTrends: any[] = [];
+      const hourlyBuckets: Record<number, { total_amount: number; transaction_count: number }> = {};
+      
+      allPaymentsList.forEach((payment: any) => {
+        const dateField = payment.payment_date || payment.created_at || payment.date;
+        if (dateField) {
+          const hour = new Date(dateField).getHours();
+          if (!hourlyBuckets[hour]) {
+            hourlyBuckets[hour] = { total_amount: 0, transaction_count: 0 };
+          }
+          hourlyBuckets[hour].total_amount += Number(payment.amount || payment.total_amount || 0);
+          hourlyBuckets[hour].transaction_count += 1;
+        }
+      });
+
+      for (let hour = 0; hour < 24; hour++) {
+        hourlyTrends.push({
+          hour,
+          total_amount: hourlyBuckets[hour]?.total_amount || 0,
+          transaction_count: hourlyBuckets[hour]?.transaction_count || 0
+        });
+      }
+      setPaymentTrendsByHour(hourlyTrends);
+      console.log(`✅ Generated hourly trends with ${hourlyTrends.filter(h => h.transaction_count > 0).length} active hours`);
+
+      // Generate top customers by payments
+      const customerTotals: Record<string, { customer_name: string; total_amount: number; transaction_count: number }> = {};
+      
+      allPaymentsList.forEach((payment: any) => {
+        const customerId = payment.customer_id || payment.customerId || payment.customer_email || payment.customer_phone || 'unknown';
+        const customerName = payment.customer_name || 
+                            payment.customerName || 
+                            payment.customers?.name || 
+                            payment.customer_email ||
+                            `Customer ${String(customerId).substring(0, 8)}`;
+        
+        // Skip if customer name is invalid
+        if (!customerName || customerName === 'unknown' || customerName.includes('undefined')) {
+          return;
+        }
+        
+        if (!customerTotals[customerId]) {
+          customerTotals[customerId] = {
+            customer_name: customerName,
+            total_amount: 0,
+            transaction_count: 0
+          };
+        }
+        
+        customerTotals[customerId].total_amount += Number(payment.amount || payment.total_amount || 0);
+        customerTotals[customerId].transaction_count += 1;
+      });
+
+      const topCustomers = Object.values(customerTotals)
+        .sort((a, b) => b.total_amount - a.total_amount)
+        .slice(0, 20);
+      
+      setTopCustomersByPayments(topCustomers);
+      console.log(`✅ Generated top ${topCustomers.length} customers`);
+
+      // Generate failed payment analysis
+      const failedPayments = allPaymentsList.filter((p: any) => 
+        p.status === 'failed' || p.payment_status === 'failed'
+      );
+      
+      const failureReasons: Record<string, { failure_count: number; total_amount: number }> = {};
+      
+      failedPayments.forEach((payment: any) => {
+        // Extract failure reason from multiple possible locations including metadata
+        const reason = payment.failure_reason || 
+                      payment.metadata?.failure_reason || 
+                      payment.notes || 
+                      payment.error_message ||
+                      'Unknown Reason';
+        if (!failureReasons[reason]) {
+          failureReasons[reason] = { failure_count: 0, total_amount: 0 };
+        }
+        failureReasons[reason].failure_count += 1;
+        failureReasons[reason].total_amount += Number(payment.amount || payment.total_amount || 0);
+      });
+
+      const failedPaymentAnalysisList = Object.entries(failureReasons).map(([failure_reason, data]) => ({
+        failure_reason,
+        failure_count: data.failure_count,
+        total_amount: data.total_amount
+      }));
+
+      setFailedPaymentAnalysis(failedPaymentAnalysisList);
+      console.log(`✅ Generated failed payment analysis with ${failedPaymentAnalysisList.length} failure reasons`);
+
+      // Generate daily payment breakdown (last 30 days)
+      const dailyBuckets: Record<string, { total_amount: number; transaction_count: number; method_breakdown: Record<string, number> }> = {};
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      allPaymentsList.forEach((payment: any) => {
+        const dateField = payment.payment_date || payment.created_at || payment.date;
+        if (dateField) {
+          const paymentDate = new Date(dateField);
+          if (paymentDate >= thirtyDaysAgo) {
+            const dateKey = paymentDate.toISOString().split('T')[0];
+            
+            if (!dailyBuckets[dateKey]) {
+              dailyBuckets[dateKey] = {
+                total_amount: 0,
+                transaction_count: 0,
+                method_breakdown: {}
+              };
+            }
+            
+            const amount = Number(payment.amount || payment.total_amount || 0);
+            dailyBuckets[dateKey].total_amount += amount;
+            dailyBuckets[dateKey].transaction_count += 1;
+            
+            const method = payment.method || payment.payment_method || 'unknown';
+            dailyBuckets[dateKey].method_breakdown[method] = 
+              (dailyBuckets[dateKey].method_breakdown[method] || 0) + amount;
+          }
+        }
+      });
+
+      const dailyBreakdown = Object.entries(dailyBuckets)
+        .map(([date, data]) => ({
+          date,
+          total_amount: data.total_amount,
+          transaction_count: data.transaction_count,
+          method_breakdown: data.method_breakdown
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      setDailyPaymentBreakdown(dailyBreakdown);
+      console.log(`✅ Generated daily breakdown for ${dailyBreakdown.length} days`);
+
+      // Generate monthly trends (last 12 months)
+      const monthlyBuckets: Record<string, { total_amount: number; transaction_count: number }> = {};
+      const twelveMonthsAgo = new Date();
+      twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+      allPaymentsList.forEach((payment: any) => {
+        const dateField = payment.payment_date || payment.created_at || payment.date;
+        if (dateField) {
+          const paymentDate = new Date(dateField);
+          if (paymentDate >= twelveMonthsAgo) {
+            const monthKey = `${paymentDate.getFullYear()}-${String(paymentDate.getMonth() + 1).padStart(2, '0')}-01`;
+            
+            if (!monthlyBuckets[monthKey]) {
+              monthlyBuckets[monthKey] = {
+                total_amount: 0,
+                transaction_count: 0
+              };
+            }
+            
+            monthlyBuckets[monthKey].total_amount += Number(payment.amount || payment.total_amount || 0);
+            monthlyBuckets[monthKey].transaction_count += 1;
+          }
+        }
+      });
+
+      const monthlyTrendsList = Object.entries(monthlyBuckets)
+        .map(([month, data]) => ({
+          month,
+          total_amount: data.total_amount,
+          transaction_count: data.transaction_count
+        }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+      setMonthlyTrends(monthlyTrendsList);
+      console.log(`✅ Generated monthly trends for ${monthlyTrendsList.length} months`);
 
       // Show success message if most requests succeeded
       const successCount = [
         paymentsData, metricsData, methodSummaryData, dailySummaryData,
         financialAnalyticsData, paymentAnalyticsData, paymentInsightsData,
-        paymentProvidersData, financeAccountsData, enhancedTransactionsData, currencyData,
+        paymentProvidersData, financeAccountsData, enhancedTransactionsData, currencyData, currencyStatsData,
         customerPaymentsData, purchaseOrderPaymentsData, devicePaymentsData, 
         repairPaymentsData, paymentTransactionsData, allFinanceAccountsData, allPaymentProvidersData
       ].filter(result => result.status === 'fulfilled').length;
 
-      if (successCount >= 8) {
-        console.log(`✅ Successfully loaded ${successCount}/17 comprehensive data sources from database`);
+      if (successCount >= 10) {
+        console.log(`✅ Successfully loaded ${successCount}/19 comprehensive data sources from database`);
       } else {
         toast.error('Some payment data failed to load. Check your connection.');
       }
@@ -679,13 +909,24 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
   }, [payments, searchQuery, statusFilter, methodFilter, currencyFilter]);
 
   // Format currency following user preference (no trailing zeros, show full numbers)
-  const formatMoney = (amount: number) => {
+  const formatMoney = (amount: number | undefined | null) => {
+    // Handle NaN, undefined, null, and Infinity
+    const safeAmount = Number(amount);
+    if (!isFinite(safeAmount) || isNaN(safeAmount)) {
+      return new Intl.NumberFormat('en-TZ', {
+        style: 'currency',
+        currency: 'TZS',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(0);
+    }
+    
     return new Intl.NumberFormat('en-TZ', {
       style: 'currency',
       currency: 'TZS',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount);
+    }).format(safeAmount);
   };
 
   // Handle payment actions
@@ -715,12 +956,6 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
       console.error('Error updating payment status:', error);
       toast.error(`Error updating payment: ${error}`);
     }
-  };
-
-  // Handle viewing payment details
-  const handleViewDetails = (payment: PaymentTransaction) => {
-    setSelectedTransactionId(payment.transactionId);
-    setShowPaymentDetails(true);
   };
 
   // Get status styling
@@ -864,46 +1099,99 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
             <Activity className="w-5 h-5 text-orange-600" />
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData.statusData} layout="horizontal">
-                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-                <XAxis 
-                  type="number"
-                  stroke="#6B7280"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
-                />
-                <YAxis 
-                  type="category"
-                  dataKey="status"
-                  stroke="#6B7280"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip 
-                  contentStyle={{
-                    backgroundColor: 'white',
-                    border: '1px solid #E5E7EB',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-                  }}
-                  formatter={(value: any, name, props) => [
-                    formatMoney(value), 
-                    `${props.payload.status} (${props.payload.count} transactions)`
-                  ]}
-                />
-                <Bar dataKey="amount" fill="#3B82F6" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {chartData.statusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData.statusData} layout="horizontal">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis 
+                    type="number"
+                    stroke="#6B7280"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                  />
+                  <YAxis 
+                    type="category"
+                    dataKey="status"
+                    stroke="#6B7280"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    formatter={(value: any, name, props) => [
+                      formatMoney(value), 
+                      `${props.payload.status} (${props.payload.count} transactions)`
+                    ]}
+                  />
+                  <Bar dataKey="amount" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                <Activity className="w-12 h-12 mb-3 opacity-50" />
+                <p className="text-sm font-medium">No payment status data available</p>
+                <p className="text-xs mt-1">Process payments to see status breakdown</p>
+              </div>
+            )}
           </div>
         </GlassCard>
       </div>
 
       {/* Additional Comprehensive Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Payment Methods Pie Chart */}
+        {chartData.methodsData.length > 0 && (
+          <GlassCard className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Payment Methods</h3>
+                <p className="text-sm text-gray-600">Distribution by method</p>
+              </div>
+              <PieChartIcon className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData.methodsData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {chartData.methodsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'white',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                    }}
+                    formatter={(value: any, name, props) => [
+                      formatMoney(value), 
+                      `${props.payload.name} (${props.payload.count} transactions)`
+                    ]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+        )}
+
         {/* Currency Usage Chart */}
         {chartData.currencyData.length > 0 && (
           <GlassCard className="p-6">
@@ -952,15 +1240,15 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         )}
 
         {/* Hourly Payment Trends */}
-        {chartData.hourlyData.length > 0 && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Hourly Trends</h3>
-                <p className="text-sm text-gray-600">Payment activity by hour</p>
-              </div>
-              <Clock className="w-5 h-5 text-blue-600" />
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Hourly Trends</h3>
+              <p className="text-sm text-gray-600">Payment activity by hour</p>
             </div>
+            <Clock className="w-5 h-5 text-blue-600" />
+          </div>
+          {chartData.hourlyData.filter(h => h.transaction_count > 0).length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData.hourlyData}>
@@ -1001,22 +1289,29 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
-        )}
+          ) : (
+            <div className="h-64 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <Clock className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No hourly trend data available yet</p>
+              </div>
+            </div>
+          )}
+        </GlassCard>
       </div>
 
       {/* Top Customers and Failed Payments Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Customers by Payments */}
-        {chartData.customerData.length > 0 && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Top Customers</h3>
-                <p className="text-sm text-gray-600">Highest paying customers</p>
-              </div>
-              <Users className="w-5 h-5 text-green-600" />
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Top Customers</h3>
+              <p className="text-sm text-gray-600">Highest paying customers</p>
             </div>
+            <Users className="w-5 h-5 text-green-600" />
+          </div>
+          {chartData.customerData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData.customerData.slice(0, 10)} layout="horizontal">
@@ -1054,19 +1349,26 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
-        )}
+          ) : (
+            <div className="h-64 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No customer payment data available yet</p>
+              </div>
+            </div>
+          )}
+        </GlassCard>
 
         {/* Failed Payment Analysis */}
-        {chartData.failedPaymentData.length > 0 && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Failed Payments</h3>
-                <p className="text-sm text-gray-600">Analysis of payment failures</p>
-              </div>
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Failed Payments</h3>
+              <p className="text-sm text-gray-600">Analysis of payment failures</p>
             </div>
+            <AlertTriangle className="w-5 h-5 text-red-600" />
+          </div>
+          {chartData.failedPaymentData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -1099,8 +1401,16 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
-        )}
+          ) : (
+            <div className="h-64 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-300" />
+                <p className="font-medium text-green-600">Great! No failed payments</p>
+                <p className="text-sm">All transactions are successful</p>
+              </div>
+            </div>
+          )}
+        </GlassCard>
       </div>
 
       {/* Payment Methods Summary */}
@@ -1176,7 +1486,6 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 </div>
                 <div className="text-right">
                   <div className="font-semibold text-gray-900">{formatMoney(payment.amount)}</div>
-                  <div className="text-xs text-gray-500">{payment.currency || 'TZS'}</div>
                 </div>
               </div>
             ))}
@@ -1187,22 +1496,22 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
       {/* Performance Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Daily Performance Chart */}
-        {chartData.dailyData.length > 0 && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Daily Performance</h3>
-                <p className="text-sm text-gray-600">Revenue trends over the last 7 days</p>
-              </div>
-              <div className="flex gap-2">
-                <button className="px-3 py-1 text-xs bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200">
-                  Last 7 Days
-                </button>
-                <button className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-                  Last 30 Days
-                </button>
-              </div>
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Daily Performance</h3>
+              <p className="text-sm text-gray-600">Revenue trends over the last 7 days</p>
             </div>
+            <div className="flex gap-2">
+              <button className="px-3 py-1 text-xs bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200">
+                Last 7 Days
+              </button>
+              <button className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                Last 30 Days
+              </button>
+            </div>
+          </div>
+          {chartData.dailyData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData.dailyData}>
@@ -1248,19 +1557,26 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 </AreaChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
-        )}
+          ) : (
+            <div className="h-64 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <TrendingUp className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No daily performance data available yet</p>
+              </div>
+            </div>
+          )}
+        </GlassCard>
 
         {/* Monthly Trends Chart */}
-        {chartData.monthlyData.length > 0 && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Monthly Trends</h3>
-                <p className="text-sm text-gray-600">Revenue trends over the last 12 months</p>
-              </div>
-              <TrendingUp className="w-5 h-5 text-green-600" />
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Monthly Trends</h3>
+              <p className="text-sm text-gray-600">Revenue trends over the last 12 months</p>
             </div>
+            <TrendingUp className="w-5 h-5 text-green-600" />
+          </div>
+          {chartData.monthlyData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData.monthlyData}>
@@ -1300,48 +1616,277 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 </LineChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
-        )}
+          ) : (
+            <div className="h-64 flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <TrendingUp className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>No monthly trend data available yet</p>
+              </div>
+            </div>
+          )}
+        </GlassCard>
       </div>
 
       {/* Comprehensive Analytics Section */}
       {(financialAnalytics || paymentAnalytics || paymentInsights) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Financial Analytics */}
+        <div className="space-y-6">
+          {/* Financial Analytics with Charts */}
           {financialAnalytics && (
-            <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Financial Analytics</h3>
-                <BarChart3 className="w-5 h-5 text-blue-600" />
-              </div>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-2xl font-bold text-blue-600">
-                      {formatMoney(financialAnalytics.summary.totalRevenue)}
+            <>
+              {/* Financial Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <GlassCard className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-600">Total Revenue</p>
+                      <p className="text-2xl font-bold text-blue-900">
+                        {formatMoney(financialAnalytics?.summary?.totalRevenue || 0)}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">
+                        Revenue Growth: {financialAnalytics?.summary?.revenueGrowth?.toFixed(1) || '0.0'}%
+                      </p>
                     </div>
-                    <div className="text-xs text-gray-600">Total Revenue</div>
-                  </div>
-                  <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
-                      {formatMoney(financialAnalytics.summary.totalExpenses)}
+                    <div className="p-3 bg-blue-500 rounded-lg">
+                      <TrendingUp className="w-6 h-6 text-white" />
                     </div>
-                    <div className="text-xs text-gray-600">Total Expenses</div>
                   </div>
-                </div>
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {formatMoney(financialAnalytics.summary.netProfit)}
+                </GlassCard>
+
+                <GlassCard className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-orange-600">Total Expenses</p>
+                      <p className="text-2xl font-bold text-orange-900">
+                        {formatMoney(financialAnalytics?.summary?.totalExpenses || 0)}
+                      </p>
+                      <p className="text-xs text-orange-600 mt-1">
+                        Expense Growth: {financialAnalytics?.summary?.expenseGrowth?.toFixed(1) || '0.0'}%
+                      </p>
+                    </div>
+                    <div className="p-3 bg-orange-500 rounded-lg">
+                      <TrendingDown className="w-6 h-6 text-white" />
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-600">Net Profit</div>
-                </div>
-                <div className="text-sm text-gray-600">
-                  <div>Revenue Growth: {financialAnalytics.summary.revenueGrowth?.toFixed(1) || '0.0'}%</div>
-                  <div>Expense Growth: {financialAnalytics.summary.expenseGrowth?.toFixed(1) || '0.0'}%</div>
-                  <div>Profit Growth: {financialAnalytics.summary.profitGrowth?.toFixed(1) || '0.0'}%</div>
-                </div>
+                </GlassCard>
+
+                <GlassCard className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-600">Net Profit</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {formatMoney(financialAnalytics?.summary?.netProfit || 0)}
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">
+                        Profit Growth: {financialAnalytics?.summary?.profitGrowth?.toFixed(1) || '0.0'}%
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-500 rounded-lg">
+                      <DollarSign className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                </GlassCard>
               </div>
-            </GlassCard>
+
+              {/* Financial Analytics Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Revenue vs Expenses vs Profit Bar Chart */}
+                <GlassCard className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Financial Overview</h3>
+                      <p className="text-sm text-gray-600">Revenue, Expenses & Profit comparison</p>
+                    </div>
+                    <BarChart3 className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[
+                          {
+                            name: 'Revenue',
+                            value: financialAnalytics?.summary?.totalRevenue || 0,
+                            color: '#3B82F6'
+                          },
+                          {
+                            name: 'Expenses',
+                            value: financialAnalytics?.summary?.totalExpenses || 0,
+                            color: '#F59E0B'
+                          },
+                          {
+                            name: 'Net Profit',
+                            value: financialAnalytics?.summary?.netProfit || 0,
+                            color: '#10B981'
+                          }
+                        ]}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <XAxis 
+                          dataKey="name" 
+                          stroke="#6B7280"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <YAxis 
+                          stroke="#6B7280"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #E5E7EB',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          formatter={(value: any) => [formatMoney(value), 'Amount']}
+                        />
+                        <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                          {[
+                            { color: '#3B82F6' },
+                            { color: '#F59E0B' },
+                            { color: '#10B981' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </GlassCard>
+
+                {/* Growth Trends Chart */}
+                <GlassCard className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Growth Trends</h3>
+                      <p className="text-sm text-gray-600">Year-over-year growth percentages</p>
+                    </div>
+                    <TrendingUp className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={[
+                          {
+                            name: 'Revenue Growth',
+                            value: financialAnalytics?.summary?.revenueGrowth || 0,
+                            color: '#3B82F6'
+                          },
+                          {
+                            name: 'Expense Growth',
+                            value: financialAnalytics?.summary?.expenseGrowth || 0,
+                            color: '#F59E0B'
+                          },
+                          {
+                            name: 'Profit Growth',
+                            value: financialAnalytics?.summary?.profitGrowth || 0,
+                            color: '#10B981'
+                          }
+                        ]}
+                        layout="horizontal"
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <XAxis 
+                          type="number"
+                          stroke="#6B7280"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tickFormatter={(value) => `${value}%`}
+                        />
+                        <YAxis 
+                          type="category"
+                          dataKey="name"
+                          stroke="#6B7280"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          width={120}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #E5E7EB',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          }}
+                          formatter={(value: any) => [`${value.toFixed(1)}%`, 'Growth']}
+                        />
+                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                          {[
+                            { color: '#3B82F6' },
+                            { color: '#F59E0B' },
+                            { color: '#10B981' }
+                          ].map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </GlassCard>
+              </div>
+
+              {/* Financial Distribution Pie Chart */}
+              <GlassCard className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Financial Distribution</h3>
+                    <p className="text-sm text-gray-600">Revenue vs Expenses breakdown</p>
+                  </div>
+                  <PieChartIcon className="w-5 h-5 text-purple-600" />
+                </div>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          {
+                            name: 'Revenue',
+                            value: financialAnalytics?.summary?.totalRevenue || 0,
+                            color: '#3B82F6'
+                          },
+                          {
+                            name: 'Expenses',
+                            value: financialAnalytics?.summary?.totalExpenses || 0,
+                            color: '#F59E0B'
+                          }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={true}
+                        label={({ name, value, percent }) => 
+                          `${name}: ${formatMoney(value)} (${(percent * 100).toFixed(1)}%)`
+                        }
+                        outerRadius={120}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        <Cell fill="#3B82F6" />
+                        <Cell fill="#F59E0B" />
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: 'white',
+                          border: '1px solid #E5E7EB',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                        }}
+                        formatter={(value: any) => [formatMoney(value), 'Amount']}
+                      />
+                      <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        formatter={(value) => value}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </GlassCard>
+            </>
           )}
 
           {/* Payment Insights */}
@@ -1355,27 +1900,27 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 bg-green-50 rounded-lg">
                     <div className="text-2xl font-bold text-green-600">
-                      {paymentInsights.topPaymentMethod}
+                      {paymentInsights?.topPaymentMethod || 'N/A'}
                     </div>
                     <div className="text-xs text-gray-600">Top Method</div>
                   </div>
                   <div className="text-center p-3 bg-blue-50 rounded-lg">
                     <div className="text-2xl font-bold text-blue-600">
-                      {formatMoney(paymentInsights.averageTransactionValue)}
+                      {formatMoney(paymentInsights?.averageTransactionValue || 0)}
                     </div>
                     <div className="text-xs text-gray-600">Avg Transaction</div>
                   </div>
                 </div>
                 <div className="text-center p-3 bg-orange-50 rounded-lg">
                   <div className="text-2xl font-bold text-orange-600">
-                    {paymentInsights.peakHour}
+                    {paymentInsights?.peakHour || 'N/A'}
                   </div>
                   <div className="text-xs text-gray-600">Peak Hour</div>
                 </div>
                 <div className="text-sm text-gray-600">
-                  <div>Success Rate: {paymentInsights.successRate?.toFixed(1) || '0.0'}%</div>
-                  <div>Failure Rate: {paymentInsights.failureRate?.toFixed(1) || '0.0'}%</div>
-                  <div>Refund Rate: {paymentInsights.refundRate?.toFixed(1) || '0.0'}%</div>
+                  <div>Success Rate: {paymentInsights?.successRate?.toFixed(1) || '0.0'}%</div>
+                  <div>Failure Rate: {paymentInsights?.failureRate?.toFixed(1) || '0.0'}%</div>
+                  <div>Refund Rate: {paymentInsights?.refundRate?.toFixed(1) || '0.0'}%</div>
                 </div>
               </div>
             </GlassCard>
@@ -1454,7 +1999,6 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                           <div className="text-sm font-semibold text-gray-900">
                             {formatMoney(account.balance || 0)}
                           </div>
-                          <div className="text-xs text-gray-500">{account.currency || 'TZS'}</div>
                         </div>
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(account.is_active)}`}>
                           {account.is_active ? 'Active' : 'Inactive'}
@@ -1511,19 +2055,6 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
           </div>
         </div>
       </GlassCard>
-
-
-      {/* Payment Details Modal */}
-      {selectedTransactionId && (
-        <PaymentDetailsViewer
-          transactionId={selectedTransactionId}
-          onClose={() => {
-            setShowPaymentDetails(false);
-            setSelectedTransactionId(null);
-          }}
-          isModal={true}
-        />
-      )}
     </div>
   );
 };

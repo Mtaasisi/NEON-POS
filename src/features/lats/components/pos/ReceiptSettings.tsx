@@ -24,6 +24,10 @@ interface ReceiptSettings {
   companyPhone: string;
   companyEmail: string;
   
+  // SMS/Receipt Message Settings
+  smsHeaderMessage: string;
+  smsFooterMessage: string;
+  
   // Print Settings
   printMode: 'thermal' | 'a4' | 'email';
   autoPrint: boolean;
@@ -67,6 +71,8 @@ const ReceiptSettings: React.FC = () => {
       companyAddress: '123 Business Street, City',
       companyPhone: '+255 123 456 789',
       companyEmail: 'info@yourcompany.com',
+      smsHeaderMessage: 'Thank you for your purchase!',
+      smsFooterMessage: 'Thank you for choosing us!',
       printMode: 'thermal',
       autoPrint: false,
       printCopies: 1,
@@ -108,6 +114,8 @@ const ReceiptSettings: React.FC = () => {
           companyAddress: '123 Business Street, City',
           companyPhone: '+255 123 456 789',
           companyEmail: 'info@yourcompany.com',
+          smsHeaderMessage: settings.sms_header_message ?? 'Thank you for your purchase!',
+          smsFooterMessage: settings.sms_footer_message ?? 'Thank you for choosing us!',
           printMode: 'thermal',
           autoPrint: settings.auto_print_receipt ?? false,
           printCopies: 1,
@@ -173,7 +181,9 @@ const ReceiptSettings: React.FC = () => {
         show_footer_message: true,
         footer_message: data.footerText,
         show_return_policy: false,
-        return_policy_text: 'Returns accepted within 7 days with receipt'
+        return_policy_text: 'Returns accepted within 7 days with receipt',
+        sms_header_message: data.smsHeaderMessage,
+        sms_footer_message: data.smsFooterMessage
       };
 
       await POSSettingsService.saveReceiptSettings(dbSettings);
@@ -201,6 +211,8 @@ const ReceiptSettings: React.FC = () => {
       companyAddress: '123 Business Street, City',
       companyPhone: '+255 123 456 789',
       companyEmail: 'info@yourcompany.com',
+      smsHeaderMessage: 'Thank you for your purchase!',
+      smsFooterMessage: 'Thank you for choosing us!',
       printMode: 'thermal',
       autoPrint: false,
       printCopies: 1,
@@ -437,6 +449,43 @@ const ReceiptSettings: React.FC = () => {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="info@yourcompany.com"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* SMS/Receipt Message Settings */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <Mail className="w-5 h-5" />
+            SMS/Receipt Message
+          </h3>
+          <p className="text-sm text-gray-600">Customize the messages sent to customers via SMS or shown on receipts</p>
+          
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                SMS Header Message
+              </label>
+              <input
+                type="text"
+                {...register('smsHeaderMessage')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Thank you for your purchase!"
+              />
+              <p className="text-xs text-gray-500 mt-1">This appears at the top of the SMS receipt</p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                SMS Footer Message
+              </label>
+              <input
+                type="text"
+                {...register('smsFooterMessage')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Thank you for choosing us!"
+              />
+              <p className="text-xs text-gray-500 mt-1">This appears at the bottom of the SMS receipt</p>
             </div>
           </div>
         </div>

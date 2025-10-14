@@ -1,5 +1,4 @@
 // Reports Feature Module
-export * from './pages/SMSControlCenterPage';
 export * from './pages/ExcelImportPage';
 
 export * from './components/BulkFiltersPanel';

@@ -202,13 +202,25 @@ class FinancialService {
         return [];
       }
       
-      const { data, error } = await supabase
+      // 🔒 Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      
+      let query = supabase
         .from('customer_payments')
         .select('*')
         .order('payment_date', { ascending: false });
+      
+      // 🔒 Apply branch filter if branch is selected
+      if (currentBranchId) {
+        console.log(`🏪 Applying branch filter to customer payments: ${currentBranchId}`);
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
-        console.log('Device payments table not found or error:', error);
+        console.error('Error fetching device payments:', { data: null, error, count: null });
+        console.error('Device payments error details:', error.message, error.details, error.hint);
         return [];
       }
 
@@ -281,18 +293,29 @@ class FinancialService {
   // Fetch POS sales data with enhanced details
   async getPOSSales(): Promise<PaymentData[]> {
     try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      
       // Use simplified query to avoid 400 errors
-      const { data, error } = await supabase
+      let query = supabase
         .from('lats_sales')
         .select('*')
         .order('created_at', { ascending: false });
+      
+      // 🔒 Apply branch filter if branch is selected
+      if (currentBranchId) {
+        console.log(`🏪 Applying branch filter to financial sales: ${currentBranchId}`);
+        query = query.eq('branch_id', currentBranchId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error('❌ Financial sales query failed:', error);
         return [];
       }
 
-      console.log(`✅ Loaded ${data?.length || 0} financial sales`);
+      console.log(`✅ Loaded ${data?.length || 0} financial sales${currentBranchId ? ' (branch filtered)' : ' (all branches)'}`);
       
       // Transform POS sales to match PaymentData format
       return data?.map((sale: any) => ({
@@ -428,14 +451,25 @@ class FinancialService {
   // Fetch all expenses
   async getExpenses(): Promise<ExpenseData[]> {
     try {
-      const { data, error } = await supabase
+      // 🔒 Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      
+      let query = supabase
         .from('finance_expenses')
         .select('*')
         .order('expense_date', { ascending: false });
+      
+      // 🔒 Apply branch filter if branch is selected
+      if (currentBranchId) {
+        console.log(`🏪 Applying branch filter to expenses: ${currentBranchId}`);
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
-        // Table doesn't exist, return empty array
-        console.log('Finance expenses table not found, returning empty array');
+        console.error('Error fetching expenses:', { data: null, error, count: null });
+        console.error('Finance expenses error details:', error.message, error.details, error.hint);
         return [];
       }
 

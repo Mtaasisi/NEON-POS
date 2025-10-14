@@ -222,3 +222,5 @@ export const StoreLocationManagementPage: React.FC = () => {
     </div>
   );
 };
+
+export default StoreLocationManagementPage;

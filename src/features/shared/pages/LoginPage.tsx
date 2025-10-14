@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Smartphone, Shield, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../../../context/AuthContext';
@@ -24,14 +24,11 @@ const LoginPage: React.FC = () => {
     logToConsole: true
   });
 
-  // Helper function to get the last visited page from navigation history
-  const getLastVisitedPage = (): string => {
-    console.log('🔍 LoginPage: Determining redirect destination...');
-    
+  // Helper function to get the last visited page from navigation history - MEMOIZED to prevent loops
+  const getLastVisitedPage = useCallback((): string => {
     // First check if there's a specific post-login redirect set
     const postLoginRedirect = localStorage.getItem('postLoginRedirect');
     if (postLoginRedirect) {
-      console.log('✅ LoginPage: Found postLoginRedirect:', postLoginRedirect);
       localStorage.removeItem('postLoginRedirect');
       return postLoginRedirect;
     }
@@ -41,19 +38,16 @@ const LoginPage: React.FC = () => {
     if (savedHistory) {
       try {
         const history: string[] = JSON.parse(savedHistory);
-        console.log('📚 LoginPage: Navigation history found:', history);
         
         // Get the last page from history (excluding login page)
         const lastPage = history[history.length - 1];
         if (lastPage && lastPage !== '/login' && lastPage !== '/') {
-          console.log('✅ LoginPage: Using last page from history:', lastPage);
           return lastPage;
         }
         // If last page was login or root, try the second to last page
         if (history.length > 1) {
           const secondLastPage = history[history.length - 2];
           if (secondLastPage && secondLastPage !== '/login' && secondLastPage !== '/') {
-            console.log('✅ LoginPage: Using second to last page from history:', secondLastPage);
             return secondLastPage;
           }
         }
@@ -63,9 +57,8 @@ const LoginPage: React.FC = () => {
     }
 
     // Fallback to dashboard if no valid history found
-    console.log('🔄 LoginPage: No valid history found, falling back to dashboard');
     return '/dashboard';
-  };
+  }, []); // Empty deps - this function doesn't depend on any external state
 
   // Autofill from localStorage if available
   useEffect(() => {
@@ -85,9 +78,9 @@ const LoginPage: React.FC = () => {
   useEffect(() => {
     if (!loading && isAuthenticated) {
       const redirectPath = getLastVisitedPage();
-      navigate(redirectPath);
+      navigate(redirectPath, { replace: true }); // Use replace to prevent back button issues
     }
-  }, [isAuthenticated, loading, navigate]);
+  }, [isAuthenticated, loading, navigate, getLastVisitedPage]);
 
   // Show loading state while checking authentication
   if (loading) {

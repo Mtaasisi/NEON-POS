@@ -1,7 +1,8 @@
-import React, { memo } from 'react';
+import React, { memo, useEffect, useState } from 'react';
 import VariantProductCard from './VariantProductCard';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import GlassButton from '../../../shared/components/ui/GlassButton';
+import { RealTimeStockService } from '../../lib/realTimeStock';
 
 interface POSProductGridProps {
   products: any[];
@@ -20,6 +21,41 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
   onPageChange,
   isLoading = false
 }) => {
+  // Real-time stock data for all products (BATCH FETCH to avoid N+1 queries)
+  const [realTimeStockData, setRealTimeStockData] = useState<Map<string, number>>(new Map());
+
+  // Batch fetch stock data for all products when products change
+  useEffect(() => {
+    const fetchAllStockData = async () => {
+      if (!products || products.length === 0) return;
+      
+      try {
+        const productIds = products.map(p => p.id);
+        
+        // Batch fetch stock for ALL products at once
+        const stockService = RealTimeStockService.getInstance();
+        const stockLevels = await stockService.getStockLevels(productIds);
+        
+        // Convert to Map for easy lookup
+        const stockMap = new Map<string, number>();
+        Object.entries(stockLevels).forEach(([productId, levels]) => {
+          const totalStock = levels.reduce((sum, level) => sum + level.quantity, 0);
+          stockMap.set(productId, totalStock);
+        });
+        
+        setRealTimeStockData(stockMap);
+        
+        if (import.meta.env.MODE === 'development') {
+          console.log(`✅ [POSProductGrid] Batch fetched stock for ${productIds.length} products in ONE query`);
+        }
+      } catch (error) {
+        console.error('❌ [POSProductGrid] Error fetching batch stock:', error);
+      }
+    };
+
+    fetchAllStockData();
+  }, [products]);
+
   const handleAddToCart = (product: any, variant?: any, quantity: number = 1) => {
     onAddToCart(product, variant, quantity);
   };
@@ -62,6 +98,7 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
             product={product}
             onAddToCart={handleAddToCart}
             compact={true}
+            realTimeStockData={realTimeStockData}
           />
         ))}
       </div>

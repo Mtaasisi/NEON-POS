@@ -470,11 +470,45 @@ const supabaseProvider = {
   },
 
   updateProduct: async (id: string, data: any) => {
-    // This would use the latsProductApi updateProduct function
-    return {
-      ok: false,
-      message: 'Not implemented yet'
-    };
+    try {
+      // Map the product data to the format expected by latsProductApi
+      const updateData = {
+        name: data.name,
+        description: data.description,
+        sku: data.sku,
+        barcode: data.barcode,
+        categoryId: data.categoryId,
+        supplierId: data.supplierId || undefined,
+        tags: data.tags || [],
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        // Handle variants if provided
+        variants: data.variants ? data.variants.map((v: any) => ({
+          sku: v.sku,
+          name: v.name || v.variant_name,
+          attributes: v.attributes || {},
+          costPrice: v.costPrice ?? v.cost_price ?? 0,
+          sellingPrice: v.sellingPrice ?? v.unit_price ?? v.price ?? 0,
+          quantity: v.quantity ?? v.stockQuantity ?? 0,
+          minQuantity: v.minQuantity ?? v.minStockLevel ?? 0
+        })) : undefined
+      };
+
+      // Call the latsProductApi updateProduct function
+      const { updateProduct: apiUpdateProduct } = await import('../../../../lib/latsProductApi');
+      const updatedProduct = await apiUpdateProduct(id, updateData, '');
+      
+      return {
+        ok: true,
+        data: updatedProduct,
+        message: 'Product updated successfully'
+      };
+    } catch (error) {
+      console.error('Error updating product:', error);
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : 'Failed to update product'
+      };
+    }
   },
 
   updateProductVariantCostPrice: async (variantId: string, costPrice: number) => {
@@ -525,41 +559,83 @@ const supabaseProvider = {
 
   searchProducts: async (query: string) => {
     try {
+      // Fetch products first (Neon doesn't support nested select syntax)
       const { data: products, error } = await supabase
         .from('lats_products')
-        .select(`
-          *,
-          lats_categories(name),
-          lats_suppliers(name),
-          lats_product_variants(*)
-        `)
+        .select('*')
         .or(`name.ilike.%${query}%,sku.ilike.%${query}%`)
         .limit(20);
 
       if (error) throw error;
+      if (!products || products.length === 0) {
+        return { ok: true, data: [] };
+      }
+
+      // Fetch related data separately
+      const productIds = products.map((p: any) => p.id);
+      const categoryIds = [...new Set(products.map((p: any) => p.category_id).filter(Boolean))];
+      const supplierIds = [...new Set(products.map((p: any) => p.supplier_id).filter(Boolean))];
+
+      // Fetch variants
+      const { data: variants } = await supabase
+        .from('lats_product_variants')
+        .select('*')
+        .in('product_id', productIds);
+
+      // Fetch categories
+      const { data: categories } = await supabase
+        .from('lats_categories')
+        .select('id, name')
+        .in('id', categoryIds);
+
+      // Fetch suppliers
+      const { data: suppliers } = await supabase
+        .from('lats_suppliers')
+        .select('id, name')
+        .in('id', supplierIds);
+
+      // Create lookup maps
+      const variantsByProduct = (variants || []).reduce((acc: any, v: any) => {
+        if (!acc[v.product_id]) acc[v.product_id] = [];
+        acc[v.product_id].push(v);
+        return acc;
+      }, {});
+
+      const categoriesMap = (categories || []).reduce((acc: any, c: any) => {
+        acc[c.id] = c;
+        return acc;
+      }, {});
+
+      const suppliersMap = (suppliers || []).reduce((acc: any, s: any) => {
+        acc[s.id] = s;
+        return acc;
+      }, {});
 
       return {
         ok: true,
-        data: (products || []).map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          sku: p.sku,
-          categoryId: p.category_id,
-          categoryName: p.lats_categories?.name,
-          supplierId: p.supplier_id,
-          supplierName: p.lats_suppliers?.name,
-          price: p.lats_product_variants?.[0]?.unit_price || 0,
-          costPrice: p.lats_product_variants?.[0]?.cost_price || 0,
-          totalQuantity: p.total_quantity,
-          variants: (p.lats_product_variants || []).map((v: any) => ({
-            id: v.id,
-            name: v.name,
-            sku: v.sku,
-            sellingPrice: v.unit_price,
-            costPrice: v.cost_price,
-            stockQuantity: v.quantity
-          }))
-        }))
+        data: products.map((p: any) => {
+          const productVariants = variantsByProduct[p.id] || [];
+          return {
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            categoryId: p.category_id,
+            categoryName: categoriesMap[p.category_id]?.name,
+            supplierId: p.supplier_id,
+            supplierName: suppliersMap[p.supplier_id]?.name,
+            price: productVariants[0]?.unit_price || 0,
+            costPrice: productVariants[0]?.cost_price || 0,
+            totalQuantity: p.total_quantity,
+            variants: productVariants.map((v: any) => ({
+              id: v.id,
+              name: v.name,
+              sku: v.sku,
+              sellingPrice: v.unit_price,
+              costPrice: v.cost_price,
+              stockQuantity: v.quantity
+            }))
+          };
+        })
       };
     } catch (error) {
       console.error('Error searching products:', error);
@@ -636,19 +712,22 @@ const supabaseProvider = {
     try {
       console.log('📋 Fetching all purchase orders...');
       
-      const { data: purchaseOrders, error } = await supabase
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      // Fetch purchase orders without nested select (Neon doesn't support this)
+      let query = supabase
         .from('lats_purchase_orders')
-        .select(`
-          *,
-          supplier:lats_suppliers(
-            id,
-            name,
-            contact_person,
-            email,
-            phone
-          )
-        `)
-        .order('created_at', { ascending: false });
+        .select('*')
+        .order('created_at', { ascending: false});
+      
+      // 🔒 COMPLETE ISOLATION: Only show purchase orders from current branch
+      if (currentBranchId) {
+        console.log('🔒 [getPurchaseOrders] ISOLATED MODE - Filtering by branch:', currentBranchId);
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: purchaseOrders, error } = await query;
 
       if (error) {
         console.error('❌ Error fetching purchase orders:', error);
@@ -656,16 +735,6 @@ const supabaseProvider = {
       }
 
       console.log(`✅ Fetched ${purchaseOrders?.length || 0} purchase orders`);
-      
-      // Debug supplier data
-      console.log('🔍 [getPurchaseOrders] Raw data sample:', purchaseOrders?.[0]);
-      console.log('🔍 [getPurchaseOrders] Supplier data:', purchaseOrders?.map(po => ({
-        id: po.id,
-        po_number: po.po_number,
-        supplier_id: po.supplier_id,
-        supplier: po.supplier,
-        supplierType: typeof po.supplier
-      })));
 
       // Fetch item counts for all purchase orders
       const poIds = purchaseOrders?.map((po: any) => po.id) || [];
@@ -686,14 +755,12 @@ const supabaseProvider = {
         }
       }
       
-      // If suppliers are not populated in the join, fetch them separately
+      // Fetch suppliers separately (Neon doesn't support nested joins)
       const suppliersMap = new Map();
-      const missingSuppliers = purchaseOrders?.filter((po: any) => !po.supplier && po.supplier_id) || [];
+      const supplierIds = [...new Set(purchaseOrders?.map((po: any) => po.supplier_id).filter(Boolean) || [])];
       
-      if (missingSuppliers.length > 0) {
-        console.log('⚠️ [getPurchaseOrders] Suppliers missing from join, fetching separately...');
-        const supplierIds = [...new Set(missingSuppliers.map((po: any) => po.supplier_id))];
-        
+      if (supplierIds.length > 0) {
+        console.log('🔍 [getPurchaseOrders] Fetching suppliers separately...');
         const { data: suppliers, error: suppliersError } = await supabase
           .from('lats_suppliers')
           .select('id, name, contact_person, email, phone')
@@ -719,8 +786,8 @@ const supabaseProvider = {
         const exchangeRate = typeof po.exchange_rate === 'string' ? parseFloat(po.exchange_rate) || undefined : po.exchange_rate;
         const totalAmountBaseCurrency = typeof po.total_amount_base_currency === 'string' ? parseFloat(po.total_amount_base_currency) || undefined : po.total_amount_base_currency;
         
-        // Get supplier from join or from separate fetch
-        const supplier = po.supplier || (po.supplier_id ? suppliersMap.get(po.supplier_id) : undefined);
+        // Get supplier from separate fetch
+        const supplier = po.supplier_id ? suppliersMap.get(po.supplier_id) : undefined;
         
         const mappedOrder = {
           id: po.id,
@@ -805,19 +872,40 @@ const supabaseProvider = {
         }
       }
 
-      // Get purchase order items
+      // Get purchase order items (without nested select - Neon doesn't support this)
       const { data: items, error: itemsError } = await supabase
         .from('lats_purchase_order_items')
-        .select(`
-          *,
-          product:lats_products(*),
-          variant:lats_product_variants(*)
-        `)
+        .select('*')
         .eq('purchase_order_id', id);
 
       if (itemsError) {
         console.error('❌ Error fetching purchase order items:', itemsError);
         return { ok: false, message: itemsError.message };
+      }
+
+      // Fetch products and variants separately
+      const productIds = [...new Set(items?.map((item: any) => item.product_id).filter(Boolean) || [])];
+      const variantIds = [...new Set(items?.map((item: any) => item.variant_id).filter(Boolean) || [])];
+
+      let productsMap = new Map();
+      let variantsMap = new Map();
+
+      if (productIds.length > 0) {
+        const { data: products } = await supabase
+          .from('lats_products')
+          .select('*')
+          .in('id', productIds);
+        
+        products?.forEach((p: any) => productsMap.set(p.id, p));
+      }
+
+      if (variantIds.length > 0) {
+        const { data: variants } = await supabase
+          .from('lats_product_variants')
+          .select('*')
+          .in('id', variantIds);
+        
+        variants?.forEach((v: any) => variantsMap.set(v.id, v));
       }
 
       console.log('✅ Purchase order fetched:', purchaseOrder.po_number);
@@ -883,8 +971,8 @@ const supabaseProvider = {
           notes: item.notes,
           createdAt: item.created_at,
           updatedAt: item.updated_at,
-          product: item.product,
-          variant: item.variant
+          product: productsMap.get(item.product_id),
+          variant: variantsMap.get(item.variant_id)
         })) || []
       };
       
@@ -919,6 +1007,10 @@ const supabaseProvider = {
         sum + (item.quantity * item.costPrice), 0
       );
       
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      console.log('🏪 [createPurchaseOrder] Assigning purchase order to branch:', currentBranchId);
+      
       // Create the purchase order - using only core columns that exist
       const { data: purchaseOrder, error: poError } = await supabase
         .from('lats_purchase_orders')
@@ -930,7 +1022,8 @@ const supabaseProvider = {
           notes: data.notes || '',
           order_date: data.orderDate || new Date().toISOString(),
           expected_delivery_date: data.expectedDelivery || null,
-          created_by: data.createdBy || null
+          created_by: data.createdBy || null,
+          branch_id: currentBranchId // 🔒 Add branch isolation
         })
         .select()
         .single();
@@ -1081,16 +1174,29 @@ const supabaseProvider = {
 
       console.log('✅ Purchase order received successfully:', data);
       
-      // Get updated purchase order
+      // Get updated purchase order (without nested select - Neon doesn't support this)
       const { data: updatedPO, error: fetchError } = await supabase
         .from('lats_purchase_orders')
-        .select('*, supplier:lats_suppliers(*)')
+        .select('*')
         .eq('id', id)
         .single();
 
       if (fetchError) {
         console.warn('⚠️ Could not fetch updated PO, but receive was successful');
         return { ok: true, message: 'Purchase order received successfully' };
+      }
+
+      // Fetch supplier separately if needed
+      if (updatedPO && updatedPO.supplier_id) {
+        const { data: supplier } = await supabase
+          .from('lats_suppliers')
+          .select('*')
+          .eq('id', updatedPO.supplier_id)
+          .single();
+        
+        if (supplier) {
+          updatedPO.supplier = supplier;
+        }
       }
 
       return { ok: true, data: updatedPO };
@@ -1107,33 +1213,255 @@ const supabaseProvider = {
     return { ok: false, message: 'Not implemented' };
   },
 
-  // Spare Parts - placeholder implementations
+  // Spare Parts - real implementations
   getSpareParts: async () => {
-    return { ok: true, data: [] };
+    try {
+      console.log('🔧 [DEBUG] getSpareParts: Fetching spare parts from database...');
+      
+      // Fetch spare parts without nested select (Neon doesn't support this)
+      const { data: spareParts, error } = await supabase
+        .from('lats_spare_parts')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.error('❌ [DEBUG] getSpareParts: Database error:', error);
+        return { ok: false, message: error.message || 'Failed to fetch spare parts' };
+      }
+
+      if (!spareParts || spareParts.length === 0) {
+        return { ok: true, data: [] };
+      }
+
+      // Fetch related data separately
+      const categoryIds = [...new Set(spareParts.map((sp: any) => sp.category_id).filter(Boolean))];
+      const supplierIds = [...new Set(spareParts.map((sp: any) => sp.supplier_id).filter(Boolean))];
+      const sparePartIds = spareParts.map((sp: any) => sp.id);
+
+      // Fetch categories, suppliers, and variants in parallel
+      const [categoriesRes, suppliersRes, variantsRes] = await Promise.all([
+        categoryIds.length > 0 ? supabase.from('lats_categories').select('id, name').in('id', categoryIds) : Promise.resolve({ data: [] }),
+        supplierIds.length > 0 ? supabase.from('lats_suppliers').select('id, name, email, phone').in('id', supplierIds) : Promise.resolve({ data: [] }),
+        supabase.from('lats_spare_part_variants').select('*').in('spare_part_id', sparePartIds)
+      ]);
+
+      // Create lookup maps
+      const categoriesMap = (categoriesRes.data || []).reduce((acc: any, c: any) => {
+        acc[c.id] = c;
+        return acc;
+      }, {});
+
+      const suppliersMap = (suppliersRes.data || []).reduce((acc: any, s: any) => {
+        acc[s.id] = s;
+        return acc;
+      }, {});
+
+      const variantsBySparePartId = (variantsRes.data || []).reduce((acc: any, v: any) => {
+        if (!acc[v.spare_part_id]) acc[v.spare_part_id] = [];
+        acc[v.spare_part_id].push(v);
+        return acc;
+      }, {});
+
+      // Map the data
+      const enrichedSpareParts = spareParts.map((sp: any) => ({
+        ...sp,
+        category: categoriesMap[sp.category_id],
+        supplier: suppliersMap[sp.supplier_id],
+        variants: variantsBySparePartId[sp.id] || []
+      }));
+
+      console.log(`✅ [DEBUG] getSpareParts: Successfully fetched ${enrichedSpareParts.length} spare parts`);
+      return { ok: true, data: enrichedSpareParts };
+    } catch (error) {
+      console.error('❌ [DEBUG] getSpareParts: Unexpected error:', error);
+      return { ok: false, message: 'Failed to fetch spare parts' };
+    }
   },
 
   getSparePart: async (id: string) => {
-    return { ok: false, message: 'Not implemented' };
+    try {
+      // Fetch spare part without nested select (Neon doesn't support this)
+      const { data: sparePart, error } = await supabase
+        .from('lats_spare_parts')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        return { ok: false, message: error.message || 'Failed to fetch spare part' };
+      }
+
+      // Fetch related data separately
+      const [categoryRes, supplierRes, variantsRes] = await Promise.all([
+        sparePart.category_id ? supabase.from('lats_categories').select('id, name').eq('id', sparePart.category_id).single() : Promise.resolve({ data: null }),
+        sparePart.supplier_id ? supabase.from('lats_suppliers').select('id, name, email, phone').eq('id', sparePart.supplier_id).single() : Promise.resolve({ data: null }),
+        supabase.from('lats_spare_part_variants').select('*').eq('spare_part_id', id)
+      ]);
+
+      // Enrich the spare part with related data
+      const enrichedSparePart = {
+        ...sparePart,
+        category: categoryRes.data,
+        supplier: supplierRes.data,
+        variants: variantsRes.data || []
+      };
+
+      return { ok: true, data: enrichedSparePart };
+    } catch (error) {
+      console.error('Error getting spare part:', error);
+      return { ok: false, message: 'Failed to fetch spare part' };
+    }
   },
 
   createSparePart: async (data: any) => {
-    return { ok: false, message: 'Not implemented' };
+    try {
+      const { data: result, error } = await supabase
+        .from('lats_spare_parts')
+        .insert(data)
+        .select()
+        .single();
+
+      if (error) {
+        return { ok: false, message: error.message || 'Failed to create spare part' };
+      }
+
+      return { ok: true, data: result };
+    } catch (error) {
+      console.error('Error creating spare part:', error);
+      return { ok: false, message: 'Failed to create spare part' };
+    }
   },
 
   updateSparePart: async (id: string, data: any) => {
-    return { ok: false, message: 'Not implemented' };
+    try {
+      const { data: result, error } = await supabase
+        .from('lats_spare_parts')
+        .update({ ...data, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        return { ok: false, message: error.message || 'Failed to update spare part' };
+      }
+
+      return { ok: true, data: result };
+    } catch (error) {
+      console.error('Error updating spare part:', error);
+      return { ok: false, message: 'Failed to update spare part' };
+    }
   },
 
   deleteSparePart: async (id: string) => {
-    return { ok: false, message: 'Not implemented' };
+    try {
+      const { error } = await supabase
+        .from('lats_spare_parts')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        return { ok: false, message: error.message || 'Failed to delete spare part' };
+      }
+
+      return { ok: true };
+    } catch (error) {
+      console.error('Error deleting spare part:', error);
+      return { ok: false, message: 'Failed to delete spare part' };
+    }
   },
 
   useSparePart: async (data: any) => {
-    return { ok: false, message: 'Not implemented' };
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return { ok: false, message: 'User not authenticated' };
+      }
+
+      const { data: result, error } = await supabase
+        .from('lats_spare_part_usage')
+        .insert({
+          ...data,
+          used_by: user.id,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return { ok: false, message: error.message || 'Failed to record spare part usage' };
+      }
+
+      // Update spare part quantity
+      const { error: updateError } = await supabase
+        .from('lats_spare_parts')
+        .update({ 
+          quantity: supabase.raw('quantity - ?', [data.quantity]),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', data.spare_part_id);
+
+      if (updateError) {
+        console.error('Error updating spare part quantity:', updateError);
+        return { ok: false, message: 'Failed to update spare part quantity' };
+      }
+
+      return { ok: true, data: result };
+    } catch (error) {
+      console.error('Error using spare part:', error);
+      return { ok: false, message: 'Failed to use spare part' };
+    }
   },
 
   getSparePartUsage: async () => {
-    return { ok: true, data: [] };
+    try {
+      // Fetch spare part usage without nested select (Neon doesn't support this)
+      const { data: usageRecords, error } = await supabase
+        .from('lats_spare_part_usage')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return { ok: false, message: error.message || 'Failed to fetch spare part usage' };
+      }
+
+      if (!usageRecords || usageRecords.length === 0) {
+        return { ok: true, data: [] };
+      }
+
+      // Fetch related data separately
+      const sparePartIds = [...new Set(usageRecords.map((u: any) => u.spare_part_id).filter(Boolean))];
+      const deviceIds = [...new Set(usageRecords.map((u: any) => u.device_id).filter(Boolean))];
+
+      const [sparePartsRes, devicesRes] = await Promise.all([
+        sparePartIds.length > 0 ? supabase.from('lats_spare_parts').select('id, name, part_number').in('id', sparePartIds) : Promise.resolve({ data: [] }),
+        deviceIds.length > 0 ? supabase.from('devices').select('id, device_name, customer_name').in('id', deviceIds) : Promise.resolve({ data: [] })
+      ]);
+
+      // Create lookup maps
+      const sparePartsMap = (sparePartsRes.data || []).reduce((acc: any, sp: any) => {
+        acc[sp.id] = sp;
+        return acc;
+      }, {});
+
+      const devicesMap = (devicesRes.data || []).reduce((acc: any, d: any) => {
+        acc[d.id] = d;
+        return acc;
+      }, {});
+
+      // Enrich usage records with related data
+      const enrichedUsage = usageRecords.map((usage: any) => ({
+        ...usage,
+        spare_part: sparePartsMap[usage.spare_part_id],
+        device: devicesMap[usage.device_id]
+      }));
+
+      return { ok: true, data: enrichedUsage };
+    } catch (error) {
+      console.error('Error getting spare part usage:', error);
+      return { ok: false, message: 'Failed to fetch spare part usage' };
+    }
   },
 
   // POS - placeholder implementations
@@ -1162,7 +1490,71 @@ const supabaseProvider = {
   },
 
   getSales: async () => {
-    return { ok: true, data: [] };
+    try {
+      console.log('🔍 [Provider] Fetching sales...');
+      
+      // Get current branch for filtering
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      // Build query
+      let query = supabase
+        .from('lats_sales')
+        .select(`
+          id,
+          sale_number,
+          customer_id,
+          customer_name,
+          subtotal,
+          total_amount,
+          discount_amount,
+          tax_amount,
+          payment_method,
+          payment_status,
+          status,
+          sold_by,
+          user_id,
+          notes,
+          created_at,
+          updated_at,
+          branch_id
+        `)
+        .order('created_at', { ascending: false })
+        .limit(500); // Limit to recent 500 sales for performance
+      
+      // Apply branch filter if branch ID exists
+      if (currentBranchId) {
+        console.log('🏪 [Provider] Filtering sales by branch:', currentBranchId);
+        query = query.eq('branch_id', currentBranchId);
+      } else {
+        console.log('⚠️ [Provider] No branch filter - showing all sales');
+      }
+      
+      const { data: sales, error } = await query;
+      
+      if (error) {
+        console.error('❌ [Provider] Error fetching sales:', error);
+        return {
+          ok: false,
+          message: error.message,
+          data: []
+        };
+      }
+      
+      console.log('✅ [Provider] Sales fetched:', sales?.length || 0);
+      
+      return {
+        ok: true,
+        data: sales || []
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch sales';
+      console.error('❌ [Provider] Exception fetching sales:', error);
+      return {
+        ok: false,
+        message: errorMessage,
+        data: []
+      };
+    }
   },
 
   getSale: async (id: string) => {

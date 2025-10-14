@@ -19,39 +19,72 @@ if (!DATABASE_URL) {
 
 console.log('✅ Neon client initializing with URL:', DATABASE_URL.substring(0, 50) + '...');
 
-// Create Neon SQL client with full results
+// Create Neon SQL client with full results and enhanced error handling
 const sql = neon(DATABASE_URL, {
   fetchOptions: {
     cache: 'no-store',
   },
   fullResults: true,
+  // Add connection pooling configuration
+  poolQueryViaFetch: true, // Use fetch for better connection pooling
 });
 
 console.log('✅ Neon SQL client created successfully');
+console.log('ℹ️ Note: Transient 400 errors from Neon are automatically retried - no action needed');
 
 // Helper function to execute SQL queries with the Neon serverless client
-const executeSql = async (query: string, params: any[] = [], suppressLogs: boolean = false): Promise<any> => {
+const executeSql = async (query: string, params: any[] = [], suppressLogs: boolean = false, retryCount: number = 0): Promise<any> => {
+  const MAX_RETRIES = 2; // Retry up to 2 times for 400 errors
+  const RETRY_DELAY = 100; // Wait 100ms before retry
+  
   // Only log queries when suppressLogs is false (reduced noise)
-  if (!suppressLogs && process.env.NODE_ENV === 'development') {
+  if (!suppressLogs && process.env.NODE_ENV === 'development' && retryCount === 0) {
     console.log('🔍 [SQL]', query.substring(0, 100) + '...');
   }
   
   try {
-    // Use the neon sql function directly with template literal
+    // Properly construct template literal for Neon
+    // Neon expects actual template literals, so we need to properly construct them
     const parts = [query];
-    const templateParts: TemplateStringsArray = Object.assign(parts, { raw: [query] });
+    const raw = [query];
+    const templateParts = Object.assign(parts, { raw }) as TemplateStringsArray;
     
-    // Execute the query
-    const result = await sql(templateParts as any, ...params);
+    // Execute the query with proper error handling
+    let result;
+    
+    if (params && params.length > 0) {
+      // If we have params, use them (shouldn't happen often in current code)
+      result = await sql(templateParts, ...params);
+    } else {
+      // No params - execute as-is
+      result = await sql(templateParts);
+    }
     
     // Reduced logging - only in dev mode and when not suppressed
     if (!suppressLogs && process.env.NODE_ENV === 'development') {
-      console.log('✅ [SQL OK]', Array.isArray(result) ? `${result.length} rows` : 'Success');
+      if (retryCount > 0) {
+        console.log(`✅ [SQL OK after ${retryCount} retries]`, Array.isArray(result) ? `${result.length} rows` : 'Success');
+      } else {
+        console.log('✅ [SQL OK]', Array.isArray(result) ? `${result.length} rows` : 'Success');
+      }
     }
     
     // Neon returns an array of rows by default
     return result;
   } catch (error: any) {
+    // Check if this is a transient 400 error that we should retry
+    const is400Error = error.message?.includes('400') || error.status === 400 || error.statusCode === 400;
+    const shouldRetry = is400Error && retryCount < MAX_RETRIES;
+    
+    if (shouldRetry) {
+      // Retry after a short delay
+      if (!suppressLogs && process.env.NODE_ENV === 'development') {
+        console.warn(`⚠️ 400 error on attempt ${retryCount + 1}, retrying...`);
+      }
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      return executeSql(query, params, suppressLogs, retryCount + 1);
+    }
+    
     // Only log significant errors, not every failure
     if (!suppressLogs) {
       console.error('❌ SQL Error:', error.message);
@@ -67,7 +100,7 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
 };
 
 // Query builder implementation for Neon
-class NeonQueryBuilder {
+class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: number | null }> {
   private tableName: string;
   private selectFields: string = '*';
   private whereConditions: string[] = [];
@@ -75,99 +108,216 @@ class NeonQueryBuilder {
   private limitClause: string = '';
   private rangeClause: { from: number; to: number } | null = null;
   private suppressErrors: boolean = false;
+  private countMode: 'exact' | 'planned' | 'estimated' | null = null;
+  private headMode: boolean = false;
+  private joins: Array<{ table: string; alias: string; on: string; columns: string[] }> = [];
 
   constructor(tableName: string) {
     this.tableName = tableName;
   }
 
-  select(fields: string = '*') {
-    // Strip out PostgREST relationship syntax (e.g., "devices(brand, model)")
-    // which is not supported in raw SQL
+  select(fields: string = '*', options?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
+    // Handle options for count and head mode
+    if (options?.count) {
+      this.countMode = options.count;
+    }
+    if (options?.head) {
+      this.headMode = true;
+    }
+    
+    // Parse PostgREST relationship syntax and convert to JOINs
     if (fields.includes('(') && fields.includes(')')) {
-      console.warn('⚠️ Stripping PostgREST relationship syntax from select:', fields.substring(0, 100));
+      console.log('🔗 Parsing PostgREST relationship syntax:', fields.substring(0, 150));
       
-      // Remove all relationship patterns with nested parentheses support
-      // Use a recursive approach to handle nested relationships properly
-      let previousFields = '';
-      while (previousFields !== fields) {
-        previousFields = fields;
-        // Remove innermost relationship patterns first
-        fields = fields.replace(/,?\s*(\w+\s*:)?\s*\w+\s*\([^()]*\)/gs, '');
+      // Helper function to find matching closing parenthesis
+      const findMatchingParen = (str: string, startIdx: number): number => {
+        let depth = 1;
+        for (let i = startIdx + 1; i < str.length; i++) {
+          if (str[i] === '(') depth++;
+          else if (str[i] === ')') {
+            depth--;
+            if (depth === 0) return i;
+          }
+        }
+        return -1;
+      };
+      
+      // Extract base fields and relationships
+      const relationships: Array<{ alias: string; table: string; foreignKey: string; columns: string[] }> = [];
+      let remainingFields = fields;
+      
+      // Find all top-level relationships (handles nested parentheses)
+      let i = 0;
+      while (i < fields.length) {
+        // Look for pattern: alias:table!foreign_key( or alias:table(
+        const explicitMatch = fields.substring(i).match(/^(\w+):(\w+)!(\w+)\(/);
+        const inferredMatch = !explicitMatch ? fields.substring(i).match(/^(\w+):(\w+)\(/) : null;
+        
+        if (explicitMatch) {
+          const alias = explicitMatch[1];
+          const table = explicitMatch[2];
+          const foreignKey = explicitMatch[3];
+          const openParenIdx = i + explicitMatch[0].length - 1;
+          const closeParenIdx = findMatchingParen(fields, openParenIdx);
+          
+          if (closeParenIdx !== -1) {
+            const columnsStr = fields.substring(openParenIdx + 1, closeParenIdx);
+            // Extract only top-level column names (ignore nested relationships)
+            const columns = columnsStr.split(',').map(c => c.trim()).filter(c => {
+              // Only keep simple column names, skip nested relationships
+              return !c.includes(':') && !c.includes('(');
+            });
+            
+            relationships.push({ alias, table, foreignKey, columns });
+            
+            // Remove this relationship from remaining fields
+            const fullMatch = fields.substring(i, closeParenIdx + 1);
+            remainingFields = remainingFields.replace(fullMatch, '');
+            
+            i = closeParenIdx + 1;
+            continue;
+          }
+        } else if (inferredMatch) {
+          const alias = inferredMatch[1];
+          const table = inferredMatch[2];
+          const foreignKey = `${alias}_id`;
+          const openParenIdx = i + inferredMatch[0].length - 1;
+          const closeParenIdx = findMatchingParen(fields, openParenIdx);
+          
+          if (closeParenIdx !== -1) {
+            const columnsStr = fields.substring(openParenIdx + 1, closeParenIdx);
+            // Extract only top-level column names (ignore nested relationships)
+            const columns = columnsStr.split(',').map(c => c.trim()).filter(c => {
+              // Only keep simple column names, skip nested relationships
+              return !c.includes(':') && !c.includes('(');
+            });
+            
+            relationships.push({ alias, table, foreignKey, columns });
+            
+            // Remove this relationship from remaining fields
+            const fullMatch = fields.substring(i, closeParenIdx + 1);
+            remainingFields = remainingFields.replace(fullMatch, '');
+            
+            i = closeParenIdx + 1;
+            continue;
+          }
+        }
+        
+        i++;
       }
       
-      // Clean up any double commas, leading/trailing commas, and extra whitespace
-      fields = fields
-        .replace(/,\s*,/g, ',')  // Remove double commas
-        .replace(/,\s*$/,'')     // Remove trailing commas
-        .replace(/^\s*,/, '')     // Remove leading commas
-        .replace(/^\s*\)\s*$/, '*')  // If only closing paren left, use *
+      // Clean up remaining fields (non-relationship fields)
+      remainingFields = remainingFields
+        .replace(/,\s*,/g, ',')
+        .replace(/,\s*$/,'')
+        .replace(/^\s*,/, '')
         .trim();
       
-      // If empty or invalid after cleanup, default to *
-      if (!fields || fields === ',' || fields === ')' || fields.length === 0) fields = '*';
+      // Build JOIN clauses
+      this.joins = relationships.map(rel => ({
+        table: rel.table,
+        alias: rel.alias,
+        on: rel.foreignKey,
+        columns: rel.columns.filter(c => c.length > 0) // Filter out empty strings
+      }));
+      
+      // Build SELECT fields
+      if (remainingFields && remainingFields !== '*' && remainingFields.length > 0) {
+        // Prefix base table fields with table name
+        const baseFieldsList = remainingFields.split(',').map(f => f.trim()).filter(f => f);
+        this.selectFields = baseFieldsList.map(f => f === '*' ? `${this.tableName}.*` : `${this.tableName}.${f} as ${f}`).join(', ');
+      } else {
+        this.selectFields = `${this.tableName}.*`;
+      }
+      
+      // Add relationship fields with JSON aggregation
+      for (const join of this.joins) {
+        if (join.columns.length > 0) {
+          const jsonFields = join.columns.map(c => `'${c}', ${join.alias}.${c}`).join(', ');
+          this.selectFields += `, json_build_object(${jsonFields}) as ${join.alias}`;
+        } else {
+          // If no columns specified, select all from joined table
+          this.selectFields += `, row_to_json(${join.alias}.*) as ${join.alias}`;
+        }
+      }
+      
+      console.log('✅ Parsed JOINs:', this.joins);
+      console.log('✅ Select fields:', this.selectFields);
+    } else {
+      this.selectFields = fields;
     }
-    this.selectFields = fields;
     return this;
   }
 
+  private qualifyColumn(column: string): string {
+    // If we have joins and column is not already qualified, prefix with table name
+    return (this.joins.length > 0 && !column.includes('.')) 
+      ? `${this.tableName}.${column}` 
+      : column;
+  }
+
   eq(column: string, value: any) {
-    this.whereConditions.push(`${column} = ${this.formatValue(value)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} = ${this.formatValue(value)}`);
     return this;
   }
 
   neq(column: string, value: any) {
-    this.whereConditions.push(`${column} != ${this.formatValue(value)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} != ${this.formatValue(value)}`);
     return this;
   }
 
   gt(column: string, value: any) {
-    this.whereConditions.push(`${column} > ${this.formatValue(value)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} > ${this.formatValue(value)}`);
     return this;
   }
 
   gte(column: string, value: any) {
-    this.whereConditions.push(`${column} >= ${this.formatValue(value)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} >= ${this.formatValue(value)}`);
     return this;
   }
 
   lt(column: string, value: any) {
-    this.whereConditions.push(`${column} < ${this.formatValue(value)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} < ${this.formatValue(value)}`);
     return this;
   }
 
   lte(column: string, value: any) {
-    this.whereConditions.push(`${column} <= ${this.formatValue(value)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} <= ${this.formatValue(value)}`);
     return this;
   }
 
   like(column: string, pattern: string) {
-    this.whereConditions.push(`${column} LIKE ${this.formatValue(pattern)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} LIKE ${this.formatValue(pattern)}`);
     return this;
   }
 
   ilike(column: string, pattern: string) {
-    this.whereConditions.push(`${column} ILIKE ${this.formatValue(pattern)}`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} ILIKE ${this.formatValue(pattern)}`);
     return this;
   }
 
   is(column: string, value: any) {
     if (value === null) {
-      this.whereConditions.push(`${column} IS NULL`);
+      this.whereConditions.push(`${this.qualifyColumn(column)} IS NULL`);
     } else {
-      this.whereConditions.push(`${column} = ${this.formatValue(value)}`);
+      this.whereConditions.push(`${this.qualifyColumn(column)} = ${this.formatValue(value)}`);
     }
     return this;
   }
 
   in(column: string, values: any[]) {
     const formattedValues = values.map(v => this.formatValue(v)).join(', ');
-    this.whereConditions.push(`${column} IN (${formattedValues})`);
+    this.whereConditions.push(`${this.qualifyColumn(column)} IN (${formattedValues})`);
     return this;
   }
 
   order(column: string, options?: { ascending?: boolean }) {
     const direction = options?.ascending === false ? 'DESC' : 'ASC';
-    this.orderByClause = `ORDER BY ${column} ${direction}`;
+    // If we have joins and column is not already qualified, prefix with table name
+    const qualifiedColumn = (this.joins.length > 0 && !column.includes('.')) 
+      ? `${this.tableName}.${column}` 
+      : column;
+    this.orderByClause = `ORDER BY ${qualifiedColumn} ${direction}`;
     return this;
   }
 
@@ -200,7 +350,17 @@ class NeonQueryBuilder {
     if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
     if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
     if (value instanceof Date) return `'${value.toISOString()}'`;
-    // Handle arrays and objects (for JSONB columns)
+    // Handle arrays - format as PostgreSQL array for text[] columns
+    if (Array.isArray(value)) {
+      // Check if array contains strings - format as text array
+      if (value.length === 0 || typeof value[0] === 'string') {
+        const arrayValues = value.map(v => `"${String(v).replace(/"/g, '\\"')}"`).join(',');
+        return `ARRAY[${value.map(v => `'${String(v).replace(/'/g, "''")}'`).join(',')}]`;
+      }
+      // For non-string arrays or complex arrays, use jsonb
+      return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
+    }
+    // Handle objects (for JSONB columns)
     if (typeof value === 'object') {
       return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
     }
@@ -208,7 +368,23 @@ class NeonQueryBuilder {
   }
 
   private buildQuery(): string {
+    // If head mode with count, we only want the count, not the data
+    if (this.headMode && this.countMode) {
+      let query = `SELECT COUNT(*) as count FROM ${this.tableName}`;
+      
+      if (this.whereConditions.length > 0) {
+        query += ` WHERE ${this.whereConditions.join(' AND ')}`;
+      }
+      
+      return query;
+    }
+    
     let query = `SELECT ${this.selectFields} FROM ${this.tableName}`;
+    
+    // Add JOIN clauses
+    for (const join of this.joins) {
+      query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.${join.on} = ${join.alias}.id`;
+    }
     
     if (this.whereConditions.length > 0) {
       query += ` WHERE ${this.whereConditions.join(' AND ')}`;
@@ -226,21 +402,79 @@ class NeonQueryBuilder {
       query += ` ${this.limitClause}`;
     }
     
+    // Debug log the generated query
+    if (this.joins.length > 0 && process.env.NODE_ENV === 'development') {
+      console.log('📝 Generated SQL with JOINs:', query);
+    }
+    
     return query;
   }
 
-  async then(resolve?: any, reject?: any) {
+  then<TResult1 = { data: any; error: any; count?: number | null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: any; error: any; count?: number | null }) => TResult1 | PromiseLike<TResult1>) | undefined | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null
+  ): PromiseLike<TResult1 | TResult2> {
+    const promise = this.execute();
+    return promise.then(onfulfilled as any, onrejected as any);
+  }
+
+  private async execute(): Promise<{ data: any; error: any; count?: number | null }> {
     let query: string;
     
+    // Check if this is an UPSERT operation
+    if ((this as any).isUpsert) {
+      const values = (this as any).upsertData;
+      const options = (this as any).upsertOptions;
+      
+      // Handle array of objects (bulk upsert)
+      if (Array.isArray(values)) {
+        if (values.length === 0) {
+          return { data: [], error: null };
+        }
+        
+        // Get columns from the first object
+        const columns = Object.keys(values[0]).join(', ');
+        
+        // Build VALUES clause for multiple rows
+        const allPlaceholders = values.map(row => {
+          const rowValues = Object.values(row).map(v => this.formatValue(v)).join(', ');
+          return `(${rowValues})`;
+        }).join(', ');
+        
+        // Determine conflict columns
+        const conflictClause = options?.onConflict || Object.keys(values[0]).join(',');
+        
+        // Build update clause for conflict resolution
+        const updateClauses = Object.keys(values[0])
+          .map(key => `${key} = EXCLUDED.${key}`)
+          .join(', ');
+        
+        query = `INSERT INTO ${this.tableName} (${columns}) VALUES ${allPlaceholders} ON CONFLICT (${conflictClause}) DO UPDATE SET ${updateClauses} RETURNING *`;
+      } 
+      // Handle single object upsert
+      else {
+        const columns = Object.keys(values).join(', ');
+        const placeholders = Object.values(values).map(v => this.formatValue(v)).join(', ');
+        
+        // Determine conflict columns
+        const conflictClause = options?.onConflict || Object.keys(values)[0];
+        
+        // Build update clause for conflict resolution
+        const updateClauses = Object.entries(values)
+          .map(([key, value]) => `${key} = ${this.formatValue(value)}`)
+          .join(', ');
+        
+        query = `INSERT INTO ${this.tableName} (${columns}) VALUES (${placeholders}) ON CONFLICT (${conflictClause}) DO UPDATE SET ${updateClauses} RETURNING *`;
+      }
+    }
     // Check if this is an INSERT operation
-    if ((this as any).isInsert) {
+    else if ((this as any).isInsert) {
       const values = (this as any).insertData;
       
       // Handle array of objects (bulk insert)
       if (Array.isArray(values)) {
         if (values.length === 0) {
-          const result = { data: [], error: null };
-          return resolve ? resolve(result) : result;
+          return { data: [], error: null };
         }
         
         // Get columns from the first object
@@ -276,6 +510,16 @@ class NeonQueryBuilder {
       
       query += ' RETURNING *';
     } 
+    // Check if this is a DELETE operation
+    else if ((this as any).isDelete) {
+      query = `DELETE FROM ${this.tableName}`;
+      
+      if (this.whereConditions.length > 0) {
+        query += ` WHERE ${this.whereConditions.join(' AND ')}`;
+      }
+      
+      query += ' RETURNING *';
+    }
     // Regular SELECT query
     else {
       query = this.buildQuery();
@@ -297,8 +541,15 @@ class NeonQueryBuilder {
         data = rawData; // Fallback
       }
       
-      const result = { data, error: null };
-      return resolve ? resolve(result) : result;
+      // If this was a count query in head mode, extract the count
+      let count: number | null = null;
+      if (this.headMode && this.countMode && data && data.length > 0) {
+        count = parseInt(data[0].count, 10);
+        // In head mode, we don't return the data, just the count
+        data = null;
+      }
+      
+      return { data, error: null, count };
     } catch (error: any) {
       // Check if this is a table-not-found or expected error
       const isExpectedError = 
@@ -313,8 +564,7 @@ class NeonQueryBuilder {
         console.error(`❌ Query failed on '${this.tableName}':`, error.message);
       }
       
-      const result = { data: null, error: { message: error.message, code: error.code || '400' } };
-      return reject ? reject(result) : result;
+      return { data: null, error: { message: error.message, code: error.code || '400' }, count: null };
     }
   }
 
@@ -339,86 +589,19 @@ class NeonQueryBuilder {
   }
 
   // Delete method
-  async delete() {
-    try {
-      let query = `DELETE FROM ${this.tableName}`;
-      
-      if (this.whereConditions.length > 0) {
-        query += ` WHERE ${this.whereConditions.join(' AND ')}`;
-      }
-      
-      query += ' RETURNING *';
-      // Execute using Neon serverless client with new API
-      const rawData = await executeSql(query, [], this.suppressErrors);
-      
-      // Extract rows from Neon fullResults format
-      let data: any;
-      if (rawData && typeof rawData === 'object' && 'rows' in rawData) {
-        data = rawData.rows;
-      } else if (Array.isArray(rawData)) {
-        data = rawData;
-      } else {
-        data = rawData;
-      }
-      
-      return { data, error: null };
-    } catch (error: any) {
-      const isExpectedError = 
-        error.message?.includes('does not exist') || 
-        error.code === '42P01' ||
-        error.message?.includes('column') ||
-        error.code === '42703';
-      
-      if (!this.suppressErrors && !isExpectedError) {
-        console.error(`❌ Delete failed on '${this.tableName}':`, error.message || error);
-      }
-      return { data: null, error: { message: error.message, code: error.code || '400' } };
-    }
+  delete() {
+    // Store the delete flag and return this for chaining
+    (this as any).isDelete = true;
+    return this;
   }
 
-  // Upsert method
-  async upsert(values: any, options?: { onConflict?: string }) {
-    try {
-      const columns = Object.keys(values).join(', ');
-      const placeholders = Object.values(values).map(v => this.formatValue(v)).join(', ');
-      const updateClauses = Object.entries(values)
-        .map(([key, value]) => `${key} = ${this.formatValue(value)}`)
-        .join(', ');
-      
-      const conflictClause = options?.onConflict || Object.keys(values)[0];
-      const query = `
-        INSERT INTO ${this.tableName} (${columns}) 
-        VALUES (${placeholders}) 
-        ON CONFLICT (${conflictClause}) 
-        DO UPDATE SET ${updateClauses}
-        RETURNING *
-      `;
-      // Execute using Neon serverless client with new API
-      const rawData = await executeSql(query, [], this.suppressErrors);
-      
-      // Extract rows from Neon fullResults format
-      let data: any;
-      if (rawData && typeof rawData === 'object' && 'rows' in rawData) {
-        data = rawData.rows;
-      } else if (Array.isArray(rawData)) {
-        data = rawData;
-      } else {
-        data = rawData;
-      }
-      
-      return { data, error: null };
-    } catch (error: any) {
-      const isExpectedError = 
-        error.message?.includes('does not exist') || 
-        error.code === '42P01' ||
-        error.message?.includes('column') ||
-        error.code === '42703';
-      
-      if (!this.suppressErrors && !isExpectedError) {
-        console.error(`❌ Upsert failed on '${this.tableName}':`, error.message || error);
-      }
-      return { data: null, error: { message: error.message, code: error.code || '400' } };
-    }
+  // Upsert method - supports chaining
+  upsert(values: any, options?: { onConflict?: string }) {
+    // Store the upsert data and options for execution in then()
+    (this as any).upsertData = values;
+    (this as any).upsertOptions = options;
+    (this as any).isUpsert = true;
+    return this;
   }
 
   // Additional filter methods
@@ -435,7 +618,34 @@ class NeonQueryBuilder {
   }
 
   or(conditions: string) {
-    this.whereConditions.push(`(${conditions})`);
+    // Parse Supabase-style OR conditions: "column1.op.value1,column2.op.value2"
+    // Split by comma to get individual conditions
+    const parts = conditions.split(',');
+    const sqlConditions = parts.map(part => {
+      // Parse each part: "column.operator.value"
+      const match = part.trim().match(/^(\w+)\.(eq|neq|gt|gte|lt|lte|like|ilike|is)\.(.+)$/);
+      if (match) {
+        const [, column, operator, value] = match;
+        let sqlOp = '=';
+        switch (operator) {
+          case 'eq': sqlOp = '='; break;
+          case 'neq': sqlOp = '!='; break;
+          case 'gt': sqlOp = '>'; break;
+          case 'gte': sqlOp = '>='; break;
+          case 'lt': sqlOp = '<'; break;
+          case 'lte': sqlOp = '<='; break;
+          case 'like': sqlOp = 'LIKE'; break;
+          case 'ilike': sqlOp = 'ILIKE'; break;
+          case 'is': sqlOp = 'IS'; break;
+        }
+        return `${column} ${sqlOp} ${this.formatValue(value)}`;
+      }
+      // If it doesn't match the pattern, return as-is (fallback)
+      return part.trim();
+    });
+    
+    // Join with OR and wrap in parentheses
+    this.whereConditions.push(`(${sqlConditions.join(' OR ')})`);
     return this;
   }
 

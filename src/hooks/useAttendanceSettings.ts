@@ -19,6 +19,11 @@ export const useAttendanceSettings = () => {
     loadSettings();
   }, []);
 
+  // Add a way to refresh settings manually
+  const refreshSettings = () => {
+    loadSettings();
+  };
+
   const loadSettings = async () => {
     try {
       setLoading(true);
@@ -118,6 +123,7 @@ export const useAttendanceSettings = () => {
     getTimeSettings,
     detectNearestOfficeByLocation,
     getOfficeWithDetection,
-    reload: loadSettings
+    reload: loadSettings,
+    refresh: refreshSettings
   };
 };

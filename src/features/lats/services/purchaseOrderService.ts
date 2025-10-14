@@ -243,15 +243,21 @@ export class PurchaseOrderService {
 
   static async addAuditEntry(audit: Omit<PurchaseOrderAudit, 'id' | 'timestamp'>): Promise<boolean> {
     try {
-      // Get current user if not provided
+      // Get current user if not provided or is empty string
       let userId = audit.user;
-      if (!userId) {
+      if (!userId || userId.trim() === '') {
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          console.warn('No authenticated user found for audit entry:', userError);
-          return false;
+        if (userError) {
+          console.warn('Error getting authenticated user for audit entry:', userError);
+          // Don't fail the operation, just log it without user info
+          userId = 'system';
+        } else if (!user) {
+          console.warn('No authenticated user found for audit entry');
+          // Use 'system' as fallback user
+          userId = 'system';
+        } else {
+          userId = user.id;
         }
-        userId = user.id;
       }
 
       // Try using the helper function first (more secure)
@@ -363,8 +369,8 @@ export class PurchaseOrderService {
             .from('lats_purchase_order_items')
             .select(`
               *,
-              product:lats_products(id, name, sku, description),
-              variant:lats_product_variants(id, name, sku)
+              product:lats_products!product_id(id, name, sku, description),
+              variant:lats_product_variants!variant_id(id, name, sku)
             `)
             .eq('purchase_order_id', trimmedId);
 
@@ -1024,13 +1030,13 @@ export class PurchaseOrderService {
               notes,
               metadata,
               created_at,
-              product:lats_products(
+              product:lats_products!product_id(
                 id,
                 name,
                 sku,
                 category_id
               ),
-              variant:lats_product_variants(
+              variant:lats_product_variants!variant_id(
                 id,
                 name,
                 sku
@@ -1097,12 +1103,12 @@ export class PurchaseOrderService {
               reason,
               adjustment_type,
               created_at,
-              product:lats_products(
+              product:lats_products!product_id(
                 id,
                 name,
                 sku
               ),
-              variant:lats_product_variants(
+              variant:lats_product_variants!variant_id(
                 id,
                 name,
                 sku
@@ -1560,35 +1566,67 @@ export class PurchaseOrderService {
 
   // Fix order status if needed
   static async fixOrderStatusIfNeeded(purchaseOrderId: string, userId: string): Promise<{ success: boolean; message: string; statusChanged?: boolean }> {
+    console.log('🔧 [fixOrderStatusIfNeeded] Starting...', { purchaseOrderId, userId });
     try {
+      console.log('🔧 [fixOrderStatusIfNeeded] Querying order...');
       // Check if order status needs fixing (e.g., draft orders with received items)
       const { data: order, error: orderError } = await supabase
         .from('lats_purchase_orders')
         .select(`
           id,
-          status,
-          items:lats_purchase_order_items(
-            id,
-            quantity,
-            received_quantity
-          )
+          status
         `)
         .eq('id', purchaseOrderId)
         .single();
+      
+      console.log('🔧 [fixOrderStatusIfNeeded] Order query result:', { order, orderError });
 
-      if (orderError || !order) {
-        console.log('Order not found or error:', orderError);
+      if (orderError) {
+        console.error('❌ Error fetching order in fixOrderStatusIfNeeded:', {
+          purchaseOrderId,
+          error: orderError,
+          code: orderError.code,
+          message: orderError.message,
+          details: orderError.details,
+          hint: orderError.hint
+        });
+        return { success: false, message: `Order query failed: ${orderError.message}` };
+      }
+
+      if (!order) {
+        console.log('⚠️ Order not found:', purchaseOrderId);
         return { success: false, message: 'Order not found' };
       }
 
+      // Fetch order items separately to avoid nested select issues
+      const { data: items, error: itemsError } = await supabase
+        .from('lats_purchase_order_items')
+        .select('id, quantity, received_quantity')
+        .eq('purchase_order_id', purchaseOrderId);
+
+      if (itemsError) {
+        console.error('❌ Error fetching order items in fixOrderStatusIfNeeded:', {
+          purchaseOrderId,
+          error: itemsError,
+          code: itemsError.code,
+          message: itemsError.message,
+          details: itemsError.details,
+          hint: itemsError.hint
+        });
+        return { success: false, message: `Items query failed: ${itemsError.message}` };
+      }
+
       // Check if order has items
-      if (!order.items || !Array.isArray(order.items)) {
+      if (!items || !Array.isArray(items) || items.length === 0) {
         return { success: true, message: 'Order has no items to check' };
       }
 
+      // Attach items to order object for compatibility
+      const orderWithItems = { ...order, items };
+
       // Check if order has received items but status is still sent
-      const hasReceivedItems = order.items.some((item: any) => item.received_quantity > 0);
-      const hasFullyReceivedItems = order.items.some((item: any) => item.received_quantity >= item.quantity);
+      const hasReceivedItems = items.some((item: any) => item.received_quantity > 0);
+      const hasFullyReceivedItems = items.some((item: any) => item.received_quantity >= item.quantity);
       
       let newStatus = order.status;
       let statusChanged = false;
@@ -1607,8 +1645,17 @@ export class PurchaseOrderService {
           .eq('id', purchaseOrderId);
 
         if (updateError) {
-          console.error('Error updating order status:', updateError);
-          return { success: false, message: 'Failed to update order status' };
+          console.error('❌ Error updating order status in fixOrderStatusIfNeeded:', {
+            purchaseOrderId,
+            oldStatus: order.status,
+            newStatus,
+            error: updateError,
+            code: updateError.code,
+            message: updateError.message,
+            details: updateError.details,
+            hint: updateError.hint
+          });
+          return { success: false, message: `Status update failed: ${updateError.message}` };
         }
 
         console.log(`✅ Order status updated from ${order.status} to ${newStatus} for PO: ${purchaseOrderId}`);
@@ -1622,8 +1669,43 @@ export class PurchaseOrderService {
       // No status change needed
       return { success: true, message: 'Order status is correct' };
     } catch (error) {
-      console.error('Error fixing order status:', error);
-      return { success: false, message: 'Failed to fix order status' };
+      // Enhanced error logging with better error object inspection
+      const errorDetails = {
+        purchaseOrderId,
+        errorType: typeof error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined,
+        errorConstructorName: error?.constructor?.name,
+        errorKeys: error ? Object.keys(error) : [],
+      };
+      
+      // Try to extract more info from the error
+      try {
+        if (error && typeof error === 'object') {
+          Object.assign(errorDetails, {
+            errorStringified: JSON.stringify(error, null, 2)
+          });
+        }
+      } catch (stringifyError) {
+        errorDetails.stringifyError = 'Could not stringify error';
+      }
+      
+      console.error('❌ Exception in fixOrderStatusIfNeeded:', errorDetails);
+      
+      // Return a more informative error message
+      let errorMessage = 'Unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage = String(error.message);
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      return { 
+        success: false, 
+        message: `Failed to fix order status: ${errorMessage}` 
+      };
     }
   }
 

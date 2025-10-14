@@ -24,13 +24,25 @@ import {
   File,
   Music,
   Download,
-  Play
+  Play,
+  Settings,
+  Save,
+  X as XIcon
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { toast } from '../../../lib/toastUtils';
 import { greenApiService } from '../../../services/greenApiService';
+import { greenApiSettingsService, GreenApiSettings } from '../../../services/greenApiSettingsService';
 import { useWhatsApp } from '../../../context/WhatsAppContext';
 import { useTheme } from '../../../context/ThemeContext';
+
+// Import Green API Settings Components
+import GeneralSettingsSection from '../components/settings/GeneralSettingsSection';
+import WebhookSettingsSection from '../components/settings/WebhookSettingsSection';
+import MessageSettingsSection from '../components/settings/MessageSettingsSection';
+import NotificationSettingsSection from '../components/settings/NotificationSettingsSection';
+import SecuritySettingsSection from '../components/settings/SecuritySettingsSection';
+import StatusSettingsSection from '../components/settings/StatusSettingsSection';
 
 const WhatsAppChatPage: React.FC = () => {
   // Get instances from WhatsApp context
@@ -103,6 +115,13 @@ const WhatsAppChatPage: React.FC = () => {
   
   // Message status tracking
   const [messageStatuses, setMessageStatuses] = useState<{[key: number]: 'sending' | 'sent' | 'delivered' | 'read'}>({});
+  
+  // Green API Settings states
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [greenApiSettings, setGreenApiSettings] = useState<GreenApiSettings>({});
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [activeSettingsTab, setActiveSettingsTab] = useState<string>('general');
   
   // Emoji picker data
   const emojis = ['😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣', '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬', '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤐', '🥴', '🤢', '🤮', '🤧', '😷', '🤒', '🤕', '🤑', '🤠', '💩', '👻', '💀', '☠️', '👽', '👾', '🤖', '😺', '😸', '😹', '😻', '😼', '😽', '🙀', '😿', '😾', '🙈', '🙉', '🙊', '👶', '👧', '🧒', '👦', '👩', '🧑', '👨', '👵', '🧓', '👴', '👮‍♀️', '👮', '👮‍♂️', '🕵️‍♀️', '🕵️', '🕵️‍♂️', '💂‍♀️', '💂', '💂‍♂️', '👷‍♀️', '👷', '👷‍♂️', '🤴', '👸', '👳‍♀️', '👳', '👳‍♂️', '👲', '🧕', '🤵‍♀️', '🤵', '🤵‍♂️', '👰‍♀️', '👰', '👰‍♂️', '🤰', '🤱', '👼', '🎅', '🤶', '🧙‍♀️', '🧙', '🧙‍♂️', '🧝‍♀️', '🧝', '🧝‍♂️', '🧛‍♀️', '🧛', '🧛‍♂️', '🧟‍♀️', '🧟', '🧟‍♂️', '🧞‍♀️', '🧞', '🧞‍♂️', '🧜‍♀️', '🧜', '🧜‍♂️', '🧚‍♀️', '🧚', '🧚‍♂️', '👼', '🤰', '🤱', '👼', '🎅', '🤶', '🧙‍♀️', '🧙', '🧙‍♂️', '🧝‍♀️', '🧝', '🧝‍♂️', '🧛‍♀️', '🧛', '🧛‍♂️', '🧟‍♀️', '🧟', '🧟‍♂️', '🧞‍♀️', '🧞', '🧞‍♂️', '🧜‍♀️', '🧜', '🧜‍♂️', '🧚‍♀️', '🧚', '🧚‍♂️'];
@@ -226,6 +245,92 @@ const WhatsAppChatPage: React.FC = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showInstanceSelector]);
+
+  // Load Green API Settings when instance is selected
+  useEffect(() => {
+    if (selectedInstance && selectedInstance.instance_id && selectedInstance.api_token) {
+      loadGreenApiSettings();
+    }
+  }, [selectedInstance]);
+
+  // Green API Settings Functions
+  const loadGreenApiSettings = async () => {
+    if (!selectedInstance) return;
+
+    try {
+      setSettingsLoading(true);
+      console.log('🔍 Loading Green API settings for instance:', selectedInstance.instance_id);
+
+      // Try loading from database first
+      let settings = await greenApiSettingsService.loadSettingsFromDatabase(selectedInstance.instance_id);
+
+      if (settings) {
+        console.log('✅ Settings loaded from database');
+        setGreenApiSettings(settings);
+      } else {
+        // Load from Green API
+        console.log('📝 Loading settings from Green API...');
+        settings = await greenApiSettingsService.getSettings(
+          selectedInstance.instance_id,
+          selectedInstance.api_token
+        );
+        setGreenApiSettings(settings);
+
+        // Save to database for future use
+        await greenApiSettingsService.saveSettingsToDatabase(selectedInstance.instance_id, settings);
+      }
+    } catch (error: any) {
+      console.error('❌ Error loading Green API settings:', error);
+      // Use default settings on error
+      const defaultSettings = greenApiSettingsService.getDefaultSettings();
+      setGreenApiSettings(defaultSettings);
+      toast.error('Using default settings');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const saveGreenApiSettings = async () => {
+    if (!selectedInstance) return;
+
+    try {
+      setSavingSettings(true);
+      console.log('💾 Saving Green API settings...');
+
+      // Validate settings
+      const validation = greenApiSettingsService.validateSettings(greenApiSettings);
+      if (!validation.isValid) {
+        toast.error(`Invalid settings: ${validation.errors.join(', ')}`);
+        return;
+      }
+
+      // Save to Green API
+      await greenApiSettingsService.setSettings(
+        selectedInstance.instance_id,
+        selectedInstance.api_token,
+        greenApiSettings
+      );
+
+      // Save to database
+      await greenApiSettingsService.saveSettingsToDatabase(selectedInstance.instance_id, greenApiSettings);
+
+      toast.success('✅ Settings saved successfully!');
+      setShowSettingsModal(false);
+    } catch (error: any) {
+      console.error('❌ Error saving settings:', error);
+      toast.error(`Failed to save settings: ${error.message}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const openSettingsModal = () => {
+    if (!selectedInstance) {
+      toast.error('Please select a WhatsApp instance first');
+      return;
+    }
+    setShowSettingsModal(true);
+  };
 
   // Phone number formatting function
   const formatPhoneNumber = (phone: string) => {
@@ -1326,16 +1431,24 @@ const WhatsAppChatPage: React.FC = () => {
                     <button 
                       onClick={() => setShowChatSearch(!showChatSearch)}
                       className="p-3 text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded-full transition-all duration-200"
+                      title="Search in chat"
                     >
                       <Search size={20} />
                     </button>
-                    <button className="p-3 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200">
+                    <button 
+                      onClick={openSettingsModal}
+                      className="p-3 text-green-500 hover:text-green-600 hover:bg-green-50 rounded-full transition-all duration-200"
+                      title="Green API Settings"
+                    >
+                      <Settings size={20} />
+                    </button>
+                    <button className="p-3 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200" title="Voice call">
                       <Phone size={20} />
                     </button>
-                    <button className="p-3 text-purple-500 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all duration-200">
+                    <button className="p-3 text-purple-500 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all duration-200" title="Video call">
                       <Video size={20} />
                     </button>
-                    <button className="p-3 text-gray-500 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200">
+                    <button className="p-3 text-gray-500 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200" title="More options">
                       <MoreVertical size={20} />
                     </button>
                   </div>
@@ -2569,6 +2682,146 @@ const WhatsAppChatPage: React.FC = () => {
                    ))}
                  </div>
                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Green API Settings Modal */}
+      {showSettingsModal && selectedInstance && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="relative bg-gradient-to-r from-green-500 to-green-600 px-8 py-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Settings size={24} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-white">Green API Settings</h2>
+                    <p className="text-green-100 mt-1">
+                      Configure {selectedInstance.instance_name || selectedInstance.instance_id}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="p-2 text-white/80 hover:text-white hover:bg-white/20 rounded-xl transition-all duration-200"
+                >
+                  <XIcon size={24} />
+                </button>
+              </div>
+            </div>
+
+            {/* Settings Tabs */}
+            <div className="border-b border-gray-200 bg-gray-50">
+              <div className="flex overflow-x-auto">
+                {[
+                  { id: 'general', label: 'General', icon: Settings },
+                  { id: 'webhooks', label: 'Webhooks', icon: MessageCircle },
+                  { id: 'messages', label: 'Messages', icon: Send },
+                  { id: 'notifications', label: 'Notifications', icon: MessageCircle },
+                  { id: 'security', label: 'Security', icon: MessageCircle },
+                  { id: 'status', label: 'Status', icon: MessageCircle }
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveSettingsTab(tab.id)}
+                    className={`flex items-center gap-2 px-6 py-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
+                      activeSettingsTab === tab.id
+                        ? 'border-green-500 text-green-600 bg-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <tab.icon size={16} />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Settings Content */}
+            <div className="flex-1 overflow-y-auto p-8">
+              {settingsLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <RefreshCw className="animate-spin mx-auto h-8 w-8 text-green-500 mb-4" />
+                    <p className="text-gray-600">Loading settings...</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {activeSettingsTab === 'general' && (
+                    <GeneralSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'webhooks' && (
+                    <WebhookSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'messages' && (
+                    <MessageSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'notifications' && (
+                    <NotificationSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'security' && (
+                    <SecuritySettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                  
+                  {activeSettingsTab === 'status' && (
+                    <StatusSettingsSection 
+                      settings={greenApiSettings} 
+                      setSettings={setGreenApiSettings} 
+                    />
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-8 py-6 bg-gray-50 border-t border-gray-200 flex justify-end gap-4">
+              <button
+                onClick={() => setShowSettingsModal(false)}
+                className="px-6 py-3 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveGreenApiSettings}
+                disabled={savingSettings}
+                className="px-8 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-medium hover:from-green-600 hover:to-green-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {savingSettings ? (
+                  <>
+                    <RefreshCw size={18} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Save Settings
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

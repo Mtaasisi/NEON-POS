@@ -1,6 +1,5 @@
 // Admin Feature Module
 export * from './pages/AdminSettingsPage';
-export * from './pages/AuditLogsPage';
 export * from './pages/DatabaseSetupPage';
 
 export * from './components/AdminFeedbackModal';

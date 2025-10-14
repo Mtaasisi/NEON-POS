@@ -336,7 +336,9 @@ export class AnalyticsService {
           }
           const customer = customerSales.get(customerId);
           customer.purchases += 1;
-          customer.totalSpent += sale.total_amount || 0;
+          // ✅ FIX: Ensure numeric addition, not string concatenation
+          const saleAmount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+          customer.totalSpent += saleAmount;
           if (new Date(sale.created_at) > new Date(customer.lastPurchase)) {
             customer.lastPurchase = sale.created_at;
           }

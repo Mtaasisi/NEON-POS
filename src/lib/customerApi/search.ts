@@ -61,26 +61,33 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
       console.log('📋 Using fallback search method');
       const offset = (page - 1) * pageSize;
       
+      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
       // Build the search query - search in name and phone primarily
       const searchLower = query.toLowerCase();
       
       // Get count first (using a separate query since custom client doesn't support count in select)
       // @ts-ignore - Custom Neon client uses chainable then() pattern
-      const { data: allMatches } = await supabase
+      const countQuery = supabase
         .from('customers')
         .select('id')
         .ilike('name', `%${searchLower}%`);
       
+      const { data: allMatches } = await countQuery;
+      
       const totalCount = allMatches?.length || 0;
       
-      // Get paginated data
+      // Get paginated data (ALL CUSTOMERS)
       // @ts-ignore - Custom Neon client uses chainable then() pattern
-      const { data: directResults, error: directError } = await supabase
+      const dataQuery = supabase
         .from('customers')
-        .select('id')
+        .select('id, name, phone, email, branch_id, created_by_branch_name')
         .ilike('name', `%${searchLower}%`)
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
+      
+      const { data: directResults, error: directError } = await dataQuery;
       
       if (directError) {
         console.error('❌ Error in fallback search:', directError);
@@ -116,8 +123,11 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
         name,
         phone,
         email,
+        whatsapp,
         gender,
         city,
+        country,
+        address,
         color_tag,
         loyalty_level,
         points,
@@ -127,6 +137,7 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
         referral_source,
         birth_month,
         birth_day,
+        birthday,
         initial_notes,
         notes,
         customer_tag,
@@ -134,7 +145,27 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
         national_id,
         joined_date,
         created_at,
-        updated_at
+        updated_at,
+        branch_id,
+        is_shared,
+        created_by_branch_id,
+        created_by_branch_name,
+        profile_image,
+        whatsapp_opt_out,
+        referred_by,
+        created_by,
+        last_purchase_date,
+        total_purchases,
+        total_calls,
+        total_call_duration_minutes,
+        incoming_calls,
+        outgoing_calls,
+        missed_calls,
+        avg_call_duration_minutes,
+        first_call_date,
+        last_call_date,
+        call_loyalty_level,
+        total_returns
       `)
       .in('id', customerIds);
     
@@ -144,6 +175,28 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
     }
     
     if (data) {
+      // Fetch branch names separately since custom client doesn't support joins
+      let branchNames: Record<string, string> = {};
+      try {
+        const branchIds = [...new Set(data.map((c: any) => c.branch_id).filter(Boolean))];
+        if (branchIds.length > 0) {
+          const branchQuery = supabase
+            .from('store_locations')
+            .select('id, name')
+            .in('id', branchIds);
+          
+          const branchResult = await branchQuery;
+          if (branchResult.data) {
+            branchNames = branchResult.data.reduce((acc: any, branch: any) => {
+              acc[branch.id] = branch.name;
+              return acc;
+            }, {});
+          }
+        }
+      } catch (branchError) {
+        console.warn('⚠️ Could not fetch branch names:', branchError);
+      }
+
       // Process and normalize the data
       const processedCustomers = data.map((customer: any) => {
         // Map snake_case database fields to camelCase interface fields
@@ -163,9 +216,10 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
           referralSource: customer.referral_source,
           birthMonth: customer.birth_month,
           birthDay: customer.birth_day,
-          totalReturns: 0, // Not in DB yet
-          profileImage: null, // Not in DB yet
-          whatsapp: customer.phone, // Use phone as fallback
+        totalReturns: 0, // Not in DB yet
+        profileImage: null, // Not in DB yet
+        branchName: branchNames[customer.branch_id] || customer.created_by_branch_name || 'Unknown Branch',
+        whatsapp: customer.phone, // Use phone as fallback
           whatsappOptOut: false, // Not in DB yet
           initialNotes: customer.initial_notes,
           locationDescription: customer.location_description,
@@ -264,23 +318,40 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
       const offset = (page - 1) * pageSize;
       const searchLower = query.toLowerCase();
       
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
       // Get count first (using a separate query since custom client doesn't support count in select)
       // @ts-ignore - Custom Neon client uses chainable then() pattern
-      const { data: allMatches } = await supabase
+      let countQuery = supabase
         .from('customers')
         .select('id')
         .ilike('name', `%${searchLower}%`);
+      
+      // 🔒 Apply branch filter
+      if (currentBranchId) {
+        countQuery = countQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: allMatches } = await countQuery;
       
       const totalCount = allMatches?.length || 0;
       
       // Get paginated data
       // @ts-ignore - Custom Neon client uses chainable then() pattern
-      const { data: directResults, error: directError } = await supabase
+      let dataQuery = supabase
         .from('customers')
-        .select('*')
+        .select('id,name,phone,email,gender,city,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared')
         .ilike('name', `%${searchLower}%`)
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
+      
+      // 🔒 Apply branch filter
+      if (currentBranchId) {
+        dataQuery = dataQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: directResults, error: directError } = await dataQuery;
       
       if (directError) {
         console.error('❌ Error in fallback fast search:', directError);

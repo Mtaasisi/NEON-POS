@@ -10,9 +10,11 @@ import { EmployeeForm, AttendanceModal } from '../components';
 import { 
   Users, UserPlus, Calendar, Clock, TrendingUp, Award, 
   Plus, Edit, Trash2, CheckCircle, AlertTriangle, Filter,
-  Mail, Phone, MapPin, Briefcase, Star, Activity
+  Mail, Phone, MapPin, Briefcase, Star, Activity, Download
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { employeeService } from '../../../services/employeeService';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface Employee {
   id: string;
@@ -30,6 +32,13 @@ interface Employee {
   skills: string[];
   manager?: string;
   location?: string;
+  branchId?: string; // ✨ NEW - Branch assignment
+  branch?: {         // ✨ NEW - Branch details
+    id: string;
+    name: string;
+    code: string;
+    isMain: boolean;
+  };
 }
 
 interface Attendance {
@@ -55,141 +64,139 @@ const EmployeeManagementPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [branchFilter, setBranchFilter] = useState('all'); // ✨ NEW - Branch filter
+  const [branches, setBranches] = useState<any[]>([]); // ✨ NEW - Available branches
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
 
-  // Mock data loading
+  // Load data from database
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        const mockEmployees: Employee[] = [
-          {
-            id: '1',
-            firstName: 'John',
-            lastName: 'Doe',
-            email: 'john.doe@company.com',
-            phone: '+255 123 456 789',
-            position: 'Senior Technician',
-            department: 'IT',
-            hireDate: '2023-01-15',
-            salary: 1500000,
-            status: 'active',
-            performance: 4.5,
-            attendance: 95,
-            skills: ['Device Repair', 'Network Setup', 'Software Installation'],
-            manager: 'Sarah Manager',
-            location: 'Main Office'
-          },
-          {
-            id: '2',
-            firstName: 'Sarah',
-            lastName: 'Manager',
-            email: 'sarah.manager@company.com',
-            phone: '+255 987 654 321',
-            position: 'IT Manager',
-            department: 'IT',
-            hireDate: '2022-06-01',
-            salary: 2500000,
-            status: 'active',
-            performance: 4.8,
-            attendance: 98,
-            skills: ['Team Management', 'Project Planning', 'Technical Support'],
-            location: 'Main Office'
-          },
-          {
-            id: '3',
-            firstName: 'Mike',
-            lastName: 'Technician',
-            email: 'mike.tech@company.com',
-            phone: '+255 555 123 456',
-            position: 'Junior Technician',
-            department: 'Service',
-            hireDate: '2023-03-10',
-            salary: 800000,
-            status: 'active',
-            performance: 3.8,
-            attendance: 88,
-            skills: ['Hardware Repair', 'Basic Diagnostics'],
-            manager: 'Sarah Manager',
-            location: 'Branch Office'
-          },
-          {
-            id: '4',
-            firstName: 'Lisa',
-            lastName: 'Support',
-            email: 'lisa.support@company.com',
-            phone: '+255 777 888 999',
-            position: 'Customer Support',
-            department: 'Support',
-            hireDate: '2023-08-20',
-            salary: 700000,
-            status: 'on-leave',
-            performance: 4.2,
-            attendance: 92,
-            skills: ['Customer Service', 'Problem Solving', 'Communication'],
-            manager: 'Sarah Manager',
-            location: 'Main Office'
-          }
-        ];
-
-        const mockAttendance: Attendance[] = [
-          {
-            id: 'att1',
-            employeeId: '1',
-            employeeName: 'John Doe',
-            date: '2024-01-20',
-            checkIn: '08:00',
-            checkOut: '17:00',
-            status: 'present',
-            hours: 9
-          },
-          {
-            id: 'att2',
-            employeeId: '2',
-            employeeName: 'Sarah Manager',
-            date: '2024-01-20',
-            checkIn: '07:45',
-            checkOut: '17:30',
-            status: 'present',
-            hours: 9.75
-          },
-          {
-            id: 'att3',
-            employeeId: '3',
-            employeeName: 'Mike Technician',
-            date: '2024-01-20',
-            checkIn: '08:30',
-            checkOut: '17:00',
-            status: 'late',
-            hours: 8.5
-          }
-        ];
-
-        setEmployees(mockEmployees);
-        setAttendance(mockAttendance);
-      } catch (error) {
-        toast.error('Failed to load employees');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     loadData();
+    loadBranches(); // ✨ NEW - Load branches for filter
   }, []);
 
-  const handleSaveEmployee = (employeeData: Employee) => {
-    if (editingEmployee) {
-      // Update existing employee
-      setEmployees(prev => prev.map(emp => 
-        emp.id === employeeData.id ? employeeData : emp
-      ));
-    } else {
-      // Add new employee
-      setEmployees(prev => [...prev, employeeData]);
+  const loadBranches = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('store_locations')
+        .select('id, name, code, is_main')
+        .eq('is_active', true)
+        .order('is_main', { ascending: false })
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setBranches(data || []);
+    } catch (error) {
+      console.error('Failed to load branches:', error);
     }
-    setEditingEmployee(undefined);
+  };
+
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      // Load employees from database
+      const employeesData = await employeeService.getAllEmployees();
+      
+      // Convert to component's Employee interface format
+      const formattedEmployees: Employee[] = employeesData.map(emp => ({
+        id: emp.id,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        email: emp.email,
+        phone: emp.phone || '',
+        position: emp.position,
+        department: emp.department,
+        hireDate: emp.hireDate,
+        salary: emp.salary,
+        status: emp.status,
+        performance: emp.performanceRating,
+        attendance: 95, // This will be calculated from attendance records
+        skills: emp.skills || [],
+        manager: '', // Will be resolved from managerId
+        location: emp.location || '',
+        branchId: emp.branchId, // ✨ NEW - Branch ID
+        branch: emp.branch // ✨ NEW - Branch details
+      }));
+
+      // Load all attendance records
+      const attendanceData = await employeeService.getAllAttendanceRecords();
+      
+      // Convert to component's Attendance interface format
+      const formattedAttendance: Attendance[] = attendanceData.map(att => {
+        const employee = employeesData.find(e => e.id === att.employeeId);
+        return {
+          id: att.id,
+          employeeId: att.employeeId,
+          employeeName: employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown',
+          date: att.attendanceDate,
+          checkIn: att.checkInTime ? new Date(att.checkInTime).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : undefined,
+          checkOut: att.checkOutTime ? new Date(att.checkOutTime).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }) : undefined,
+          status: att.status,
+          hours: att.totalHours,
+          notes: att.notes
+        };
+      });
+
+      setEmployees(formattedEmployees);
+      setAttendance(formattedAttendance);
+    } catch (error) {
+      console.error('Failed to load data:', error);
+      toast.error('Failed to load employees data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveEmployee = async (employeeData: Employee) => {
+    try {
+      if (editingEmployee) {
+        // Update existing employee
+        await employeeService.updateEmployee(employeeData.id, {
+          firstName: employeeData.firstName,
+          lastName: employeeData.lastName,
+          email: employeeData.email,
+          phone: employeeData.phone,
+          position: employeeData.position,
+          department: employeeData.department,
+          hireDate: employeeData.hireDate,
+          salary: employeeData.salary,
+          status: employeeData.status,
+          performanceRating: employeeData.performance,
+          skills: employeeData.skills,
+          location: employeeData.location,
+          branchId: employeeData.branchId, // ✨ NEW - Branch ID
+          employmentType: 'full-time',
+          currency: 'TZS'
+        });
+      } else {
+        // Add new employee
+        await employeeService.createEmployee({
+          firstName: employeeData.firstName,
+          lastName: employeeData.lastName,
+          email: employeeData.email,
+          phone: employeeData.phone,
+          position: employeeData.position,
+          department: employeeData.department,
+          hireDate: employeeData.hireDate,
+          salary: employeeData.salary,
+          status: employeeData.status,
+          performanceRating: employeeData.performance,
+          skills: employeeData.skills,
+          location: employeeData.location,
+          branchId: employeeData.branchId, // ✨ NEW - Branch ID
+          employmentType: 'full-time',
+          currency: 'TZS'
+        });
+      }
+      
+      // Reload data
+      await loadData();
+      setEditingEmployee(undefined);
+      setShowCreateEmployee(false);
+    } catch (error) {
+      console.error('Failed to save employee:', error);
+    }
   };
 
   const handleEditEmployee = (employee: Employee) => {
@@ -197,22 +204,71 @@ const EmployeeManagementPage: React.FC = () => {
     setShowCreateEmployee(true);
   };
 
-  const handleDeleteEmployee = (employeeId: string) => {
+  const handleDeleteEmployee = async (employeeId: string) => {
     if (window.confirm('Are you sure you want to delete this employee?')) {
-      setEmployees(prev => prev.filter(emp => emp.id !== employeeId));
-      toast.success('Employee deleted successfully');
+      try {
+        await employeeService.deleteEmployee(employeeId);
+        await loadData();
+      } catch (error) {
+        console.error('Failed to delete employee:', error);
+      }
     }
   };
 
-  const handleSaveAttendance = (attendanceData: Attendance) => {
-    setAttendance(prev => [...prev, attendanceData]);
+  const handleSaveAttendance = async (attendanceData: Attendance) => {
+    try {
+      await employeeService.markAttendance({
+        employeeId: attendanceData.employeeId,
+        attendanceDate: attendanceData.date,
+        checkInTime: attendanceData.checkIn ? `${attendanceData.date}T${attendanceData.checkIn}` : undefined,
+        checkOutTime: attendanceData.checkOut ? `${attendanceData.date}T${attendanceData.checkOut}` : undefined,
+        status: attendanceData.status,
+        totalHours: attendanceData.hours,
+        notes: attendanceData.notes
+      });
+      
+      await loadData();
+      setShowAttendanceModal(false);
+    } catch (error) {
+      console.error('Failed to save attendance:', error);
+    }
   };
 
-  const handleDeleteAttendance = (attendanceId: string) => {
+  const handleDeleteAttendance = async (attendanceId: string) => {
     if (window.confirm('Are you sure you want to delete this attendance record?')) {
-      setAttendance(prev => prev.filter(att => att.id !== attendanceId));
-      toast.success('Attendance record deleted successfully');
+      try {
+        await employeeService.deleteAttendanceRecord(attendanceId);
+        await loadData();
+      } catch (error) {
+        console.error('Failed to delete attendance:', error);
+      }
     }
+  };
+
+  const handleExportEmployees = () => {
+    const csv = employeeService.exportEmployeesToCSV(employees.map(emp => ({
+      ...emp,
+      performanceRating: emp.performance,
+      employmentType: 'full-time' as const,
+      currency: 'TZS'
+    })));
+    employeeService.downloadCSV(csv, `employees_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleExportAttendance = () => {
+    const csv = employeeService.exportAttendanceToCSV(attendance.map(att => ({
+      id: att.id,
+      employeeId: att.employeeId,
+      attendanceDate: att.date,
+      checkInTime: att.checkIn,
+      checkOutTime: att.checkOut,
+      totalHours: att.hours,
+      breakHours: 0,
+      overtimeHours: att.hours > 8 ? att.hours - 8 : 0,
+      status: att.status,
+      notes: att.notes
+    })));
+    employeeService.downloadCSV(csv, `attendance_${new Date().toISOString().split('T')[0]}.csv`);
   };
 
   if (isLoading) {
@@ -240,21 +296,39 @@ const EmployeeManagementPage: React.FC = () => {
 
         <div className="flex flex-wrap gap-3">
           {activeTab === 'employees' ? (
-            <GlassButton
-              onClick={() => setShowCreateEmployee(true)}
-              icon={<Plus size={18} />}
-              className="bg-gradient-to-r from-green-500 to-green-600 text-white"
-            >
-              Add Employee
-            </GlassButton>
+            <>
+              <GlassButton
+                onClick={() => setShowCreateEmployee(true)}
+                icon={<Plus size={18} />}
+                className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+              >
+                Add Employee
+              </GlassButton>
+              <GlassButton
+                onClick={handleExportEmployees}
+                icon={<Download size={18} />}
+                className="bg-gradient-to-r from-purple-500 to-purple-600 text-white"
+              >
+                Export CSV
+              </GlassButton>
+            </>
           ) : (
-            <GlassButton
-              onClick={() => setShowAttendanceModal(true)}
-              icon={<Calendar size={18} />}
-              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
-            >
-              Mark Attendance
-            </GlassButton>
+            <>
+              <GlassButton
+                onClick={() => setShowAttendanceModal(true)}
+                icon={<Calendar size={18} />}
+                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+              >
+                Mark Attendance
+              </GlassButton>
+              <GlassButton
+                onClick={handleExportAttendance}
+                icon={<Download size={18} />}
+                className="bg-gradient-to-r from-purple-500 to-purple-600 text-white"
+              >
+                Export CSV
+              </GlassButton>
+            </>
           )}
         </div>
       </div>
@@ -448,6 +522,19 @@ const EmployeeManagementPage: React.FC = () => {
                   placeholder="Filter by Status"
                   className="min-w-[150px]"
                 />
+                <GlassSelect
+                  options={[
+                    { value: 'all', label: 'All Branches' },
+                    ...branches.map(b => ({ 
+                      value: b.id, 
+                      label: `${b.name}${b.is_main ? ' 🏢' : ''}` 
+                    }))
+                  ]}
+                  value={branchFilter}
+                  onChange={setBranchFilter}
+                  placeholder="Filter by Branch"
+                  className="min-w-[150px]"
+                />
               </>
             ) : (
               <GlassSelect
@@ -478,6 +565,7 @@ const EmployeeManagementPage: React.FC = () => {
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Employee</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Position</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Department</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Branch/Store</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Performance</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-900">Attendance</th>
@@ -494,7 +582,8 @@ const EmployeeManagementPage: React.FC = () => {
                       employee.department.toLowerCase().includes(searchQuery.toLowerCase());
                     const matchesDepartment = departmentFilter === 'all' || employee.department === departmentFilter;
                     const matchesStatus = statusFilter === 'all' || employee.status === statusFilter;
-                    return matchesSearch && matchesDepartment && matchesStatus;
+                    const matchesBranch = branchFilter === 'all' || employee.branchId === branchFilter; // ✨ NEW
+                    return matchesSearch && matchesDepartment && matchesStatus && matchesBranch; // ✨ UPDATED
                   })
                   .map((employee) => (
                   <tr key={employee.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -521,6 +610,17 @@ const EmployeeManagementPage: React.FC = () => {
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {employee.department}
                       </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      {employee.branch ? (
+                        <div className="flex items-center gap-1">
+                          <MapPin size={14} className="text-purple-600" />
+                          <span className="text-sm font-medium text-gray-900">{employee.branch.name}</span>
+                          {employee.branch.isMain && <span className="text-xs text-gray-500">🏢</span>}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400 italic">Unassigned</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -602,18 +702,19 @@ const EmployeeManagementPage: React.FC = () => {
               employee.department.toLowerCase().includes(searchQuery.toLowerCase());
             const matchesDepartment = departmentFilter === 'all' || employee.department === departmentFilter;
             const matchesStatus = statusFilter === 'all' || employee.status === statusFilter;
-            return matchesSearch && matchesDepartment && matchesStatus;
+            const matchesBranch = branchFilter === 'all' || employee.branchId === branchFilter; // ✨ NEW
+            return matchesSearch && matchesDepartment && matchesStatus && matchesBranch; // ✨ UPDATED
           }).length === 0 && (
             <div className="text-center py-8">
               <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No employees found</h3>
               <p className="text-gray-500 mb-6">
-                {searchQuery || departmentFilter !== 'all' || statusFilter !== 'all'
+                {searchQuery || departmentFilter !== 'all' || statusFilter !== 'all' || branchFilter !== 'all'
                   ? 'Try adjusting your search or filters'
                   : 'Get started by adding your first employee'
                 }
               </p>
-              {!searchQuery && departmentFilter === 'all' && statusFilter === 'all' && (
+              {!searchQuery && departmentFilter === 'all' && statusFilter === 'all' && branchFilter === 'all' && (
                 <GlassButton
                   onClick={() => setShowCreateEmployee(true)}
                   icon={<Plus size={18} />}

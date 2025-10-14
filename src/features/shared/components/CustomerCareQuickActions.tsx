@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { PlusCircle, QrCode, Stethoscope } from 'lucide-react';
+import { PlusCircle, QrCode, Stethoscope, ShoppingCart, UserPlus } from 'lucide-react';
 import StandardButton from './ui/StandardButton';
 
 interface CustomerCareQuickActionsProps {
@@ -46,6 +46,32 @@ const CustomerCareQuickActions: React.FC<CustomerCareQuickActionsProps> = ({
         >
           <span className="hidden sm:inline">New Diagnostic</span>
           <span className="sm:hidden">Diagnostic</span>
+        </StandardButton>
+      </Link>
+      
+      <Link to="/lats/pos" className="flex-1 sm:flex-none min-w-[120px]">
+        <StandardButton
+          variant="warning"
+          size="md"
+          icon={<ShoppingCart size={16} />}
+          fullWidth
+          className="backdrop-blur-md border border-orange-300/30"
+        >
+          <span className="hidden sm:inline">Quick Sale</span>
+          <span className="sm:hidden">Sale</span>
+        </StandardButton>
+      </Link>
+      
+      <Link to="/customers/new" className="flex-1 sm:flex-none min-w-[120px]">
+        <StandardButton
+          variant="secondary"
+          size="md"
+          icon={<UserPlus size={16} />}
+          fullWidth
+          className="backdrop-blur-md border border-gray-300/30"
+        >
+          <span className="hidden sm:inline">Add Customer</span>
+          <span className="sm:hidden">Customer</span>
         </StandardButton>
       </Link>
     </div>

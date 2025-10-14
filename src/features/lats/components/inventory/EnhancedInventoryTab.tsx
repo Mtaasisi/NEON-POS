@@ -98,6 +98,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   setShowDeleteConfirmation,
   toggleProductSelection,
   toggleSelectAll,
+  productModals,
   navigate,
   deleteProduct
 }) => {
@@ -815,7 +816,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           onEdit={(product) => {
             setShowProductDetailModal(false);
             setSelectedProductForDetail(null);
-            navigate(`/lats/products/${product.id}/edit`);
+            // ✅ FIXED: Open EditProductModal instead of navigating to edit page
+            productModals.openEditModal(product.id);
           }}
         />
       )}

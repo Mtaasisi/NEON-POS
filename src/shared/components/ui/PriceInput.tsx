@@ -14,7 +14,7 @@ interface PriceInputProps {
   error?: string;
 }
 
-const PriceInput: React.FC<PriceInputProps> = ({
+const PriceInput = React.forwardRef<HTMLInputElement, PriceInputProps>(({
   value,
   onChange,
   placeholder = "0",
@@ -25,7 +25,7 @@ const PriceInput: React.FC<PriceInputProps> = ({
   step = 0.01,
   label,
   error
-}) => {
+}, ref) => {
   const [displayValue, setDisplayValue] = useState<string>("");
   const [isFocused, setIsFocused] = useState(false);
 
@@ -128,6 +128,7 @@ const PriceInput: React.FC<PriceInputProps> = ({
       )}
       <div className="relative">
         <input
+          ref={ref}
           type="text"
           value={displayValue}
           onChange={handleChange}
@@ -150,6 +151,8 @@ const PriceInput: React.FC<PriceInputProps> = ({
       )}
     </div>
   );
-};
+});
+
+PriceInput.displayName = 'PriceInput';
 
 export default PriceInput;

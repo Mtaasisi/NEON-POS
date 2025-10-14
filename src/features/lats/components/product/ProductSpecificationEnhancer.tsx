@@ -130,16 +130,35 @@ const ProductSpecificationEnhancer: React.FC = () => {
   const analyzeProducts = async () => {
     setIsAnalyzing(true);
     try {
-      // Get overall analysis
+      // Get overall analysis (without nested select - Neon doesn't support this)
       const { data: analysisData, error: analysisError } = await supabase
         .from('lats_products')
-        .select('id, name, attributes, category_id, lats_categories(name)')
+        .select('id, name, attributes, category_id')
         .eq('is_active', true);
 
       if (analysisError) throw analysisError;
 
-      const totalProducts = analysisData?.length || 0;
-      const productsWithSpecs = analysisData?.filter((p: any) => 
+      // Fetch categories separately
+      const categoryIds = [...new Set(analysisData?.map((p: any) => p.category_id).filter(Boolean) || [])];
+      const { data: categories } = await supabase
+        .from('lats_categories')
+        .select('id, name')
+        .in('id', categoryIds);
+
+      // Create category lookup map
+      const categoriesMap = (categories || []).reduce((acc: any, cat: any) => {
+        acc[cat.id] = cat;
+        return acc;
+      }, {});
+
+      // Enrich products with category names
+      const enrichedData = analysisData?.map((p: any) => ({
+        ...p,
+        lats_categories: categoriesMap[p.category_id]
+      }));
+
+      const totalProducts = enrichedData?.length || 0;
+      const productsWithSpecs = enrichedData?.filter((p: any) => 
         p.attributes && Object.keys(p.attributes).length > 0
       ).length || 0;
       const productsWithoutSpecs = totalProducts - productsWithSpecs;
@@ -147,7 +166,7 @@ const ProductSpecificationEnhancer: React.FC = () => {
         Math.round((productsWithSpecs / totalProducts) * 100) : 0;
 
       // Calculate spec counts
-      const specCounts = analysisData?.map((p: any) => 
+      const specCounts = enrichedData?.map((p: any) => 
         p.attributes ? Object.keys(p.attributes).length : 0
       ) || [];
       const avgSpecCount = specCounts.length > 0 ? 
@@ -168,7 +187,7 @@ const ProductSpecificationEnhancer: React.FC = () => {
       // Category analysis
       const categoryMap = new Map<string, { total: number; withSpecs: number }>();
       
-      analysisData?.forEach((product: any) => {
+      enrichedData?.forEach((product: any) => {
         const categoryName = product.lats_categories?.name || 'Uncategorized';
         const hasSpecs = product.attributes && Object.keys(product.attributes).length > 0;
         

@@ -187,7 +187,7 @@ export function createTimeoutPromise<T>(
  */
 export async function withTimeoutAndRetry<T>(
   fn: () => Promise<T>,
-  timeoutMs: number = 30000,
+  timeoutMs: number = 90000,
   retryOptions: Partial<RetryOptions> = {}
 ): Promise<T> {
   return retryWithBackoff(async () => {

@@ -104,7 +104,7 @@ const PostClosureWarningModal: React.FC<PostClosureWarningModalProps> = ({
                 className="flex-1 px-4 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium flex items-center justify-center gap-2"
               >
                 <CheckCircle className="w-4 h-4" />
-                {userRole === 'admin' || userRole === 'manager' || userRole === 'owner' 
+                {userRole === 'admin' 
                   ? 'Override & Continue' 
                   : 'Continue Sale'
                 }
@@ -116,7 +116,7 @@ const PostClosureWarningModal: React.FC<PostClosureWarningModalProps> = ({
         {/* Footer Note */}
         <div className="px-6 pb-6">
           <p className="text-xs text-gray-500 text-center">
-            {userRole === 'admin' || userRole === 'manager' || userRole === 'owner' 
+            {userRole === 'admin' 
               ? 'Admin override: Post-closure sales will be logged with override reason'
               : 'Post-closure sales will be flagged in reports for review'
             }

@@ -28,13 +28,17 @@
     "fix-console-errors": "node apply-console-fixes.mjs",
     "insert-default-settings": "node insert-default-settings.mjs",
     "setup-logo": "node run-logo-setup.mjs",
+    "setup:whatsapp": "node setup-whatsapp-automatic.mjs",
     "test:product": "node auto-test-product-creation.mjs",
     "test:product:setup": "npx playwright install chromium && npm run test:product",
     "create:products": "node create-product-direct.mjs",
     "create:product": "node create-product-interactive.mjs",
     "create:products:images": "node create-products-with-images.mjs",
     "fix:product-deletion": "node auto-fix-product-deletion.mjs",
-    "diagnose:product-deletion": "psql \"$DATABASE_URL\" -f diagnose-product-deletion.sql"
+    "diagnose:product-deletion": "psql \"$DATABASE_URL\" -f diagnose-product-deletion.sql",
+    "test:theme": "node theme-test.mjs",
+    "test:theme:setup": "npx playwright install chromium && npm run test:theme",
+    "test:automation": "node test-automation-ui.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.1.1",

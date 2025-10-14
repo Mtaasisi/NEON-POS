@@ -9,6 +9,7 @@ import { fetchAllCustomersSimple } from '../../../../lib/customerApi/core';
 import AddCustomerModal from '../../../customers/components/forms/AddCustomerModal';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import { customerCacheService } from '../../../../lib/customerCacheService';
 
 interface CustomerSelectionModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [recentCustomers, setRecentCustomers] = useState<Customer[]>([]);
   const [showCreateCustomer, setShowCreateCustomer] = useState(false);
+  const [hasAttemptedLoad, setHasAttemptedLoad] = useState(false);
   
   // Sound effects hook
   const { playClickSound } = usePOSClickSounds();
@@ -36,19 +38,10 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
   // Load all customers on mount
   useEffect(() => {
     if (isOpen) {
+      setHasAttemptedLoad(false); // Reset on open
       loadAllCustomers();
     }
   }, [isOpen]);
-
-  // Add a retry mechanism if no customers are loaded
-  useEffect(() => {
-    if (isOpen && !loading && customers.length === 0 && recentCustomers.length === 0) {
-      console.log('🔄 No customers loaded, retrying...');
-      setTimeout(() => {
-        loadAllCustomers();
-      }, 1000);
-    }
-  }, [isOpen, loading, customers.length, recentCustomers.length]);
 
   // Search customers when query changes with debouncing
   useEffect(() => {
@@ -67,8 +60,33 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
   const loadAllCustomers = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Loading all customers for selection modal...');
       
+      // 🚀 OPTIMIZED: Try localStorage cache first (instant load!)
+      const cachedCustomers = customerCacheService.getCustomers();
+      if (cachedCustomers && cachedCustomers.length > 0) {
+        console.log(`⚡ [CustomerModal] Using cached customers (${cachedCustomers.length} customers)`);
+        setRecentCustomers(cachedCustomers);
+        setCustomers(cachedCustomers.slice(0, 24));
+        setLoading(false);
+        setHasAttemptedLoad(true);
+        
+        // ⚡ OPTIMIZED: Only refresh cache if data is stale (older than 5 minutes)
+        const cacheAge = customerCacheService.getCacheAge();
+        if (cacheAge > 5 * 60 * 1000) { // 5 minutes in milliseconds
+          // Refresh in background without blocking UI or showing errors
+          fetchAllCustomersSimple().then(result => {
+            if (result && Array.isArray(result)) {
+              customerCacheService.saveCustomers(result);
+            }
+          }).catch(() => {
+            // Silently fail - cache is still valid
+          });
+        }
+        
+        return;
+      }
+      
+      console.log('📡 [CustomerModal] No cache, fetching from database...');
       const result = await fetchAllCustomersSimple();
       console.log('📊 fetchAllCustomersSimple result:', {
         type: typeof result,
@@ -82,6 +100,9 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
         setCustomers(result.slice(0, 24)); // Show only first 24 customers
         console.log(`✅ Loaded ${result.length} customers, showing first 24`);
         
+        // 🚀 Save to cache for next time
+        customerCacheService.saveCustomers(result);
+        
         // Debug: Check for customers with missing data
         const customersWithNames = result.filter(c => c.name && c.name.trim());
         const customersWithPhones = result.filter(c => c.phone && c.phone.trim());
@@ -89,6 +110,7 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
         
       } else if (result && result.customers && Array.isArray(result.customers)) {
         setRecentCustomers(result.customers);
+        customerCacheService.saveCustomers(result.customers);
         setCustomers(result.customers.slice(0, 24)); // Show only first 24 customers
         console.log(`✅ Loaded ${result.customers.length} customers, showing first 24`);
         
@@ -132,6 +154,7 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
       }
     } finally {
       setLoading(false);
+      setHasAttemptedLoad(true); // Mark that we've attempted to load
     }
   };
 
@@ -195,12 +218,31 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
   };
 
   const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    const realAmount = amount || 0;
+    
+    // Safety check: Detect unrealistic amounts
+    const MAX_REALISTIC_AMOUNT = 1_000_000_000_000; // 1 trillion
+    const isCorrupt = Math.abs(realAmount) > MAX_REALISTIC_AMOUNT;
+    
+    if (isCorrupt) {
+      console.warn(`⚠️ CORRUPT DATA in modal - Amount: ${realAmount}`);
+    }
+    
+    // Safety check: Handle NaN and Infinity
+    if (!isFinite(realAmount)) {
+      console.warn(`⚠️ Invalid amount in modal: ${amount}.`);
+      return 'TZS 0 ⚠️ INVALID';
+    }
+    
+    const formatted = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'TZS',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount || 0);
+    }).format(realAmount);
+    
+    // Add corruption indicator if amount is unrealistic
+    return isCorrupt ? `${formatted} ⚠️` : formatted;
   };
 
   // Prevent body scroll when modal is open
@@ -292,19 +334,22 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
           </div>
         </div>
 
-        {/* Content */}
-        <div className="relative flex-1 overflow-y-auto p-6 bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 custom-scrollbar scroll-smooth min-h-0" style={{ maxHeight: 'calc(95vh - 200px)', scrollbarWidth: 'thin', scrollbarColor: '#3b82f6 transparent' }}>
+        {/* Content - Fixed min-height to prevent layout shift */}
+        <div className="relative flex-1 overflow-y-auto p-6 bg-gradient-to-br from-white via-blue-50/30 to-purple-50/20 custom-scrollbar scroll-smooth" style={{ minHeight: '500px', maxHeight: 'calc(95vh - 200px)', scrollbarWidth: 'thin', scrollbarColor: '#3b82f6 transparent' }}>
           {/* Scroll indicators */}
           <div className="absolute top-0 left-0 right-0 h-4 bg-gradient-to-b from-white/80 to-transparent pointer-events-none z-10"></div>
           <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white/80 to-transparent pointer-events-none z-10"></div>
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-12 mt-4 mb-4">
+          
+          {/* Loading overlay - absolute positioned to prevent layout shift */}
+          {loading && !hasAttemptedLoad && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/90 backdrop-blur-sm z-20 rounded-lg">
               <div className="relative">
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200"></div>
                 <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent absolute top-0 left-0"></div>
               </div>
-              <span className="mt-4 text-gray-600 font-medium">Searching customers...</span>
-              <div className="mt-2 w-32 h-1 bg-blue-200 rounded-full overflow-hidden">
+              <span className="mt-4 text-gray-800 font-semibold text-lg">Loading Customers...</span>
+              <span className="mt-1 text-gray-600 text-sm">Please wait while we fetch your customer list</span>
+              <div className="mt-3 w-32 h-1 bg-blue-200 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full animate-pulse"></div>
               </div>
             </div>
@@ -377,6 +422,26 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
               </button>
             </div>
           )}
+
+          {/* No Customers in Database */}
+          {!searchQuery && !loading && customers.length === 0 && hasAttemptedLoad && (
+            <div className="text-center py-12 mt-4 mb-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <User className="w-10 h-10 text-blue-500" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">No customers yet</h3>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                You haven't added any customers to your system yet. Create your first customer to get started!
+              </p>
+              <button
+                onClick={handleCreateNewCustomer}
+                className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-2xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 hover:scale-105 hover:shadow-lg"
+              >
+                <Plus className="w-5 h-5" />
+                Create Your First Customer
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -442,12 +507,31 @@ interface CustomerCardProps {
 
 const CustomerCard: React.FC<CustomerCardProps> = ({ customer, onSelect, isSelected, searchQuery }) => {
   const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
+    const realAmount = amount || 0;
+    
+    // Safety check: Detect unrealistic amounts
+    const MAX_REALISTIC_AMOUNT = 1_000_000_000_000; // 1 trillion
+    const isCorrupt = Math.abs(realAmount) > MAX_REALISTIC_AMOUNT;
+    
+    if (isCorrupt) {
+      console.warn(`⚠️ Customer ${customer.name} (${customer.id}) has CORRUPT amount: ${realAmount}`);
+    }
+    
+    // Safety check: Handle NaN and Infinity
+    if (!isFinite(realAmount)) {
+      console.warn(`⚠️ Customer ${customer.name} has invalid amount: ${amount}.`);
+      return 'TZS 0 ⚠️ INVALID';
+    }
+    
+    const formatted = new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'TZS',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
-    }).format(amount || 0);
+    }).format(realAmount);
+    
+    // Add corruption indicator
+    return isCorrupt ? `${formatted} ⚠️` : formatted;
   };
 
   // Helper function to highlight search terms

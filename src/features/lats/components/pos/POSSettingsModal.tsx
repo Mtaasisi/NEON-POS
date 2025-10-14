@@ -4,19 +4,21 @@ import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../../features/shared/components/ui/GlassButton';
 import { X, Save, Settings, Search } from 'lucide-react';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
+import { useAuth } from '../../../../context/AuthContext';
 
-// Import settings tabs - NEW SIMPLIFIED STRUCTURE (5 tabs only)
+// Import settings tabs - NEW SIMPLIFIED STRUCTURE (6 tabs now)
 import GeneralSettingsTab from './GeneralSettingsTab';
 import DynamicPricingSimplifiedTab from './DynamicPricingSimplifiedTab';
 import ImprovedReceiptSettings from './ImprovedReceiptSettings';
 import FeaturesTab from './FeaturesTab';
 import UserPermissionsSimplifiedTab from './UserPermissionsSimplifiedTab';
+import NotificationsSettingsTab from './NotificationsSettingsTab';
 
-// Import hooks - Simplified
-import { 
-  useGeneralSettings,
-  useReceiptSettings,
-} from '../../../../hooks/usePOSSettings';
+// Import hooks - Simplified (REMOVED - not needed, tabs manage their own settings)
+// import { 
+//   useGeneralSettings,
+//   useReceiptSettings,
+// } from '../../../../hooks/usePOSSettings';
 
 interface POSSettingsModalProps {
   isOpen: boolean;
@@ -31,7 +33,11 @@ export interface POSSettingsModalRef {
 
 const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
   ({ isOpen, onClose, activeTab, onTabChange }, ref) => {
-    const [activeSettingsTab, setActiveSettingsTab] = useState(activeTab || 'general');
+    const { currentUser } = useAuth();
+    const userRole = currentUser?.role || 'customer-care';
+    const isAdmin = userRole === 'admin';
+    
+    const [activeSettingsTab, setActiveSettingsTab] = useState(activeTab || (isAdmin ? 'general' : 'receipt'));
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -42,25 +48,29 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
       }
     }, [activeTab, activeSettingsTab]);
 
-    // Settings hooks - Simplified (only need these two)
-    const { settings: generalSettings, saveSettings: saveGeneralSettings } = useGeneralSettings();
-    const { settings: receiptSettings, saveSettings: saveReceiptSettings } = useReceiptSettings();
-
     // Settings refs to access current settings from tabs
     const generalSettingsRef = useRef<any>(null);
     const pricingSettingsRef = useRef<any>(null);
     const receiptSettingsRef = useRef<any>(null);
     const featuresSettingsRef = useRef<any>(null);
     const permissionsSettingsRef = useRef<any>(null);
+    const notificationsSettingsRef = useRef<any>(null);
 
-    // Settings tabs data - SIMPLIFIED TO 5 TABS (memoized to prevent recreating on every render)
-    const settingsTabs = useMemo(() => [
-      { id: 'general', name: '🏪 General', keywords: ['interface', 'theme', 'language', 'currency', 'display', 'barcode', 'scanner', 'notifications', 'alerts', 'security', 'passcode'] },
-      { id: 'pricing', name: '💰 Pricing & Discounts', keywords: ['pricing', 'discount', 'happy hour', 'bulk', 'loyalty', 'promotions'] },
-      { id: 'receipt', name: '🧾 Receipts', keywords: ['receipt', 'print', 'template', 'logo', 'format', 'email', 'sms'] },
-      { id: 'features', name: '📦 Features', keywords: ['features', 'delivery', 'loyalty', 'customer', 'payment tracking', 'enable', 'disable'] },
-      { id: 'permissions', name: '👥 Users & Permissions', keywords: ['permissions', 'access', 'user', 'role', 'security', 'cashier', 'manager', 'admin'] }
+    // Settings tabs data - 6 TABS (memoized to prevent recreating on every render)
+    // Role-based filtering: customer-care only sees receipts and notifications
+    const allSettingsTabs = useMemo(() => [
+      { id: 'general', name: '🏪 General', keywords: ['interface', 'theme', 'language', 'currency', 'display', 'barcode', 'scanner', 'security', 'passcode'], roles: ['admin'] },
+      { id: 'pricing', name: '💰 Pricing & Discounts', keywords: ['pricing', 'discount', 'happy hour', 'bulk', 'loyalty', 'promotions'], roles: ['admin'] },
+      { id: 'receipt', name: '🧾 Receipts', keywords: ['receipt', 'print', 'template', 'logo', 'format'], roles: ['admin', 'customer-care'] },
+      { id: 'notifications', name: '📢 Notifications', keywords: ['notifications', 'alerts', 'whatsapp', 'sms', 'email', 'invoice', 'send', 'auto', 'manual'], roles: ['admin', 'customer-care'] },
+      { id: 'features', name: '📦 Features', keywords: ['features', 'delivery', 'loyalty', 'customer', 'payment tracking', 'enable', 'disable'], roles: ['admin'] },
+      { id: 'permissions', name: '👥 Users & Permissions', keywords: ['permissions', 'access', 'user', 'role', 'security', 'cashier', 'manager', 'admin'], roles: ['admin'] }
     ], []);
+    
+    // Filter tabs based on user role
+    const settingsTabs = useMemo(() => {
+      return allSettingsTabs.filter(tab => tab.roles.includes(userRole));
+    }, [allSettingsTabs, userRole]);
 
     // Filter tabs based on search query
     const filteredTabs = useMemo(() => {
@@ -82,9 +92,6 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
       setIsSavingSettings(true);
       
       try {
-        // Get the current settings ref based on active tab
-        let saveFunction: (() => Promise<void>) | null = null;
-        
         // Simplified save function - tabs handle their own saving
         switch (activeSettingsTab) {
           case 'general':
@@ -122,22 +129,22 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
               return await permissionsSettingsRef.current.saveSettings();
             }
             break;
+          case 'notifications':
+            console.log('  - Checking notificationsSettingsRef:', !!notificationsSettingsRef.current);
+            if (notificationsSettingsRef.current?.saveSettings) {
+              console.log('  ✅ Calling notificationsSettingsRef.saveSettings()');
+              return await notificationsSettingsRef.current.saveSettings();
+            }
+            break;
           default:
             console.error('  ❌ Unknown settings tab:', activeSettingsTab);
             toast.error(`Unknown settings tab: ${activeSettingsTab}`);
             return false;
         }
 
-        if (saveFunction) {
-          console.log('  - Save function exists, calling it');
-          await saveFunction();
-          console.log('  ✅ Save completed successfully');
-          toast.success(`${activeSettingsTab.charAt(0).toUpperCase() + activeSettingsTab.slice(1)} settings saved successfully`);
-          return true;
-        } else {
-          console.error('  ❌ No save function available for tab:', activeSettingsTab);
-          throw new Error(`No save function available for ${activeSettingsTab} settings`);
-        }
+        // If we get here, no save function was found
+        console.error('  ❌ No save function available for tab:', activeSettingsTab);
+        throw new Error(`No save function available for ${activeSettingsTab} settings`);
       } catch (error) {
         console.error('  ❌ Save failed:', error);
         toast.error(`Failed to save ${activeSettingsTab} settings. Please try again.`);
@@ -223,7 +230,7 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
           {/* Settings Content */}
           <div className="min-h-[400px]">
             {/* ============================================ */}
-            {/* SIMPLIFIED STRUCTURE - 5 TABS ONLY */}
+            {/* UPDATED STRUCTURE - 6 TABS */}
             {/* ============================================ */}
             
             {/* 1. General Settings Tab */}
@@ -241,12 +248,17 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
               <ImprovedReceiptSettings ref={receiptSettingsRef} />
             )}
 
-            {/* 4. Features Toggle Tab (NEW) */}
+            {/* 4. Notifications Tab (NEW) */}
+            {activeSettingsTab === 'notifications' && (
+              <NotificationsSettingsTab ref={notificationsSettingsRef} />
+            )}
+
+            {/* 5. Features Toggle Tab */}
             {activeSettingsTab === 'features' && (
               <FeaturesTab ref={featuresSettingsRef} />
             )}
 
-            {/* 5. User Permissions Tab (Simplified) */}
+            {/* 6. User Permissions Tab (Simplified) */}
             {activeSettingsTab === 'permissions' && (
               <UserPermissionsSimplifiedTab ref={permissionsSettingsRef} />
             )}

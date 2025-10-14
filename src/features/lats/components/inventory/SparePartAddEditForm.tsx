@@ -47,10 +47,10 @@ const SparePartAddEditForm: React.FC<SparePartAddEditFormProps> = ({
   // Form state
   const [formData, setFormData] = useState({
     name: '',
-    categoryId: null,
+    categoryId: '',
     partNumber: '',
     brand: '',
-    supplierId: null,
+    supplierId: '',
     condition: 'new',
     description: '',
     costPrice: 0,

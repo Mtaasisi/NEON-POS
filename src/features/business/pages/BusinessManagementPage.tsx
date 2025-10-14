@@ -44,17 +44,17 @@ const BusinessManagementPage: React.FC = () => {
       title: 'Points Management',
       description: 'Manage customer points and rewards system',
       icon: <Sparkles size={24} />,
-      path: '/finance/payments',
+      path: '/payments',
       color: 'from-yellow-500 to-yellow-600',
       category: 'loyalty'
     },
-    // Payments & Finance
+    // Payments
     {
       id: 'payment-management',
       title: 'Payment Management',
       description: 'Centralized payment tracking and management',
       icon: <CreditCard size={24} />,
-      path: '/finance/payments',
+      path: '/payments',
       color: 'from-green-500 to-green-600',
       category: 'payments'
     },
@@ -63,7 +63,7 @@ const BusinessManagementPage: React.FC = () => {
       title: 'Payments Report',
       description: 'Generate payment reports and analytics',
       icon: <Receipt size={24} />,
-      path: '/finance/payments',
+      path: '/payments',
       color: 'from-teal-500 to-teal-600',
       category: 'payments'
     },
@@ -72,17 +72,8 @@ const BusinessManagementPage: React.FC = () => {
       title: 'Payments Accounts',
       description: 'Manage payment accounts and settings',
       icon: <CreditCard size={24} />,
-      path: '/finance/payments/providers',
+      path: '/payments',
       color: 'from-indigo-500 to-indigo-600',
-      category: 'payments'
-    },
-    {
-      id: 'finance-management',
-      title: 'Finance Management',
-      description: 'Comprehensive financial management tools',
-      icon: <DollarSign size={24} />,
-      path: '/finance',
-      color: 'from-emerald-500 to-emerald-600',
       category: 'payments'
     },
 

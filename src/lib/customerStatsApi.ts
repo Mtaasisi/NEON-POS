@@ -10,7 +10,15 @@ export interface CustomerStats {
 
 export const fetchCustomerStats = async (): Promise<CustomerStats> => {
   try {
-    // Fetch total customers count
+    // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+    const currentBranchId = localStorage.getItem('current_branch_id');
+    
+    console.log('📊 [CustomerStats] Configuration:');
+    console.log('   - Current Branch ID:', currentBranchId || '❌ NOT SET');
+    console.log('   - 🌐 CUSTOMERS: SHARED ACROSS ALL BRANCHES');
+    console.log('   - 📊 Will fetch stats for ALL customers from ALL branches');
+
+    // Fetch total customers count (ALL CUSTOMERS - NO BRANCH FILTERING)
     const { count: totalCustomers, error: totalError } = await supabase
       .from('customers')
       .select('id', { count: 'exact', head: true });
@@ -19,7 +27,7 @@ export const fetchCustomerStats = async (): Promise<CustomerStats> => {
       console.error('Error fetching total customers count:', totalError);
     }
 
-    // Fetch active customers count (using correct column name: is_active)
+    // Fetch active customers count (ALL CUSTOMERS - NO BRANCH FILTERING)
     const { count: activeCustomers, error: activeError } = await supabase
       .from('customers')
       .select('id', { count: 'exact', head: true })
@@ -29,7 +37,7 @@ export const fetchCustomerStats = async (): Promise<CustomerStats> => {
       console.error('Error fetching active customers count:', activeError);
     }
 
-    // Fetch today's birthdays (using correct column names: birth_month, birth_day)
+    // Fetch today's birthdays (ALL CUSTOMERS - NO BRANCH FILTERING)
     const today = new Date();
     const currentMonth = today.getMonth() + 1; // getMonth() returns 0-11
     const currentDay = today.getDate();
@@ -90,32 +98,85 @@ export const fetchCustomerStats = async (): Promise<CustomerStats> => {
     }).length || 0;
 
     // Fetch total devices count
-    const { count: totalDevices, error: devicesError } = await supabase
-      .from('devices')
-      .select('id', { count: 'exact', head: true });
+    let totalDevices = 0;
+    let devicesError: any = null;
+    
+    try {
+      let devicesQuery = supabase
+        .from('devices')
+        .select('id', { count: 'exact', head: true });
+      
+      // 🔒 COMPLETE ISOLATION: Only count devices from current branch
+      if (currentBranchId) {
+        console.log('   🔒 Applying branch filter to devices count...');
+        devicesQuery = devicesQuery.eq('branch_id', currentBranchId);
+      }
+
+      const result = await devicesQuery;
+      totalDevices = result.count || 0;
+      devicesError = result.error;
+    } catch (error) {
+      console.warn('⚠️  Branch filtering failed for devices, falling back to total count...');
+      console.warn('⚠️  This might be because devices table does not have branch_id column');
+      
+      // Fallback: get total devices count without branch filtering
+      try {
+        const fallbackResult = await supabase
+          .from('devices')
+          .select('id', { count: 'exact', head: true });
+        totalDevices = fallbackResult.count || 0;
+        devicesError = fallbackResult.error;
+      } catch (fallbackError) {
+        console.error('❌ Error fetching devices count (fallback):', fallbackError);
+        devicesError = fallbackError;
+      }
+    }
 
     if (devicesError) {
-      console.error('Error fetching total devices count:', devicesError);
+      console.error('❌ Error fetching total devices count:', devicesError);
+      console.error('❌ Devices query details:', { currentBranchId, devicesError });
     }
 
-    // Calculate total revenue from customers.total_spent (since payment tables don't exist)
-    const { data: revenueData, error: revenueError } = await supabase
-      .from('customers')
-      .select('total_spent');
+    // Calculate revenue for current branch only (BRANCH-SPECIFIC REVENUE)
+    let totalRevenue = 0;
+    let revenueError: any = null;
+    
+    if (currentBranchId) {
+      console.log('💰 Calculating revenue for current branch:', currentBranchId);
+      
+      try {
+        const { data: revenueData, error: revenueError } = await supabase
+          .from('customers')
+          .select('total_spent')
+          .eq('branch_id', currentBranchId);
 
-    if (revenueError) {
-      console.error('Error fetching revenue data:', revenueError);
+        if (revenueError) {
+          console.error('❌ Error fetching branch revenue data:', revenueError);
+          console.error('❌ Revenue query details:', { currentBranchId, revenueError });
+        } else {
+          totalRevenue = revenueData?.reduce((sum, customer) => sum + (customer.total_spent || 0), 0) || 0;
+          console.log('💰 Branch revenue calculated:', totalRevenue);
+        }
+      } catch (error) {
+        console.error('❌ Error calculating branch revenue:', error);
+        revenueError = error;
+      }
+    } else {
+      console.warn('⚠️  No branch selected - revenue will be 0');
     }
 
-    const totalRevenue = revenueData?.reduce((sum, customer) => sum + (customer.total_spent || 0), 0) || 0;
-
-    return {
+    const finalStats = {
       totalCustomers: totalCustomers || 0,
       activeCustomers: activeCustomers || 0,
       todaysBirthdays,
       totalRevenue,
       totalDevices: totalDevices || 0
     };
+
+    console.log('📊 [CustomerStats] Final Statistics:', finalStats);
+    console.log('📊 [CustomerStats] Customers: SHARED | Revenue: BRANCH-SPECIFIC');
+
+    return finalStats;
   } catch (error) {
     console.error('Error fetching customer stats:', error);
     return {

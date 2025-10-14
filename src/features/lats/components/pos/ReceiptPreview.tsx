@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { ReceiptSettings } from '../../../../lib/posSettingsApi';
 import { ZoomIn, ZoomOut } from 'lucide-react';
+import { format } from '../../lib/format';
 
 interface ReceiptPreviewProps {
   settings: ReceiptSettings;
@@ -317,8 +318,8 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                       )}
                       {settings.show_product_skus && <td className="py-2 text-gray-600">{item.sku}</td>}
                       {settings.show_quantities && <td className="py-2 text-center">{item.qty}</td>}
-                      {settings.show_unit_prices && <td className="py-2 text-right">{item.price.toLocaleString()} TZS</td>}
-                      <td className="py-2 text-right font-medium">{item.total.toLocaleString()} TZS</td>
+                      {settings.show_unit_prices && <td className="py-2 text-right">{format.money(item.price)}</td>}
+                      <td className="py-2 text-right font-medium">{format.money(item.total)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -351,10 +352,10 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                             <div className="text-gray-600">{item.barcode}</div>
                           )}
                           {settings.show_quantities && settings.show_unit_prices && (
-                            <div>{item.qty} x {item.price.toLocaleString()} TZS</div>
+                            <div>{item.qty} x {format.money(item.price)}</div>
                           )}
                         </div>
-                        <div className="font-semibold">{item.total.toLocaleString()} TZS</div>
+                        <div className="font-semibold">{format.money(item.total)}</div>
                       </div>
                     </>
                   )}
@@ -372,25 +373,25 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                   {settings.show_subtotal && (
                     <div className="flex justify-between">
                       <span className="text-gray-700">Subtotal:</span>
-                      <span className="font-medium">{sampleData.subtotal.toLocaleString()} TZS</span>
+                      <span className="font-medium">{format.money(sampleData.subtotal)}</span>
                     </div>
                   )}
                   {settings.show_discounts && settings.show_discount_total && sampleData.discount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span>Discount:</span>
-                      <span className="font-medium">-{sampleData.discount.toLocaleString()} TZS</span>
+                      <span className="font-medium">-{format.money(sampleData.discount)}</span>
                     </div>
                   )}
                   {settings.show_tax && (
                     <div className="flex justify-between">
                       <span className="text-gray-700">Tax (18%):</span>
-                      <span className="font-medium">{sampleData.tax.toLocaleString()} TZS</span>
+                      <span className="font-medium">{format.money(sampleData.tax)}</span>
                     </div>
                   )}
                   {settings.show_grand_total && (
                     <div className="flex justify-between font-bold text-lg border-t-2 border-gray-800 pt-2 mt-2">
                       <span>TOTAL:</span>
-                      <span>{sampleData.grandTotal.toLocaleString()} TZS</span>
+                      <span>{format.money(sampleData.grandTotal)}</span>
                     </div>
                   )}
                 </div>
@@ -407,11 +408,11 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                       <>
                         <div className="flex justify-between">
                           <span className="text-gray-700">Cash Received:</span>
-                          <span className="font-medium">{sampleData.payment.amount.toLocaleString()} TZS</span>
+                          <span className="font-medium">{format.money(sampleData.payment.amount)}</span>
                         </div>
                         <div className="flex justify-between font-semibold text-green-600">
                           <span>Change:</span>
-                          <span>{sampleData.payment.change.toLocaleString()} TZS</span>
+                          <span>{format.money(sampleData.payment.change)}</span>
                         </div>
                       </>
                     )}
@@ -425,25 +426,25 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
               {settings.show_subtotal && !isCompact && (
                 <div className="flex justify-between">
                   <span>Subtotal:</span>
-                  <span>{sampleData.subtotal.toLocaleString()} TZS</span>
+                  <span>{format.money(sampleData.subtotal)}</span>
                 </div>
               )}
               {settings.show_discounts && settings.show_discount_total && sampleData.discount > 0 && !isCompact && (
                 <div className="flex justify-between text-green-600">
                   <span>Discount:</span>
-                  <span>-{sampleData.discount.toLocaleString()} TZS</span>
+                  <span>-{format.money(sampleData.discount)}</span>
                 </div>
               )}
               {settings.show_tax && !isCompact && (
                 <div className="flex justify-between">
                   <span>Tax (18%):</span>
-                  <span>{sampleData.tax.toLocaleString()} TZS</span>
+                  <span>{format.money(sampleData.tax)}</span>
                 </div>
               )}
               {settings.show_grand_total && (
                 <div className={`flex justify-between font-bold ${isCompact ? 'text-sm' : 'text-base'} border-t border-gray-400 pt-1 mt-1`}>
                   <span>TOTAL:</span>
-                  <span>{sampleData.grandTotal.toLocaleString()} TZS</span>
+                  <span>{format.money(sampleData.grandTotal)}</span>
                 </div>
               )}
             </div>
@@ -462,11 +463,11 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                 <>
                   <div className="flex justify-between">
                     <span>Cash:</span>
-                    <span>{sampleData.payment.amount.toLocaleString()} TZS</span>
+                    <span>{format.money(sampleData.payment.amount)}</span>
                   </div>
                   <div className="flex justify-between font-semibold">
                     <span>Change:</span>
-                    <span>{sampleData.payment.change.toLocaleString()} TZS</span>
+                    <span>{format.money(sampleData.payment.change)}</span>
                   </div>
                 </>
               )}

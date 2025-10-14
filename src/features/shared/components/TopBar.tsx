@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
+import { useTheme } from '../../../context/ThemeContext';
+import { useBranch } from '../../../context/BranchContext';
 import { useDevices } from '../../../context/DevicesContext';
 import { useCustomers } from '../../../context/CustomersContext';
 import { useNavigationHistory } from '../../../hooks/useNavigationHistory';
@@ -63,6 +65,8 @@ import ActivityCounter from './ui/ActivityCounter';
 import GlassButton from './ui/GlassButton';
 import SearchDropdown from './SearchDropdown';
 import CacheClearButton from '../../../components/CacheClearButton';
+import SimpleBranchSelector from '../../../components/SimpleBranchSelector';
+import QuickExpenseModal from '../../../components/QuickExpenseModal';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -72,6 +76,8 @@ interface TopBarProps {
 
 const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapsed }) => {
   const { currentUser, logout } = useAuth();
+  const { isDark } = useTheme();
+  const [showQuickExpense, setShowQuickExpense] = useState(false);
   
   // Safely access devices context with error handling for HMR
   let devices: any[] = [];
@@ -79,7 +85,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     const devicesContext = useDevices();
     devices = devicesContext.devices || [];
   } catch (error) {
-    console.warn('Devices context not available during HMR:', error);
+    // Silently handle - context may not be available during HMR
     devices = [];
   }
   
@@ -169,7 +175,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
   const activityCounts = getActivityCounts();
 
-  // Format numbers like Instagram followers (1K, 1.2K, etc.)
+  // Format numbers with abbreviations (1K, 1.2K, etc.)
   const formatNumber = (num: number): string => {
     if (num < 1000) return num.toString();
     if (num < 10000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
@@ -216,24 +222,24 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   return (
     <header className={`sticky top-0 z-20 transition-all duration-500 ${isNavCollapsed ? 'md:ml-[5.5rem]' : 'md:ml-72'}`}>
       {/* Main TopBar */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-white/30 shadow-lg">
+      <div className={`topbar ${isDark ? 'bg-slate-900/90' : 'bg-white/80'} backdrop-blur-xl ${isDark ? 'border-slate-700/50' : 'border-white/30'} border-b shadow-lg`}>
         <div className="flex items-center justify-between px-4 py-3">
           {/* Left Section - Menu Toggle & Back Button */}
           <div className="flex items-center gap-4">
             <button
               onClick={onMenuToggle}
-              className="p-2 rounded-lg bg-white/30 hover:bg-white/50 transition-all duration-300 backdrop-blur-sm md:hidden border border-white/30 shadow-sm"
+              className={`p-2 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60' : 'bg-white/30 hover:bg-white/50'} transition-all duration-300 backdrop-blur-sm md:hidden ${isDark ? 'border-slate-600' : 'border-white/30'} border shadow-sm`}
             >
-              {isMenuOpen ? <X size={20} className="text-gray-700" /> : <Menu size={20} className="text-gray-700" />}
+              {isMenuOpen ? <X size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} /> : <Menu size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} />}
             </button>
             
             {/* Back Button */}
             <button
               onClick={handleBackClick}
-              className="p-3 rounded-lg bg-white/30 hover:bg-white/50 transition-all duration-300 backdrop-blur-sm border border-white/30 shadow-sm"
+              className={`p-3 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60' : 'bg-white/30 hover:bg-white/50'} transition-all duration-300 backdrop-blur-sm ${isDark ? 'border-slate-600' : 'border-white/30'} border shadow-sm`}
               title={previousPage ? "Go Back" : "Go to Dashboard"}
             >
-              <ArrowLeft size={18} className="text-gray-700" />
+              <ArrowLeft size={18} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
             </button>
           </div>
 
@@ -243,10 +249,22 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               placeholder="Search devices, customers..."
               className="flex-1"
             />
-            <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg bg-gray-100/50 text-gray-500 text-xs">
+            <div className={`hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg ${isDark ? 'bg-slate-800/50 text-gray-400' : 'bg-gray-100/50 text-gray-500'} text-xs`}>
               <span>⌘K</span>
             </div>
           </div>
+
+          {/* Quick Expense Button - Admins only */}
+          {currentUser?.role === 'admin' && (
+            <button
+              onClick={() => setShowQuickExpense(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+              title="Quick Expense (⚡ Fast Entry)"
+            >
+              <DollarSign size={16} />
+              <span className="hidden lg:inline font-medium">Expense</span>
+            </button>
+          )}
 
           {/* Create Dropdown - Role-based */}
           {currentUser?.role !== 'technician' && (
@@ -261,7 +279,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               
               {/* Create Dropdown Menu - Image Style */}
               {showCreateDropdown && (
-                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className={`absolute right-0 top-full mt-2 w-80 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} rounded-lg shadow-lg border z-50`}>
                   <div className="p-4 space-y-3">
                     {/* New Sale - Priority for Customer Care */}
                     <button
@@ -269,14 +287,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                         navigate('/pos');
                         setShowCreateDropdown(false);
                       }}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-emerald-50 transition-colors group"
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-emerald-900/30' : 'hover:bg-emerald-50'} transition-colors group`}
                     >
                       <div className="p-2 rounded-lg bg-emerald-500 text-white">
                         <ShoppingCart size={20} />
                       </div>
                       <div className="flex-1 text-left">
-                        <p className="font-medium text-gray-900">New Sale</p>
-                        <p className="text-sm text-gray-600">Start POS transaction</p>
+                        <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>New Sale</p>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Start POS transaction</p>
                       </div>
                     </button>
                     
@@ -286,14 +304,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                         navigate('/devices/new');
                         setShowCreateDropdown(false);
                       }}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-blue-50 transition-colors group"
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-blue-900/30' : 'hover:bg-blue-50'} transition-colors group`}
                     >
                       <div className="p-2 rounded-lg bg-blue-500 text-white">
                         <Smartphone size={20} />
                       </div>
                       <div className="flex-1 text-left">
-                        <p className="font-medium text-gray-900">New Device</p>
-                        <p className="text-sm text-gray-600">Add device for repair</p>
+                        <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>New Device</p>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Add device for repair</p>
                       </div>
                     </button>
                     
@@ -303,14 +321,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                         navigate('/customers');
                         setShowCreateDropdown(false);
                       }}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-purple-50 transition-colors group"
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-purple-900/30' : 'hover:bg-purple-50'} transition-colors group`}
                     >
                       <div className="p-2 rounded-lg bg-purple-500 text-white">
                         <Users size={20} />
                       </div>
                       <div className="flex-1 text-left">
-                        <p className="font-medium text-gray-900">Add Customer</p>
-                        <p className="text-sm text-gray-600">Register new customer</p>
+                        <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Add Customer</p>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Register new customer</p>
                       </div>
                     </button>
                     
@@ -320,20 +338,37 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                         navigate('/diagnostics/new');
                         setShowCreateDropdown(false);
                       }}
-                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-green-50 transition-colors group"
+                      className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-green-900/30' : 'hover:bg-green-50'} transition-colors group`}
                     >
                       <div className="p-2 rounded-lg bg-green-500 text-white">
                         <Stethoscope size={20} />
                       </div>
                       <div className="flex-1 text-left">
-                        <p className="font-medium text-gray-900">Diagnostic Request</p>
-                        <p className="text-sm text-gray-600">Create device analysis</p>
+                        <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Diagnostic Request</p>
+                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Create device analysis</p>
                       </div>
                     </button>
                     
                     {/* Admin-only options */}
                     {currentUser.role === 'admin' && (
                       <>
+                        {/* Quick Expense */}
+                        <button
+                          onClick={() => {
+                            setShowQuickExpense(true);
+                            setShowCreateDropdown(false);
+                          }}
+                          className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-red-50 transition-colors group border-2 border-red-100"
+                        >
+                          <div className="p-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 text-white">
+                            <DollarSign size={20} />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <p className="font-medium text-gray-900">⚡ Quick Expense</p>
+                            <p className="text-sm text-gray-600">Fast expense entry</p>
+                          </div>
+                        </button>
+                        
                         {/* Add Product */}
                         <button
                           onClick={() => {
@@ -400,15 +435,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   className={`p-3 rounded-lg transition-all duration-300 backdrop-blur-sm border shadow-sm hover:scale-110 ${
                     location.pathname.includes('/pos') 
                       ? 'bg-emerald-500 text-white border-emerald-400' 
-                      : 'bg-white/30 hover:bg-white/50 border-white/30'
+                      : isDark
+                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600'
+                        : 'bg-white/30 hover:bg-white/50 border-white/30'
                   }`}
                   title="POS System"
                 >
-                  <ShoppingCart size={18} className={location.pathname.includes('/pos') ? 'text-white' : 'text-gray-700'} />
+                  <ShoppingCart size={18} className={location.pathname.includes('/pos') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                 </button>
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-white/95 backdrop-blur-sm border border-gray-200/50 text-gray-700 text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50">
+                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                   POS System
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white/95"></div>
+                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
                 </div>
               </div>
               
@@ -419,15 +456,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   className={`p-3 rounded-lg transition-all duration-300 backdrop-blur-sm border shadow-sm hover:scale-110 ${
                     location.pathname.includes('/customers') 
                       ? 'bg-purple-500 text-white border-purple-400' 
-                      : 'bg-white/30 hover:bg-white/50 border-white/30'
+                      : isDark
+                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600'
+                        : 'bg-white/30 hover:bg-white/50 border-white/30'
                   }`}
                   title="Customers"
                 >
-                  <Users size={18} className={location.pathname.includes('/customers') ? 'text-white' : 'text-gray-700'} />
+                  <Users size={18} className={location.pathname.includes('/customers') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                 </button>
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-white/95 backdrop-blur-sm border border-gray-200/50 text-gray-700 text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50">
+                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                   Customers
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white/95"></div>
+                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
                 </div>
               </div>
               
@@ -438,15 +477,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   className={`p-3 rounded-lg transition-all duration-300 backdrop-blur-sm border shadow-sm hover:scale-110 ${
                     location.pathname.includes('/devices') 
                       ? 'bg-blue-500 text-white border-blue-400' 
-                      : 'bg-white/30 hover:bg-white/50 border-white/30'
+                      : isDark
+                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600'
+                        : 'bg-white/30 hover:bg-white/50 border-white/30'
                   }`}
                   title="Devices"
                 >
-                  <Smartphone size={18} className={location.pathname.includes('/devices') ? 'text-white' : 'text-gray-700'} />
+                  <Smartphone size={18} className={location.pathname.includes('/devices') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                 </button>
-                <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-white/95 backdrop-blur-sm border border-gray-200/50 text-gray-700 text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50">
+                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                   Devices
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white/95"></div>
+                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
                 </div>
               </div>
               
@@ -460,15 +501,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                       className={`p-3 rounded-lg transition-all duration-300 backdrop-blur-sm border shadow-sm hover:scale-110 ${
                         location.pathname.includes('/lats/unified-inventory') 
                           ? 'bg-orange-500 text-white border-orange-400' 
-                          : 'bg-white/30 hover:bg-white/50 border-white/30'
+                          : isDark
+                            ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600'
+                            : 'bg-white/30 hover:bg-white/50 border-white/30'
                       }`}
                       title="Inventory"
                     >
-                      <Warehouse size={18} className={location.pathname.includes('/lats/unified-inventory') ? 'text-white' : 'text-gray-700'} />
+                      <Warehouse size={18} className={location.pathname.includes('/lats/unified-inventory') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
                     </button>
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-white/95 backdrop-blur-sm border border-gray-200/50 text-gray-700 text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50">
+                    <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                       Inventory
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-white/95"></div>
+                      <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
                     </div>
                   </div>
                 </>
@@ -480,10 +523,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           <div className="flex items-center gap-3">
             {/* Date & Time Display */}
             <div className="hidden lg:flex flex-col items-end mr-2">
-              <div className="text-xs font-semibold text-gray-700">
+              <div className={`text-xs font-semibold ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
                 {currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
               </div>
-              <div className="text-xs text-gray-600">
+              <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                 {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
@@ -511,6 +554,11 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                 </div>
               )}
             </div>
+
+            {/* Branch Selector - Admin Only */}
+            {currentUser?.role === 'admin' && (
+              <SimpleBranchSelector />
+            )}
             
             {/* Status Indicator */}
             <div className="hidden sm:flex items-center justify-center w-6 h-6">
@@ -521,9 +569,9 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             <div className="relative" ref={notificationsRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 rounded-lg bg-white/30 hover:bg-white/50 transition-all duration-300 backdrop-blur-sm border border-white/30 relative shadow-sm"
+                className={`p-2 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/30 hover:bg-white/50 border-white/30'} transition-all duration-300 backdrop-blur-sm border relative shadow-sm`}
               >
-                <Bell size={20} className="text-gray-700" />
+                <Bell size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
                 {unreadNotifications.length > 0 && (
                   <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full notification-badge border-2 border-white shadow-sm flex items-center justify-center">
                     <span className="text-xs text-white font-bold">
@@ -535,10 +583,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               
               {/* Notifications Dropdown */}
               {showNotifications && (
-                <div className="absolute right-0 top-full mt-3 w-80 bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-white/30 z-50 max-h-96 overflow-y-auto">
+                <div className={`absolute right-0 top-full mt-3 w-80 ${isDark ? 'bg-slate-800/95' : 'bg-white/95'} backdrop-blur-xl rounded-xl shadow-xl ${isDark ? 'border-slate-700' : 'border-white/30'} border z-50 max-h-96 overflow-y-auto`}>
                   <div className="p-4">
                     <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-semibold text-gray-900">Notifications</h3>
+                      <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Notifications</h3>
                       {unreadNotifications.length > 0 && (
                         <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
                           {unreadNotifications.length} unread
@@ -552,8 +600,12 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                             key={notification.id}
                             className={`flex items-start gap-3 p-3 rounded-lg border transition-all duration-200 hover:shadow-sm cursor-pointer ${
                               notification.status === 'unread' 
-                                ? 'bg-blue-50 border-blue-200' 
-                                : 'bg-gray-50 border-gray-200'
+                                ? isDark
+                                  ? 'bg-blue-900/30 border-blue-700'
+                                  : 'bg-blue-50 border-blue-200'
+                                : isDark
+                                  ? 'bg-slate-700/30 border-slate-600'
+                                  : 'bg-gray-50 border-gray-200'
                             }`}
                             onClick={() => {
                               if (notification.status === 'unread') {
@@ -570,14 +622,16 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className={`text-sm font-medium ${
-                                notification.status === 'unread' ? 'text-gray-900' : 'text-gray-700'
+                                notification.status === 'unread' 
+                                  ? isDark ? 'text-white' : 'text-gray-900'
+                                  : isDark ? 'text-gray-300' : 'text-gray-700'
                               }`}>
                                 {notification.title}
                               </p>
-                              <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                              <p className={`text-xs mt-1 line-clamp-2 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
                                 {notification.message}
                               </p>
-                              <p className="text-xs text-gray-500 mt-1">
+                              <p className={`text-xs mt-1 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
                                 {new Date(notification.createdAt).toLocaleString()}
                               </p>
                             </div>
@@ -590,7 +644,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                                   e.stopPropagation();
                                   dismissNotification(notification.id);
                                 }}
-                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                className={`${isDark ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'} transition-colors`}
                                 title="Dismiss"
                               >
                                 <X size={12} />
@@ -599,14 +653,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                           </div>
                         ))
                       ) : (
-                        <div className="text-center py-6 text-gray-500">
+                        <div className={`text-center py-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
                           <Bell size={24} className="mx-auto mb-2 opacity-50" />
                           <p className="text-sm font-medium">No notifications</p>
                         </div>
                       )}
                     </div>
                     {notifications.length > 8 && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className={`mt-3 pt-3 ${isDark ? 'border-slate-700' : 'border-gray-200'} border-t`}>
                         <button
                           onClick={() => {
                             navigate('/notifications');
@@ -665,17 +719,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               
               {/* User Menu Dropdown */}
               {showUserMenu && (
-                <div className="absolute right-0 top-full mt-3 w-64 bg-white/95 backdrop-blur-xl rounded-xl shadow-xl border border-white/30 z-50">
+                <div className={`absolute right-0 top-full mt-3 w-64 ${isDark ? 'bg-slate-800/95' : 'bg-white/95'} backdrop-blur-xl rounded-xl shadow-xl ${isDark ? 'border-slate-700' : 'border-white/30'} border z-50`}>
                   <div className="p-4">
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 mb-3 border border-gray-200">
-                      <div className="p-2 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 text-white">
+                    <div className={`flex items-center gap-3 p-3 rounded-lg ${isDark ? 'bg-gradient-to-br from-slate-700 to-slate-800' : 'bg-gradient-to-br from-gray-100 to-gray-50'} mb-3 ${isDark ? 'border-slate-600' : 'border-gray-200'} border`}>
+                      <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
                         <User size={20} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{currentUser.name}</p>
-                        <p className="text-sm text-gray-600 capitalize truncate">{currentUser.role.replace('-', ' ')}</p>
+                        <p className={`font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{currentUser.name}</p>
+                        <p className={`text-sm capitalize truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{currentUser.role.replace('-', ' ')}</p>
                         {currentUser.email && (
-                          <p className="text-xs text-gray-500 truncate">{currentUser.email}</p>
+                          <p className={`text-xs truncate ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{currentUser.email}</p>
                         )}
                       </div>
                     </div>
@@ -686,10 +740,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                           navigate('/settings');
                           setShowUserMenu(false);
                         }}
-                        className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} transition-colors`}
                       >
-                        <Settings size={16} className="text-gray-500" />
-                        <span className="text-sm text-gray-700">Settings</span>
+                        <Settings size={16} className={isDark ? 'text-gray-400' : 'text-gray-500'} />
+                        <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Settings</span>
                       </button>
                       
                       <div className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-orange-50 transition-colors">
@@ -703,10 +757,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                       
                       <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                        className={`w-full flex items-center gap-3 p-2 rounded-lg ${isDark ? 'hover:bg-red-900/30' : 'hover:bg-red-50'} transition-colors`}
                       >
                         <LogOut size={16} className="text-red-500" />
-                        <span className="text-sm text-red-700">Logout</span>
+                        <span className={`text-sm ${isDark ? 'text-red-400' : 'text-red-700'}`}>Logout</span>
                       </button>
                     </div>
                   </div>
@@ -718,7 +772,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
       </div>
 
       {/* Mobile Search Bar & Create Button */}
-      <div className="md:hidden px-4 py-3 bg-white/20 backdrop-blur-sm border-b border-white/20">
+      <div className={`md:hidden px-4 py-3 ${isDark ? 'bg-slate-900/40' : 'bg-white/20'} backdrop-blur-sm ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-b`}>
         <div className="flex items-center gap-3">
           <SearchDropdown 
             placeholder="Search devices, customers..."
@@ -734,7 +788,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
         
         {/* Mobile Create Dropdown */}
         {showCreateDropdown && (
-          <div className="mt-3 p-4 bg-white rounded-lg shadow-lg border border-gray-200">
+          <div className={`mt-3 p-4 ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} rounded-lg shadow-lg border`}>
             <div className="space-y-3">
               {/* New Sale - Priority for Customer Care */}
               <button
@@ -742,14 +796,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   navigate('/pos');
                   setShowCreateDropdown(false);
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-emerald-50 transition-colors"
+                className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-emerald-900/30' : 'hover:bg-emerald-50'} transition-colors`}
               >
                 <div className="p-2 rounded-lg bg-emerald-500 text-white">
                   <ShoppingCart size={20} />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-medium text-gray-900">New Sale</p>
-                  <p className="text-sm text-gray-600">Start POS transaction</p>
+                  <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>New Sale</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Start POS transaction</p>
                 </div>
               </button>
               
@@ -758,14 +812,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   navigate('/devices/new');
                   setShowCreateDropdown(false);
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-blue-50 transition-colors"
+                className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-blue-900/30' : 'hover:bg-blue-50'} transition-colors`}
               >
                 <div className="p-2 rounded-lg bg-blue-500 text-white">
                   <Smartphone size={20} />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-medium text-gray-900">New Device</p>
-                  <p className="text-sm text-gray-600">Add device for repair</p>
+                  <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>New Device</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Add device for repair</p>
                 </div>
               </button>
               
@@ -774,14 +828,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   navigate('/customers');
                   setShowCreateDropdown(false);
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-purple-50 transition-colors"
+                className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-purple-900/30' : 'hover:bg-purple-50'} transition-colors`}
               >
                 <div className="p-2 rounded-lg bg-purple-500 text-white">
                   <Users size={20} />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-medium text-gray-900">Add Customer</p>
-                  <p className="text-sm text-gray-600">Register new customer</p>
+                  <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Add Customer</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Register new customer</p>
                 </div>
               </button>
               
@@ -790,14 +844,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                   navigate('/diagnostics/new');
                   setShowCreateDropdown(false);
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-green-50 transition-colors"
+                className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-green-900/30' : 'hover:bg-green-50'} transition-colors`}
               >
                 <div className="p-2 rounded-lg bg-green-500 text-white">
                   <Stethoscope size={20} />
                 </div>
                 <div className="flex-1 text-left">
-                  <p className="font-medium text-gray-900">Diagnostic Request</p>
-                  <p className="text-sm text-gray-600">Create device analysis</p>
+                  <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Diagnostic Request</p>
+                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Create device analysis</p>
                 </div>
               </button>
               
@@ -841,6 +895,16 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           </div>
         )}
       </div>
+
+      {/* Quick Expense Modal */}
+      <QuickExpenseModal
+        isOpen={showQuickExpense}
+        onClose={() => setShowQuickExpense(false)}
+        onSuccess={() => {
+          // Optional: Show toast or refresh data
+          console.log('Expense recorded successfully');
+        }}
+      />
     </header>
   );
 };

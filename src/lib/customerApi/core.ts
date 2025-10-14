@@ -11,7 +11,7 @@ const REQUEST_DELAY = 100; // Delay between batches in milliseconds
 // const MAX_CONCURRENT_REQUESTS = 10; // Maximum concurrent requests
 const MAX_RETRIES = 3; // Maximum retry attempts for failed requests
 const RETRY_DELAY = 1000; // Delay between retries in milliseconds
-const REQUEST_TIMEOUT = 30000; // Default timeout for requests in milliseconds
+const REQUEST_TIMEOUT = 90000; // Default timeout for requests in milliseconds (increased to 90s for large datasets)
 
 // Request deduplication cache
 const requestCache = new Map<string, Promise<any>>();
@@ -164,13 +164,29 @@ export async function fetchAllCustomers() {
 async function performFetchAllCustomers() {
   if (navigator.onLine) {
     try {
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('👥 FETCHING CUSTOMERS - START');
+      console.log('═══════════════════════════════════════════════════════');
+      
+      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      console.log('🏪 Branch Configuration:');
+      console.log('   - Current Branch ID:', currentBranchId || '❌ NOT SET');
+      console.log('   - 🌐 CUSTOMERS: SHARED ACROSS ALL BRANCHES');
+      console.log('   - 📊 Will fetch ALL customers from ALL branches');
+      
+      console.log('');
+      console.log('🔍 Step 1: Counting total customers...');
 
-      // First, let's get a simple count to see how many customers exist
+      // First, let's get a simple count to see how many customers exist (ALL CUSTOMERS)
       const { count, error: countError } = await withTimeout(
         retryRequest(async () => {
-          const result = await checkSupabase()
+          const countQuery = checkSupabase()
             .from('customers')
             .select('id', { count: 'exact', head: true });
+          
+          const result = await countQuery;
           
           if (result.error) {
             throw result.error;
@@ -181,9 +197,23 @@ async function performFetchAllCustomers() {
       );
       
       if (countError) {
-        console.error('❌ Error counting customers:', countError);
+        console.error('═══════════════════════════════════════════════════════');
+        console.error('❌ ERROR COUNTING CUSTOMERS');
+        console.error('═══════════════════════════════════════════════════════');
+        console.error('Error:', countError);
+        console.error('═══════════════════════════════════════════════════════');
         throw countError;
       }
+
+      console.log('');
+      console.log('📊 Count Results:');
+      console.log('   ✓ Total customers found:', count || 0);
+      if (currentBranchId) {
+        console.log('   ✓ For branch:', currentBranchId);
+      } else {
+        console.log('   ⚠️  Across ALL branches (no filter)');
+      }
+      console.log('');
 
       // Use pagination to fetch customers in batches to avoid overwhelming the browser
       const pageSize = BATCH_SIZE; // Use configured batch size
@@ -193,44 +223,36 @@ async function performFetchAllCustomers() {
       // Prevent infinite loops by limiting maximum pages
       const maxPages = Math.min(totalPages, 100);
 
+      console.log('📄 Pagination Setup:');
+      console.log('   - Page size:', pageSize, 'customers per page');
+      console.log('   - Total pages:', totalPages);
+      console.log('   - Will fetch:', maxPages, 'pages');
+      console.log('');
+      console.log('🔍 Step 2: Fetching customer data page by page...');
+      console.log('');
+
       // Fetch customers page by page with controlled concurrency and timeout protection
       for (let page = 1; page <= maxPages; page++) {
 
         const from = (page - 1) * pageSize;
         const to = from + pageSize - 1;
         
+        console.log(`📖 Fetching page ${page}/${maxPages} (rows ${from}-${to})...`);
+        
         try {
           const { data: pageData, error: pageError } = await withTimeout(
             retryRequest(async () => {
-              const result = await checkSupabase()
+              const query = checkSupabase()
                 .from('customers')
                 .select(`
-                  id,
-                  name,
-                  phone,
-                  email,
-                  gender,
-                  city,
-                  color_tag,
-                  loyalty_level,
-                  points,
-                  total_spent,
-                  last_visit,
-                  is_active,
-                  referral_source,
-                  birth_month,
-                  birth_day,
-                  initial_notes,
-                  notes,
-                  customer_tag,
-                  location_description,
-                  national_id,
-                  joined_date,
-                  created_at,
-                  updated_at
+                  id,name,phone,email,whatsapp,gender,city,country,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,birthday,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared,created_by_branch_id,created_by_branch_name,profile_image,whatsapp_opt_out,referred_by,created_by,last_purchase_date,total_purchases,total_calls,total_call_duration_minutes,incoming_calls,outgoing_calls,missed_calls,avg_call_duration_minutes,first_call_date,last_call_date,call_loyalty_level,total_returns
                 `)
                 .range(from, to)
-                .order('created_at', { ascending: false });
+                .order('created_at', { ascending: false});
+              
+              console.log(`   🌐 Fetching ALL customers for page ${page} (shared across branches)`);
+              
+              const result = await query;
               
               if (result.error) {
                 throw result.error;
@@ -241,11 +263,74 @@ async function performFetchAllCustomers() {
           );
           
           if (pageError) {
-            console.error(`❌ Error fetching page ${page}:`, pageError);
+            console.error('═══════════════════════════════════════════════════════');
+            console.error(`❌ ERROR FETCHING PAGE ${page}/${maxPages}`);
+            console.error('═══════════════════════════════════════════════════════');
+            console.error('Error:', pageError);
+            console.error('Page range:', from, '-', to);
+            console.error('Branch filter:', currentBranchId || 'NONE');
+            console.error('═══════════════════════════════════════════════════════');
             throw pageError;
           }
           
+          console.log(`   ✓ Page ${page} fetched: ${pageData?.length || 0} customers`);
+          
+          // Log sample of branch_id values to verify filtering
+          if (pageData && pageData.length > 0) {
+            const branchIds = [...new Set(pageData.map((c: any) => c.branch_id))];
+            console.log(`   📍 Branch IDs in this page:`, branchIds.length === 1 ? branchIds[0] || 'NULL' : branchIds);
+            
+            const customersWithoutBranch = pageData.filter((c: any) => !c.branch_id).length;
+            if (customersWithoutBranch > 0) {
+              console.warn(`   ⚠️  ${customersWithoutBranch} customers WITHOUT branch_id (will be invisible in filtered view)`);
+            }
+          }
+          
           if (pageData && Array.isArray(pageData)) {
+            // Helper function to safely parse numeric values and detect corruption
+            const safeParseNumber = (value: any, defaultValue: number = 0): number => {
+              if (value === null || value === undefined) return defaultValue;
+              const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
+              // Detect corrupted data (unrealistic values > 1 trillion TZS)
+              if (isNaN(parsed) || parsed > 1000000000000 || parsed < 0) {
+                console.warn('⚠️ Detected corrupted value:', value, '- resetting to', defaultValue);
+                return defaultValue;
+              }
+              return parsed;
+            };
+            
+            // Fetch branch names separately since custom client doesn't support joins
+            let branchNames: Record<string, string> = {};
+            try {
+              const branchIds = [...new Set(pageData.map((c: any) => c.branch_id).filter(Boolean))];
+              if (branchIds.length > 0) {
+                const branchQuery = checkSupabase()
+                  .from('store_locations')
+                  .select('id, name')
+                  .in('id', branchIds);
+                
+                const branchResult = await branchQuery;
+                if (branchResult.data) {
+                  branchNames = branchResult.data.reduce((acc: any, branch: any) => {
+                    acc[branch.id] = branch.name;
+                    return acc;
+                  }, {});
+                }
+              }
+            } catch (branchError) {
+              console.warn('⚠️ Could not fetch branch names:', branchError);
+            }
+
+            // Debug: Show raw data for first customer
+            if (pageData.length > 0) {
+              console.log('🔍 Raw customer data (first customer):', {
+                name: pageData[0].name,
+                branch_id: pageData[0].branch_id,
+                branch_name: branchNames[pageData[0].branch_id],
+                created_by_branch_name: pageData[0].created_by_branch_name
+              });
+            }
+            
             // Process and normalize the data
             const processedCustomers = pageData.map((customer: any) => {
               // Map snake_case database fields to camelCase interface fields
@@ -260,9 +345,10 @@ async function performFetchAllCustomers() {
                 loyaltyLevel: customer.loyalty_level,
                 colorTag: normalizeColorTag(customer.color_tag || 'new'),
                 referredBy: null, // Not in DB yet
-                totalSpent: customer.total_spent,
-                points: customer.points,
+                totalSpent: safeParseNumber(customer.total_spent, 0),
+                points: safeParseNumber(customer.points, 0),
                 lastVisit: customer.last_visit,
+                branchName: branchNames[customer.branch_id] || customer.created_by_branch_name || 'Unknown Branch',
                 isActive: customer.is_active,
                 referralSource: customer.referral_source,
                 birthMonth: customer.birth_month,
@@ -301,7 +387,12 @@ async function performFetchAllCustomers() {
                 customerNotes: [],
                 customerPayments: [],
                 devices: [],
-                promoHistory: []
+                promoHistory: [],
+                // Branch information
+                branchId: customer.branch_id,
+                branchName: customer.store_locations?.name || customer.created_by_branch_name,
+                createdByBranchId: customer.created_by_branch_id,
+                createdByBranchName: customer.created_by_branch_name
               };
               return mappedCustomer;
             });
@@ -323,6 +414,63 @@ async function performFetchAllCustomers() {
         }
       }
 
+      console.log('');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('✅ CUSTOMER FETCH COMPLETE');
+      console.log('═══════════════════════════════════════════════════════');
+      console.log('📊 Results Summary:');
+      console.log('   ✓ Total customers fetched:', allCustomers.length);
+      console.log('   ✓ Pages processed:', maxPages);
+      console.log('');
+      
+      if (currentBranchId) {
+        console.log('🏪 Branch Filter Verification:');
+        console.log('   ✓ Filtered by branch:', currentBranchId);
+        
+        // Check if all customers have the correct branch_id
+        const branchIds = [...new Set(allCustomers.map((c: any) => c.branchId))];
+        console.log('   ✓ Unique branch IDs in results:', branchIds);
+        
+        const customersWithoutBranch = allCustomers.filter((c: any) => !c.branchId).length;
+        const customersWithWrongBranch = allCustomers.filter((c: any) => c.branchId && c.branchId !== currentBranchId).length;
+        
+        if (customersWithoutBranch > 0) {
+          console.warn(`   ⚠️  ${customersWithoutBranch} customers missing branch_id`);
+        }
+        
+        if (customersWithWrongBranch > 0) {
+          console.error(`   ❌ ${customersWithWrongBranch} customers from WRONG branch!`);
+          console.error(`   ❌ This indicates a filtering problem!`);
+        }
+        
+        if (customersWithoutBranch === 0 && customersWithWrongBranch === 0) {
+          console.log('   ✅ All customers belong to the correct branch!');
+        }
+      } else {
+        console.warn('⚠️  No Branch Filter:');
+        console.warn('   - Fetched customers from ALL branches');
+        
+        const branchIds = [...new Set(allCustomers.map((c: any) => c.branchId).filter(Boolean))];
+        console.warn('   - Branches represented:', branchIds.length);
+        console.warn('   - Branch IDs:', branchIds);
+        
+        const customersWithoutBranch = allCustomers.filter((c: any) => !c.branchId).length;
+        if (customersWithoutBranch > 0) {
+          console.warn(`   - ${customersWithoutBranch} customers without branch_id`);
+        }
+      }
+      
+      console.log('');
+      console.log('📋 Sample customers (first 3):');
+      allCustomers.slice(0, 3).forEach((customer: any, index: number) => {
+        console.log(`   ${index + 1}. ${customer.name} (${customer.phone})`);
+        console.log(`      - ID: ${customer.id}`);
+        console.log(`      - Branch: ${customer.branchId || '❌ NO BRANCH'}`);
+        console.log(`      - Shared: ${customer.isShared ?? 'not set'}`);
+      });
+      
+      console.log('═══════════════════════════════════════════════════════');
+
       return allCustomers;
       
     } catch (error) {
@@ -340,11 +488,11 @@ async function performFetchAllCustomers() {
 export async function fetchAllCustomersSimple() {
   console.log('🚀 fetchAllCustomersSimple function called - starting execution', new Date().toISOString());
   
-  // Clear cache to force fresh request
+  // Use request deduplication to prevent multiple simultaneous requests
   const cacheKey = 'fetchAllCustomersSimple';
   if (requestCache.has(cacheKey)) {
-
-    requestCache.delete(cacheKey);
+    console.log('🔄 Returning cached request for fetchAllCustomersSimple');
+    return requestCache.get(cacheKey)!;
   }
 
   // Create new request
@@ -366,14 +514,18 @@ async function performFetchAllCustomersSimple() {
 
   if (navigator.onLine) {
     try {
-      console.log('🔍 Fetching ALL customers from database (no limits)...');
+      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      console.log('🔍 Fetching ALL customers from database (no limits)... Customers: SHARED ACROSS ALL BRANCHES');
       
-      // First, get the total count
+      // First, get the total count (ALL CUSTOMERS)
       const countResult = await withTimeout(
         retryRequest(async () => {
-          const result = await checkSupabase()
+          const countQuery = checkSupabase()
             .from('customers')
             .select('id', { count: 'exact', head: true });
+          
+          const result = await countQuery;
           return result;
         }),
         REQUEST_TIMEOUT
@@ -381,49 +533,32 @@ async function performFetchAllCustomersSimple() {
 
       if (countResult.error) {
         console.error('❌ Error getting customer count:', countResult.error);
+        console.error('❌ Error details:', JSON.stringify(countResult.error, null, 2));
         throw countResult.error;
       }
 
       const count = countResult.count;
 
       // Log the count for debugging
-      console.log(`📊 Total customer count: ${count}`, 'Type:', typeof count, 'Result:', countResult);
+      console.log(`📊 Total customer count for branch ${currentBranchId}: ${count}`, 'Type:', typeof count, 'Result:', countResult);
 
       // If count is reasonable, fetch all at once with a high limit
-      // Handle undefined count as 0 for safety
-      const customerCount = count ?? 0;
-      if (customerCount > 0 && customerCount <= 100000) { // 100k limit for safety
+      // Handle undefined count by trying to fetch anyway (count query might have failed)
+      const customerCount = count ?? -1; // Use -1 to distinguish undefined from actual 0
+      if ((customerCount > 0 || customerCount === -1) && (customerCount <= 100000 || customerCount === -1)) { // 100k limit for safety, but allow -1 (undefined)
         const { data, error } = await withTimeout(
           retryRequest(async () => {
-            const result = await checkSupabase()
+            const query = checkSupabase()
               .from('customers')
               .select(`
-                id,
-                name,
-                phone,
-                email,
-                gender,
-                city,
-                color_tag,
-                loyalty_level,
-                points,
-                total_spent,
-                last_visit,
-                is_active,
-                referral_source,
-                birth_month,
-                birth_day,
-                initial_notes,
-                notes,
-                customer_tag,
-                location_description,
-                national_id,
-                joined_date,
-                created_at,
-                updated_at
+                id,name,phone,email,whatsapp,gender,city,country,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,birthday,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared,created_by_branch_id,created_by_branch_name,profile_image,whatsapp_opt_out,referred_by,created_by,last_purchase_date,total_purchases,total_calls,total_call_duration_minutes,incoming_calls,outgoing_calls,missed_calls,avg_call_duration_minutes,first_call_date,last_call_date,call_loyalty_level,total_returns
               `)
               .order('created_at', { ascending: false })
               .limit(100000); // High limit to get all customers
+            
+            console.log('   🌐 Fetching ALL customers (shared across branches)');
+            
+            const result = await query;
             
             if (result.error) {
               throw result.error;
@@ -435,6 +570,11 @@ async function performFetchAllCustomersSimple() {
         
         if (error) {
           console.error('❌ Error fetching customers (simple):', error);
+          console.error('❌ Error details:', JSON.stringify(error, null, 2));
+          console.error('❌ Error message:', error?.message);
+          console.error('❌ Error code:', error?.code);
+          console.error('❌ Error hint:', error?.hint);
+          console.error('❌ Error details:', error?.details);
           throw error;
         }
         
@@ -444,6 +584,40 @@ async function performFetchAllCustomersSimple() {
 
           }
           
+          // Helper function to safely parse numeric values and detect corruption
+          const safeParseNumber = (value: any, defaultValue: number = 0): number => {
+            if (value === null || value === undefined) return defaultValue;
+            const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
+            // Detect corrupted data (unrealistic values > 1 trillion TZS)
+            if (isNaN(parsed) || parsed > 1000000000000 || parsed < 0) {
+              console.warn('⚠️ Detected corrupted value:', value, '- resetting to', defaultValue);
+              return defaultValue;
+            }
+            return parsed;
+          };
+          
+          // Fetch branch names separately since custom client doesn't support joins
+          let branchNames: Record<string, string> = {};
+          try {
+            const branchIds = [...new Set(data.map((c: any) => c.branch_id).filter(Boolean))];
+            if (branchIds.length > 0) {
+              const branchQuery = checkSupabase()
+                .from('store_locations')
+                .select('id, name')
+                .in('id', branchIds);
+              
+              const branchResult = await branchQuery;
+              if (branchResult.data) {
+                branchNames = branchResult.data.reduce((acc: any, branch: any) => {
+                  acc[branch.id] = branch.name;
+                  return acc;
+                }, {});
+              }
+            }
+          } catch (branchError) {
+            console.warn('⚠️ Could not fetch branch names:', branchError);
+          }
+
           // Process and normalize the data
           const processedCustomers = data.map((customer: any) => {
             // Map snake_case database fields to camelCase interface fields
@@ -456,8 +630,8 @@ async function performFetchAllCustomersSimple() {
               city: customer.city || '',
               colorTag: normalizeColorTag(customer.color_tag || 'new'),
               loyaltyLevel: customer.loyalty_level || 'bronze',
-              points: customer.points || 0,
-              totalSpent: customer.total_spent || 0,
+              points: safeParseNumber(customer.points, 0),
+              totalSpent: safeParseNumber(customer.total_spent, 0),
               lastVisit: customer.last_visit || customer.created_at,
               isActive: customer.is_active !== false, // Default to true if null
               referralSource: customer.referral_source,
@@ -465,6 +639,7 @@ async function performFetchAllCustomersSimple() {
               birthDay: customer.birth_day,
               totalReturns: 0, // Not in DB yet
               profileImage: null, // Not in DB yet
+              branchName: branchNames[customer.branch_id] || customer.created_by_branch_name || 'Unknown Branch',
               whatsapp: customer.phone, // Use phone as fallback
               whatsappOptOut: false, // Not in DB yet
               initialNotes: customer.initial_notes,
@@ -499,18 +674,42 @@ async function performFetchAllCustomersSimple() {
               customerNotes: [],
               customerPayments: [],
               devices: [],
-              promoHistory: []
+              promoHistory: [],
+              // Branch information
+              branchId: customer.branch_id,
+              branchName: customer.store_locations?.name || customer.created_by_branch_name,
+              createdByBranchId: customer.created_by_branch_id,
+              createdByBranchName: customer.created_by_branch_name
             };
             return mappedCustomer;
           });
 
-          // Debug: Show first few customer names
+          // Debug: Show first few customer names and check for corrupt data
           if (processedCustomers.length > 0) {
             console.log(`🔍 First 5 customers from API:`, processedCustomers.slice(0, 5).map(c => ({
               name: c.name,
               phone: c.phone,
               email: c.email
             })));
+            
+            // Log corrupt customer's RAW database value
+            const corruptCustomer = processedCustomers.find(c => c.name && c.name.includes('Samuel masikabbbb'));
+            if (corruptCustomer) {
+              console.log('');
+              console.log('🔍 ═══════════════════════════════════════');
+              console.log('🔍 DATABASE RAW VALUE CHECK');
+              console.log('🔍 ═══════════════════════════════════════');
+              console.log('Name:', corruptCustomer.name);
+              console.log('ID:', corruptCustomer.id);
+              console.log('Total Spent (raw DB value):', corruptCustomer.totalSpent);
+              console.log('Total Spent (type):', typeof corruptCustomer.totalSpent);
+              console.log('Total Spent (as string):', String(corruptCustomer.totalSpent));
+              console.log('Total Spent (exact):', corruptCustomer.totalSpent.toString());
+              console.log('Points:', corruptCustomer.points);
+              console.log('Phone:', corruptCustomer.phone);
+              console.log('🔍 ═══════════════════════════════════════');
+              console.log('');
+            }
           }
           
           return processedCustomers;
@@ -519,9 +718,9 @@ async function performFetchAllCustomersSimple() {
           return [];
         }
       } else {
-        // Handle case where count is 0 or exceeds limit
+        // Handle case where count is 0 (actual zero, not undefined) or exceeds limit
         if (customerCount === 0) {
-          console.log('ℹ️ No customers found in database');
+          console.log('ℹ️ No customers found in database (count is explicitly 0)');
           return [];
         }
         console.log(`⚠️ Customer count (${customerCount}) exceeds safety limit (100,000). Using fallback method.`);
@@ -529,35 +728,18 @@ async function performFetchAllCustomersSimple() {
         // ✅ Using same column list as the normal query to avoid 400 errors
         const { data, error } = await withTimeout(
           retryRequest(async () => {
-            const result = await checkSupabase()
+            let query = checkSupabase()
               .from('customers')
-              .select(`
-                id,
-                name,
-                phone,
-                email,
-                gender,
-                city,
-                color_tag,
-                loyalty_level,
-                points,
-                total_spent,
-                last_visit,
-                is_active,
-                referral_source,
-                birth_month,
-                birth_day,
-                initial_notes,
-                notes,
-                customer_tag,
-                location_description,
-                national_id,
-                joined_date,
-                created_at,
-                updated_at
-              `)
+              .select('id,name,phone,email,gender,city,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared')
               .order('created_at', { ascending: false })
               .limit(100000); // Increased limit for large datasets
+            
+            // 🔒 COMPLETE ISOLATION: Only show customers from current branch
+            if (currentBranchId) {
+              query = query.eq('branch_id', currentBranchId);
+            }
+            
+            const result = await query;
             
             if (result.error) {
               throw result.error;
@@ -648,6 +830,15 @@ async function performFetchAllCustomersSimple() {
       
     } catch (error) {
       console.error('❌ Error fetching customers (simple):', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error stringified:', JSON.stringify(error, null, 2));
+      if (error && typeof error === 'object') {
+        console.error('❌ Error keys:', Object.keys(error));
+        console.error('❌ Error message:', (error as any)?.message);
+        console.error('❌ Error code:', (error as any)?.code);
+        console.error('❌ Error hint:', (error as any)?.hint);
+        console.error('❌ Error details:', (error as any)?.details);
+      }
       throw error;
     }
   } else {
@@ -668,8 +859,11 @@ export async function fetchCustomerById(customerId: string) {
         name,
         phone,
         email,
+        whatsapp,
         gender,
         city,
+        country,
+        address,
         color_tag,
         loyalty_level,
         points,
@@ -679,6 +873,7 @@ export async function fetchCustomerById(customerId: string) {
         referral_source,
         birth_month,
         birth_day,
+        birthday,
         initial_notes,
         notes,
         customer_tag,
@@ -686,7 +881,27 @@ export async function fetchCustomerById(customerId: string) {
         national_id,
         joined_date,
         created_at,
-        updated_at
+        updated_at,
+        branch_id,
+        is_shared,
+        created_by_branch_id,
+        created_by_branch_name,
+        profile_image,
+        whatsapp_opt_out,
+        referred_by,
+        created_by,
+        last_purchase_date,
+        total_purchases,
+        total_calls,
+        total_call_duration_minutes,
+        incoming_calls,
+        outgoing_calls,
+        missed_calls,
+        avg_call_duration_minutes,
+        first_call_date,
+        last_call_date,
+        call_loyalty_level,
+        total_returns
       `)
       .eq('id', customerId as any)
       .single();
@@ -786,6 +1001,7 @@ export async function addCustomerToDb(customer: Omit<Customer, 'promoHistory' | 
     const fieldMapping: Record<string, string> = {
       colorTag: 'color_tag',
       isActive: 'is_active',
+      isShared: 'is_shared',
       lastVisit: 'last_visit',
       joinedDate: 'joined_date',
       loyaltyLevel: 'loyalty_level',
@@ -801,7 +1017,10 @@ export async function addCustomerToDb(customer: Omit<Customer, 'promoHistory' | 
       createdAt: 'created_at',
       updatedAt: 'updated_at',
       createdBy: 'created_by',
-      whatsapp: 'whatsapp'
+      whatsapp: 'whatsapp',
+      branchId: 'branch_id',
+      createdByBranchId: 'created_by_branch_id',
+      createdByBranchName: 'created_by_branch_name'
     };
     
     // Fields that should not be inserted into the database (TypeScript-only fields)
@@ -827,6 +1046,65 @@ export async function addCustomerToDb(customer: Omit<Customer, 'promoHistory' | 
       }
     });
     
+    // 🏪 Automatically capture current branch information
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('🏪 BRANCH ASSIGNMENT PROCESS');
+    console.log('═══════════════════════════════════════════════════════');
+    
+    const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+    
+    console.log('📍 Current Branch ID from localStorage:', currentBranchId || 'NOT SET');
+    
+    if (currentBranchId) {
+      console.log('✅ Branch ID found! Assigning customer to branch...');
+      
+      // Set branch_id for branch filtering (REQUIRED for branch isolation)
+      dbCustomer.branch_id = currentBranchId;
+      console.log('   ✓ branch_id set to:', currentBranchId);
+      
+      // Also set created_by_branch_id for metadata/audit trail
+      dbCustomer.created_by_branch_id = currentBranchId;
+      console.log('   ✓ created_by_branch_id set to:', currentBranchId);
+      
+      // Fetch branch name for denormalized storage
+      try {
+        console.log('   🔍 Fetching branch name from database...');
+        const { data: branchData } = await checkSupabase()
+          .from('store_locations')
+          .select('name')
+          .eq('id', currentBranchId)
+          .single();
+        
+        if (branchData?.name) {
+          dbCustomer.created_by_branch_name = branchData.name;
+          console.log('   ✓ created_by_branch_name set to:', branchData.name);
+        } else {
+          console.warn('   ⚠️  Branch name not found in database');
+        }
+      } catch (branchError) {
+        console.warn('   ⚠️  Could not fetch branch name:', branchError);
+        console.warn('   ℹ️  Database trigger will handle branch name assignment');
+      }
+      
+      // Mark as branch-specific (not shared)
+      dbCustomer.is_shared = false;
+      console.log('   ✓ is_shared set to: false (branch-specific customer)');
+      
+      console.log('✅ Branch assignment completed successfully!');
+      console.log('📋 Branch fields summary:');
+      console.log('   - branch_id:', dbCustomer.branch_id);
+      console.log('   - created_by_branch_id:', dbCustomer.created_by_branch_id);
+      console.log('   - created_by_branch_name:', dbCustomer.created_by_branch_name || 'Will be set by trigger');
+      console.log('   - is_shared:', dbCustomer.is_shared);
+    } else {
+      console.warn('⚠️  No current branch ID found!');
+      console.warn('⚠️  Customer will be created WITHOUT branch assignment');
+      console.warn('⚠️  This customer will NOT appear in branch-filtered views');
+      console.warn('💡 Tip: Make sure a branch is selected before creating customers');
+    }
+    
+    console.log('═══════════════════════════════════════════════════════');
+    
     // Normalize color tag
     if (dbCustomer.color_tag) {
       const originalTag = dbCustomer.color_tag;
@@ -841,8 +1119,34 @@ export async function addCustomerToDb(customer: Omit<Customer, 'promoHistory' | 
       dbCustomer.phone = generatedPhone;
     }
     
-    console.log('📤 Final database object to insert:', dbCustomer);
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('💾 FINAL DATABASE INSERT');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📤 Customer object being inserted:');
+    console.log('');
+    console.log('🆔 Identity:');
+    console.log('   - id:', dbCustomer.id);
+    console.log('   - name:', dbCustomer.name);
+    console.log('   - phone:', dbCustomer.phone);
+    console.log('   - email:', dbCustomer.email || '(none)');
+    console.log('');
+    console.log('🏪 Branch Assignment (CRITICAL):');
+    console.log('   - branch_id:', dbCustomer.branch_id || '❌ NOT SET - CUSTOMER WILL BE INVISIBLE!');
+    console.log('   - is_shared:', dbCustomer.is_shared ?? '❌ NOT SET');
+    console.log('   - created_by_branch_id:', dbCustomer.created_by_branch_id || '(none)');
+    console.log('   - created_by_branch_name:', dbCustomer.created_by_branch_name || '(none)');
+    console.log('');
+    console.log('📊 Customer Details:');
+    console.log('   - loyalty_level:', dbCustomer.loyalty_level);
+    console.log('   - color_tag:', dbCustomer.color_tag);
+    console.log('   - points:', dbCustomer.points);
+    console.log('   - city:', dbCustomer.city || '(none)');
+    console.log('');
+    console.log('📄 Full JSON (for debugging):');
+    console.log(JSON.stringify(dbCustomer, null, 2));
+    console.log('');
     console.log('🔗 Connecting to Supabase...');
+    console.log('═══════════════════════════════════════════════════════');
     
     const { data, error } = await checkSupabase()
       .from('customers')
@@ -866,12 +1170,44 @@ export async function addCustomerToDb(customer: Omit<Customer, 'promoHistory' | 
       throw error;
     }
 
-    console.log('✅ Database insert successful!');
-    console.log('📨 Returned data:', {
-      id: data?.id,
-      name: data?.name,
-      phone: data?.phone
-    });
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('✅ DATABASE INSERT SUCCESSFUL!');
+    console.log('═══════════════════════════════════════════════════════');
+    console.log('📨 Customer record returned from database:');
+    console.log('');
+    console.log('🆔 Customer Created:');
+    console.log('   ✓ ID:', data?.id);
+    console.log('   ✓ Name:', data?.name);
+    console.log('   ✓ Phone:', data?.phone);
+    console.log('');
+    console.log('🏪 Branch Verification (IMPORTANT):');
+    console.log('   ✓ branch_id:', data?.branch_id || '⚠️  NOT IN DATABASE - PROBLEM!');
+    console.log('   ✓ is_shared:', data?.is_shared ?? '⚠️  NOT IN DATABASE');
+    console.log('   ✓ created_by_branch_id:', data?.created_by_branch_id || '(not set)');
+    console.log('   ✓ created_by_branch_name:', data?.created_by_branch_name || '(not set)');
+    console.log('');
+    
+    if (!data?.branch_id) {
+      console.error('🚨 CRITICAL WARNING 🚨');
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('❌ Customer was created WITHOUT branch_id in database!');
+      console.error('❌ This customer will NOT appear in branch-filtered queries!');
+      console.error('❌ User will NOT see this customer in their customer list!');
+      console.error('═══════════════════════════════════════════════════════');
+      console.error('Possible causes:');
+      console.error('  1. No branch selected (check localStorage.current_branch_id)');
+      console.error('  2. Database column "branch_id" missing in customers table');
+      console.error('  3. Database permissions preventing branch_id insert');
+      console.error('═══════════════════════════════════════════════════════');
+    } else {
+      console.log('✅ BRANCH ASSIGNMENT VERIFIED IN DATABASE!');
+      console.log('✅ Customer belongs to branch:', data.branch_id);
+      console.log('✅ Customer will appear in branch-filtered queries!');
+    }
+    
+    console.log('');
+    console.log('📄 Full customer record from database:');
+    console.log(JSON.stringify(data, null, 2));
     console.log('═══════════════════════════════════════════════════════');
 
     return data;
@@ -899,6 +1235,7 @@ export async function updateCustomerInDb(customerId: string, updates: Partial<Cu
     const fieldMapping: Record<string, string> = {
       colorTag: 'color_tag',
       isActive: 'is_active',
+      isShared: 'is_shared',
       lastVisit: 'last_visit',
       joinedDate: 'joined_date',
       loyaltyLevel: 'loyalty_level',
@@ -914,7 +1251,10 @@ export async function updateCustomerInDb(customerId: string, updates: Partial<Cu
       createdAt: 'created_at',
       updatedAt: 'updated_at',
       createdBy: 'created_by',
-      whatsapp: 'whatsapp'
+      whatsapp: 'whatsapp',
+      branchId: 'branch_id',
+      createdByBranchId: 'created_by_branch_id',
+      createdByBranchName: 'created_by_branch_name'
     };
     
     // Filter out undefined values and map field names
@@ -949,7 +1289,8 @@ export async function updateCustomerInDb(customerId: string, updates: Partial<Cu
       'joined_date', 'loyalty_level', 'color_tag', 'total_spent', 'points', 
       'last_visit', 'is_active', 'referral_source', 'birth_month', 'birth_day', 
       'total_returns', 'initial_notes', 'notes', 'customer_tag',
-      'location_description', 'national_id', 'created_at', 'updated_at'
+      'location_description', 'national_id', 'created_at', 'updated_at',
+      'branch_id', 'is_shared', 'created_by_branch_id', 'created_by_branch_name', 'whatsapp'
     ];
     
     // Filter out any invalid fields and handle data type conversions

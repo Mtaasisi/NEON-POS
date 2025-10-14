@@ -220,8 +220,15 @@ class SaleProcessingService {
 
       if (error) {
         console.error('❌ Error fetching variant data:', error);
+        console.error('❌ Full error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        console.error('❌ Variant IDs requested:', variantIds);
         return {
-          stockValidation: { success: false, error: 'Failed to check stock and costs' },
+          stockValidation: { success: false, error: `Failed to check stock and costs: ${error.message}` },
           itemsWithCosts: items.map(item => ({ ...item, costPrice: 0, profit: item.totalPrice }))
         };
       }
@@ -270,8 +277,13 @@ class SaleProcessingService {
       };
     } catch (error) {
       console.error('❌ Error in combined validation and calculation:', error);
+      console.error('❌ Exception details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        error: error
+      });
       return {
-        stockValidation: { success: false, error: 'Failed to validate stock and calculate costs' },
+        stockValidation: { success: false, error: `Failed to validate stock and calculate costs: ${error instanceof Error ? error.message : 'Unknown error'}` },
         itemsWithCosts: items.map(item => ({ ...item, costPrice: 0, profit: item.totalPrice }))
       };
     }
@@ -442,13 +454,22 @@ class SaleProcessingService {
         };
       }
 
+      // 🔒 Get current branch for sale assignment
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      console.log('🏪 [saveSale] Assigning sale to branch:', currentBranchId);
+
+      // Properly format payment_method for JSONB column
+      // Ensure it's a valid object and will be properly handled by Supabase
+      const paymentMethodFormatted = JSON.parse(JSON.stringify(paymentMethodData));
+
       const saleInsertData = {
         sale_number: saleNumber,
         customer_id: saleData.customerId, // Customer ID is required - validated above
         total_amount: saleData.total,
-        payment_method: paymentMethodData, // JSONB column - no need to stringify
+        payment_method: paymentMethodFormatted, // JSONB column - Supabase handles the conversion
         payment_status: saleData.paymentStatus || 'completed',
         sold_by: soldBy,
+        branch_id: currentBranchId,  // 🔒 Assign to current branch
         // Add optional columns if they exist (ensure numeric types)
         ...(subtotal !== undefined && !isNaN(subtotal) && { subtotal }),
         ...(discount !== undefined && !isNaN(discount) && { discount }),
@@ -486,9 +507,10 @@ class SaleProcessingService {
           sale_number: saleNumber,
           customer_id: saleData.customerId,
           total_amount: saleData.total,
-          payment_method: paymentMethodData, // JSONB column - no need to stringify
+          payment_method: paymentMethodFormatted, // JSONB column - Supabase handles the conversion
           payment_status: saleData.paymentStatus || 'completed',
           sold_by: soldBy,
+          branch_id: currentBranchId,  // 🔒 Assign to current branch
           ...(subtotal !== undefined && !isNaN(subtotal) && { subtotal }),
           ...(discount !== undefined && !isNaN(discount) && { discount }),
           ...(tax !== undefined && !isNaN(tax) && { tax }),
@@ -580,7 +602,9 @@ class SaleProcessingService {
         return { success: false, error: `Sale created but items failed: ${itemsError.message}` };
       }
 
-      // Mirror POS payments into customer_payments and account transactions (best-effort)
+      // Mirror POS payments into payment_transactions table (NEW - leverages triggers)
+      // The AUTO-SYNC-PAYMENT-TRANSACTIONS.sql triggers automatically create payment_transactions
+      // This code block is kept for backward compatibility but is now optional
       try {
         const multiPayments = (saleData as any)?.paymentMethod?.details?.payments;
         const payments: Array<{
@@ -601,59 +625,51 @@ class SaleProcessingService {
               timestamp: (saleData as any)?.soldAt
             }];
 
+        console.log('💳 Processing payment mirroring for', payments.length, 'payment(s)');
+
         for (const p of payments) {
-          if (!p?.amount || p.amount <= 0) continue;
-
-          const paymentInsert: any = {
-            customer_id: saleData.customerId,
-            device_id: null,
-            sale_id: sale.id, // Link payment to the sale
-            amount: p.amount,
-            method: p.method || (saleData as any)?.paymentMethod?.type || 'cash',
-            payment_type: 'payment',
-            status: 'completed',
-            payment_date: p.timestamp || new Date().toISOString(),
-            notes: p.notes || `POS sale ${saleNumber} - ${p.method || 'payment'}`,
-            reference_number: p.reference || saleNumber,
-            created_at: new Date().toISOString()
-          };
-
-          const { error: cpError } = await supabase
-            .from('customer_payments')
-            .insert(paymentInsert);
-          if (cpError) {
-            console.warn('⚠️ Failed to mirror payment to customer_payments:', cpError);
-            console.warn('⚠️ Payment insert data:', paymentInsert);
-          } else {
-            console.log(`✅ Payment mirrored: ${p.method} - ${p.amount}`);
+          if (!p?.amount || p.amount <= 0) {
+            console.log('⏭️ Skipping payment with invalid amount:', p?.amount);
+            continue;
           }
 
+          // Skip customer_payments mirroring - rely on triggers instead
+          console.log(`ℹ️  Payment ${p.method} - ${p.amount} will be auto-synced by database triggers`);
+
+          // Update finance accounts and account transactions if accountId is provided
           if (p.accountId) {
             try {
+              console.log('💰 Updating finance account:', p.accountId);
               const { data: acct, error: faErr } = await supabase
                 .from('finance_accounts')
                 .select('balance')
                 .eq('id', p.accountId)
                 .single();
-              if (!faErr && acct && typeof acct.balance === 'number') {
+              
+              if (faErr) {
+                console.warn('⚠️ Failed to fetch finance account:', faErr.message);
+                continue; // Skip this payment's account updates
+              }
+              
+              if (acct && typeof acct.balance === 'number') {
                 const newBalance = acct.balance + p.amount;
                 const { error: updErr } = await supabase
                   .from('finance_accounts')
                   .update({ balance: newBalance, updated_at: new Date().toISOString() })
                   .eq('id', p.accountId);
+                
                 if (updErr) {
-                  console.warn('⚠️ Failed updating finance account balance:', updErr);
+                  console.warn('⚠️ Failed updating finance account balance:', updErr.message);
                 } else {
                   console.log(`✅ Finance account ${p.accountId} balance updated: ${acct.balance} + ${p.amount} = ${newBalance}`);
                 }
-              } else if (faErr) {
-                console.warn('⚠️ Failed to fetch finance account:', faErr);
               }
-            } catch (e) {
-              console.warn('⚠️ finance_accounts table not available');
+            } catch (faError) {
+              console.warn('⚠️ finance_accounts error:', faError instanceof Error ? faError.message : 'Unknown error');
             }
 
             try {
+              console.log('📝 Recording account transaction for account:', p.accountId);
               const { error: atErr } = await supabase
                 .from('account_transactions')
                 .insert({
@@ -665,24 +681,36 @@ class SaleProcessingService {
                   metadata: { sale_id: sale.id, customer_id: saleData.customerId },
                   created_at: new Date().toISOString()
                 });
+              
               if (atErr) {
-                console.warn('⚠️ account_transactions insert failed:', atErr);
+                console.warn('⚠️ account_transactions insert failed:', atErr.message);
               } else {
                 console.log(`✅ Transaction recorded for account ${p.accountId}: +${p.amount}`);
               }
-            } catch (e) {
-              console.warn('⚠️ account_transactions table not available');
+            } catch (atError) {
+              console.warn('⚠️ account_transactions error:', atError instanceof Error ? atError.message : 'Unknown error');
             }
           }
         }
+        
+        console.log('✅ Payment mirroring completed (triggers will handle payment_transactions sync)');
       } catch (mirrorErr: any) {
+        // Enhanced error logging
+        const errorMessage = mirrorErr instanceof Error ? mirrorErr.message : String(mirrorErr);
+        const errorStack = mirrorErr instanceof Error ? mirrorErr.stack : undefined;
+        
         console.error('❌ Payment mirroring failed:', {
-          error: mirrorErr,
-          message: mirrorErr?.message,
+          errorType: typeof mirrorErr,
+          errorName: mirrorErr?.name,
+          message: errorMessage,
           details: mirrorErr?.details,
           hint: mirrorErr?.hint,
-          code: mirrorErr?.code
+          code: mirrorErr?.code,
+          stack: errorStack
         });
+        
+        // Don't throw - payment mirroring is optional (triggers handle it)
+        console.log('ℹ️  Sale completed successfully despite payment mirroring error (database triggers will sync payments)');
       }
 
       // Create complete sale object
@@ -744,15 +772,33 @@ class SaleProcessingService {
           .single();
 
         if (customer) {
-          // Add fields that exist in the customer record
+          // Helper function to safely parse numeric values
+          const safeParseNumber = (value: any, defaultValue: number = 0): number => {
+            if (value === null || value === undefined) return defaultValue;
+            const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
+            // Detect corrupted data (unrealistic values > 1 trillion TZS)
+            if (isNaN(parsed) || parsed > 1000000000000 || parsed < 0) {
+              console.warn('⚠️ Detected corrupted value:', value, '- resetting to', defaultValue);
+              return defaultValue;
+            }
+            return parsed;
+          };
+
+          // Add fields that exist in the customer record with safe numeric parsing
           if ('total_spent' in customer) {
-            updateData.total_spent = (customer.total_spent || 0) + saleData.total;
+            const currentTotal = safeParseNumber(customer.total_spent, 0);
+            const saleTotal = safeParseNumber(saleData.total, 0); // ✅ FIX: Parse sale total to prevent string concatenation
+            const newTotal = currentTotal + saleTotal;
+            updateData.total_spent = Math.max(0, newTotal); // Ensure non-negative
+            console.log(`💰 Updating total_spent: ${currentTotal} + ${saleTotal} = ${newTotal}`);
           }
           if ('total_orders' in customer) {
-            updateData.total_orders = (customer.total_orders || 0) + 1;
+            const currentOrders = safeParseNumber(customer.total_orders, 0);
+            updateData.total_orders = currentOrders + 1;
           }
           if ('points' in customer) {
-            updateData.points = (customer.points || 0) + pointsEarned;
+            const currentPoints = safeParseNumber(customer.points, 0);
+            updateData.points = currentPoints + pointsEarned;
           }
         }
 
@@ -832,7 +878,7 @@ class SaleProcessingService {
         return {
           product_id: item.productId,
           variant_id: item.variantId,
-          type: 'out',
+          movement_type: 'out',
           quantity: item.quantity,
           previous_quantity: currentQuantity,
           new_quantity: newQuantity,
@@ -981,7 +1027,7 @@ class SaleProcessingService {
   // Send SMS notification
   private async sendSMSNotification(sale: SaleData): Promise<void> {
     try {
-      const message = this.generateSMSMessage(sale);
+      const message = await this.generateSMSMessage(sale);
       
       // Try to use the SMS service if available
       try {
@@ -993,28 +1039,50 @@ class SaleProcessingService {
         if (result.success) {
           console.log('📱 SMS notification sent successfully for sale:', sale.saleNumber);
         } else {
-          console.warn('⚠️ SMS notification failed:', result.error);
+          // Only log SMS errors if they're not connection errors (which are expected in dev)
+          if (result.error && !result.error.includes('Network error') && !result.error.includes('Failed to fetch')) {
+            console.warn('⚠️ SMS notification failed:', result.error);
+          }
         }
       } catch (importError) {
-        console.warn('⚠️ SMS service not available - skipping notification:', importError);
+        // Silently skip SMS if service is unavailable (expected in dev environment)
+        console.log('ℹ️  SMS service not configured - sale completed without notification');
       }
     } catch (error) {
-      console.warn('⚠️ Error sending SMS notification:', error);
-      // Don't throw - SMS is optional
+      // Silently skip SMS errors - SMS is optional and shouldn't affect sale completion
+      console.log('ℹ️  SMS notification skipped - sale completed successfully');
     }
   }
 
   // Generate SMS message
-  private generateSMSMessage(sale: SaleData): string {
+  private async generateSMSMessage(sale: SaleData): Promise<string> {
     const items = sale.items.map(item => `${item.productName} x${item.quantity}`).join(', ');
     const discountText = sale.discount > 0 ? `\nDiscount: ${this.formatMoney(sale.discount)}` : '';
     
-    return `Thank you for your purchase!
+    // Load SMS message settings from POS settings
+    let headerMessage = 'Thank you for your purchase!';
+    let footerMessage = 'Thank you for choosing us!';
+    
+    try {
+      const { POSSettingsService } = await import('./posSettingsApi');
+      const receiptSettings = await POSSettingsService.loadReceiptSettings();
+      
+      if (receiptSettings?.sms_header_message) {
+        headerMessage = receiptSettings.sms_header_message;
+      }
+      if (receiptSettings?.sms_footer_message) {
+        footerMessage = receiptSettings.sms_footer_message;
+      }
+    } catch (error) {
+      console.warn('⚠️ Could not load SMS message settings, using defaults');
+    }
+    
+    return `${headerMessage}
 Sale #${sale.saleNumber}
 Items: ${items}
 Total: ${this.formatMoney(sale.total)}${discountText}
 Payment: ${sale.paymentMethod.type.toUpperCase()}
-Thank you for choosing us!`;
+${footerMessage}`;
   }
 
   // Email service disabled - function commented out

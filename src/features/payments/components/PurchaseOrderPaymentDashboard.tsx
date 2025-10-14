@@ -255,9 +255,77 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
     fetchPaymentAccounts();
   }, [fetchPurchaseOrders, fetchRecentPayments, fetchPaymentAccounts]);
 
+  // Real-time subscription for purchase order payments
+  useEffect(() => {
+    console.log('🔔 Setting up real-time subscriptions for purchase order payments...');
+
+    // Subscribe to purchase order payments table
+    const paymentsSubscription = supabase
+      .channel('purchase_order_payments_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'purchase_order_payments'
+        },
+        (payload) => {
+          console.log('🔔 Purchase order payment change detected:', payload);
+          // Refresh both purchase orders and payments
+          fetchPurchaseOrders();
+          fetchRecentPayments();
+          
+          if (payload.eventType === 'INSERT') {
+            toast.success('Payment recorded successfully!');
+          } else if (payload.eventType === 'UPDATE') {
+            toast.success('Payment updated!');
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to purchase orders table (for payment_status updates)
+    const ordersSubscription = supabase
+      .channel('purchase_orders_payment_status')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'lats_purchase_orders',
+          filter: 'payment_status=neq.unpaid' // Only listen to payment status changes
+        },
+        (payload) => {
+          console.log('🔔 Purchase order payment status changed:', payload);
+          fetchPurchaseOrders();
+          
+          const newStatus = payload.new?.payment_status;
+          if (newStatus === 'paid') {
+            toast.success('Purchase order fully paid!', {
+              icon: '✅',
+              duration: 3000
+            });
+          } else if (newStatus === 'partial') {
+            toast.success('Partial payment received!', {
+              icon: '💰',
+              duration: 3000
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscriptions on unmount
+    return () => {
+      console.log('🔔 Cleaning up purchase order payment subscriptions...');
+      paymentsSubscription.unsubscribe();
+      ordersSubscription.unsubscribe();
+    };
+  }, [fetchPurchaseOrders, fetchRecentPayments]);
+
   // Filter purchase orders
   const filteredOrders = purchaseOrders.filter(order => {
-    const matchesSearch = order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch = order.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.supplier?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || order.paymentStatus === statusFilter;
     const matchesCurrency = currencyFilter === 'all' || order.currency === currencyFilter;
@@ -312,9 +380,18 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
         toast.success('All payments processed successfully');
       }
       
+      // Close modal and refresh data
       setShowPaymentModal(false);
-      await fetchPurchaseOrders();
-      await fetchRecentPayments();
+      setSelectedOrder(null);
+      
+      // Force immediate refresh of all data
+      console.log('💰 Payment completed, refreshing data...');
+      await Promise.all([
+        fetchPurchaseOrders(),
+        fetchRecentPayments(),
+        fetchPaymentAccounts()
+      ]);
+      console.log('✅ Data refreshed after payment');
     } catch (error: any) {
       console.error('Error processing payment:', error);
       toast.error(error.message || 'Failed to process payment');
@@ -331,7 +408,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-h-screen p-6 space-y-6" style={{ backgroundColor: 'transparent' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -489,7 +566,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(order.paymentStatus || 'unpaid', remainingAmount)}`}>
                     {remainingAmount < 0 ? 'overpaid' : (order.paymentStatus || 'unpaid')}
                   </span>
-                  {remainingAmount > 0 && (
+                  {remainingAmount > 0 ? (
                     <button
                       onClick={() => handleMakePayment(order)}
                       className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-xs font-medium"
@@ -497,6 +574,11 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                       <Plus size={12} />
                       Pay
                     </button>
+                  ) : (
+                    <div className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-500 rounded-lg text-xs font-medium cursor-not-allowed">
+                      <CheckCircle2 size={12} />
+                      {remainingAmount < 0 ? 'Overpaid' : 'Fully Paid'}
+                    </div>
                   )}
                 </div>
               </div>
@@ -534,7 +616,6 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                   <span className="text-sm text-gray-600">Total Amount</span>
                   <div className="text-right">
                     <span className="font-semibold text-gray-900">{formatMoney(order.totalAmount)}</span>
-                    <div className="text-xs text-gray-500">{order.currency || 'TZS'}</div>
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
@@ -544,7 +625,6 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                       <ArrowUpRight className="w-3 h-3" />
                       {formatMoney(order.totalPaid || 0)}
                     </span>
-                    <div className="text-xs text-gray-500">{order.currency || 'TZS'}</div>
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
@@ -564,7 +644,6 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                       )}
                       {remainingAmount < 0 ? formatMoney(Math.abs(remainingAmount)) : formatMoney(remainingAmount)}
                     </span>
-                    <div className="text-xs text-gray-500">{order.currency || 'TZS'}</div>
                   </div>
                 </div>
               </div>
@@ -612,9 +691,6 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                     </div>
                     <div className="text-sm text-gray-600">
                       {payment.payment_method} • {new Date(payment.payment_date).toLocaleDateString()}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {payment.currency || 'TZS'}
                     </div>
                   </div>
                 </div>

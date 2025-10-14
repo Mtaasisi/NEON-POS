@@ -189,10 +189,29 @@ const CustomerLoyaltyPage: React.FC = () => {
 
   // Format currency
   const formatMoney = (amount: number) => {
-    return new Intl.NumberFormat('en-TZ', {
+    const realAmount = amount || 0;
+    
+    // Safety check: Detect unrealistic amounts
+    const MAX_REALISTIC_AMOUNT = 1_000_000_000_000; // 1 trillion
+    const isCorrupt = Math.abs(realAmount) > MAX_REALISTIC_AMOUNT;
+    
+    if (isCorrupt) {
+      console.warn(`⚠️ CORRUPT DATA - Amount: ${realAmount}`);
+    }
+    
+    // Safety check: Handle NaN and Infinity
+    if (!isFinite(realAmount)) {
+      console.warn(`⚠️ Invalid amount: ${amount}.`);
+      return 'TZS 0 ⚠️ INVALID';
+    }
+    
+    const formatted = new Intl.NumberFormat('en-TZ', {
       style: 'currency',
       currency: 'TZS'
-    }).format(amount);
+    }).format(realAmount);
+    
+    // Add corruption indicator
+    return isCorrupt ? `${formatted} ⚠️` : formatted;
   };
 
   // Get tier color
@@ -810,7 +829,7 @@ const CustomerLoyaltyPage: React.FC = () => {
 
   if (loading && currentPage === 1) {
     return (
-      <div className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen p-6" style={{ backgroundColor: 'transparent' }}>
         <PageHeader
           title="Customer Loyalty"
           subtitle="Manage loyalty points, rewards, and customer tiers"
@@ -827,7 +846,7 @@ const CustomerLoyaltyPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen p-6 bg-gradient-to-br from-blue-50 to-indigo-100">
+    <div className="min-h-screen p-6" style={{ backgroundColor: 'transparent' }}>
       <PageHeader
         title="Customer Loyalty"
         subtitle="Manage loyalty points, rewards, and customer tiers"

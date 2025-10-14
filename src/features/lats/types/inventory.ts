@@ -138,7 +138,7 @@ export interface StockMovement {
   id: string;
   productId: string;
   variantId: string;
-  type: 'in' | 'out' | 'adjustment' | 'transfer';
+  movement_type: 'in' | 'out' | 'adjustment' | 'transfer' | 'sale' | 'purchase' | 'return';
   quantity: number;
   reason: string;
   reference?: string;

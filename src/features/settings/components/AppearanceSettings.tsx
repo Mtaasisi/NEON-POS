@@ -1,24 +1,40 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
-import { Palette, Sun, Moon, Monitor, Save } from 'lucide-react';
+import { Palette, Sun, Moon, Monitor, Save, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useTheme, Theme } from '../../../context/ThemeContext';
 
 interface AppearanceSettingsProps {
   isActive: boolean;
 }
 
 const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => {
-  const [theme, setTheme] = useState('system');
-  const [accentColor, setAccentColor] = useState('#3B82F6');
-  const [fontSize, setFontSize] = useState('medium');
+  const { theme: currentTheme, setTheme } = useTheme();
+  const [selectedTheme, setSelectedTheme] = useState<Theme>(currentTheme);
+  const [accentColor, setAccentColor] = useState(() => 
+    localStorage.getItem('accentColor') || '#3B82F6'
+  );
+  const [fontSize, setFontSize] = useState(() => 
+    localStorage.getItem('fontSize') || 'medium'
+  );
+
+  // Update selected theme when current theme changes
+  useEffect(() => {
+    setSelectedTheme(currentTheme);
+  }, [currentTheme]);
+
+  const handleThemeChange = (newTheme: Theme) => {
+    setSelectedTheme(newTheme);
+    setTheme(newTheme);
+    toast.success(`Theme changed to ${newTheme === 'dark' ? 'Dark' : newTheme === 'dark-cards' ? 'Dark Cards' : 'Light'}`);
+  };
 
   const handleSave = () => {
-    // Save appearance settings
-    localStorage.setItem('theme', theme);
+    // Save other appearance settings
     localStorage.setItem('accentColor', accentColor);
     localStorage.setItem('fontSize', fontSize);
-    toast.success('Appearance settings saved');
+    toast.success('Appearance settings saved successfully');
   };
 
   if (!isActive) return null;
@@ -35,25 +51,36 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => 
           {/* Theme Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Theme
+              Theme Mode
             </label>
             <div className="grid grid-cols-3 gap-3">
               {[
-                { value: 'light', label: 'Light', icon: Sun },
-                { value: 'dark', label: 'Dark', icon: Moon },
-                { value: 'system', label: 'System', icon: Monitor }
-              ].map(({ value, label, icon: Icon }) => (
+                { value: 'light' as Theme, label: 'Light', icon: Sun, desc: 'Bright & Clean', preview: 'bg-gradient-to-br from-blue-50 to-indigo-100' },
+                { value: 'dark' as Theme, label: 'Dark', icon: Moon, desc: 'Easy on Eyes', preview: 'bg-gradient-to-br from-slate-800 to-slate-900' },
+                { value: 'dark-cards' as Theme, label: 'Dark Pro', icon: Monitor, desc: 'Premium Dark', preview: 'bg-gradient-to-br from-slate-900 to-gray-900' }
+              ].map(({ value, label, icon: Icon, desc, preview }) => (
                 <button
                   key={value}
-                  onClick={() => setTheme(value)}
-                  className={`p-4 rounded-lg border-2 transition-all ${
-                    theme === value
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : 'border-gray-300 bg-gray-50 hover:bg-gray-100'
+                  onClick={() => handleThemeChange(value)}
+                  className={`relative p-4 rounded-xl border-2 transition-all overflow-hidden group ${
+                    selectedTheme === value
+                      ? 'border-indigo-500 bg-indigo-50 shadow-lg scale-105'
+                      : 'border-gray-300 bg-white hover:bg-gray-50 hover:border-indigo-300'
                   }`}
                 >
-                  <Icon className={`w-6 h-6 mx-auto mb-2 ${theme === value ? 'text-indigo-600' : 'text-gray-600'}`} />
-                  <span className={`text-sm ${theme === value ? 'text-indigo-700' : 'text-gray-700'}`}>{label}</span>
+                  {/* Theme Preview */}
+                  <div className={`absolute top-2 right-2 w-8 h-8 rounded-md ${preview} opacity-40 group-hover:opacity-60 transition-opacity`}></div>
+                  
+                  {/* Check Icon */}
+                  {selectedTheme === value && (
+                    <div className="absolute top-2 left-2">
+                      <Check className="w-5 h-5 text-indigo-600" />
+                    </div>
+                  )}
+                  
+                  <Icon className={`w-8 h-8 mx-auto mb-2 mt-2 ${selectedTheme === value ? 'text-indigo-600' : 'text-gray-600'}`} />
+                  <div className={`text-sm font-semibold mb-1 ${selectedTheme === value ? 'text-indigo-700' : 'text-gray-700'}`}>{label}</div>
+                  <div className="text-xs text-gray-500">{desc}</div>
                 </button>
               ))}
             </div>

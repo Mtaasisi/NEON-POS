@@ -237,9 +237,15 @@ const POcreate: React.FC = () => {
     if (dbProducts.length === 0 || categories.length === 0) {
       return [];
     }
+
+    // Filter out sample products first
+    const filteredDbProducts = dbProducts.filter(product => {
+      const name = product.name.toLowerCase();
+      return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
+    });
     
     
-    const transformedProducts = dbProducts.map(product => {
+    const transformedProducts = filteredDbProducts.map(product => {
       // Try multiple possible category field names - handle both camelCase and snake_case
       const categoryId = product.categoryId || (product as any).category_id || (product as any).category?.id;
       
@@ -954,6 +960,7 @@ const POcreate: React.FC = () => {
         status: purchaseOrderStatus,
         currency: selectedCurrency.code, // Add currency
         paymentTerms: paymentTerms, // Add payment terms
+        createdBy: currentUser?.id || currentUser?.uid || null, // Add created by user ID
         // Exchange rate tracking
         exchangeRate: exchangeRateInfo?.rate || 1.0,
         baseCurrency: 'TZS',

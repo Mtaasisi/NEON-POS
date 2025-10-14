@@ -16,9 +16,10 @@ const AutoLocationVerification: React.FC<AutoLocationVerificationProps> = ({
   onVerificationFailed,
   employeeName
 }) => {
-  const { detectNearestOfficeByLocation, settings: attendanceSettings } = useAttendanceSettings();
+  const { detectNearestOfficeByLocation, settings: attendanceSettings, getAllOffices } = useAttendanceSettings();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showManualSelection, setShowManualSelection] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<{
     lat: number;
     lng: number;
@@ -52,8 +53,6 @@ const AutoLocationVerification: React.FC<AutoLocationVerificationProps> = ({
     setError('');
 
     try {
-      console.log('📍 Starting auto office detection...');
-      
       // Get current GPS location
       const position = await getCurrentLocation();
       
@@ -65,12 +64,8 @@ const AutoLocationVerification: React.FC<AutoLocationVerificationProps> = ({
 
       setCurrentLocation(userLocation);
 
-      console.log('📍 User location:', userLocation);
-
       // Auto-detect nearest office
       const detection = await detectNearestOfficeByLocation(userLocation.lat, userLocation.lng);
-      
-      console.log('📍 Office detection result:', detection);
 
       if (!detection.office) {
         setError('No office locations configured. Please contact your administrator.');
@@ -114,6 +109,17 @@ const AutoLocationVerification: React.FC<AutoLocationVerificationProps> = ({
     }
   };
 
+  const handleManualOfficeSelection = (office: any) => {
+    setDetectedOffice(office);
+    toast.success(`Office selected: ${office.name}`);
+    onVerificationSuccess({
+      office,
+      userLocation: null,
+      distance: 0,
+      detectionMethod: 'manual'
+    });
+  };
+
   useEffect(() => {
     // Auto-start detection when component mounts
     detectOffice();
@@ -146,19 +152,69 @@ const AutoLocationVerification: React.FC<AutoLocationVerificationProps> = ({
         )}
 
         {/* Error State */}
-        {error && !isLoading && (
+        {error && !isLoading && !showManualSelection && (
           <div className="space-y-4">
             <div className="flex items-center justify-center gap-3 text-red-600">
               <AlertTriangle className="w-6 h-6" />
               <span className="font-medium">Detection Failed</span>
             </div>
             <p className="text-red-600 text-sm">{error}</p>
+            <div className="flex gap-3">
+              <GlassButton
+                onClick={detectOffice}
+                className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                <Compass className="w-4 h-4 mr-2" />
+                Try Again
+              </GlassButton>
+              <GlassButton
+                onClick={() => setShowManualSelection(true)}
+                className="flex-1 bg-gray-600 text-white hover:bg-gray-700"
+              >
+                <MapPin className="w-4 h-4 mr-2" />
+                Select Manually
+              </GlassButton>
+            </div>
+          </div>
+        )}
+
+        {/* Manual Office Selection */}
+        {showManualSelection && !isLoading && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-center gap-3 text-blue-600">
+              <MapPin className="w-6 h-6" />
+              <span className="font-medium">Select Your Office</span>
+            </div>
+            <p className="text-gray-600 text-sm">
+              Choose the office location where you're currently working
+            </p>
+            <div className="space-y-2">
+              {getAllOffices().map((office, index) => (
+                <div
+                  key={index}
+                  onClick={() => handleManualOfficeSelection(office)}
+                  className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="text-left">
+                      <h4 className="font-medium text-gray-900">{office.name}</h4>
+                      <p className="text-sm text-gray-600">{office.address}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {office.networks.length} WiFi network(s) • {office.radius}m check-in radius
+                      </p>
+                    </div>
+                    <MapPin className="w-5 h-5 text-blue-600" />
+                  </div>
+                </div>
+              ))}
+            </div>
             <GlassButton
-              onClick={detectOffice}
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => setShowManualSelection(false)}
+              variant="ghost"
+              className="text-gray-600"
             >
               <Compass className="w-4 h-4 mr-2" />
-              Try Again
+              Back to Auto-Detect
             </GlassButton>
           </div>
         )}
@@ -240,15 +296,18 @@ const AutoLocationVerification: React.FC<AutoLocationVerificationProps> = ({
         )}
 
         {/* Instructions */}
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h4 className="font-medium text-gray-800 mb-2">How It Works</h4>
-          <div className="space-y-1 text-sm text-gray-600">
-            <p>📍 Uses your GPS location to find the nearest office</p>
-            <p>📏 Checks if you're within the office's check-in radius</p>
-            <p>📶 Shows available WiFi networks for that office</p>
-            <p>✅ Automatically proceeds if you're in range</p>
+        {!showManualSelection && (
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <h4 className="font-medium text-gray-800 mb-2">How It Works</h4>
+            <div className="space-y-1 text-sm text-gray-600">
+              <p>📍 Uses your GPS location to find the nearest office</p>
+              <p>📏 Checks if you're within the office's check-in radius</p>
+              <p>📶 Shows available WiFi networks for that office</p>
+              <p>✅ Automatically proceeds if you're in range</p>
+              <p>🏢 Can't detect? Select your office manually instead</p>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </GlassCard>
   );

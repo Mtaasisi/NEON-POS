@@ -6,16 +6,34 @@ import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import SearchBar from '../../../features/shared/components/ui/SearchBar';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
+import CreateUserModal from '../components/CreateUserModal';
+import EditUserModal from '../components/EditUserModal';
+import RoleManagementModal from '../components/RoleManagementModal';
+import UserEmployeeLinkModal from '../components/UserEmployeeLinkModal';
 import { 
   Users, Search, Plus, Edit, Trash2, Shield, UserCheck, UserX, 
   Mail, Phone, Calendar, Eye, EyeOff, Lock, Unlock, Settings,
-  Filter, Download, Upload, RefreshCw, AlertTriangle, CheckCircle
+  Filter, Download, Upload, RefreshCw, AlertTriangle, CheckCircle, Link as LinkIcon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { 
+  fetchAllUsers, 
+  createUser, 
+  updateUser, 
+  deleteUser, 
+  toggleUserStatus, 
+  bulkUpdateUserStatus, 
+  bulkDeleteUsers,
+  transformUserForUI,
+  type CreateUserData as ApiCreateUserData,
+  type UpdateUserData as ApiUpdateUserData
+} from '../../../lib/userApi';
+import { bulkAssignUserToBranches } from '../../../lib/userBranchApi';
 
 interface User {
   id: string;
   email: string;
+  username?: string;
   firstName: string;
   lastName: string;
   role: 'admin' | 'manager' | 'technician' | 'customer-care' | 'user';
@@ -50,132 +68,76 @@ const UserManagementPage: React.FC = () => {
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [showEditUser, setShowEditUser] = useState(false);
   const [showRoleManagement, setShowRoleManagement] = useState(false);
+  const [showUserEmployeeLink, setShowUserEmployeeLink] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
-  // Mock data - replace with actual API calls
+  // Load real users from database
   useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        // Mock users data
-        const mockUsers: User[] = [
-          {
-            id: '1',
-            email: 'admin@company.com',
-            firstName: 'John',
-            lastName: 'Admin',
-            role: 'admin',
-            status: 'active',
-            lastLogin: '2024-01-15T10:30:00Z',
-            createdAt: '2024-01-01T00:00:00Z',
-            phone: '+255 123 456 789',
-            department: 'IT',
-            permissions: ['all']
-          },
-          {
-            id: '2',
-            email: 'manager@company.com',
-            firstName: 'Sarah',
-            lastName: 'Manager',
-            role: 'manager',
-            status: 'active',
-            lastLogin: '2024-01-14T15:45:00Z',
-            createdAt: '2024-01-02T00:00:00Z',
-            phone: '+255 987 654 321',
-            department: 'Sales',
-            permissions: ['inventory', 'customers', 'reports']
-          },
-          {
-            id: '3',
-            email: 'tech@company.com',
-            firstName: 'Mike',
-            lastName: 'Technician',
-            role: 'technician',
-            status: 'active',
-            lastLogin: '2024-01-13T09:15:00Z',
-            createdAt: '2024-01-03T00:00:00Z',
-            phone: '+255 555 123 456',
-            department: 'Service',
-            permissions: ['devices', 'diagnostics']
-          },
-          {
-            id: '4',
-            email: 'care@company.com',
-            firstName: 'Lisa',
-            lastName: 'CustomerCare',
-            role: 'customer-care',
-            status: 'active',
-            lastLogin: '2024-01-12T14:20:00Z',
-            createdAt: '2024-01-04T00:00:00Z',
-            phone: '+255 777 888 999',
-            department: 'Support',
-            permissions: ['customers', 'diagnostics']
-          },
-          {
-            id: '5',
-            email: 'newuser@company.com',
-            firstName: 'Alex',
-            lastName: 'NewUser',
-            role: 'user',
-            status: 'pending',
-            createdAt: '2024-01-15T00:00:00Z',
-            phone: '+255 111 222 333',
-            department: 'Marketing',
-            permissions: ['basic']
-          }
-        ];
-
-        // Mock roles data
-        const mockRoles: Role[] = [
-          {
-            id: 'admin',
-            name: 'Administrator',
-            description: 'Full system access and control',
-            permissions: ['all'],
-            userCount: 1
-          },
-          {
-            id: 'manager',
-            name: 'Manager',
-            description: 'Department management and reporting',
-            permissions: ['inventory', 'customers', 'reports', 'employees'],
-            userCount: 1
-          },
-          {
-            id: 'technician',
-            name: 'Technician',
-            description: 'Device diagnostics and repair',
-            permissions: ['devices', 'diagnostics', 'spare-parts'],
-            userCount: 1
-          },
-          {
-            id: 'customer-care',
-            name: 'Customer Care',
-            description: 'Customer support and service',
-            permissions: ['customers', 'diagnostics', 'appointments'],
-            userCount: 1
-          },
-          {
-            id: 'user',
-            name: 'User',
-            description: 'Basic system access',
-            permissions: ['basic'],
-            userCount: 1
-          }
-        ];
-
-        setUsers(mockUsers);
-        setRoles(mockRoles);
-      } catch (error) {
-        console.error('Error loading users:', error);
-        toast.error('Failed to load users');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadData();
+    loadUsers();
   }, []);
+
+  const loadUsers = async () => {
+    setIsLoading(true);
+    try {
+      const dbUsers = await fetchAllUsers();
+      const transformedUsers = dbUsers.map(transformUserForUI);
+      setUsers(transformedUsers);
+
+      // Calculate roles data
+      const rolesMap = new Map<string, number>();
+      dbUsers.forEach(user => {
+        const count = rolesMap.get(user.role) || 0;
+        rolesMap.set(user.role, count + 1);
+      });
+
+      const rolesData: Role[] = [
+        {
+          id: 'admin',
+          name: 'Administrator',
+          description: 'Full system access and control',
+          permissions: ['all'],
+          userCount: rolesMap.get('admin') || 0
+        },
+        {
+          id: 'manager',
+          name: 'Manager',
+          description: 'Department management and reporting',
+          permissions: ['inventory', 'customers', 'reports', 'employees'],
+          userCount: rolesMap.get('manager') || 0
+        },
+        {
+          id: 'technician',
+          name: 'Technician',
+          description: 'Device diagnostics and repair',
+          permissions: ['devices', 'diagnostics', 'spare-parts'],
+          userCount: rolesMap.get('technician') || 0
+        },
+        {
+          id: 'customer-care',
+          name: 'Customer Care',
+          description: 'Customer support and service',
+          permissions: ['customers', 'diagnostics', 'appointments'],
+          userCount: rolesMap.get('customer-care') || 0
+        },
+        {
+          id: 'user',
+          name: 'User',
+          description: 'Basic system access',
+          permissions: ['basic'],
+          userCount: rolesMap.get('user') || 0
+        }
+      ];
+
+      setRoles(rolesData);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      toast.error('Failed to load users');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter users based on search and filters
   const filteredUsers = users.filter(user => {
@@ -183,6 +145,7 @@ const UserManagementPage: React.FC = () => {
       user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.department?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
@@ -204,19 +167,102 @@ const UserManagementPage: React.FC = () => {
     setShowCreateUser(true);
   };
 
+  const handleCreateUserSubmit = async (data: any) => {
+    setIsCreating(true);
+    try {
+      // Create the user first
+      const newUser = await createUser(data);
+      
+      // Handle branch assignments
+      if (!data.accessAllBranches && data.assignedBranches && data.assignedBranches.length > 0) {
+        const branchAssignments = data.assignedBranches.map((branchId: string, index: number) => ({
+          branch_id: branchId,
+          is_primary: index === 0, // First branch is primary
+          can_manage: false,
+          can_view_reports: true,
+          can_manage_inventory: false,
+          can_manage_staff: false
+        }));
+        
+        await bulkAssignUserToBranches(newUser.id, branchAssignments, currentUser?.id);
+      }
+      // If accessAllBranches is true, no assignments needed (user has access to all)
+      
+      toast.success('User created successfully with branch assignments');
+      await loadUsers(); // Reload users list
+      setShowCreateUser(false);
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      toast.error(error.message || 'Failed to create user');
+      throw error; // Re-throw to let modal handle it
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     setShowEditUser(true);
   };
 
+  const handleEditUserSubmit = async (data: any) => {
+    if (!editingUser) return;
+
+    setIsEditing(true);
+    try {
+      const updateData: ApiUpdateUserData = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        username: data.username, // ✅ Include username from the form
+        role: data.role,
+        phone: data.phone,
+        department: data.department,
+        is_active: data.isActive,
+        permissions: data.permissions // Include permissions from the form
+      };
+
+      await updateUser(editingUser.id, updateData);
+      
+      // Handle branch assignments
+      if (!data.accessAllBranches && data.assignedBranches && data.assignedBranches.length > 0) {
+        const branchAssignments = data.assignedBranches.map((branchId: string, index: number) => ({
+          branch_id: branchId,
+          is_primary: index === 0, // First branch is primary
+          can_manage: false,
+          can_view_reports: true,
+          can_manage_inventory: false,
+          can_manage_staff: false
+        }));
+        
+        await bulkAssignUserToBranches(editingUser.id, branchAssignments, currentUser?.id);
+      } else if (data.accessAllBranches) {
+        // Clear all branch assignments (user has access to all)
+        await bulkAssignUserToBranches(editingUser.id, [], currentUser?.id);
+      }
+      
+      toast.success('User updated successfully with branch assignments');
+      await loadUsers(); // Reload users list
+      setShowEditUser(false);
+      setEditingUser(null);
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      toast.error(error.message || 'Failed to update user');
+      throw error; // Re-throw to let modal handle it
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   const handleDeleteUser = async (userId: string) => {
     if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       try {
-        // API call to delete user
-        setUsers(users.filter(u => u.id !== userId));
+        await deleteUser(userId);
         toast.success('User deleted successfully');
-      } catch (error) {
-        toast.error('Failed to delete user');
+        await loadUsers(); // Reload users list
+      } catch (error: any) {
+        console.error('Error deleting user:', error);
+        toast.error(error.message || 'Failed to delete user');
       }
     }
   };
@@ -225,14 +271,14 @@ const UserManagementPage: React.FC = () => {
     try {
       const user = users.find(u => u.id === userId);
       if (user) {
-        const newStatus = user.status === 'active' ? 'inactive' : 'active';
-        setUsers(users.map(u => 
-          u.id === userId ? { ...u, status: newStatus } : u
-        ));
-        toast.success(`User ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+        const newStatus = user.status === 'active' ? false : true;
+        await toggleUserStatus(userId, newStatus);
+        toast.success(`User ${newStatus ? 'activated' : 'deactivated'} successfully`);
+        await loadUsers(); // Reload users list
       }
-    } catch (error) {
-      toast.error('Failed to update user status');
+    } catch (error: any) {
+      console.error('Error toggling user status:', error);
+      toast.error(error.message || 'Failed to update user status');
     }
   };
 
@@ -242,29 +288,35 @@ const UserManagementPage: React.FC = () => {
       return;
     }
 
-    switch (action) {
-      case 'activate':
-        setUsers(users.map(u => 
-          selectedUsers.includes(u.id) ? { ...u, status: 'active' } : u
-        ));
-        toast.success(`${selectedUsers.length} users activated`);
-        break;
-      case 'deactivate':
-        setUsers(users.map(u => 
-          selectedUsers.includes(u.id) ? { ...u, status: 'inactive' } : u
-        ));
-        toast.success(`${selectedUsers.length} users deactivated`);
-        break;
-      case 'delete':
-        if (confirm(`Are you sure you want to delete ${selectedUsers.length} users?`)) {
-          setUsers(users.filter(u => !selectedUsers.includes(u.id)));
-          toast.success(`${selectedUsers.length} users deleted`);
-        }
-        break;
-      default:
-        toast.error('Unknown action');
+    try {
+      switch (action) {
+        case 'activate':
+          await bulkUpdateUserStatus(selectedUsers, true);
+          toast.success(`${selectedUsers.length} users activated`);
+          break;
+        case 'deactivate':
+          await bulkUpdateUserStatus(selectedUsers, false);
+          toast.success(`${selectedUsers.length} users deactivated`);
+          break;
+        case 'delete':
+          if (confirm(`Are you sure you want to delete ${selectedUsers.length} users?`)) {
+            await bulkDeleteUsers(selectedUsers);
+            toast.success(`${selectedUsers.length} users deleted`);
+          } else {
+            return; // Don't reload if cancelled
+          }
+          break;
+        default:
+          toast.error('Unknown action');
+          return;
+      }
+      
+      setSelectedUsers([]);
+      await loadUsers(); // Reload users list
+    } catch (error: any) {
+      console.error('Error performing bulk action:', error);
+      toast.error(error.message || 'Failed to perform action');
     }
-    setSelectedUsers([]);
   };
 
   const getRoleColor = (role: string) => {
@@ -294,6 +346,114 @@ const UserManagementPage: React.FC = () => {
     });
   };
 
+  // Export users to CSV
+  const handleExportCSV = () => {
+    try {
+      const headers = ['ID', 'First Name', 'Last Name', 'Email', 'Username', 'Phone', 'Role', 'Department', 'Status', 'Created At', 'Last Login'];
+      const csvData = filteredUsers.map(user => [
+        user.id,
+        user.firstName,
+        user.lastName,
+        user.email,
+        user.username || '',
+        user.phone || '',
+        user.role,
+        user.department || '',
+        user.status,
+        user.createdAt,
+        user.lastLogin || ''
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...csvData.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `users_export_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success(`Exported ${filteredUsers.length} users to CSV`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export users');
+    }
+  };
+
+  // Export users to JSON
+  const handleExportJSON = () => {
+    try {
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        totalUsers: filteredUsers.length,
+        users: filteredUsers
+      };
+
+      const jsonContent = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonContent], { type: 'application/json' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `users_export_${new Date().toISOString().split('T')[0]}.json`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success(`Exported ${filteredUsers.length} users to JSON`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export users');
+    }
+  };
+
+  // Import users from JSON
+  const handleImportUsers = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const data = JSON.parse(content);
+        
+        const usersToImport = data.users || data;
+        if (!Array.isArray(usersToImport)) {
+          throw new Error('Invalid file format');
+        }
+
+        toast.success(`Ready to import ${usersToImport.length} users. Feature coming soon!`);
+        // TODO: Implement bulk user import
+      } catch (error) {
+        console.error('Import error:', error);
+        toast.error('Failed to import users. Please check file format.');
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset input
+    event.target.value = '';
+  };
+
+  // Manual refresh
+  const handleRefresh = () => {
+    toast.promise(
+      loadUsers(),
+      {
+        loading: 'Refreshing users...',
+        success: 'Users refreshed successfully',
+        error: 'Failed to refresh users'
+      }
+    );
+  };
+
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
@@ -318,6 +478,67 @@ const UserManagementPage: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap gap-3">
+          <GlassButton
+            onClick={handleRefresh}
+            variant="secondary"
+            icon={<RefreshCw size={18} />}
+            title="Refresh users list"
+          >
+            Refresh
+          </GlassButton>
+          
+          <div className="relative">
+            <input
+              type="file"
+              accept=".json"
+              onChange={handleImportUsers}
+              className="hidden"
+              id="import-users"
+            />
+            <label htmlFor="import-users">
+              <GlassButton
+                variant="secondary"
+                icon={<Upload size={18} />}
+                as="span"
+              >
+                Import
+              </GlassButton>
+            </label>
+          </div>
+
+          <div className="relative group">
+            <GlassButton
+              variant="secondary"
+              icon={<Download size={18} />}
+            >
+              Export
+            </GlassButton>
+            <div className="hidden group-hover:block absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+              <button
+                onClick={handleExportCSV}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-t-lg flex items-center gap-2"
+              >
+                <Download size={16} />
+                <span>Export as CSV</span>
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="w-full text-left px-4 py-2 hover:bg-gray-50 rounded-b-lg flex items-center gap-2"
+              >
+                <Download size={16} />
+                <span>Export as JSON</span>
+              </button>
+            </div>
+          </div>
+
+          <GlassButton
+            onClick={() => setShowUserEmployeeLink(true)}
+            variant="secondary"
+            icon={<LinkIcon size={18} />}
+            title="Link users to employee records"
+          >
+            User-Employee Links
+          </GlassButton>
           <GlassButton
             onClick={() => setShowRoleManagement(true)}
             variant="secondary"
@@ -384,7 +605,7 @@ const UserManagementPage: React.FC = () => {
           <div className="flex-1">
             <SearchBar
               onSearch={setSearchQuery}
-              placeholder="Search users by name, email, or department..."
+              placeholder="Search users by name, email, username, or department..."
               className="w-full"
               suggestions={users.map(u => `${u.firstName} ${u.lastName}`)}
               searchKey="user_management_search"
@@ -481,9 +702,11 @@ const UserManagementPage: React.FC = () => {
                   />
                 </th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">User</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">Username</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Role</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Department</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">Permissions</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Last Login</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
               </tr>
@@ -516,6 +739,15 @@ const UserManagementPage: React.FC = () => {
                       )}
                     </div>
                   </td>
+                  <td className="py-3 px-4 text-sm text-gray-600">
+                    {user.username ? (
+                      <span className="font-mono bg-gray-100 px-2 py-1 rounded">
+                        {user.username}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 italic">Not set</span>
+                    )}
+                  </td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
                       {user.role.replace('-', ' ')}
@@ -528,6 +760,31 @@ const UserManagementPage: React.FC = () => {
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
                     {user.department || 'N/A'}
+                  </td>
+                  <td className="py-3 px-4">
+                    {user.permissions && user.permissions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {user.permissions.slice(0, 2).map((perm) => (
+                          <span
+                            key={perm}
+                            className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs"
+                            title={perm}
+                          >
+                            {perm}
+                          </span>
+                        ))}
+                        {user.permissions.length > 2 && (
+                          <span 
+                            className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
+                            title={user.permissions.slice(2).join(', ')}
+                          >
+                            +{user.permissions.length - 2}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 italic text-xs">None</span>
+                    )}
                   </td>
                   <td className="py-3 px-4 text-sm text-gray-600">
                     {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}
@@ -590,8 +847,50 @@ const UserManagementPage: React.FC = () => {
         )}
       </GlassCard>
 
-      {/* Modals would go here */}
-      {/* CreateUserModal, EditUserModal, RoleManagementModal */}
+      {/* Modals */}
+      <CreateUserModal
+        isOpen={showCreateUser}
+        onClose={() => setShowCreateUser(false)}
+        onSubmit={handleCreateUserSubmit}
+        loading={isCreating}
+      />
+
+      <EditUserModal
+        isOpen={showEditUser}
+        onClose={() => {
+          setShowEditUser(false);
+          setEditingUser(null);
+        }}
+        onSubmit={handleEditUserSubmit}
+        user={editingUser}
+        loading={isEditing}
+      />
+
+      {/* Role Management Modal */}
+      <RoleManagementModal
+        isOpen={showRoleManagement}
+        onClose={() => setShowRoleManagement(false)}
+        roles={roles}
+        onRoleCreate={async (data) => {
+          // TODO: Implement role creation API
+          toast.success('Role creation API coming soon!');
+        }}
+        onRoleUpdate={async (id, data) => {
+          // TODO: Implement role update API
+          toast.success('Role update API coming soon!');
+        }}
+        onRoleDelete={async (id) => {
+          // TODO: Implement role deletion API
+          toast.success('Role deletion API coming soon!');
+        }}
+      />
+
+      {/* User-Employee Link Modal */}
+      <UserEmployeeLinkModal
+        isOpen={showUserEmployeeLink}
+        onClose={() => setShowUserEmployeeLink(false)}
+        onLinksUpdated={() => loadUsers()}
+      />
     </div>
   );
 };

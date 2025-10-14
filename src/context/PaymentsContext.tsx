@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { safeQuery, SupabaseErrorHandler } from '../utils/supabaseErrorHandler';
+import { fetchCustomerPayments, fetchLatsSales, fetchCustomersByIds } from '../lib/deduplicatedQueries';
 
 export interface PaymentRow {
   id: string;

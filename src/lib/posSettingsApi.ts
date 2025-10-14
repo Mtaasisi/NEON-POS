@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { businessInfoService } from './businessInfoService';
 
 // Types for all POS settings
 export interface GeneralSettings {
@@ -113,6 +114,24 @@ export interface ReceiptSettings {
   footer_message: string;
   show_return_policy: boolean;
   return_policy_text: string;
+  // SMS/Receipt Message Customization (NEW)
+  sms_header_message?: string;
+  sms_footer_message?: string;
+  // WhatsApp PDF Settings (NEW)
+  enable_whatsapp_pdf?: boolean;
+  whatsapp_pdf_auto_send?: boolean;
+  whatsapp_pdf_show_preview?: boolean;
+  whatsapp_pdf_format?: 'a4' | 'letter' | 'thermal';
+  whatsapp_pdf_quality?: 'high' | 'standard' | 'compressed';
+  whatsapp_pdf_include_logo?: boolean;
+  whatsapp_pdf_include_images?: boolean;
+  whatsapp_pdf_include_qr?: boolean;
+  whatsapp_pdf_include_barcode?: boolean;
+  whatsapp_pdf_message?: string;
+  enable_email_pdf?: boolean;
+  enable_print_pdf?: boolean;
+  enable_download_pdf?: boolean;
+  show_share_button?: boolean;
 }
 
 export interface BarcodeScannerSettings {
@@ -480,8 +499,9 @@ export class POSSettingsAPI {
       currentUserCache = { user, timestamp: Date.now() };
       return user;
     } catch (error) {
-      console.error('Auth error:', error);
-      throw new Error('Authentication failed');
+      // Silently handle auth errors - they're normal when not logged in
+      // The app will use default settings which is fine
+      throw error;
     }
   }
 
@@ -591,7 +611,9 @@ export class POSSettingsAPI {
           show_footer_message: true,
           footer_message: 'Thank you for your business!',
           show_return_policy: false,
-          return_policy_text: 'Returns accepted within 7 days with receipt'
+          return_policy_text: 'Returns accepted within 7 days with receipt',
+          sms_header_message: 'Thank you for your purchase!',
+          sms_footer_message: 'Thank you for choosing us!'
         };
 
       case 'scanner':
@@ -980,6 +1002,12 @@ export class POSSettingsAPI {
           return null;
         }
         
+        // Clear business info cache if general settings were updated
+        if (tableKey === 'general') {
+          businessInfoService.clearCache();
+          console.log('🔄 Business info cache cleared - components will refresh');
+        }
+        
         return data as T;
       } else {
         // Insert new settings
@@ -995,6 +1023,12 @@ export class POSSettingsAPI {
         if (error) {
           // Silently return null on error
           return null;
+        }
+
+        // Clear business info cache if general settings were created
+        if (tableKey === 'general') {
+          businessInfoService.clearCache();
+          console.log('🔄 Business info cache cleared - components will refresh');
         }
 
         return data as T;

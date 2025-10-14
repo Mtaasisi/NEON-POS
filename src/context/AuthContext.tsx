@@ -198,6 +198,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return [];
     } catch (error) {
       console.error('❌ Error loading customers:', error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error stringified:', JSON.stringify(error, null, 2));
+      if (error && typeof error === 'object') {
+        console.error('❌ Error keys:', Object.keys(error as any));
+        console.error('❌ Error message:', (error as any)?.message);
+        console.error('❌ Error code:', (error as any)?.code);
+        console.error('❌ Error details:', (error as any)?.details);
+        console.error('❌ Error hint:', (error as any)?.hint);
+      }
       return [];
     }
   };

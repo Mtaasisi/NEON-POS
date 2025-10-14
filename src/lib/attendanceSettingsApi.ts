@@ -1,9 +1,21 @@
 import { supabase } from './supabaseClient';
 
+export type SecurityMode = 
+  | 'auto-location' // Auto-detect office using GPS
+  | 'manual-location' // Manual location selection with GPS
+  | 'wifi-only' // Only WiFi network verification
+  | 'location-and-wifi' // Both location and WiFi required
+  | 'photo-only' // Only photo verification (least secure)
+  | 'all-security'; // All security methods required (most secure)
+
 export interface AttendanceSettings {
   enabled: boolean;
+  allowEmployeeChoice: boolean; // NEW: Let employees choose their preferred method
+  availableSecurityModes: SecurityMode[]; // NEW: Which modes employees can choose from
+  defaultSecurityMode: SecurityMode; // NEW: Default mode (or only mode if choice disabled)
   requireLocation: boolean;
   requireWifi: boolean;
+  requirePhoto: boolean; // NEW: Require photo verification
   allowMobileData: boolean;
   gpsAccuracy: number;
   checkInRadius: number;
@@ -27,8 +39,12 @@ export interface AttendanceSettings {
 // Default attendance settings
 export const defaultAttendanceSettings: AttendanceSettings = {
   enabled: true,
+  allowEmployeeChoice: true, // Allow employees to choose
+  availableSecurityModes: ['auto-location', 'manual-location', 'wifi-only'], // Available options
+  defaultSecurityMode: 'auto-location' as SecurityMode,
   requireLocation: true,
   requireWifi: true,
+  requirePhoto: false, // Photo verification disabled
   allowMobileData: true,
   gpsAccuracy: 50,
   checkInRadius: 100,

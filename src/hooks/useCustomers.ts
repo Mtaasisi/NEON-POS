@@ -144,7 +144,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
             console.log('⏰ Customer fetch timeout - aborting request');
             abortControllerRef.current.abort();
           }
-        }, 60000); // 60 second timeout for entire operation
+        }, 120000); // 120 second timeout for entire operation (allows core 90s + buffer)
         
         
         const fetchPromise = simple ? fetchAllCustomersSimple() : fetchAllCustomers();

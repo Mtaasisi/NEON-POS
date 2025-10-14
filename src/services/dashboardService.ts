@@ -302,18 +302,34 @@ class DashboardService {
    */
   private async getEmployeeStats() {
     try {
-      // Use deduplicated query to prevent duplicate calls
-      const employees = await fetchUserStatsDedup();
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get all employees
+      const { data: employees, error: empError } = await supabase
+        .from('employees')
+        .select('id, status');
 
-      // TODO: Implement actual attendance tracking
-      const presentToday = Math.floor(employees.length * 0.85);
-      const onLeaveToday = employees.length - presentToday;
+      if (empError) throw empError;
+
+      const total = employees?.length || 0;
+      const onLeaveCount = employees?.filter(e => e.status === 'on-leave').length || 0;
+
+      // Get today's attendance
+      const { data: attendance, error: attError } = await supabase
+        .from('attendance_records')
+        .select('status')
+        .eq('attendance_date', today);
+
+      if (attError) throw attError;
+
+      const presentToday = attendance?.filter(a => a.status === 'present' || a.status === 'late').length || 0;
+      const attendanceRate = total > 0 ? (presentToday / total) * 100 : 0;
 
       return {
-        total: employees.length,
+        total,
         presentToday,
-        onLeaveToday,
-        attendanceRate: employees.length > 0 ? (presentToday / employees.length) * 100 : 0
+        onLeaveToday: onLeaveCount,
+        attendanceRate: Math.round(attendanceRate)
       };
     } catch (error) {
       console.error('Error fetching employee stats:', error instanceof Error ? error.message : error);
@@ -430,23 +446,46 @@ class DashboardService {
    */
   async getTodayEmployeeStatus(): Promise<EmployeeStatus[]> {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name, email, role, is_active')
-        .eq('is_active', true)
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Get all active employees
+      const { data: employees, error: empError } = await supabase
+        .from('employees')
+        .select('id, first_name, last_name, email, department, status')
+        .eq('status', 'active')
         .limit(10);
 
-      if (error) throw error;
+      if (empError) throw empError;
 
-      // TODO: Implement actual attendance tracking
-      return (data || []).map((emp: any) => ({
-        id: emp.id,
-        full_name: emp.full_name,
-        email: emp.email,
-        role: emp.role,
-        status: 'present' as const, // Default status
-        department: emp.role // Use role as department for now
-      }));
+      if (!employees || employees.length === 0) {
+        return [];
+      }
+
+      // Get today's attendance for these employees
+      const employeeIds = employees.map(emp => emp.id);
+      const { data: attendance, error: attError } = await supabase
+        .from('attendance_records')
+        .select('employee_id, status, check_in_time')
+        .eq('attendance_date', today)
+        .in('employee_id', employeeIds);
+
+      if (attError) throw attError;
+
+      // Map employees with their attendance status
+      return employees.map((emp: any) => {
+        const att = attendance?.find((a: any) => a.employee_id === emp.id);
+        const fullName = `${emp.first_name} ${emp.last_name}`;
+        
+        return {
+          id: emp.id,
+          full_name: fullName,
+          email: emp.email,
+          role: emp.department,
+          status: att?.status || 'absent',
+          department: emp.department,
+          checkInTime: att?.check_in_time ? new Date(att.check_in_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : undefined
+        };
+      });
     } catch (error) {
       console.error('Error fetching employee status:', error instanceof Error ? error.message : error);
       return [];

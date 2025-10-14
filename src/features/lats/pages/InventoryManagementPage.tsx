@@ -7,7 +7,7 @@ import { PageErrorBoundary } from '../../../features/shared/components/PageError
 import PageHeader from '../components/ui/PageHeader';
 import { 
   Package, Crown, Users, MapPin, Settings, Plus, Edit, Trash2, 
-  Building, Tag, Truck, Store, Database, Shield, Bell, BarChart3, Layers
+  Building, Tag, Truck, Store, Database, Shield, Bell, BarChart3, Layers, ArrowRightLeft
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -154,6 +154,14 @@ const InventoryManagementPage: React.FC = () => {
                 icon={<Package size={18} />}
               >
                 Back to Inventory
+              </GlassButton>
+              <GlassButton
+                onClick={() => navigate('/lats/stock-transfers')}
+                variant="secondary"
+                icon={<ArrowRightLeft size={18} />}
+                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700"
+              >
+                Stock Transfers
               </GlassButton>
               <GlassButton
                 onClick={() => navigate('/lats/add-product')}

@@ -101,17 +101,18 @@ import ShareReceiptModal from '../../../components/ui/ShareReceiptModal';
 import { 
   useDynamicPricingSettings,
   useGeneralSettings,
-  useReceiptSettings,
+  // useReceiptSettings, // NOT USED - removed
   useBarcodeScannerSettings,
   useDeliverySettings,
   useSearchFilterSettings,
-  useUserPermissionsSettings,
-  useLoyaltyCustomerSettings,
-  useAnalyticsReportingSettings,
-  useNotificationSettings,
+  // useUserPermissionsSettings, // NOT USED - removed
+  // useLoyaltyCustomerSettings, // NOT USED - removed
+  // useAnalyticsReportingSettings, // NOT USED - removed
+  // useNotificationSettings, // NOT USED - removed
   useAdvancedSettings
 } from '../../../hooks/usePOSSettings';
 import { useDynamicDelivery } from '../hooks/useDynamicDelivery';
+import { format } from '../lib/format';
 
 // Helper function to convert old image format to new format
 // const convertToProductImages = (imageUrls: string[]): ProductImage[] => {
@@ -170,17 +171,29 @@ const POSPageOptimized: React.FC = () => {
         sale.created_at && sale.created_at >= sessionStartTime
       );
       const total = sessionSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
-      console.log(`📊 Session sales (since ${new Date(sessionStartTime).toLocaleTimeString()}):`, sessionSales.length, 'transactions, Total:', total);
       return total;
     }
     
     // Fallback: If no session, show today's sales
     const today = new Date().toISOString().split('T')[0];
-    const todaySales = dbSales.filter(sale => sale.created_at?.startsWith(today));
+    const todaySales = dbSales.filter(sale => {
+      if (!sale.created_at) return false;
+      const createdDate = typeof sale.created_at === 'string' 
+        ? sale.created_at 
+        : new Date(sale.created_at).toISOString();
+      return createdDate.startsWith(today);
+    });
     const total = todaySales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
 
     return total;
   }, [dbSales, sessionStartTime]);
+  
+  // Log session info only when session actually changes (not on every sale)
+  useEffect(() => {
+    if (sessionStartTime) {
+      console.log(`📊 Session started at: ${new Date(sessionStartTime).toLocaleTimeString()}`);
+    }
+  }, [sessionStartTime]);
   
   // Get customers from context
   const { customers } = useCustomers();
@@ -226,18 +239,14 @@ const POSPageOptimized: React.FC = () => {
   // const { paymentMethods: dbPaymentMethods, loading: paymentMethodsLoading } = usePaymentMethodsContext();
 
   // All POS settings hooks
+  // Load only the settings that are actually used in this page (optimized from 11 to 6 hooks)
   const { settings: generalSettings } = useGeneralSettings();
   const { settings: dynamicPricingSettings } = useDynamicPricingSettings();
-  const { settings: receiptSettings } = useReceiptSettings();
   const { settings: barcodeScannerSettings } = useBarcodeScannerSettings();
   const { settings: deliverySettings } = useDeliverySettings();
   const dynamicDelivery = useDynamicDelivery(deliverySettings);
   const [selectedDeliveryArea, setSelectedDeliveryArea] = useState<string>('');
   const { settings: searchFilterSettings } = useSearchFilterSettings();
-  const { settings: userPermissionsSettings } = useUserPermissionsSettings();
-  const { settings: loyaltyCustomerSettings } = useLoyaltyCustomerSettings();
-  const { settings: analyticsReportingSettings } = useAnalyticsReportingSettings();
-  const { settings: notificationSettings } = useNotificationSettings();
   const { settings: advancedSettings } = useAdvancedSettings();
 
   // Database state management
@@ -250,22 +259,35 @@ const POSPageOptimized: React.FC = () => {
     loadSales
   } = useInventoryStore();
 
-  // Transform products with category information
+  // Transform products with category information - OPTIMIZED
   const products = useMemo(() => {
     if (dbProducts.length === 0) {
+      console.log('⚠️ [POS] No products loaded from database yet');
       return [];
     }
+
+    console.log(`✅ [POS] Processing ${dbProducts.length} products from database`);
+
+    // Filter out sample products first
+    const filteredDbProducts = dbProducts.filter(product => {
+      const name = product.name.toLowerCase();
+      return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
+    });
     
+    console.log(`✅ [POS] ${filteredDbProducts.length} products after filtering`);
+    
+    // DON'T WAIT FOR CATEGORIES - Show products immediately!
     // If no categories loaded yet, return products without category info
     if (categories.length === 0) {
-      return dbProducts.map(product => ({
+      console.log('⚡ [POS] Showing products without categories (loading faster)');
+      return filteredDbProducts.map(product => ({
         ...product,
-        categoryName: 'Loading...',
+        categoryName: 'Uncategorized',
         category: undefined
       }));
     }
     
-    return dbProducts.map(product => {
+    return filteredDbProducts.map(product => {
       // Try multiple possible category field names - handle both camelCase and snake_case
       const categoryId = product.categoryId || (product as any).category_id || (product as any).category?.id;
       
@@ -325,7 +347,7 @@ const POSPageOptimized: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
-  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('in-stock');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('all'); // Changed from 'in-stock' to 'all' for faster initial display
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock' | 'recent' | 'sales'>('sales');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -486,34 +508,8 @@ const POSPageOptimized: React.FC = () => {
 
   // Initialize sound debugging
   useEffect(() => {
-    console.log('🎵 ════════════════════════════════════════════════');
-    console.log('🎵 POS SOUND SYSTEM - INITIALIZATION (POSPageOptimized)');
-    console.log('🎵 ════════════════════════════════════════════════');
-    
-    // Expose SoundManager to window for debugging
+    // Expose SoundManager to window for debugging (if needed)
     (window as any).SoundManager = SoundManager;
-    console.log('🎵 SoundManager exposed to window.SoundManager');
-    console.log('🎵 Available methods:');
-    console.log('   - window.SoundManager.logStatus() - Show status');
-    console.log('   - window.SoundManager.playClickSound() - Test click');
-    console.log('   - window.SoundManager.playCartAddSound() - Test cart add');
-    console.log('   - window.SoundManager.playPaymentSound() - Test payment');
-    console.log('   - window.SoundManager.playDeleteSound() - Test delete');
-    console.log('🎵 ════════════════════════════════════════════════');
-    
-    // Show initial status
-    setTimeout(() => {
-      console.log('🎵 Initial Sound Status:');
-      SoundManager.logStatus();
-    }, 100);
-    
-    // Test sound on first click
-    const testOnClick = () => {
-      console.log('🎵 First click detected - testing sound...');
-      SoundManager.playClickSound();
-      document.removeEventListener('click', testOnClick);
-    };
-    document.addEventListener('click', testOnClick, { once: true });
   }, []);
 
   // Component-level permission check
@@ -549,24 +545,42 @@ const POSPageOptimized: React.FC = () => {
     }
   }, [dbProducts, lowStockThreshold]);
 
-  // Load initial data with comprehensive error handling
+  // Load initial data with comprehensive error handling - OPTIMIZED
   useEffect(() => {
     const loadInitialData = async () => {
       try {
+        console.log('🚀 [POS] Starting optimized data load...');
+        const startTime = Date.now();
 
-        // Load data with individual error handling
+        // CRITICAL: Load only essential data first (products + categories)
         const results = await Promise.allSettled([
-          loadProducts(),
-          loadCategories(),
-          loadSuppliers(),
-          loadSales()
+          loadProducts({ page: 1, limit: 200 }),  // Load products first
+          loadCategories()                         // Categories needed for display
         ]);
 
-        // Check results and provide specific feedback
+        const loadTime = Date.now() - startTime;
+        console.log(`✅ [POS] Essential data loaded in ${loadTime}ms`);
+
+        // Detect cold start (Neon database waking up)
+        if (loadTime > 10000) {
+          console.warn(`⏰ [POS] Cold start detected (${loadTime}ms) - Database was asleep`);
+        }
+
+        // Load non-critical data in background (don't wait for it)
+        Promise.allSettled([
+          loadSuppliers(),
+          loadSales()
+        ]).then(() => {
+          console.log('✅ [POS] Background data loaded');
+        }).catch(err => {
+          console.warn('⚠️ [POS] Background data failed (non-critical):', err);
+        });
+
+        // Check results for critical data only
         const errors = results
           .map((result, index) => {
             if (result.status === 'rejected') {
-              const dataTypes = ['products', 'categories', 'suppliers', 'sales'];
+              const dataTypes = ['products', 'categories'];
               console.error(`Failed to load ${dataTypes[index]}:`, result.reason);
               return dataTypes[index];
             }
@@ -575,12 +589,15 @@ const POSPageOptimized: React.FC = () => {
           .filter(Boolean);
 
         if (errors.length > 0) {
-          toast.error(`Failed to load: ${errors.join(', ')}. Some features may not work properly.`);
+          toast.error(`Failed to load: ${errors.join(', ')}. Please refresh.`);
         } else {
-          toast.success('POS data loaded successfully');
+          // Show appropriate message based on load time
+          if (loadTime > 15000) {
+            toast.success('POS ready! (Database took a moment to wake up)', { duration: 3000 });
+          } else {
+            toast.success('POS ready!', { duration: 2000 });
+          }
         }
-
-        // Debug will be handled by the categories monitoring useEffect
 
         setDataLoaded(true);
         setLastLoadTime(Date.now());
@@ -593,7 +610,7 @@ const POSPageOptimized: React.FC = () => {
     if (!dataLoaded || (isCachingEnabled && Date.now() - lastLoadTime > CACHE_DURATION_MS)) {
       loadInitialData();
     }
-  }, [dataLoaded, lastLoadTime, isCachingEnabled]);
+  }, [dataLoaded, lastLoadTime, isCachingEnabled, loadProducts, loadCategories, loadSuppliers, loadSales]);
 
   // Monitor categories loading
   useEffect(() => {
@@ -866,6 +883,17 @@ const POSPageOptimized: React.FC = () => {
     setAlertsDismissed(false);
   };
 
+  // Auto-dismiss inventory alerts notification after 10 seconds
+  useEffect(() => {
+    if (showInventoryAlerts) {
+      const timer = setTimeout(() => {
+        handleCloseInventoryAlerts();
+      }, 10000); // 10 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [showInventoryAlerts]);
+
   // Migration handler for testing (temporarily disabled)
   // const handleApplyMigration = async () => {
   //   const success = await applyInventoryAlertsMigration();
@@ -917,8 +945,10 @@ const POSPageOptimized: React.FC = () => {
           }
 
           if (sessionData) {
-            // Active session found - use it
-            console.log('✅ Active session found, started at:', sessionData.opened_at);
+            // Active session found - use it (only log in development)
+            if (process.env.NODE_ENV === 'development') {
+              console.log('✅ Active session found, started at:', sessionData.opened_at);
+            }
             setIsDailyClosed(false);
             setDailyClosureInfo(null);
             setSessionStartTime(sessionData.opened_at);
@@ -1258,7 +1288,7 @@ const POSPageOptimized: React.FC = () => {
       // Validate discount is not greater than total
       if (discountAmount >= totalAmount) {
         console.error('❌ Discount exceeds total:', { discountAmount, totalAmount });
-        toast.error(`Discount (${discountAmount.toLocaleString()} TZS) cannot exceed total (${totalAmount.toLocaleString()} TZS)`);
+        toast.error(`Discount (${format.money(discountAmount)}) cannot exceed total (${format.money(totalAmount)})`);
         return;
       }
 
@@ -1307,6 +1337,9 @@ const POSPageOptimized: React.FC = () => {
     }
   };
 
+  // Tax rate - can be made configurable later
+  const TAX_RATE = 18; // 18% VAT for Tanzania
+
   // Calculate totals with validation
   const totalAmount = useMemo(() => {
     const total = cartItems.reduce((sum, item) => {
@@ -1325,7 +1358,10 @@ const POSPageOptimized: React.FC = () => {
   }, [cartItems]);
   
   const discountAmount = manualDiscount || 0;
-  const finalAmount = totalAmount - discountAmount;
+  const discountPercentage = totalAmount > 0 ? Math.round((discountAmount / totalAmount) * 100) : 0;
+  const subtotalAfterDiscount = totalAmount - discountAmount;
+  const taxAmount = (subtotalAfterDiscount * TAX_RATE) / 100;
+  const finalAmount = subtotalAfterDiscount + taxAmount;
 
   // Check if barcode scanner is enabled
   const isQrCodeScannerEnabled = barcodeScannerSettings?.enable_barcode_scanner;
@@ -1334,38 +1370,6 @@ const POSPageOptimized: React.FC = () => {
     <div className="min-h-screen pos-auto-scale" data-pos-page="true">
       {/* Breadcrumb */}
       <LATSBreadcrumb />
-
-      {/* TEST BUTTON - Remove after testing */}
-      <div style={{ position: 'fixed', top: '10px', right: '10px', zIndex: 999999 }}>
-        <button
-          onClick={() => {
-            console.log('🧪 TEST: Clicking test button');
-            console.log('🧪 TEST: successModal:', successModal);
-            console.log('🧪 TEST: SuccessIcons:', SuccessIcons);
-            successModal.show('TEST SUCCESS! If you see this, the modal works!', {
-              title: 'Test Success! 🎉',
-              icon: SuccessIcons.saleCompleted,
-              autoCloseDelay: 0,
-              actionButtons: [
-                { label: 'Close', onClick: () => console.log('Close clicked') }
-              ]
-            });
-            console.log('🧪 TEST: After show(), isOpen:', successModal.isOpen);
-          }}
-          style={{
-            padding: '8px 16px',
-            background: '#ef4444',
-            color: 'white',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '12px',
-            fontWeight: 'bold'
-          }}
-        >
-          🧪 TEST SUCCESS MODAL
-        </button>
-      </div>
 
       {/* POS Top Bar */}
       <POSTopBar
@@ -1417,14 +1421,26 @@ const POSPageOptimized: React.FC = () => {
         </div>
       )} */}
 
-      <div className="p-4 sm:p-6 pb-6 max-w-full mx-auto space-y-6 pos-page-container">
-        <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-200px)]">
-          {/* Product Search Section */}
-          <ProductSearchSection
-            products={products as any}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            isSearching={isSearching}
+      <div className="p-4 sm:p-6 max-w-full mx-auto pos-page-container overflow-hidden h-[calc(100vh-120px)]">
+        <div className="flex flex-col lg:flex-row gap-6 h-full">
+          {/* Product Search Section - Fixed height to prevent layout shift */}
+          <div className="flex-1 min-h-0 relative h-full">
+            {!dataLoaded && products.length === 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur rounded-lg shadow-lg z-10">
+                <div className="text-center p-12">
+                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Loading Products...</h3>
+                  <p className="text-gray-600">Please wait while we fetch your inventory</p>
+                  <p className="text-sm text-gray-500 mt-2">First load may take a few seconds</p>
+                </div>
+              </div>
+            ) : null}
+            
+            <ProductSearchSection
+              products={products as any}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              isSearching={isSearching}
             showAdvancedFilters={showAdvancedFilters}
             setShowAdvancedFilters={setShowAdvancedFilters}
             selectedCategory={selectedCategory}
@@ -1449,7 +1465,8 @@ const POSPageOptimized: React.FC = () => {
             setCurrentPage={setCurrentPage}
             totalPages={totalPages}
             productsPerPage={PRODUCTS_PER_PAGE}
-          />
+            />
+          </div>
 
           {/* Cart Section */}
           <POSCartSection
@@ -1478,6 +1495,9 @@ const POSPageOptimized: React.FC = () => {
             dynamicPricingEnabled={dynamicPricingSettings?.enable_dynamic_pricing}
             totalAmount={totalAmount}
             discountAmount={discountAmount}
+            discountPercentage={discountPercentage}
+            taxAmount={taxAmount}
+            taxRate={TAX_RATE}
             finalAmount={finalAmount}
             onEditCustomer={(_customer) => setShowCustomerEditModal(true)}
           />
@@ -1572,7 +1592,7 @@ const POSPageOptimized: React.FC = () => {
                 profit: 0 // Will be calculated by service
               })),
               subtotal: totalAmount,
-              tax: 0, // No tax for now
+              tax: taxAmount,
               discount: manualDiscount,
               discountType: discountType,
               discountValue: parseFloat(discountValue) || 0,
@@ -1613,12 +1633,12 @@ const POSPageOptimized: React.FC = () => {
                   email: selectedCustomer.email
                 } : null,
                 subtotal: totalAmount,
-                tax: 0,
+                tax: taxAmount,
                 discount: manualDiscount,
                 total: finalAmount,
                 paymentMethod: {
                   name: 'ZenoPay',
-                  description: `ZenoPay - ${finalAmount.toLocaleString()} TZS`,
+                  description: `ZenoPay - ${format.money(finalAmount)}`,
                   icon: '💳'
                 },
                 cashier: cashierName || 'POS User',
@@ -1740,7 +1760,7 @@ const POSPageOptimized: React.FC = () => {
                 profit: 0 // Will be calculated by service
               })),
               subtotal: totalAmount,
-              tax: 0, // No tax for now
+              tax: taxAmount,
               discount: manualDiscount,
               discountType: discountType,
               discountValue: parseFloat(discountValue) || 0,
@@ -1792,14 +1812,14 @@ const POSPageOptimized: React.FC = () => {
                   email: selectedCustomer.email
                 } : null,
                 subtotal: totalAmount,
-                tax: 0,
+                tax: taxAmount,
                 discount: manualDiscount,
                 total: finalAmount,
                 paymentMethod: {
                   name: payments.length === 1 ? payments[0].paymentMethod : 'Multiple Payments',
                   description: payments.length === 1 
-                    ? `${payments[0].paymentMethod} - ${payments[0].amount.toLocaleString()} TZS`
-                    : `${payments.length} payment methods - ${totalPaid.toLocaleString()} TZS`,
+                    ? `${payments[0].paymentMethod} - ${format.money(payments[0].amount)}`
+                    : `${payments.length} payment methods - ${format.money(displayAmount)}`,
                   icon: '💳'
                 },
                 cashier: cashierName || 'POS User',
@@ -1818,7 +1838,7 @@ const POSPageOptimized: React.FC = () => {
               // Use setTimeout to ensure modal renders before state changes
               setTimeout(() => {
                 successModal.show(
-                  `Payment of ${displayAmount.toLocaleString()} TZS processed successfully!${saleNumber ? ` Sale #${saleNumber}` : ''}`,
+                  `Payment of ${format.money(displayAmount)} processed successfully!${saleNumber ? ` Sale #${saleNumber}` : ''}`,
                   {
                     title: 'Sale Complete! 🎉',
                     icon: SuccessIcons.paymentReceived,
@@ -1882,7 +1902,7 @@ const POSPageOptimized: React.FC = () => {
                 // Continue with successful payment flow
                 const displayAmount = totalPaid || finalAmount;
                 successModal.show(
-                  `Payment of ${displayAmount.toLocaleString()} TZS processed successfully!`,
+                  `Payment of ${format.money(displayAmount)} processed successfully!`,
                   {
                     title: 'Payment Received! 💰',
                     icon: SuccessIcons.paymentReceived,
@@ -2047,10 +2067,14 @@ const POSPageOptimized: React.FC = () => {
             console.log('🔓 Opening new day session...');
             
             // Delete the closure record to "open" the day
-            await supabase
+            const { error: deleteError } = await supabase
               .from('daily_sales_closures')
-              .delete()
-              .match({ date: today });
+              .eq('date', today)
+              .delete();
+            
+            if (deleteError) {
+              console.error('❌ Error deleting closure:', deleteError);
+            }
             
             // Create a new session
             const { data: newSession, error: sessionError } = await supabase
@@ -2108,80 +2132,97 @@ const POSPageOptimized: React.FC = () => {
         currentUser={currentUser}
       />
 
-      {/* Inventory Alerts Modal */}
+      {/* Inventory Alerts Notification (Non-Blocking Toast) */}
       {showInventoryAlerts && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-          onClick={() => handleCloseInventoryAlerts()}
-        >
-          <div 
-            className="bg-white rounded-lg p-6 max-w-lg w-full mx-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold">Inventory Alerts</h3>
+        <div className="fixed top-4 right-4 z-50 w-96 animate-slide-in">
+          <div className="bg-white rounded-xl shadow-2xl border border-red-200 overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-red-500 to-orange-500 px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <h3 className="text-white font-semibold text-sm">
+                  {inventoryAlerts.length} Low Stock {inventoryAlerts.length !== 1 ? 'Items' : 'Item'}
+                </h3>
+              </div>
               <button
                 onClick={() => {
                   playClickSound();
                   handleCloseInventoryAlerts();
                 }}
-                className="text-gray-500 hover:text-gray-700 text-xl font-bold"
+                className="text-white hover:text-red-100 transition-colors"
               >
-                ×
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            <div className="max-h-60 overflow-y-auto">
+
+            {/* Content */}
+            <div className="max-h-72 overflow-y-auto bg-gray-50">
               {inventoryAlerts.length > 0 ? (
-                inventoryAlerts.map((alert) => (
-                  <div key={alert.productId} className="p-3 border-b border-gray-200">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <div className="font-medium text-red-600">{alert.productName}</div>
-                        <div className="text-sm text-gray-600">
-                          Current Stock: {alert.currentStock} | Threshold: {alert.threshold}
+                inventoryAlerts.slice(0, 5).map((alert, index) => (
+                  <div 
+                    key={alert.productId} 
+                    className={`px-4 py-3 bg-white ${index !== inventoryAlerts.length - 1 && index !== 4 ? 'border-b border-gray-100' : ''} hover:bg-red-50 transition-colors`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-900 text-sm truncate">{alert.productName}</div>
+                        <div className="text-xs text-gray-600 mt-0.5">
+                          Stock: <span className="font-semibold text-red-600">{alert.currentStock}</span> / {alert.threshold}
                         </div>
                       </div>
-                      <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">
-                        Low Stock
-                      </span>
+                      <div className="flex-shrink-0">
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Low
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))
               ) : (
-                <p className="text-gray-500 text-center py-4">No inventory alerts</p>
+                <div className="px-4 py-6 text-center">
+                  <p className="text-gray-500 text-sm">No inventory alerts</p>
+                </div>
+              )}
+              {inventoryAlerts.length > 5 && (
+                <div className="px-4 py-2 bg-gray-100 text-center">
+                  <p className="text-xs text-gray-600">
+                    +{inventoryAlerts.length - 5} more items
+                  </p>
+                </div>
               )}
             </div>
-            <div className="flex gap-2 justify-between mt-4">
+
+            {/* Actions */}
+            <div className="bg-white px-4 py-3 flex gap-2 border-t border-gray-200">
               <button
                 onClick={() => {
                   playClickSound();
                   handleCloseInventoryAlerts(true);
                 }}
-                className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 text-sm"
+                className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-xs font-medium"
               >
-                Don't Show Today
+                Hide Today
               </button>
-              <div className="flex gap-2">
               <button
                 onClick={() => {
                   playClickSound();
-                  handleCloseInventoryAlerts(false);
+                  setAlertsDismissed(true);
+                  setShowInventoryAlerts(false);
                 }}
-                className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 text-sm"
+                className="flex-1 px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-xs font-medium"
               >
-                Close
+                Don't Show Again
               </button>
-                <button
-                  onClick={() => {
-                    setAlertsDismissed(true);
-                    setShowInventoryAlerts(false);
-                  }}
-                  className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
-                >
-                  Don't Show Again
-                </button>
-              </div>
             </div>
+          </div>
+
+          {/* Auto-dismiss progress bar */}
+          <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-red-500 to-orange-500 animate-shrink" />
           </div>
         </div>
       )}

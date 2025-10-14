@@ -431,28 +431,25 @@ class PaymentTrackingService {
       // Fetch device payments (repair payments) with safe query
       const { data: devicePayments, error: devicePaymentsError } = await supabase
         .from('customer_payments')
-        .select(`
-          *,
-          devices(brand, model),
-          customers(name)
-        `)
+        .select('*')
         .order('payment_date', { ascending: false })
         .limit(1000); // Add reasonable limit to prevent performance issues
 
       if (devicePaymentsError) {
-        console.log('⚠️ PaymentTrackingService: customer_payments table not found or error:', devicePaymentsError);
-      } else if (devicePayments) {
+        console.log('⚠️ PaymentTrackingService: customer_payments error:', devicePaymentsError);
+      } else if (devicePayments && devicePayments.length > 0) {
         console.log(`📊 PaymentTrackingService: Found ${devicePayments.length} device payments`);
         const transformedDevicePayments = devicePayments.map((payment: any) => ({
           id: payment.id,
           transactionId: `TXN-${payment.id.slice(0, 8).toUpperCase()}`,
-          customerName: payment.customers?.name || 'Unknown Customer',
+          customerName: payment.customer_name || 'Unknown Customer',
           customerPhone: payment.customer_phone,
           customerEmail: payment.customer_email,
           customerAddress: payment.customer_address,
           amount: Number(payment.amount) || 0,
-          method: this.mapPaymentMethod(payment.method),
-          paymentMethod: this.mapPaymentMethod(payment.method),
+          currency: payment.currency || 'TZS',
+          method: this.mapPaymentMethod(payment.method || payment.payment_method),
+          paymentMethod: this.mapPaymentMethod(payment.method || payment.payment_method),
           reference: payment.reference || `REF-${payment.id.slice(0, 8).toUpperCase()}`,
           status: payment.status || 'completed',
           date: payment.payment_date || payment.created_at,
@@ -464,9 +461,7 @@ class PaymentTrackingService {
           source: 'device_payment' as const,
           customerId: payment.customer_id,
           deviceId: payment.device_id,
-          deviceName: payment.devices 
-            ? `${payment.devices.brand || ''} ${payment.devices.model || ''}`.trim() 
-            : undefined,
+          deviceName: payment.device_name || undefined,
           paymentType: payment.payment_type || 'payment',
           createdBy: payment.created_by,
           createdAt: payment.created_at,
@@ -475,20 +470,32 @@ class PaymentTrackingService {
           // soldItems will be fetched on-demand when viewing transaction details
         }));
         allPayments.push(...transformedDevicePayments);
-      } else if (devicePaymentsError) {
-        console.error('❌ PaymentTrackingService: Error fetching device payments:', devicePaymentsError);
+      } else {
+        console.log('📊 PaymentTrackingService: No device payments found (0 records)');
       }
 
       // Fetch POS sales (if accessible) with safe query
       try {
         console.log('🔍 PaymentTrackingService: Fetching POS sales...');
-        const { data: posSales, error: posSalesError } = await supabase
+        
+        // 🔒 Get current branch for isolation
+        const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+        
+        let query = supabase
           .from('lats_sales')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(1000); // Add reasonable limit
+        
+        // 🔒 COMPLETE ISOLATION: Only show sales from current branch
+        if (currentBranchId) {
+          console.log('🔒 [PaymentTracking] Filtering POS sales by branch:', currentBranchId);
+          query = query.eq('branch_id', currentBranchId);
+        }
+        
+        const { data: posSales, error: posSalesError } = await query;
 
-        if (!posSalesError && posSales) {
+        if (!posSalesError && posSales && posSales.length > 0) {
           console.log(`📊 PaymentTrackingService: Found ${posSales.length} POS sales`);
           
           // Transform POS sales with safe data mapping
@@ -525,9 +532,11 @@ class PaymentTrackingService {
           allPayments.push(...transformedPOSSales);
         } else if (posSalesError) {
           console.error('❌ PaymentTrackingService: Error fetching POS sales:', posSalesError);
+        } else {
+          console.log('📊 PaymentTrackingService: No POS sales found (0 records)');
         }
       } catch (posError) {
-        console.warn('POS sales not accessible due to RLS policies:', posError);
+        console.warn('⚠️ PaymentTrackingService: POS sales not accessible:', posError);
       }
 
       // Fetch Purchase Order payments with ULTRA simplified query to avoid 400 errors
@@ -541,7 +550,7 @@ class PaymentTrackingService {
           .order('payment_date', { ascending: false })
           .limit(1000); // Add reasonable limit
 
-        if (!poPaymentsError && poPayments) {
+        if (!poPaymentsError && poPayments && poPayments.length > 0) {
           console.log(`📊 PaymentTrackingService: Found ${poPayments.length} Purchase Order payments`);
           
           // Transform Purchase Order payments with safe data mapping (no joins to avoid 400 errors)
@@ -587,9 +596,11 @@ class PaymentTrackingService {
           allPayments.push(...transformedPOPayments);
         } else if (poPaymentsError) {
           console.error('❌ PaymentTrackingService: Error fetching Purchase Order payments:', poPaymentsError);
+        } else {
+          console.log('📊 PaymentTrackingService: No Purchase Order payments found (0 records)');
         }
       } catch (poError) {
-        console.warn('Purchase Order payments not accessible due to RLS policies:', poError);
+        console.warn('⚠️ PaymentTrackingService: Purchase Order payments not accessible:', poError);
       }
 
       // Apply filters
@@ -1161,17 +1172,9 @@ class PaymentTrackingService {
       return this.mapPaymentMethod(parsed);
     }
     
-    // If it's multiple payment methods, extract and display them
+    // If it's multiple payment methods, just return "Multiple"
     if (parsed.type === 'multiple' && parsed.details?.payments) {
-      const methods = parsed.details.payments.map((payment: any) => {
-        // Format method name nicely
-        const methodName = payment.method || payment.paymentMethod || 'Unknown';
-        return methodName.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
-      });
-      
-      // Remove duplicates and join with commas
-      const uniqueMethods = [...new Set(methods)];
-      return uniqueMethods.join(', ');
+      return 'Multiple';
     }
     
     // Fallback to mapping the parsed method

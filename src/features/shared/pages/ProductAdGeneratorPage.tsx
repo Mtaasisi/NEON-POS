@@ -69,7 +69,7 @@ interface ExportSettings {
 }
 
 interface SocialMediaSettings {
-  platform: 'instagram' | 'facebook' | 'twitter' | 'linkedin' | 'whatsapp' | 'tiktok';
+  platform: 'facebook' | 'twitter' | 'linkedin' | 'whatsapp' | 'tiktok';
   hashtags: string[];
   caption: string;
   contactInfo: {
@@ -174,12 +174,12 @@ const ProductAdGeneratorPage: React.FC = () => {
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
     format: 'PNG',
     quality: 90,
-    size: { width: 1080, height: 1350, name: 'Instagram' },
+    size: { width: 1200, height: 630, name: 'Facebook' },
     filename: 'product_ad',
     includeMetadata: false
   });
   const [socialMediaSettings, setSocialMediaSettings] = useState<SocialMediaSettings>({
-    platform: 'instagram',
+    platform: 'facebook',
     hashtags: ['#technology', '#laptop', '#deals', '#tanzania'],
     caption: 'Check out this amazing deal! 🔥',
     contactInfo: {
@@ -532,11 +532,6 @@ const ProductAdGeneratorPage: React.FC = () => {
 
   const optimizeForPlatform = (platform: string) => {
     const optimizations = {
-      instagram: {
-        size: { width: 1080, height: 1080, name: 'Instagram Square' },
-        hashtags: ['#instagram', '#instagood', '#photooftheday', '#fashion', '#beautiful', '#happy', '#cute', '#tbt', '#like4like', '#followme'],
-        caption: '✨ New arrival! Swipe to see more details 👆'
-      },
       facebook: {
         size: { width: 1200, height: 630, name: 'Facebook Post' },
         hashtags: ['#facebook', '#deals', '#shopping', '#technology', '#lifestyle'],
@@ -1342,7 +1337,6 @@ const ProductAdGeneratorPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">Platform</label>
                       <div className="grid grid-cols-3 gap-2">
                         {[
-                          { key: 'instagram', name: 'Instagram', icon: '📷' },
                           { key: 'facebook', name: 'Facebook', icon: '📘' },
                           { key: 'twitter', name: 'Twitter', icon: '🐦' },
                           { key: 'linkedin', name: 'LinkedIn', icon: '💼' },
@@ -1721,7 +1715,6 @@ const ProductAdGeneratorPage: React.FC = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">Size Presets</label>
                       <div className="grid grid-cols-2 gap-2">
                         {[
-                          { name: 'Instagram', width: 1080, height: 1080 },
                           { name: 'Facebook', width: 1200, height: 630 },
                           { name: 'Twitter', width: 1200, height: 675 },
                           { name: 'LinkedIn', width: 1200, height: 627 },

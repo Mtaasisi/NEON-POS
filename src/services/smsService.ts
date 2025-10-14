@@ -1,6 +1,7 @@
 // Enhanced SMS Service with AI Integration
 import { supabase } from '../lib/supabaseClient';
 import geminiService from './geminiService';
+import { updateIntegrationUsage } from '../lib/integrationsApi';
 
 export interface SMSLog {
   id: string;
@@ -57,60 +58,36 @@ class SMSService {
   }
 
   private async initializeService() {
-    // Load SMS configuration from settings
+    // Load SMS configuration from integrations
     try {
-      console.log('🔧 Initializing SMS service...');
-      console.log('🔍 DEBUG: Starting SMS service initialization');
+      console.log('🔧 Initializing SMS service from integrations...');
       
-      // Use .in() instead of .or() for better Neon compatibility
-      const { data, error } = await supabase
-        .from('settings')
-        .select('key, value')
-        .in('key', ['sms_provider_api_key', 'sms_api_url', 'sms_provider_password']);
+      // Get full integration (not just credentials) to access config
+      const { getIntegration } = await import('../lib/integrationsApi');
+      const integration = await getIntegration('SMS_GATEWAY');
       
-      console.log('🔍 DEBUG: Supabase query result:', { data, error });
-
-      if (error) {
-        console.warn('❌ SMS service configuration query failed:', error);
+      if (!integration || !integration.is_enabled) {
+        console.warn('⚠️ SMS integration not configured. Please set up SMS in Admin Settings → Integrations');
         return;
       }
 
-      if (data && Array.isArray(data)) {
-        console.log('📋 Found SMS settings:', data.length, 'records');
-        
-        data.forEach(setting => {
-          console.log('🔍 DEBUG: Processing setting:', setting.key, '=', setting.value);
-          if (setting.key === 'sms_provider_api_key') {
-            this.apiKey = setting.value || null;
-            console.log('🔑 SMS API Key:', this.apiKey ? '✅ Configured' : '❌ Missing');
-            console.log('🔍 DEBUG: API Key set to:', this.apiKey);
-          } else if (setting.key === 'sms_api_url') {
-            this.apiUrl = setting.value || null;
-            console.log('🌐 SMS API URL:', this.apiUrl ? '✅ Configured' : '❌ Missing');
-            console.log('🔍 DEBUG: API URL set to:', this.apiUrl);
-          } else if (setting.key === 'sms_provider_password') {
-            this.apiPassword = setting.value || null;
-            console.log('🔐 SMS Password:', this.apiPassword ? '✅ Configured' : '❌ Missing');
-            console.log('🔍 DEBUG: Password set to:', this.apiPassword);
-          }
-        });
-        
-        console.log('🔍 DEBUG: Final SMS service state:', {
-          apiKey: this.apiKey,
-          apiUrl: this.apiUrl,
-          apiPassword: this.apiPassword,
-          initialized: this.initialized
-        });
-        
-        if (!this.apiKey || !this.apiUrl) {
-          console.warn('⚠️ SMS service not fully configured. SMS notifications will fail.');
-          console.warn('💡 To configure SMS, run the setup instructions in the console.');
-        } else {
-          console.log('✅ SMS service initialized successfully');
-        }
+      // Set credentials from integrations (credentials field)
+      this.apiKey = integration.credentials?.api_key || null;
+      this.apiPassword = integration.credentials?.api_password || integration.credentials?.api_secret || null;
+      
+      // Set API URL from config field (not credentials)
+      this.apiUrl = integration.config?.api_url || 'https://mshastra.com/sendurl.aspx'; // Correct MShastra URL
+      
+      console.log('✅ SMS credentials loaded from integrations');
+      console.log('🔑 API Key:', this.apiKey ? '✅ Configured' : '❌ Missing');
+      console.log('🌐 API URL:', this.apiUrl ? '✅ Configured' : '❌ Missing');
+      console.log('🔐 Password:', this.apiPassword ? '✅ Configured' : '❌ Missing');
+      
+      if (!this.apiKey || !this.apiUrl) {
+        console.warn('⚠️ SMS service not fully configured. SMS notifications will fail.');
+        console.warn('💡 To configure SMS in Admin Settings → Integrations');
       } else {
-        console.warn('⚠️ No SMS settings found in database');
-        console.warn('💡 SMS notifications will be disabled until configured');
+        console.log('✅ SMS service initialized successfully');
       }
       
       this.initialized = true;
@@ -154,15 +131,24 @@ class SMSService {
       // Send the SMS
       const result = await this.sendSMSToProvider(phone, enhancedMessage);
       
+      // Track usage in integrations (non-blocking)
+      updateIntegrationUsage('SMS_GATEWAY', result.success).catch(err => 
+        console.warn('Could not update integration usage:', err)
+      );
+      
       // Log the SMS
-      const logData = {
+      const logData: any = {
         recipient_phone: phone,
         message: enhancedMessage,
         status: result.success ? 'sent' : 'failed',
-        error_message: result.error,
         sent_at: new Date().toISOString(),
         created_at: new Date().toISOString()
       };
+
+      // Only include error_message if it exists
+      if (result.error) {
+        logData.error_message = result.error;
+      }
 
       const { data: log, error: logError } = await supabase
         .from('sms_logs')
@@ -415,12 +401,23 @@ Respond in JSON format:
       }
 
       // Use backend proxy to avoid CORS issues
-      const proxyUrl = '/api/sms-proxy';
+      // In production, use environment variable; in development, use localhost
+      const proxyUrl = import.meta.env.VITE_API_URL 
+        ? `${import.meta.env.VITE_API_URL}/api/sms-proxy`
+        : 'http://localhost:8000/api/sms-proxy';
       
-      console.log('📱 Sending SMS via backend proxy...');
+      console.log('📱 Sending SMS via MShastra backend proxy...');
       console.log('   Phone:', phone);
       console.log('   Message:', message.substring(0, 50) + '...');
-      console.log('   Provider:', this.apiUrl);
+      console.log('   Provider: MShastra');
+
+      // Get fresh credentials from integrations for all fields
+      const { getIntegration } = await import('../lib/integrationsApi');
+      const integration = await getIntegration('SMS_GATEWAY');
+      const senderId = integration?.credentials?.sender_id || 'LATS POS';
+      const apiUrl = integration?.config?.api_url || this.apiUrl || 'https://mshastra.com/sendurl.aspx';
+      const apiKey = integration?.credentials?.api_key || this.apiKey;
+      const apiPassword = integration?.credentials?.api_password || this.apiPassword;
 
       const response = await fetch(proxyUrl, {
         method: 'POST',
@@ -430,10 +427,10 @@ Respond in JSON format:
         body: JSON.stringify({
           phone,
           message,
-          apiUrl: this.apiUrl,
-          apiKey: this.apiKey,
-          apiPassword: this.apiPassword,
-          senderId: 'INAUZWA'
+          apiUrl: apiUrl,
+          apiKey: apiKey,
+          apiPassword: apiPassword,
+          senderId: senderId
         })
       });
       
@@ -456,8 +453,18 @@ Respond in JSON format:
         return { success: false, error: result.error || 'SMS sending failed' };
       }
     } catch (error) {
-      console.error('📱 SMS Network Error:', error);
+      // Check if it's a connection refused error (expected when proxy server is down)
       const errorMessage = error instanceof Error ? error.message : 'Unknown network error';
+      const isConnectionError = errorMessage.includes('Failed to fetch') || 
+                               errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+                               errorMessage.includes('ECONNREFUSED');
+      
+      if (isConnectionError) {
+        console.log('ℹ️  SMS proxy server not available - skipping SMS (expected in dev environment)');
+        return { success: false, error: 'SMS proxy server not available' };
+      }
+      
+      console.error('📱 SMS Network Error:', error);
       return { success: false, error: `Network error: ${errorMessage}` };
     }
   }

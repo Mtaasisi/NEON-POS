@@ -29,19 +29,19 @@ class QueryDeduplicationService {
     // Check if we have a valid cached result
     const cached = this.cache.get(key);
     if (cached && Date.now() - cached.timestamp < cacheDuration) {
-      console.log(`📦 Query cache HIT for: ${key}`);
+      // console.log(`📦 Query cache HIT for: ${key}`);
       return cached.data;
     }
 
     // Check if there's already a pending request for this key
     const pending = this.pendingRequests.get(key);
     if (pending) {
-      console.log(`⏳ Query deduplication: waiting for pending request: ${key}`);
+      // console.log(`⏳ Query deduplication: waiting for pending request: ${key}`);
       return pending;
     }
 
     // Execute the query
-    console.log(`🔍 Query cache MISS, executing: ${key}`);
+    // console.log(`🔍 Query cache MISS, executing: ${key}`);
     const promise = queryFn()
       .then((data) => {
         // Cache the result
@@ -72,10 +72,10 @@ class QueryDeduplicationService {
   clearCache(key?: string): void {
     if (key) {
       this.cache.delete(key);
-      console.log(`🗑️ Cleared cache for: ${key}`);
+      // console.log(`🗑️ Cleared cache for: ${key}`);
     } else {
       this.cache.clear();
-      console.log('🗑️ Cleared all query cache');
+      // console.log('🗑️ Cleared all query cache');
     }
   }
 
@@ -105,7 +105,7 @@ class QueryDeduplicationService {
     }
 
     if (cleaned > 0) {
-      console.log(`🧹 Cleaned up ${cleaned} expired cache entries`);
+      // console.log(`🧹 Cleaned up ${cleaned} expired cache entries`);
     }
   }
 }

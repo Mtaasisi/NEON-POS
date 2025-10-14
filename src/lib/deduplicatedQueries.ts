@@ -258,12 +258,54 @@ export async function fetchLatsSales(cacheDuration: number = 5000) {
   return deduplicatedQuery(
     'lats-sales',
     async () => {
-      const { data, error } = await supabase
+      console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #9900cc; font-weight: bold;');
+      console.log('%c💰 FETCHING SALES', 'background: #9900cc; color: white; font-size: 14px; padding: 3px;');
+      
+      // 🔒 Get current branch for isolation
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      
+      const branchNames = {
+        '24cd45b8-1ce1-486a-b055-29d169c3a8ea': 'Main Store',
+        '115e0e51-d0d6-437b-9fda-dfe11241b167': 'ARUSHA',
+        'd4603b1e-6bb7-414d-91b6-ca1a4938b441': 'Airport Branch'
+      };
+      
+      console.log('%c🏪 Current Branch:', 'color: #9900cc; font-weight: bold;', currentBranchId);
+      console.log('%c📍 Branch Name:', 'color: #9900cc; font-weight: bold;', branchNames[currentBranchId] || 'UNKNOWN');
+      
+      let query = supabase
         .from('lats_sales')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
+      // 🔒 COMPLETE ISOLATION: Only show sales from current branch
+      if (currentBranchId) {
+        console.log('%c🔒 APPLYING BRANCH FILTER TO SALES!', 'background: #ff0000; color: white; font-weight: bold; padding: 3px;');
+        console.log('%c   Filter: branch_id = ' + currentBranchId, 'color: #ff0000;');
+        query = query.eq('branch_id', currentBranchId);
+      } else {
+        console.log('%c⚠️ NO BRANCH FILTER - SHOWING ALL SALES!', 'background: #ff9900; color: black; font-weight: bold; padding: 3px;');
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('%c❌ SALES QUERY FAILED!', 'background: #ff0000; color: white; padding: 3px;');
+        console.error('Error:', error);
+        throw error;
+      }
+      
+      console.log('%c✅ SALES RETURNED:', 'background: #00cc00; color: white; font-weight: bold; padding: 3px;', data?.length || 0);
+      
+      if (data && data.length > 0) {
+        console.log('%c📊 SAMPLE SALES (first 3):', 'color: #9900cc; font-weight: bold;');
+        data.slice(0, 3).forEach((s, i) => {
+          console.log(`   ${i+1}. ${s.sale_number} - ${s.total_amount} TZS (${branchNames[s.branch_id] || 'Unknown Branch'})`);
+        });
+      }
+      
+      console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #9900cc; font-weight: bold;');
+      
       return data || [];
     },
     cacheDuration

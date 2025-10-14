@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../../context/AuthContext';
+import { useTheme } from '../../../../context/ThemeContext';
 import { useDevices } from '../../../../context/DevicesContext';
 import { useCustomers } from '../../../../context/CustomersContext';
 import { useUserGoals } from '../../../../context/UserGoalsContext';
@@ -16,6 +17,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { PlusCircle, Smartphone, CheckCircle, UserCheck, QrCode, Clock, AlertTriangle, TrendingUp, Calendar, Users, Phone, Mail, MessageSquare, ClipboardList, Trophy, Star, Gift, Check, ArrowUpDown, ArrowUp, ArrowDown, Target, Search } from 'lucide-react';
 import CustomerCareStatsCard from '../CustomerCareStatsCard';
 import CustomerCareQuickActions from '../CustomerCareQuickActions';
+import CustomerCareSalesCard from '../CustomerCareSalesCard';
 import StandardButton from '../ui/StandardButton';
 
 import { DeviceStatus, Device } from '../../../types';
@@ -41,6 +43,19 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
   setStatusFilter
 }) => {
   const { currentUser } = useAuth();
+  const { isDark } = useTheme();
+  
+  // 🔍 DEBUG: Log component mount and props
+  useEffect(() => {
+    console.log('🎨 CustomerCareDashboard rendered at:', new Date().toISOString());
+    console.log('📥 Props received:', {
+      devicesCount: devices.length,
+      loading,
+      searchQuery,
+      statusFilter,
+      currentUser: currentUser ? { id: currentUser.id, email: currentUser.email } : 'Not authenticated'
+    });
+  }, [devices.length, loading, currentUser]);
   
   // Safely access devices context with error handling for HMR
   let getOverdueDevices: any = null;
@@ -50,7 +65,7 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
     getOverdueDevices = devicesContext?.getOverdueDevices || null;
     addRemark = devicesContext?.addRemark || null;
   } catch (error) {
-    console.warn('Devices context not available during HMR:', error);
+    // Silently handle - context may not be available during HMR
   }
   
   const { customers, addPoints } = useCustomers();
@@ -78,11 +93,35 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   // --- New: Customers registered today by this staff ---
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const newCustomersToday: any[] = useMemo(() =>
-    (customers || []).filter((c: any) => c.joinedDate.slice(0, 10) === todayStr),
-    [customers, todayStr]
-  );
+  // Use local date string for accurate "today" filtering
+  const todayStr = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+  
+  const newCustomersToday: any[] = useMemo(() => {
+    const todayCustomers = (customers || []).filter((c: any) => {
+      if (!c.joinedDate) return false;
+      const joinedDate = typeof c.joinedDate === 'string' ? c.joinedDate : new Date(c.joinedDate).toISOString();
+      // Extract just the date part (YYYY-MM-DD) for comparison
+      const joinedDateStr = joinedDate.slice(0, 10);
+      return joinedDateStr === todayStr;
+    });
+    console.log('👥 New customers today:', todayCustomers.length, 'from total:', customers.length);
+    console.log('📅 Today date string:', todayStr);
+    if (customers.length > 0) {
+      console.log('📅 Sample customer dates:', customers.slice(0, 3).map((c: any) => ({
+        id: c.id,
+        joinedDate: c.joinedDate,
+        dateOnly: c.joinedDate ? c.joinedDate.slice(0, 10) : 'N/A'
+      })));
+    }
+    return todayCustomers;
+  }, [customers, todayStr]);
+  
   // --- New: Daily goal ---
   const [dailyGoal, setDailyGoal] = useState(5);
   const [progress, setProgress] = useState(0);
@@ -91,7 +130,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
   useEffect(() => {
     const fetchUserGoal = async () => {
       if (currentUser?.id) {
+        console.log('🎯 Fetching user goal for:', currentUser.id);
         const goalProgress = await getGoalProgress('new_customers');
+        console.log('✅ Goal progress fetched:', goalProgress);
         setDailyGoal(goalProgress.goal);
         setProgress(goalProgress.progress);
       }
@@ -112,8 +153,13 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
 
   // Setup real-time subscriptions for diagnostic requests
   useEffect(() => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.id) {
+      console.log('⚠️ No current user, skipping real-time subscription');
+      return;
+    }
 
+    console.log('📡 Setting up real-time subscription for diagnostic requests');
+    
     // Subscribe to diagnostic requests created by this user
     const diagnosticRequestsSubscription = supabase
       .channel('customer-care-dashboard-diagnostic-requests')
@@ -136,9 +182,12 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 Real-time subscription status:', status);
+      });
 
     return () => {
+      console.log('🔌 Unsubscribing from real-time updates');
       diagnosticRequestsSubscription.unsubscribe();
     };
   }, [currentUser?.id]);
@@ -170,10 +219,24 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
 
   // --- New: Devices received today by this staff (if tracked) ---
   // For now, just show all devices created today
-  const devicesToday = useMemo(() =>
-    devices.filter(d => d.createdAt && d.createdAt.slice(0, 10) === todayStr),
-    [devices, todayStr]
-  );
+  const devicesToday = useMemo(() => {
+    const todayDevices = devices.filter(d => {
+      if (!d.createdAt) return false;
+      const createdAt = typeof d.createdAt === 'string' ? d.createdAt : new Date(d.createdAt).toISOString();
+      const createdDateStr = createdAt.slice(0, 10);
+      return createdDateStr === todayStr;
+    });
+    console.log('📱 Devices received today:', todayDevices.length, 'from total:', devices.length);
+    console.log('📅 Today date string:', todayStr);
+    if (devices.length > 0) {
+      console.log('📅 Sample device dates:', devices.slice(0, 3).map(d => ({
+        id: d.id,
+        createdAt: d.createdAt,
+        dateOnly: d.createdAt ? (typeof d.createdAt === 'string' ? d.createdAt : new Date(d.createdAt).toISOString()).slice(0, 10) : 'N/A'
+      })));
+    }
+    return todayDevices;
+  }, [devices, todayStr]);
 
   // --- New: Check-in modal state ---
   const [showCheckinModal, setShowCheckinModal] = useState(false);
@@ -186,7 +249,12 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
   const checkinStats = useMemo(() => {
     const stats: Record<string, number> = {};
     (customers || []).forEach(c => {
-      const todayNotes = (c.notes || []).filter(n => n.content.toLowerCase().includes('checked in') && n.createdAt.slice(0, 10) === todayStr);
+      const todayNotes = (c.notes || []).filter(n => {
+        if (!n.content?.toLowerCase().includes('checked in')) return false;
+        if (!n.createdAt) return false;
+        const noteCreatedAt = typeof n.createdAt === 'string' ? n.createdAt : new Date(n.createdAt).toISOString();
+        return noteCreatedAt.slice(0, 10) === todayStr;
+      });
       if (todayNotes.length > 0) stats[c.id] = todayNotes.length;
     });
     return stats;
@@ -387,9 +455,10 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
     {
       label: 'Completed Today',
       count: done.filter(d => {
-        const today = new Date().toDateString();
-        const doneDate = new Date(d.updatedAt || '').toDateString();
-        return doneDate === today;
+        if (!d.updatedAt) return false;
+        const updatedAt = typeof d.updatedAt === 'string' ? d.updatedAt : new Date(d.updatedAt).toISOString();
+        const updatedDateStr = updatedAt.slice(0, 10);
+        return updatedDateStr === todayStr;
       }).length,
       icon: <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 text-gray-500" />,
       color: 'from-gray-500/20 to-gray-400/10',
@@ -450,8 +519,11 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
   const monthStr = new Date().toISOString().slice(0, 7);
   const checkinCounts: Record<string, number> = {};
   (customers || []).forEach((c: any) => {
-    if (c.joinedDate && c.joinedDate.slice(0, 7) === monthStr) {
-      checkinCounts[c.id] = (checkinCounts[c.id] || 0) + 1;
+    if (c.joinedDate) {
+      const joinedDate = typeof c.joinedDate === 'string' ? c.joinedDate : new Date(c.joinedDate).toISOString();
+      if (joinedDate.slice(0, 7) === monthStr) {
+        checkinCounts[c.id] = (checkinCounts[c.id] || 0) + 1;
+      }
     }
   });
   const frequentVisitors = Object.entries(checkinCounts)
@@ -525,6 +597,10 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
         devicesToday={devicesToday}
         birthdaysThisMonth={birthdaysThisMonth}
       />
+      
+      {/* Today's Sales Performance Card */}
+      <CustomerCareSalesCard />
+      
       {/* --- TOP: Dashboard Stats Grid --- */}
       {/* Removed the dashboard stats grid with three GlassCard widgets for New Customers Today, My Activities Today, and Customers Checked In Today. */}
       {/* --- Customer Insights Section --- */}
@@ -670,7 +746,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
             className={`px-3 sm:px-4 py-2 rounded-lg border transition-colors whitespace-nowrap text-sm ${
               statusFilter === 'all'
                 ? 'bg-blue-500 text-white border-blue-500'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : isDark 
+                  ? 'bg-slate-800 text-gray-200 border-slate-600 hover:bg-slate-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
             All
@@ -680,7 +758,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
             className={`px-3 sm:px-4 py-2 rounded-lg border transition-colors whitespace-nowrap text-sm ${
               statusFilter === 'pending'
                 ? 'bg-yellow-500 text-white border-yellow-500'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : isDark 
+                  ? 'bg-slate-800 text-gray-200 border-slate-600 hover:bg-slate-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
             Pending
@@ -690,7 +770,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
             className={`px-3 sm:px-4 py-2 rounded-lg border transition-colors whitespace-nowrap text-sm ${
               statusFilter === 'in-progress'
                 ? 'bg-blue-500 text-white border-blue-500'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : isDark 
+                  ? 'bg-slate-800 text-gray-200 border-slate-600 hover:bg-slate-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
             In Progress
@@ -700,7 +782,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
             className={`px-3 sm:px-4 py-2 rounded-lg border transition-colors whitespace-nowrap text-sm ${
               statusFilter === 'repair-complete'
                 ? 'bg-green-500 text-white border-green-500'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : isDark 
+                  ? 'bg-slate-800 text-gray-200 border-slate-600 hover:bg-slate-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
             Ready for Handover
@@ -710,7 +794,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
             className={`px-3 sm:px-4 py-2 rounded-lg border transition-colors whitespace-nowrap text-sm ${
               statusFilter === 'returned-to-customer-care'
                 ? 'bg-teal-500 text-white border-teal-500'
-                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                : isDark 
+                  ? 'bg-slate-800 text-gray-200 border-slate-600 hover:bg-slate-700'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
             }`}
           >
             Returned to CC
@@ -719,11 +805,11 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
       </div>
 
       {/* Device List - Redesigned to match modal */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-        <div className="flex items-center justify-between pb-4 border-b border-gray-100 mb-6">
+      <div className={`${isDark ? 'bg-slate-800/90 border-slate-700' : 'bg-white border-gray-200'} rounded-xl border p-6 shadow-sm`}>
+        <div className={`flex items-center justify-between pb-4 ${isDark ? 'border-slate-700' : 'border-gray-100'} border-b mb-6`}>
           <div className="flex items-center gap-2">
             <Smartphone className="w-5 h-5 text-blue-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Active Devices ({filteredDevices.length})</h3>
+            <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Active Devices ({filteredDevices.length})</h3>
           </div>
           
           {/* View Mode Toggle */}
@@ -733,7 +819,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === 'column'
                   ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : isDark
+                    ? 'bg-slate-700 text-gray-200 hover:bg-slate-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Table
@@ -743,7 +831,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === 'list'
                   ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : isDark
+                    ? 'bg-slate-700 text-gray-200 hover:bg-slate-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               List
@@ -753,7 +843,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === 'grid'
                   ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : isDark
+                    ? 'bg-slate-700 text-gray-200 hover:bg-slate-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Grid
@@ -763,7 +855,9 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 viewMode === 'analytics'
                   ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : isDark
+                    ? 'bg-slate-700 text-gray-200 hover:bg-slate-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Analytics
@@ -774,13 +868,13 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
         {loading ? (
           <div className="text-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="text-gray-600 mt-2">Loading devices...</p>
+            <p className={`mt-2 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Loading devices...</p>
           </div>
         ) : filteredDevices.length === 0 ? (
           <div className="text-center py-8">
-            <Smartphone className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No devices found</p>
-            <p className="text-sm text-gray-500">Try adjusting your search or filters</p>
+            <Smartphone className={`h-12 w-12 mx-auto mb-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+            <p className={isDark ? 'text-gray-300' : 'text-gray-600'}>No devices found</p>
+            <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Try adjusting your search or filters</p>
           </div>
         ) : viewMode === 'analytics' ? (
           <CustomerCareAnalyticsDashboard devices={filteredDevices} loading={loading} />
@@ -834,10 +928,10 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
 
       {/* All Done Status Devices Section - Redesigned */}
       {done.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex items-center gap-2 pb-4 border-b border-gray-100 mb-6">
+        <div className={`${isDark ? 'bg-slate-800/90 border-slate-700' : 'bg-white border-gray-200'} rounded-xl border p-6 shadow-sm`}>
+          <div className={`flex items-center gap-2 pb-4 ${isDark ? 'border-slate-700' : 'border-gray-100'} border-b mb-6`}>
             <CheckCircle className="w-5 h-5 text-green-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Completed Devices ({done.length})</h3>
+            <h3 className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Completed Devices ({done.length})</h3>
           </div>
           
           <div className="space-y-3">
@@ -984,17 +1078,19 @@ const CustomerCareDashboard: React.FC<CustomerCareDashboardProps> = ({
           <div className="space-y-4">
             <p className="text-gray-600 mb-4">Devices completed today:</p>
             {done.filter(d => {
-              const today = new Date().toDateString();
-              const doneDate = new Date(d.updatedAt || '').toDateString();
-              return doneDate === today;
+              if (!d.updatedAt) return false;
+              const updatedAt = typeof d.updatedAt === 'string' ? d.updatedAt : new Date(d.updatedAt).toISOString();
+              const updatedDateStr = updatedAt.slice(0, 10);
+              return updatedDateStr === todayStr;
             }).length === 0 ? (
               <p className="text-gray-500 text-center py-4">No devices completed today</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {done.filter(d => {
-                  const today = new Date().toDateString();
-                  const doneDate = new Date(d.updatedAt || '').toDateString();
-                  return doneDate === today;
+                  if (!d.updatedAt) return false;
+                  const updatedAt = typeof d.updatedAt === 'string' ? d.updatedAt : new Date(d.updatedAt).toISOString();
+                  const updatedDateStr = updatedAt.slice(0, 10);
+                  return updatedDateStr === todayStr;
                 }).map((device) => (
                   <div key={device.id} className="p-3 bg-green-50 rounded-lg relative">
                     <div className="flex justify-between items-start pt-2">

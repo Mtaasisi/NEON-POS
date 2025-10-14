@@ -26,11 +26,12 @@ import { supabase } from '../../../lib/supabaseClient';
 import { getCustomerStatus, trackCustomerActivity, reactivateCustomer, checkInCustomerWithReactivation } from '../../../lib/customerStatusService';
 import Modal from '../../shared/components/ui/Modal';
 import CustomerForm from './forms/CustomerForm';
-import PointsManagementModal from '../../finance/components/PointsManagementModal';
+import PointsManagementModal from './PointsManagementModal';
 import { fetchCustomerAppointments, createAppointment } from '../../../lib/customerApi/appointments';
 import { fetchCustomerReturns } from '../../../lib/customerApi/returns';
 import WhatsAppMessageModal from './WhatsAppMessageModal';
 import AppointmentModal from './forms/AppointmentModal';
+import CustomerJourneyTimeline from './CustomerJourneyTimeline';
 import CallAnalyticsCard from './CallAnalyticsCard';
 
 interface CustomerDetailModalProps {
@@ -539,6 +540,19 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                             Activity
                           </div>
                         </button>
+                        <button
+                          onClick={() => setActiveTab('journey')}
+                          className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                            activeTab === 'journey'
+                              ? 'border-blue-500 text-blue-600'
+                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4" />
+                            Journey
+                          </div>
+                        </button>
           </div>
         </div>
 
@@ -662,6 +676,12 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                           <MessageSquare className="w-4 h-4 text-green-500" />
                           <span className="text-sm text-gray-600">WhatsApp:</span>
                           <span className="text-sm font-medium text-green-600">{customer.whatsapp}</span>
+                          {customer.whatsappOptOut && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
+                              <EyeOff className="w-3 h-3 mr-1" />
+                              Opted Out
+                            </span>
+                          )}
                         </div>
                       )}
                       {customer.email && (
@@ -787,6 +807,89 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
 
 
+                  {/* Referral Information */}
+                  {(customer.referredBy || (customer.referrals && customer.referrals.length > 0) || referrals.length > 0) && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                        <Users className="w-5 h-5 text-purple-600" />
+                        <h3 className="text-sm font-semibold text-gray-800">Referral Information</h3>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3">
+                        {customer.referredBy && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Referred By</span>
+                            <p className="text-sm font-medium text-blue-600">Customer ID: {customer.referredBy}</p>
+                          </div>
+                        )}
+                        {customer.referralSource && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Referral Source</span>
+                            <p className="text-sm font-medium text-gray-900">{customer.referralSource}</p>
+                          </div>
+                        )}
+                        {referrals.length > 0 && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Customers Referred ({referrals.length})</span>
+                            <div className="mt-2 space-y-2">
+                              {referrals.slice(0, 3).map((ref: any) => (
+                                <div key={ref.id} className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">{ref.name}</p>
+                                    <p className="text-xs text-gray-500">{ref.phone}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-xs text-gray-500">Joined: {new Date(ref.created_at).toLocaleDateString()}</p>
+                                    {ref.total_spent > 0 && (
+                                      <p className="text-xs font-medium text-green-600">{formatCurrency(ref.total_spent)}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                              {referrals.length > 3 && (
+                                <p className="text-xs text-gray-500 text-center">+{referrals.length - 3} more referrals</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Branch & Staff Information */}
+                  {(customer.branchName || customer.createdByBranchName || customer.createdBy) && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                        <Globe className="w-5 h-5 text-indigo-600" />
+                        <h3 className="text-sm font-semibold text-gray-800">Branch & Registration Info</h3>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {customer.branchName && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Current Branch</span>
+                            <p className="text-sm font-medium text-gray-900">{customer.branchName}</p>
+                            {customer.isShared && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                Shared Customer
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {customer.createdByBranchName && (
+                          <div className="space-y-1">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Registered At</span>
+                            <p className="text-sm font-medium text-gray-900">{customer.createdByBranchName}</p>
+                          </div>
+                        )}
+                        {customer.createdBy && (
+                          <div className="space-y-1 col-span-2">
+                            <span className="text-xs text-gray-500 uppercase tracking-wide">Registered By Staff</span>
+                            <p className="text-sm font-medium text-gray-900">Staff ID: {customer.createdBy}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Purchase History Summary */}
                   {(customer.totalSpent > 0 || customer.totalPurchases > 0 || customer.lastPurchaseDate) && (
                     <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
@@ -852,6 +955,65 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     </div>
                   </div>
 
+                  {/* Call Analytics Summary */}
+                  {(customer.totalCalls || 0) > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                        <Phone className="w-5 h-5 text-blue-600" />
+                        <h3 className="text-sm font-semibold text-gray-800">Call Summary</h3>
+                        {customer.callLoyaltyLevel && (
+                          <span className={`ml-auto inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            customer.callLoyaltyLevel === 'VIP' ? 'bg-purple-100 text-purple-800' :
+                            customer.callLoyaltyLevel === 'Gold' ? 'bg-yellow-100 text-yellow-800' :
+                            customer.callLoyaltyLevel === 'Silver' ? 'bg-gray-100 text-gray-800' :
+                            customer.callLoyaltyLevel === 'Bronze' ? 'bg-orange-100 text-orange-800' :
+                            'bg-blue-100 text-blue-800'
+                          }`}>
+                            {customer.callLoyaltyLevel}
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Total Calls</span>
+                          <span className="text-sm font-semibold text-gray-900">{customer.totalCalls || 0}</span>
+                        </div>
+                        {(customer.incomingCalls || 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Incoming</span>
+                            <span className="text-sm font-medium text-green-600">{customer.incomingCalls}</span>
+                          </div>
+                        )}
+                        {(customer.outgoingCalls || 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Outgoing</span>
+                            <span className="text-sm font-medium text-blue-600">{customer.outgoingCalls}</span>
+                          </div>
+                        )}
+                        {(customer.missedCalls || 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Missed</span>
+                            <span className="text-sm font-medium text-red-600">{customer.missedCalls}</span>
+                          </div>
+                        )}
+                        {(customer.avgCallDurationMinutes || 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Avg Duration</span>
+                            <span className="text-sm font-medium text-gray-900">{customer.avgCallDurationMinutes.toFixed(1)} min</span>
+                          </div>
+                        )}
+                        {customer.lastCallDate && (
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-600">Last Call</span>
+                            <span className="text-sm font-medium text-gray-900">
+                              {new Date(customer.lastCallDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Financial Summary */}
                   <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                     <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
@@ -865,10 +1027,18 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                           {customer.totalSpent ? `Tsh ${customer.totalSpent.toLocaleString()}` : 'Tsh 0'}
                         </span>
                       </div>
+                      {(customer.totalPurchases || 0) > 0 && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-gray-600">Total Purchases</span>
+                          <span className="text-sm font-semibold text-indigo-600">
+                            {customer.totalPurchases}
+                          </span>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-gray-600">Loyalty Points</span>
                         <span className="text-sm font-semibold text-blue-600">
-                          {customer.loyaltyPoints || 0}
+                          {customer.loyaltyPoints || customer.points || 0}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -1160,6 +1330,20 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Journey Tab - Customer Timeline */}
+          {activeTab === 'journey' && (
+            <div className="bg-white border border-gray-200 rounded-xl p-6">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Customer Journey</h3>
+                <p className="text-sm text-gray-600">Complete timeline of all interactions and activities</p>
+              </div>
+              <CustomerJourneyTimeline 
+                customerId={customer.id} 
+                customerPhone={customer.phone} 
+              />
             </div>
           )}
 
