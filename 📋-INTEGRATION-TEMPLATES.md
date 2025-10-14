@@ -216,7 +216,7 @@ INSERT INTO lats_pos_integrations_settings (
   true, true, 'test',
   jsonb_build_object(
     'publishable_key', 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxx',
-    'secret_key', 'sk_test_YOUR_SECRET_KEY_HERE',
+    'secret_key', 'YOUR_STRIPE_SECRET_KEY_HERE',
     'webhook_secret', 'whsec_xxxxxxxxxxxxxxxxxxxxxxxx'
   ),
   jsonb_build_object(
@@ -356,7 +356,7 @@ INSERT INTO lats_pos_integrations_settings (
   true, true, 'test',
   jsonb_build_object(
     'public_key', 'pk_test_xxxxxxxxxxxxxxxxxxxxxxxx',
-    'secret_key', 'sk_test_xxxxxxxxxxxxxxxxxxxxxxxx'
+    'secret_key', 'YOUR_PAYSTACK_SECRET_KEY_HERE'
   ),
   jsonb_build_object(
     'currency', 'NGN'
