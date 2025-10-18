@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { X, User, Phone, Mail, MapPin, Save, Loader2 } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, Save, Loader2, Check, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import GlassCard from '../../../shared/components/ui/GlassCard';
-import GlassButton from '../../../shared/components/ui/GlassButton';
 import { Customer } from '../../../customers/types';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import SuccessModal from '../../../../components/ui/SuccessModal';
@@ -121,7 +119,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
     }
   };
 
-  const handleClose = () => {
+  const handleReset = () => {
     setFormData({
       name: '',
       phone: '',
@@ -133,6 +131,10 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       notes: ''
     });
     setErrors({});
+  };
+
+  const handleClose = () => {
+    handleReset();
     setIsSubmitting(false);
     onClose();
   };
@@ -143,30 +145,31 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <GlassCard className="w-full max-w-2xl max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/20">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <User className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Create New Customer</h3>
+                <p className="text-xs text-gray-500">Add a new customer to your database</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">Create New Customer</h2>
-              <p className="text-gray-600">Add a new customer to your database</p>
-            </div>
+            <button
+              onClick={handleClose}
+              disabled={isSubmitting}
+              className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            disabled={isSubmitting}
-          >
-            <X className="w-6 h-6 text-gray-500" />
-          </button>
-        </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
           {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -179,8 +182,8 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
                   type="text"
                   value={formData.name}
                   onChange={(e) => handleInputChange('name', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.name ? 'border-red-300' : 'border-gray-300'
+                  className={`w-full pl-10 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 ${
+                    errors.name ? 'border-red-300' : 'border-gray-200'
                   }`}
                   placeholder="Enter customer name"
                   disabled={isSubmitting}
@@ -201,8 +204,8 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => handleInputChange('phone', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.phone ? 'border-red-300' : 'border-gray-300'
+                  className={`w-full pl-10 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 ${
+                    errors.phone ? 'border-red-300' : 'border-gray-200'
                   }`}
                   placeholder="+255 123 456 789"
                   disabled={isSubmitting}
@@ -226,8 +229,8 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
                   type="email"
                   value={formData.email}
                   onChange={(e) => handleInputChange('email', e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.email ? 'border-red-300' : 'border-gray-300'
+                  className={`w-full pl-10 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 ${
+                    errors.email ? 'border-red-300' : 'border-gray-200'
                   }`}
                   placeholder="customer@example.com"
                   disabled={isSubmitting}
@@ -245,7 +248,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
               <select
                 value={formData.loyaltyLevel}
                 onChange={(e) => handleInputChange('loyaltyLevel', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
                 disabled={isSubmitting}
               >
                 <option value="bronze">Bronze</option>
@@ -268,7 +271,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
                   type="text"
                   value={formData.address}
                   onChange={(e) => handleInputChange('address', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
                   placeholder="Street address"
                   disabled={isSubmitting}
                 />
@@ -283,7 +286,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
                 type="text"
                 value={formData.city}
                 onChange={(e) => handleInputChange('city', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
                 placeholder="City"
                 disabled={isSubmitting}
               />
@@ -299,7 +302,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
               type="text"
               value={formData.country}
               onChange={(e) => handleInputChange('country', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
               placeholder="Country"
               disabled={isSubmitting}
             />
@@ -313,43 +316,67 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
             <textarea
               value={formData.notes}
               onChange={(e) => handleInputChange('notes', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
               placeholder="Additional notes about the customer..."
               rows={3}
               disabled={isSubmitting}
             />
           </div>
 
-          {/* Submit Buttons */}
-          <div className="flex gap-3 pt-4">
-            <GlassButton
+          {/* Action Buttons - Sticky Footer */}
+          <div className="w-full" style={{
+            position: 'sticky',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(255, 255, 255, 0.97)',
+            boxShadow: '0 -2px 8px rgba(0, 0, 0, 0.05)',
+            padding: '16px',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            borderBottomLeftRadius: '24px',
+            borderBottomRightRadius: '24px',
+            zIndex: 20
+          }}>
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 shadow-sm ml-2 bg-rose-500 text-white hover:bg-rose-600 hover:shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <X className="w-5 h-5" />
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              disabled={isSubmitting}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 shadow-sm ml-2 bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className="w-5 h-5" />
+              Reset
+            </button>
+            <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 flex items-center justify-center gap-2"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 shadow-sm ml-2 bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   Creating...
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4" />
+                  <Check className="w-5 h-5" />
                   Create Customer
                 </>
               )}
-            </GlassButton>
-            <GlassButton
-              type="button"
-              variant="outline"
-              onClick={handleClose}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </GlassButton>
+            </button>
           </div>
         </form>
-      </GlassCard>
+        </div>
+      </div>
       
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />

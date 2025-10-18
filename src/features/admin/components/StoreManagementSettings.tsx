@@ -41,6 +41,9 @@ interface Store {
   opening_time: string;
   closing_time: string;
   
+  // Data Isolation & Sharing
+  data_isolation_mode: 'shared' | 'isolated' | 'hybrid';
+  
   // What data is shared vs isolated
   share_products: boolean;
   share_customers: boolean;
@@ -60,6 +63,7 @@ interface Store {
   tax_rate_override?: number;
   
   // Permissions
+  can_view_other_branches: boolean;
   can_transfer_to_branches: string[]; // Array of branch IDs
 }
 
@@ -104,7 +108,8 @@ const StoreManagementSettings: React.FC = () => {
     opening_time: '09:00',
     closing_time: '18:00',
     
-    // Data Sharing Defaults - Users must manually configure
+    // Data Isolation Defaults - Users must manually configure
+    data_isolation_mode: 'hybrid',
     share_products: false,
     share_customers: false,
     share_inventory: false,
@@ -122,6 +127,7 @@ const StoreManagementSettings: React.FC = () => {
     pricing_model: 'centralized',
     
     // Permissions
+    can_view_other_branches: false,
     can_transfer_to_branches: []
   }), []);
 
@@ -979,22 +985,21 @@ const StoreManagementSettings: React.FC = () => {
                       <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
                         Code: {store.code}
                       </span>
+                      <span className={`px-2 py-1 text-xs rounded font-medium ${
+                        store.data_isolation_mode === 'shared' ? 'bg-blue-100 text-blue-700' :
+                        store.data_isolation_mode === 'isolated' ? 'bg-red-100 text-red-700' :
+                        'bg-purple-100 text-purple-700'
+                      }`}>
+                        {store.data_isolation_mode === 'shared' ? 'Shared Data' :
+                         store.data_isolation_mode === 'isolated' ? 'Isolated Data' :
+                         'Hybrid Model'}
+                      </span>
                       <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
                         {store.pricing_model === 'centralized' ? 'Centralized Pricing' : 'Location-Specific Pricing'}
                       </span>
                       {store.allow_stock_transfer && (
                         <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">
                           Stock Transfers
-                        </span>
-                      )}
-                      {store.share_products && (
-                        <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded">
-                          Shared Products
-                        </span>
-                      )}
-                      {store.share_customers && (
-                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded">
-                          Shared Customers
                         </span>
                       )}
                       {store.share_inventory && (

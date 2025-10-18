@@ -1,5 +1,5 @@
 import React, { ReactNode, useState, useEffect, useRef, useMemo } from 'react';
-import { User, Phone, Mail, MapPin, Tag, Check, RefreshCw, X, ArrowLeft, AlertTriangle, ChevronDown, Users, UserCheck, Facebook, Music, Globe, CreditCard, Newspaper, Search, Building, Calendar, HelpCircle } from 'lucide-react';
+import { User, Phone, MapPin, Tag, Check, RefreshCw, X, ArrowLeft, AlertTriangle, ChevronDown, Users, UserCheck, Facebook, Instagram, Globe, CreditCard, Newspaper, Search, Building, Calendar, HelpCircle } from 'lucide-react';
 // import FloatingActionBar from '../ui/FloatingActionBar';
 // import { addCustomer } from '../../../services/customer.services'; // Not used in this context
 import { supabase } from '../../../../lib/supabaseClient';
@@ -85,18 +85,6 @@ const isValidTanzaniaPhone = (phone: string): boolean => {
   return /^255[67]\d{8}$/.test(normalized);
 };
 
-const REFERRAL_CLICK_KEY = 'referral_source_clicks';
-
-function getReferralClicks() {
-  try {
-    return JSON.parse(localStorage.getItem(REFERRAL_CLICK_KEY) || '{}');
-  } catch {
-    return {};
-  }
-}
-function setReferralClicks(clicks: Record<string, number>) {
-  localStorage.setItem(REFERRAL_CLICK_KEY, JSON.stringify(clicks));
-}
 
 const CustomerForm: React.FC<CustomerFormProps> = ({
   onSubmit,
@@ -121,7 +109,6 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
   const [submitted, setSubmitted] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
   const [offlineSuccess, setOfflineSuccess] = useState(false);
-  const [referralClicks, setReferralClicksState] = useState<Record<string, number>>(getReferralClicks());
   
   // Ref for auto-focus
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -171,74 +158,32 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
   // Days array (1-31)
   const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString());
 
-  type ReferralColor = 'green' | 'orange' | 'blue' | 'pink' | 'gray' | 'teal' | 'yellow' | 'red' | 'indigo' | 'violet' | 'slate';
-
   interface ReferralSource {
     label: string;
     icon: React.ReactNode;
-    color: ReferralColor;
   }
 
-  const referralSources: ReferralSource[] = [
-    { label: 'Friend', icon: <Users className="w-5 h-5" />, color: 'green' },
-    { label: 'Walk-in', icon: <UserCheck className="w-5 h-5" />, color: 'orange' },
-    { label: 'Facebook', icon: <Facebook className="w-5 h-5" />, color: 'blue' },
-    { label: 'Tiktok', icon: <Music className="w-5 h-5" />, color: 'gray' },
-    { label: 'Website', icon: <Globe className="w-5 h-5" />, color: 'teal' },
-    { label: 'Business Card', icon: <CreditCard className="w-5 h-5" />, color: 'yellow' },
-    { label: 'Newspaper', icon: <Newspaper className="w-5 h-5" />, color: 'gray' },
-    { label: 'Google Search', icon: <Search className="w-5 h-5" />, color: 'red' },
-    { label: 'Billboard', icon: <Building className="w-5 h-5" />, color: 'indigo' },
-    { label: 'Event', icon: <Calendar className="w-5 h-5" />, color: 'violet' },
-    { label: 'Other', icon: <HelpCircle className="w-5 h-5" />, color: 'slate' },
-  ];
+  // TikTok Logo Component
+  const TikTokIcon = () => (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+    </svg>
+  );
 
-  const colorMap: Record<ReferralColor, { selected: string; unselected: string }> = {
-    green: {
-      selected: 'bg-green-600 text-white font-semibold shadow-lg ring-2 ring-green-300',
-      unselected: 'bg-green-100 text-green-700',
-    },
-    orange: {
-      selected: 'bg-orange-600 text-white font-semibold shadow-lg ring-2 ring-orange-300',
-      unselected: 'bg-orange-100 text-orange-700',
-    },
-    blue: {
-      selected: 'bg-blue-600 text-white font-semibold shadow-lg ring-2 ring-blue-300',
-      unselected: 'bg-blue-100 text-blue-700',
-    },
-    pink: {
-      selected: 'bg-pink-600 text-white font-semibold shadow-lg ring-2 ring-pink-300',
-      unselected: 'bg-pink-100 text-pink-700',
-    },
-    gray: {
-      selected: 'bg-gray-600 text-white font-semibold shadow-lg ring-2 ring-gray-300',
-      unselected: 'bg-gray-100 text-gray-700',
-    },
-    teal: {
-      selected: 'bg-teal-600 text-white font-semibold shadow-lg ring-2 ring-teal-300',
-      unselected: 'bg-teal-100 text-teal-700',
-    },
-    yellow: {
-      selected: 'bg-yellow-500 text-white font-semibold shadow-lg ring-2 ring-yellow-200',
-      unselected: 'bg-yellow-100 text-yellow-700',
-    },
-    red: {
-      selected: 'bg-red-600 text-white font-semibold shadow-lg ring-2 ring-red-300',
-      unselected: 'bg-red-100 text-red-700',
-    },
-    indigo: {
-      selected: 'bg-indigo-600 text-white font-semibold shadow-lg ring-2 ring-indigo-300',
-      unselected: 'bg-indigo-100 text-indigo-700',
-    },
-    violet: {
-      selected: 'bg-violet-600 text-white font-semibold shadow-lg ring-2 ring-violet-300',
-      unselected: 'bg-violet-100 text-violet-700',
-    },
-    slate: {
-      selected: 'bg-slate-600 text-white font-semibold shadow-lg ring-2 ring-slate-300',
-      unselected: 'bg-slate-100 text-slate-700',
-    },
-  };
+  const referralSources: ReferralSource[] = [
+    { label: 'Friend', icon: <Users className="w-5 h-5" /> },
+    { label: 'Walk-in', icon: <UserCheck className="w-5 h-5" /> },
+    { label: 'Facebook', icon: <Facebook className="w-5 h-5" /> },
+    { label: 'Instagram', icon: <Instagram className="w-5 h-5" /> },
+    { label: 'Tiktok', icon: <TikTokIcon /> },
+    { label: 'Website', icon: <Globe className="w-5 h-5" /> },
+    { label: 'Business Card', icon: <CreditCard className="w-5 h-5" /> },
+    { label: 'Newspaper', icon: <Newspaper className="w-5 h-5" /> },
+    { label: 'Google Search', icon: <Search className="w-5 h-5" /> },
+    { label: 'Billboard', icon: <Building className="w-5 h-5" /> },
+    { label: 'Event', icon: <Calendar className="w-5 h-5" /> },
+    { label: 'Other', icon: <HelpCircle className="w-5 h-5" /> },
+  ];
 
   // Add a prop for customerId to know if we're editing
   const customerId = initialValues?.id;
@@ -455,14 +400,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
     },
   ].filter(Boolean) as ActionButton[];
 
-  // Sort referralSources by click count (desc), fallback to original order - memoized for performance
-  const sortedReferralSources = useMemo(() => {
-    return [...referralSources].sort((a, b) => {
-      const ac = referralClicks[a.label] || 0;
-      const bc = referralClicks[b.label] || 0;
-      return bc - ac;
-    });
-  }, [referralClicks]);
+  // Use referralSources in original order (no sorting by clicks)
+  const sortedReferralSources = referralSources;
 
   // Memoize filtered regions for performance
   const filteredRegions = useMemo(() => {
@@ -490,24 +429,14 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
 
   function handleReferralClick(label: string) {
     setFormData(prev => ({ ...prev, referralSource: label }));
-    const clicks = { ...referralClicks, [label]: (referralClicks[label] || 0) + 1 };
-    setReferralClicks(clicks);
-    setReferralClicksState(clicks);
   }
 
   // Reusable form fields component
   const renderFormFields = () => (
     <>
-      {/* Required Fields Indicator */}
-      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-sm text-blue-800">
-          <span className="font-semibold">Required fields</span> are marked with <span className="text-red-500 font-bold">*</span>
-        </p>
-      </div>
-      
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
       {/* Name */}
-      <div>
+      <div className="md:col-span-2">
         <label className="block text-gray-700 mb-2 font-medium">
           Name <span className="text-red-500">*</span>
         </label>
@@ -540,28 +469,6 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             {validationErrors.name}
           </div>
         )}
-        <p className="text-xs text-gray-500 mt-1">Max 100 characters</p>
-      </div>
-      {/* Email */}
-      <div>
-        <label className="block text-gray-700 mb-2 font-medium">Email</label>
-        <div className="relative">
-          <input
-            type="email"
-            name="email"
-            value={formData.email || ''}
-            onChange={handleInputChange}
-            className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
-            placeholder="Enter email address"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            maxLength={100}
-            aria-label="Customer email"
-          />
-          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-        </div>
-        {validationErrors.email && <div className="text-red-600 text-xs mt-1">{validationErrors.email}</div>}
       </div>
       {/* Phone Number */}
       <div>
@@ -794,22 +701,24 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             {showMonthDropdown && (
               <div 
                 data-dropdown="month" 
-                className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto"
+                className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
                 role="listbox"
                 aria-label="Month options"
               >
-                {filteredMonths.map((month) => (
-                    <div
-                      key={month}
-                      className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, birthMonth: month }));
-                        setShowMonthDropdown(false);
-                      }}
-                    >
-                      {month}
-                    </div>
-                  ))}
+                <div className="grid grid-cols-2 gap-1">
+                  {filteredMonths.map((month) => (
+                      <div
+                        key={month}
+                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer rounded text-sm"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, birthMonth: month }));
+                          setShowMonthDropdown(false);
+                        }}
+                      >
+                        {month}
+                      </div>
+                    ))}
+                </div>
                 {filteredMonths.length === 0 && (
                   <div className="px-4 py-3 text-gray-500">
                     No matching months found
@@ -852,22 +761,24 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             {showDayDropdown && (
               <div 
                 data-dropdown="day" 
-                className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto"
+                className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto p-2"
                 role="listbox"
                 aria-label="Day options"
               >
-                {filteredDays.map((day) => (
-                    <div
-                      key={day}
-                      className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                      onClick={() => {
-                        setFormData(prev => ({ ...prev, birthDay: day }));
-                        setShowDayDropdown(false);
-                      }}
-                    >
-                      {day}
-                    </div>
-                  ))}
+                <div className="grid grid-cols-7 gap-1">
+                  {filteredDays.map((day) => (
+                      <div
+                        key={day}
+                        className="px-2 py-2 hover:bg-blue-50 cursor-pointer rounded text-sm text-center"
+                        onClick={() => {
+                          setFormData(prev => ({ ...prev, birthDay: day }));
+                          setShowDayDropdown(false);
+                        }}
+                      >
+                        {day}
+                      </div>
+                    ))}
+                </div>
                 {filteredDays.length === 0 && (
                   <div className="px-4 py-3 text-gray-500">
                     No matching days found
@@ -886,7 +797,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
       </div>
       {/* Referral Source */}
       <div className="md:col-span-2">
-        <label className="block text-gray-700 mb-3 font-medium">How did you hear about us?</label>
+        <label className="block text-sm font-medium text-gray-700 mb-2">How did you hear about us?</label>
         
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
           {sortedReferralSources.map((source) => {
@@ -896,35 +807,17 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                 key={source.label}
                 type="button"
                 onClick={() => handleReferralClick(source.label)}
-                className={`flex flex-col items-center gap-2 p-3 rounded-lg text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   selected 
-                    ? 'bg-blue-50 border border-blue-300' 
-                    : 'bg-gray-50 border border-gray-200 hover:bg-gray-100'
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
                 style={{ userSelect: 'none' }}
               >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors duration-200 ${
-                  selected 
-                    ? 'bg-blue-500' 
-                    : source.color === 'green' ? 'bg-gray-400 hover:bg-green-500' :
-                      source.color === 'orange' ? 'bg-gray-400 hover:bg-orange-500' :
-                      source.color === 'blue' ? 'bg-gray-400 hover:bg-blue-500' :
-                      source.color === 'pink' ? 'bg-gray-400 hover:bg-pink-500' :
-                      source.color === 'gray' ? 'bg-gray-400 hover:bg-gray-600' :
-                      source.color === 'teal' ? 'bg-gray-400 hover:bg-teal-500' :
-                      source.color === 'yellow' ? 'bg-gray-400 hover:bg-yellow-500' :
-                      source.color === 'red' ? 'bg-gray-400 hover:bg-red-500' :
-                      source.color === 'indigo' ? 'bg-gray-400 hover:bg-indigo-500' :
-                      source.color === 'violet' ? 'bg-gray-400 hover:bg-violet-500' :
-                      'bg-gray-400 hover:bg-slate-500'
-                }`}>
-                  <div className="text-white">
-                    {source.icon}
-                  </div>
-                </div>
-                <span className={`text-xs font-medium transition-colors duration-200 ${
-                  selected ? 'text-blue-700' : 'text-gray-600'
-                }`}>
+                <span className={selected ? 'text-white' : 'text-gray-500'}>
+                  {source.icon}
+                </span>
+                <span className="text-xs">
                   {source.label}
                 </span>
               </button>
@@ -939,7 +832,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
               name="referralSourceCustom"
               value={formData.referralSourceCustom || ''}
               onChange={e => setFormData(prev => ({ ...prev, referralSourceCustom: e.target.value }))}
-              className="w-full py-2 px-3 bg-white border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+              className="w-full py-2.5 px-3 bg-white border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
               placeholder="Please specify..."
               autoComplete="off"
               autoCorrect="off"
@@ -998,52 +891,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
           Customer saved offline! Will sync when you are back online.
         </div>
       )}
-      <form id="customer-form" onSubmit={handleSubmit} className="space-y-6 pb-28">
+      <form id="customer-form" onSubmit={handleSubmit} className="space-y-6">
         {renderFormFields()}
       </form>
-      {/* Sticky action bar for standalone page and modal */}
-      <div
-        className="w-full"
-        style={{
-          position: 'sticky',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(255,255,255,0.97)',
-          boxShadow: '0 -2px 8px rgba(0,0,0,0.05)',
-          padding: 16,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
-          zIndex: 20,
-        }}
-      >
-        {actionButtons.map((btn, i) => (
-          <button
-            key={btn.label + i}
-            type={i === actionButtons.length - 1 ? 'submit' : 'button'}
-            onClick={i === actionButtons.length - 1 ? (e) => {
-              // For submit button, trigger form submission
-              e.preventDefault();
-              const form = document.getElementById('customer-form');
-              if (form) {
-                form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-              }
-            } : btn.onClick}
-            disabled={btn.disabled}
-            className={`inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-base transition-all duration-200 shadow-sm ml-2
-              ${btn.color === 'danger' ? 'bg-rose-500 text-white hover:bg-rose-600 hover:shadow-md' :
-                btn.color === 'success' ? 'bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-md' :
-                btn.color === 'primary' ? 'bg-blue-500 text-white hover:bg-blue-600 hover:shadow-md' :
-                'bg-gray-100 text-gray-700 hover:bg-gray-200 hover:shadow-md'}
-              ${btn.disabled ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}
-              focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-50`}
-          >
-            {btn.icon} {btn.label}
-          </button>
-        ))}
-      </div>
     </div>
   );
 

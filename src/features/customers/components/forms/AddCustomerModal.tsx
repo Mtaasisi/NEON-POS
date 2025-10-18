@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { X, UserPlus, Sparkles, CheckCircle } from 'lucide-react';
+import { X, UserPlus, Check } from 'lucide-react';
 import { useCustomers } from '../../../../context/CustomersContext';
 import { toast } from 'react-hot-toast';
 import CustomerForm from './CustomerForm';
@@ -84,13 +83,22 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
             autoCloseDelay: 0, // Don't auto-close when there are action buttons
             actionButtons: [
               {
+                label: 'Message on WhatsApp',
+                onClick: () => {
+                  const whatsappNumber = customer.whatsapp || customer.phone;
+                  const cleanNumber = whatsappNumber.replace(/\D/g, '');
+                  window.open(`https://wa.me/${cleanNumber}`, '_blank');
+                },
+                variant: 'primary',
+              },
+              {
                 label: 'View Customer',
                 onClick: () => {
                   if (onCustomerCreated) {
                     onCustomerCreated(customer);
                   }
                 },
-                variant: 'primary',
+                variant: 'secondary',
               },
               {
                 label: 'Add Another',
@@ -158,161 +166,62 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
 
   if (!isOpen) return null;
 
-  return createPortal(
+  return (
     <>
-      <style>{`
-        @keyframes slideInUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        
-        @keyframes successPulse {
-          0%, 100% {
-            transform: scale(1);
-          }
-          50% {
-            transform: scale(1.05);
-          }
-        }
-        
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 1;
-          }
-        }
-        
-        .modal-enter {
-          animation: slideInUp 0.3s ease-out;
-        }
-        
-        .success-animation {
-          animation: successPulse 0.6s ease-in-out;
-        }
-        
-        .fade-in {
-          animation: fadeIn 0.2s ease-out;
-        }
-        
-        .glass-effect {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(20px);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .gradient-border {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          padding: 2px;
-          border-radius: 20px;
-        }
-        
-        .gradient-border > div {
-          background: rgba(255, 255, 255, 0.98);
-          border-radius: 18px;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar {
-          width: 6px;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar-track {
-          background: transparent;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: linear-gradient(180deg, #667eea, #764ba2);
-          border-radius: 10px;
-        }
-        
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(180deg, #5a6fd8, #6a4190);
-        }
-      `}</style>
-      
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
-        <div className="modal-enter gradient-border w-full max-w-4xl max-h-[95vh] overflow-hidden flex flex-col">
-          <div className="glass-effect rounded-t-[18px] flex-1 flex flex-col overflow-hidden">
-            
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
+        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
             {/* Header */}
-            <div className="flex-shrink-0 relative bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-b border-white/30">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-indigo-500/5 to-purple-500/5"></div>
-              <div className="relative flex items-center justify-between p-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-                    <UserPlus className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                      Add New Customer
-                    </h2>
-                    <p className="text-gray-600 mt-1 text-sm">
-                      Enter customer details to add them to your system
-                    </p>
-                  </div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <UserPlus className="w-5 h-5 text-blue-600" />
                 </div>
-                
-                <button
-                  onClick={onClose}
-                  disabled={isLoading}
-                  className="p-3 hover:bg-red-50 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <X className="w-6 h-6 text-red-500" />
-                </button>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Add New Customer</h3>
+                  <p className="text-xs text-gray-500">Enter customer details below</p>
+                </div>
               </div>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <div className="p-6">
-                <CustomerForm
-                  onSubmit={handleCustomerCreated}
-                  onCancel={onClose}
-                  isLoading={isLoading}
-                  renderActionsInModal={false}
+            <div className="space-y-4">
+              <CustomerForm
+                onSubmit={handleCustomerCreated}
+                onCancel={onClose}
+                isLoading={isLoading}
+                renderActionsInModal={false}
+              />
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-6">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {(actions, formFields) => (
-                    <div className="space-y-6">
-                      {formFields}
-                      
-                      {/* Action Buttons */}
-                      <div className="flex gap-3 pt-6 border-t border-gray-200">
-                        <button
-                          type="button"
-                          onClick={onClose}
-                          disabled={isLoading}
-                          className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={isLoading}
-                          className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isLoading ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                              Adding Customer...
-                            </>
-                          ) : (
-                            <>
-                              <UserPlus className="w-4 h-4" />
-                              Add Customer
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </CustomerForm>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const form = document.getElementById('customer-form') as HTMLFormElement;
+                    if (form) {
+                      form.requestSubmit();
+                    }
+                  }}
+                  disabled={isLoading}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoading ? 'Adding...' : 'Add Customer'}
+                </button>
               </div>
             </div>
           </div>
@@ -321,8 +230,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
       
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />
-    </>,
-    document.body
+    </>
   );
 };
 
