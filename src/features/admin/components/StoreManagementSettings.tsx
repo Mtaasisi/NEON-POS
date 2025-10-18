@@ -14,12 +14,15 @@ import {
   AlertTriangle,
   X,
   Package,
-  Settings
+  Settings,
+  ShoppingCart,
+  Box,
+  Warehouse,
+  Factory,
+  FolderTree,
+  UserCircle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassInput from '../../shared/components/ui/GlassInput';
-import GlassButton from '../../shared/components/ui/GlassButton';
 
 interface Store {
   id?: string;
@@ -567,148 +570,56 @@ const StoreManagementSettings: React.FC = () => {
             </div>
           </div>
 
-          {/* Data Isolation Mode */}
+          {/* Data Isolation Configuration */}
           <div className="border-t pt-4 mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Data Isolation Model for This Branch *
+              Data Isolation Configuration
             </label>
-            <p className="text-xs text-gray-500 mb-3">
-              <span className="font-semibold text-orange-600">Required:</span> Each branch can have its own isolation settings. Choose a mode below, then manually configure each feature.
+            <p className="text-xs text-gray-500 mb-4">
+              Configure what data this branch shares with other branches. Toggle each feature individually.
             </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-            {[
-              {
-                value: 'shared',
-                title: 'Shared Model',
-                description: 'Recommended: Share most features',
-                icon: '🌐',
-                benefits: ['Best for unified operations', 'Centralized data', 'Configure below']
-              },
-              {
-                value: 'isolated',
-                title: 'Isolated Model',
-                description: 'Recommended: Isolate most features',
-                icon: '🔒',
-                benefits: ['Best for independence', 'Separate data', 'Configure below']
-              },
-              {
-                value: 'hybrid',
-                title: 'Hybrid Model',
-                description: 'Mix of shared and isolated features',
-                icon: '⚖️',
-                benefits: ['Complete flexibility', 'Custom configuration', 'Configure below']
-              }
-            ].map((mode) => (
-              <button
-                key={mode.value}
-                onClick={() => setFormData({ 
-                  ...formData, 
-                  data_isolation_mode: mode.value as any
-                })}
-                className={`p-4 rounded-xl border-2 text-left transition-all ${
-                  formData.data_isolation_mode === mode.value
-                    ? 'border-purple-500 bg-white shadow-lg'
-                    : 'border-gray-200 bg-white hover:border-purple-300'
-                }`}
-              >
-                <div className="text-2xl mb-2">{mode.icon}</div>
-                <div className="font-semibold text-gray-900 mb-1">{mode.title}</div>
-                <div className="text-xs text-gray-600 mb-2">{mode.description}</div>
-                <div className="space-y-1">
-                  {mode.benefits.map((benefit, i) => (
-                    <div key={i} className="text-xs text-gray-500 flex items-center gap-1">
-                      <span className="text-green-500">✓</span>
-                      {benefit}
-                    </div>
-                  ))}
-                </div>
-              </button>
-            ))}
-          </div>
 
-          {/* Configuration for All Modes */}
-          {formData.data_isolation_mode && (
-            <div className="bg-white rounded-lg p-4 border-2 border-purple-200">
-              <h5 className="font-medium text-gray-900 mb-2 text-sm">
-                Configure What This Branch Shares
-              </h5>
-              <p className="text-xs text-gray-500 mb-3">
-                {formData.data_isolation_mode === 'shared' && (
-                  <span className="text-blue-600 font-semibold">Shared Mode: </span>
-                )}
-                {formData.data_isolation_mode === 'isolated' && (
-                  <span className="text-red-600 font-semibold">Isolated Mode: </span>
-                )}
-                {formData.data_isolation_mode === 'hybrid' && (
-                  <span className="text-purple-600 font-semibold">Hybrid Mode: </span>
-                )}
-                Toggle ON to <span className="font-semibold">share</span> with other branches, toggle OFF to keep <span className="font-semibold">isolated</span> for this branch only.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {[
-                  { key: 'share_products', label: 'Products & Catalog', icon: '📦', description: 'Product catalog visible across branches', setting: 'allow_products_isolation' },
-                  { key: 'share_customers', label: 'Customers', icon: '👥', description: 'Customer database shared', setting: 'allow_customers_isolation' },
-                  { key: 'share_inventory', label: 'Inventory', icon: '📊', description: 'Real-time inventory sync', setting: 'allow_inventory_isolation' },
-                  { key: 'share_suppliers', label: 'Suppliers', icon: '🏭', description: 'Supplier contacts shared', setting: 'allow_suppliers_isolation' },
-                  { key: 'share_categories', label: 'Categories', icon: '📁', description: 'Product categories shared', setting: 'allow_categories_isolation' },
-                  { key: 'share_employees', label: 'Employees', icon: '👤', description: 'Staff can work at any branch', setting: 'allow_employees_isolation' }
-                ].filter(({ setting }) => isolationSettings[setting as keyof IsolationSettings]).map(({ key, label, icon, description }) => (
-                  <div key={key} className="flex items-start p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-lg">{icon}</span>
-                        <span className="text-sm font-medium text-gray-900">{label}</span>
-                      </div>
-                      <p className="text-xs text-gray-600">{description}</p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer ml-2">
-                      <input
-                        type="checkbox"
-                        checked={formData[key as keyof Store] as boolean}
-                        onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                    </label>
-                  </div>
-                ))}
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { key: 'share_products', setting: 'allow_products_isolation' },
-                { key: 'share_customers', setting: 'allow_customers_isolation' },
-                { key: 'share_inventory', setting: 'allow_inventory_isolation' },
-                { key: 'share_suppliers', setting: 'allow_suppliers_isolation' },
-                { key: 'share_categories', setting: 'allow_categories_isolation' },
-                { key: 'share_employees', setting: 'allow_employees_isolation' }
-              ].filter(({ setting }) => !isolationSettings[setting as keyof IsolationSettings]).length > 0 && (
-                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-xs text-yellow-800">
-                    <span className="font-semibold">Note:</span> Some features are disabled in global settings and cannot be isolated for this branch.
-                  </p>
+                { key: 'share_products', label: 'Products & Catalog', Icon: Box, description: 'Share product catalog', setting: 'allow_products_isolation' },
+                { key: 'share_customers', label: 'Customers', Icon: Users, description: 'Share customer database', setting: 'allow_customers_isolation' },
+                { key: 'share_inventory', label: 'Inventory', Icon: Warehouse, description: 'Share inventory tracking', setting: 'allow_inventory_isolation' },
+                { key: 'share_suppliers', label: 'Suppliers', Icon: Factory, description: 'Share supplier contacts', setting: 'allow_suppliers_isolation' },
+                { key: 'share_categories', label: 'Categories', Icon: FolderTree, description: 'Share product categories', setting: 'allow_categories_isolation' },
+                { key: 'share_employees', label: 'Employees', Icon: UserCircle, description: 'Share employee lists', setting: 'allow_employees_isolation' }
+              ].filter(({ setting }) => isolationSettings[setting as keyof IsolationSettings]).map(({ key, label, Icon, description }) => (
+                <div key={key} className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Icon className="w-5 h-5 text-gray-600" />
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">{label}</div>
+                      <p className="text-xs text-gray-500">{description}</p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer ml-4">
+                    <input
+                      type="checkbox"
+                      checked={formData[key as keyof Store] as boolean}
+                      onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                  </label>
                 </div>
-              )}
-              
-              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-xs text-green-800 mb-2">
-                  <span className="font-semibold">💡 How It Works:</span>
-                </p>
-                <ul className="text-xs text-green-800 space-y-1 ml-4 list-disc">
-                  <li><span className="font-semibold">Toggle ON (Share):</span> This branch sees data from all other branches</li>
-                  <li><span className="font-semibold">Toggle OFF (Isolate):</span> This branch has its own separate database</li>
-                  <li><span className="font-semibold">Each branch is independent:</span> Different branches can have different settings</li>
-                </ul>
-              </div>
+              ))}
             </div>
-          )}
           </div>
 
           {/* Transfer & Sync Options */}
           <div className="border-t pt-4 mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Transfer & Synchronization
             </label>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-xs text-gray-500 mb-4">
+              Configure stock transfer and synchronization settings
+            </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
               <div>
                 <span className="text-sm font-medium text-gray-700">Allow Stock Transfers</span>
                 <p className="text-xs text-gray-500">Enable transferring stock between branches</p>
@@ -720,12 +631,12 @@ const StoreManagementSettings: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, allow_stock_transfer: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
               </label>
             </div>
 
             {formData.allow_stock_transfer && (
-              <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
                 <div>
                   <span className="text-sm font-medium text-gray-700">Require Approval for Transfers</span>
                   <p className="text-xs text-gray-500">Transfers need manager approval</p>
@@ -737,12 +648,12 @@ const StoreManagementSettings: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, require_approval_for_transfers: e.target.checked })}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600"></div>
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
                 </label>
               </div>
             )}
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
               <div>
                 <span className="text-sm font-medium text-gray-700">Auto-Sync Products</span>
                 <p className="text-xs text-gray-500">Automatically sync product catalog changes</p>
@@ -754,11 +665,11 @@ const StoreManagementSettings: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, auto_sync_products: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
               <div>
                 <span className="text-sm font-medium text-gray-700">Auto-Sync Prices</span>
                 <p className="text-xs text-gray-500">Keep prices synchronized across branches</p>
@@ -770,7 +681,7 @@ const StoreManagementSettings: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, auto_sync_prices: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
               </label>
             </div>
           </div>
@@ -778,11 +689,14 @@ const StoreManagementSettings: React.FC = () => {
 
           {/* Branch Configuration */}
           <div className="border-t pt-4 mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Branch Configuration
             </label>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-xs text-gray-500 mb-4">
+              Configure branch settings and permissions
+            </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
               <div>
                 <span className="text-sm font-medium text-gray-700">Main Store</span>
                 <p className="text-xs text-gray-500">This is the primary/headquarters location</p>
@@ -794,11 +708,11 @@ const StoreManagementSettings: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, is_main: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
               <div>
                 <span className="text-sm font-medium text-gray-700">Active</span>
                 <p className="text-xs text-gray-500">Store is currently operational</p>
@@ -810,23 +724,7 @@ const StoreManagementSettings: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-              </label>
-            </div>
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <div>
-                <span className="text-sm font-medium text-gray-700">Can View Other Branches</span>
-                <p className="text-xs text-gray-500">Branch staff can view data from other branches</p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.can_view_other_branches}
-                  onChange={(e) => setFormData({ ...formData, can_view_other_branches: e.target.checked })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
               </label>
             </div>
 
@@ -835,7 +733,7 @@ const StoreManagementSettings: React.FC = () => {
               <select
                 value={formData.pricing_model}
                 onChange={(e) => setFormData({ ...formData, pricing_model: e.target.value as 'centralized' | 'location-specific' })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors text-gray-900"
               >
                 <option value="centralized">Centralized Pricing (Same prices for all stores)</option>
                 <option value="location-specific">Location-Specific Pricing</option>
@@ -852,7 +750,7 @@ const StoreManagementSettings: React.FC = () => {
                   step="0.01"
                   value={formData.tax_rate_override || ''}
                   onChange={(e) => setFormData({ ...formData, tax_rate_override: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors text-gray-900"
                   placeholder="Leave empty to use default tax rate"
                 />
               </div>
@@ -965,8 +863,9 @@ const StoreManagementSettings: React.FC = () => {
 
           <div className="space-y-4">
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-              <p className="text-sm text-blue-900 font-semibold mb-2">
-                🔧 Global Isolation Controls
+              <p className="text-sm text-blue-900 font-semibold mb-2 flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                Global Isolation Controls
               </p>
               <p className="text-xs text-blue-800">
                 These settings control which features <span className="font-semibold">can be isolated per branch</span>. When enabled, each branch can choose to share or isolate that feature. When disabled, the feature is <span className="font-semibold">always shared</span> across all branches.
@@ -975,17 +874,17 @@ const StoreManagementSettings: React.FC = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { key: 'allow_products_isolation', label: 'Products & Catalog', icon: '📦', description: 'Allow stores to have separate product catalogs' },
-                { key: 'allow_customers_isolation', label: 'Customers', icon: '👥', description: 'Allow stores to have separate customer databases' },
-                { key: 'allow_inventory_isolation', label: 'Inventory', icon: '📊', description: 'Allow stores to have separate inventory tracking' },
-                { key: 'allow_suppliers_isolation', label: 'Suppliers', icon: '🏭', description: 'Allow stores to have separate supplier lists' },
-                { key: 'allow_categories_isolation', label: 'Categories', icon: '📁', description: 'Allow stores to have separate product categories' },
-                { key: 'allow_employees_isolation', label: 'Employees', icon: '👤', description: 'Allow stores to have separate employee lists' }
-              ].map(({ key, label, icon, description }) => (
+                { key: 'allow_products_isolation', label: 'Products & Catalog', Icon: Box, description: 'Allow stores to have separate product catalogs' },
+                { key: 'allow_customers_isolation', label: 'Customers', Icon: Users, description: 'Allow stores to have separate customer databases' },
+                { key: 'allow_inventory_isolation', label: 'Inventory', Icon: Warehouse, description: 'Allow stores to have separate inventory tracking' },
+                { key: 'allow_suppliers_isolation', label: 'Suppliers', Icon: Factory, description: 'Allow stores to have separate supplier lists' },
+                { key: 'allow_categories_isolation', label: 'Categories', Icon: FolderTree, description: 'Allow stores to have separate product categories' },
+                { key: 'allow_employees_isolation', label: 'Employees', Icon: UserCircle, description: 'Allow stores to have separate employee lists' }
+              ].map(({ key, label, Icon, description }) => (
                 <div key={key} className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-lg">{icon}</span>
+                      <Icon className="w-5 h-5 text-gray-600" />
                       <span className="text-sm font-semibold text-gray-900">{label}</span>
                     </div>
                     <p className="text-xs text-gray-600">{description}</p>
@@ -1091,21 +990,21 @@ const StoreManagementSettings: React.FC = () => {
                         store.data_isolation_mode === 'isolated' ? 'bg-red-100 text-red-700' :
                         'bg-purple-100 text-purple-700'
                       }`}>
-                        {store.data_isolation_mode === 'shared' ? '🌐 Shared Data' :
-                         store.data_isolation_mode === 'isolated' ? '🔒 Isolated Data' :
-                         '⚖️ Hybrid Model'}
+                        {store.data_isolation_mode === 'shared' ? 'Shared Data' :
+                         store.data_isolation_mode === 'isolated' ? 'Isolated Data' :
+                         'Hybrid Model'}
                       </span>
                       <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
                         {store.pricing_model === 'centralized' ? 'Centralized Pricing' : 'Location-Specific Pricing'}
                       </span>
                       {store.allow_stock_transfer && (
                         <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">
-                          ✓ Stock Transfers
+                          Stock Transfers
                         </span>
                       )}
                       {store.share_inventory && (
                         <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded">
-                          📊 Shared Inventory
+                          Shared Inventory
                         </span>
                       )}
                     </div>

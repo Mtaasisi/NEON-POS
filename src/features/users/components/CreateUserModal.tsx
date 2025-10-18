@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassInput from '../../shared/components/ui/GlassInput';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { 
-  User, Mail, Phone, Shield, Eye, EyeOff, X, Save, UserPlus, Building2, MapPin
+  User, Mail, Phone, Shield, Eye, EyeOff, X, UserPlus, Building2, MapPin
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getAllBranches } from '../../../lib/userBranchApi';
@@ -160,35 +158,36 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/50"
       onClick={onClose}
     >
-      <GlassCard 
-        className="max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+      <div 
+        className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6 space-y-6">
           {/* Header */}
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <UserPlus className="w-6 h-6 text-blue-600" />
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <UserPlus className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">
+                <h3 className="text-xl font-bold text-gray-900">
                   Create New User
-                </h2>
-                <p className="text-sm text-gray-500">
+                </h3>
+                <p className="text-xs text-gray-500">
                   Add a new user to the system
                 </p>
               </div>
             </div>
-            <GlassButton
-              variant="ghost"
-              size="sm"
+            <button
+              type="button"
               onClick={handleCancel}
-              icon={<X size={20} />}
-            />
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
 
           {/* User Information */}
@@ -517,20 +516,24 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
           </div>
 
           {/* Form Actions */}
-          <div className="pt-6 border-t border-gray-200">
-            <GlassButton
-              type="submit"
-              variant="primary"
-              loading={loading}
-              disabled={!isDirty}
-              className="w-full py-4 text-lg font-semibold"
-              icon={<Save size={20} />}
+          <div className="flex gap-3 mt-6">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
             >
-              {loading ? 'Creating User...' : 'Create User'}
-            </GlassButton>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!isDirty || loading}
+              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creating...' : 'Create User'}
+            </button>
           </div>
         </form>
-      </GlassCard>
+      </div>
     </div>
   );
 };

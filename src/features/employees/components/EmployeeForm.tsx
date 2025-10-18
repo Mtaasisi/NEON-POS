@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import BranchSelector from '../../../components/BranchSelector';
-import { X, Save, UserPlus, Edit, User, Shield, Key } from 'lucide-react';
+import { X, UserPlus, Edit, User, Shield, Key } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 
@@ -208,21 +206,36 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <GlassCard className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
+          {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
-              {employee ? <Edit size={24} className="text-blue-600" /> : <UserPlus size={24} className="text-green-600" />}
-              <h2 className="text-2xl font-bold text-gray-900">
-                {employee ? 'Edit Employee' : 'Add New Employee'}
-              </h2>
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                employee ? 'bg-blue-100' : 'bg-green-100'
+              }`}>
+                {employee ? (
+                  <Edit className="w-5 h-5 text-blue-600" />
+                ) : (
+                  <UserPlus className="w-5 h-5 text-green-600" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {employee ? 'Edit Employee' : 'Add New Employee'}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {employee ? 'Update employee information' : 'Create a new employee record'}
+                </p>
+              </div>
             </div>
-            <GlassButton
-              variant="ghost"
+            <button
               onClick={onClose}
-              icon={<X size={20} />}
-            />
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
           
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -545,13 +558,13 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   placeholder="Add a skill"
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
                 />
-                <GlassButton
+                <button
                   type="button"
                   onClick={addSkill}
-                  className="bg-blue-600 text-white"
+                  className="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
                   Add
-                </GlassButton>
+                </button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {(formData.skills || []).map((skill, index) => (
@@ -573,25 +586,24 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
             </div>
 
             {/* Form Actions */}
-            <div className="flex justify-end gap-3 pt-6 border-t border-gray-200">
-              <GlassButton
+            <div className="flex gap-3 mt-6">
+              <button
                 type="button"
-                variant="ghost"
                 onClick={onClose}
+                className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
               >
                 Cancel
-              </GlassButton>
-              <GlassButton
+              </button>
+              <button
                 type="submit"
-                icon={<Save size={18} />}
-                className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+                className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
               >
                 {employee ? 'Update Employee' : 'Add Employee'}
-              </GlassButton>
+              </button>
             </div>
           </form>
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 };
