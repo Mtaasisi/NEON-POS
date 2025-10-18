@@ -44,6 +44,7 @@ interface POSCartSectionProps {
   taxRate: number;
   finalAmount: number;
   onEditCustomer?: (customer: Customer) => void;
+  isTaxEnabled?: boolean;
 }
 
 const POSCartSection: React.FC<POSCartSectionProps> = ({
@@ -65,7 +66,8 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   taxAmount,
   taxRate,
   finalAmount,
-  onEditCustomer
+  onEditCustomer,
+  isTaxEnabled = true
 }) => {
   // Calculate total item count
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
@@ -273,11 +275,13 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                 )}
               </div>
 
-              {/* Tax/VAT Line */}
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Tax (VAT {taxRate}%):</span>
-                <span className="font-medium">TZS {taxAmount.toLocaleString()}</span>
-              </div>
+              {/* Tax/VAT Line - Only show if tax is enabled */}
+              {isTaxEnabled && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Tax (VAT {taxRate}%):</span>
+                  <span className="font-medium">TZS {taxAmount.toLocaleString()}</span>
+                </div>
+              )}
               
               {/* Total */}
               <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-2">

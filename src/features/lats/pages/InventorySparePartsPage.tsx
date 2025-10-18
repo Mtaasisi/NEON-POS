@@ -6,7 +6,7 @@ import SearchBar from '../../../features/shared/components/ui/SearchBar';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import { 
   Package, Plus, Grid, List, SortAsc, AlertCircle, Edit, Eye, Trash2, 
-  RefreshCw, Wrench, Minus
+  RefreshCw, Wrench, Minus, CheckCircle, XCircle, Search
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -547,45 +547,85 @@ const InventorySparePartsPage: React.FC = () => {
 
 
   return (
-    <div className="min-h-screen">
-      
-      <div className="max-w-6xl mx-auto p-3">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
 
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+        {/* Header - Flat Design */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <Wrench className="text-blue-600 w-5 h-5" />
-              Spare Parts
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <Wrench className="text-orange-600 w-8 h-8" />
+              Spare Parts Inventory
             </h1>
-            <p className="text-gray-600 text-sm mt-1">
-              Manage inventory, track usage, monitor stock
+            <p className="text-gray-600 mt-1">
+              Manage inventory, track usage, and monitor stock levels
             </p>
           </div>
           
-          <div className="flex gap-2">
-            <div className="flex gap-2">
-              <GlassButton
-                onClick={() => {
-                  setEditingSparePart(null);
-                  setShowSparePartFormSteps(true);
-                }}
-                className="flex items-center gap-1 text-sm px-3 py-2"
-              >
-                <Plus className="w-3 h-3" />
-                Add Part
-              </GlassButton>
-              <GlassButton
-                onClick={() => {
-                  setEditingSparePart(null);
-                  setShowSparePartForm(true);
-                }}
-                variant="outline"
-                className="flex items-center gap-1 text-sm px-3 py-2"
-              >
-                <Package className="w-3 h-3" />
-                Advanced
-              </GlassButton>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setEditingSparePart(null);
+                setShowSparePartFormSteps(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-orange-600 text-white hover:bg-orange-700 transition-colors text-sm"
+            >
+              <Plus size={18} />
+              Add Part
+            </button>
+            <button
+              onClick={() => {
+                setEditingSparePart(null);
+                setShowSparePartForm(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors text-sm bg-white"
+            >
+              <Package size={18} />
+              Advanced
+            </button>
+          </div>
+        </div>
+
+        {/* Statistics - Flat Design */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+            <div className="flex items-center gap-3">
+              <Package className="w-7 h-7 text-blue-600 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Total Parts</p>
+                <p className="text-2xl font-bold text-gray-900">{filteredSpareParts.length}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-7 h-7 text-green-600 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-gray-600 mb-1">In Stock</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {spareParts.filter(part => part.quantity > part.min_quantity).length}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-yellow-50 rounded-lg p-5 hover:bg-yellow-100 transition-colors">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-7 h-7 text-yellow-600 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Low Stock</p>
+                <p className="text-2xl font-bold text-gray-900">{stockAlerts.lowStock.length}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-red-50 rounded-lg p-5 hover:bg-red-100 transition-colors">
+            <div className="flex items-center gap-3">
+              <XCircle className="w-7 h-7 text-red-600 flex-shrink-0" />
+              <div>
+                <p className="text-xs text-gray-600 mb-1">Out of Stock</p>
+                <p className="text-2xl font-bold text-gray-900">{stockAlerts.outOfStock.length}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -664,329 +704,292 @@ const InventorySparePartsPage: React.FC = () => {
 
         {/* Bulk Actions Bar */}
         {selectedSpareParts.length > 0 && (
-          <GlassCard className="mb-4 p-3 bg-blue-50 border-blue-200">
+          <GlassCard className="bg-orange-50 border-orange-200 p-4">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-blue-800">
-                  {selectedSpareParts.length} part{selectedSpareParts.length !== 1 ? 's' : ''} selected
-                </span>
-                <button
-                  onClick={() => setSelectedSpareParts([])}
-                  className="text-xs text-blue-600 hover:text-blue-800 underline"
-                >
-                  Clear selection
-                </button>
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-orange-600" />
+                <div>
+                  <p className="text-sm font-semibold text-orange-900">
+                    {selectedSpareParts.length} part{selectedSpareParts.length !== 1 ? 's' : ''} selected
+                  </p>
+                  <button
+                    onClick={() => setSelectedSpareParts([])}
+                    className="text-xs text-orange-600 hover:text-orange-800 underline"
+                  >
+                    Clear selection
+                  </button>
+                </div>
               </div>
               <div className="flex gap-2">
-                <GlassButton
-                  size="sm"
+                <button
                   onClick={handleBulkExport}
-                  className="bg-green-600 text-white hover:bg-green-700"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors text-sm"
                 >
-                  <Package className="w-3 h-3 mr-1" />
+                  <Package className="w-4 h-4" />
                   Export CSV
-                </GlassButton>
-                <GlassButton
-                  size="sm"
+                </button>
+                <button
                   onClick={handleBulkDelete}
-                  className="bg-red-600 text-white hover:bg-red-700"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-red-600 text-white hover:bg-red-700 transition-colors text-sm"
                 >
-                  <Trash2 className="w-3 h-3 mr-1" />
+                  <Trash2 className="w-4 h-4" />
                   Delete
-                </GlassButton>
+                </button>
               </div>
             </div>
           </GlassCard>
         )}
 
-        {/* Filters and Search */}
-        <GlassCard className="mb-4 p-3">
-          <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
-            {/* Search */}
-            <div className="flex-1 min-w-0">
-              <SearchBar
-                onSearch={setSearchTerm}
-                placeholder="Search parts..."
-                className="w-full"
-                suggestions={spareParts.map(sp => sp.name)}
-                searchKey="spare_parts_search"
-              />
+        {/* Search and Filters */}
+        <GlassCard className="p-6">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Search Bar */}
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="Search parts, numbers, or descriptions..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900"
+                />
+              </div>
             </div>
 
-            {/* Category Filter */}
-            <GlassSelect
-              options={[
-                { value: 'all', label: 'All Categories' },
-                ...categories.map(category => ({
-                  value: category.id,
-                  label: category.name
-                }))
-              ]}
-              value={selectedCategory}
-              onChange={setSelectedCategory}
-              placeholder="Category"
-              className="min-w-[120px]"
-            />
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Category Filter */}
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
+              >
+                <option value="all">All Categories</option>
+                {categories.map(category => (
+                  <option key={category.id} value={category.id}>{category.name}</option>
+                ))}
+              </select>
 
-            {/* Stock Filter */}
-            <GlassSelect
-              options={[
-                { value: 'all', label: 'All Stock' },
-                { value: 'in-stock', label: 'In Stock' },
-                { value: 'low-stock', label: 'Low Stock' },
-                { value: 'out-of-stock', label: 'Out of Stock' }
-              ]}
-              value={stockFilter}
-              onChange={(value: string) => setStockFilter(value as 'all' | 'in-stock' | 'low-stock' | 'out-of-stock')}
-              placeholder="Stock"
-              className="min-w-[100px]"
-            />
+              {/* Stock Filter */}
+              <select
+                value={stockFilter}
+                onChange={(e) => setStockFilter(e.target.value as any)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
+              >
+                <option value="all">All Stock</option>
+                <option value="in-stock">In Stock</option>
+                <option value="low-stock">Low Stock</option>
+                <option value="out-of-stock">Out of Stock</option>
+              </select>
 
-            {/* Sort */}
-            <div className="flex gap-1">
+              {/* Sort Filter */}
               <select
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'name' | 'quantity' | 'cost' | 'selling')}
-                className="px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => setSortBy(e.target.value as any)}
+                className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-gray-900 bg-white"
               >
-                <option value="name">Name</option>
-                <option value="quantity">Qty</option>
-                <option value="cost">Cost</option>
-                <option value="selling">Price</option>
+                <option value="name">Sort: Name</option>
+                <option value="quantity">Sort: Quantity</option>
+                <option value="cost">Sort: Cost</option>
+                <option value="selling">Sort: Price</option>
               </select>
-              <button
-                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                className="px-2 py-1 border border-gray-300 rounded hover:bg-gray-50"
-              >
-                <SortAsc className={`w-3 h-3 ${sortOrder === 'desc' ? 'rotate-180' : ''}`} />
-              </button>
-            </div>
 
-            {/* Refresh Button */}
-            <button
-              onClick={async () => {
-                await loadSpareParts();
-                toast.success('Data refreshed successfully');
-              }}
-              className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
-              disabled={isLoading}
-            >
-              <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-
-            {/* View Mode - Auto-switch to grid on mobile */}
-            <div className="flex gap-1">
+              {/* Refresh Button */}
               <button
-                onClick={() => setViewMode('grid')}
-                className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}
-                title="Grid View"
+                onClick={async () => {
+                  await loadSpareParts();
+                  toast.success('Data refreshed successfully');
+                }}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white"
               >
-                <Grid className="w-3 h-3" />
+                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
               </button>
-              {!isMobile && (
+
+              {/* View Mode Toggle */}
+              <div className="flex gap-1 border border-gray-300 rounded-lg p-1 bg-white">
                 <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}
-                  title="Table View"
+                  onClick={() => setViewMode('grid')}
+                  className={`p-2 rounded transition-colors ${viewMode === 'grid' ? 'bg-orange-100 text-orange-600' : 'text-gray-600 hover:bg-gray-100'}`}
+                  title="Grid View"
                 >
-                  <List className="w-3 h-3" />
+                  <Grid className="w-4 h-4" />
                 </button>
-              )}
+                {!isMobile && (
+                  <button
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded transition-colors ${viewMode === 'list' ? 'bg-orange-100 text-orange-600' : 'text-gray-600 hover:bg-gray-100'}`}
+                    title="Table View"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </GlassCard>
 
         {/* Error Display */}
         {error && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded">
-            <div className="flex items-center gap-2 text-red-800 text-sm">
-              <AlertCircle className="w-4 h-4" />
-              <span>{error}</span>
+          <GlassCard className="bg-red-50 border-red-200 p-4">
+            <div className="flex items-center gap-3 text-red-700">
+              <AlertCircle className="w-5 h-5" />
+              <div>
+                <h4 className="font-semibold">Error</h4>
+                <p className="text-sm">{error}</p>
+              </div>
             </div>
-          </div>
+          </GlassCard>
         )}
 
-        {/* Loading State with Skeleton */}
+        {/* Loading State */}
         {isLoading || isInitialLoad ? (
-          <div className="space-y-4">
-            {/* Loading Skeleton for Grid View */}
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {Array.from({ length: 8 }).map((_, index) => (
-                  <GlassCard key={index} className="animate-pulse">
-                    <div className="p-3">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-1"></div>
-                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                        </div>
-                        <div className="h-5 bg-gray-200 rounded-full w-16"></div>
-                      </div>
-                      <div className="h-24 bg-gray-200 rounded mb-2"></div>
-                      <div className="space-y-1 mb-3">
-                        <div className="h-3 bg-gray-200 rounded w-full"></div>
-                        <div className="h-3 bg-gray-200 rounded w-2/3"></div>
-                        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                      </div>
-                      <div className="flex gap-1">
-                        <div className="h-8 bg-gray-200 rounded flex-1"></div>
-                        <div className="h-8 bg-gray-200 rounded w-8"></div>
-                        <div className="h-8 bg-gray-200 rounded w-8"></div>
-                        <div className="h-8 bg-gray-200 rounded w-8"></div>
-                      </div>
-                    </div>
-                  </GlassCard>
-                ))}
-              </div>
-            ) : (
-              /* Loading Skeleton for Table View */
-              <GlassCard>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        {Array.from({ length: 10 }).map((_, index) => (
-                          <th key={index} className="text-left py-2 px-3">
-                            <div className="h-4 bg-gray-200 rounded w-16"></div>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Array.from({ length: 5 }).map((_, rowIndex) => (
-                        <tr key={rowIndex} className="border-b border-gray-100">
-                          {Array.from({ length: 10 }).map((_, colIndex) => (
-                            <td key={colIndex} className="py-2 px-3">
-                              <div className="h-4 bg-gray-200 rounded w-12"></div>
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </GlassCard>
+          <GlassCard className="p-12">
+            <div className="flex items-center justify-center">
+              <RefreshCw className="w-8 h-8 animate-spin text-orange-500" />
+              <span className="ml-4 text-gray-700 font-medium">Loading spare parts...</span>
+            </div>
+          </GlassCard>
+        ) : filteredSpareParts.length === 0 ? (
+          // Empty State
+          <GlassCard className="p-12 text-center">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-xl font-bold text-gray-900 mb-2">No spare parts found</h3>
+            <p className="text-gray-600 mb-6">
+              {searchTerm || selectedCategory !== 'all' || stockFilter !== 'all' 
+                ? 'Try adjusting your search or filters'
+                : 'Get started by adding your first spare part'
+              }
+            </p>
+            {!searchTerm && selectedCategory === 'all' && stockFilter === 'all' && (
+              <button
+                onClick={() => {
+                  setEditingSparePart(null);
+                  setShowSparePartForm(true);
+                }}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Spare Part</span>
+              </button>
             )}
-          </div>
+          </GlassCard>
         ) : (
-          <>
-            {/* Spare Parts Grid/List */}
-            {viewMode === 'grid' ? (
+          // Spare Parts Grid/List
+          viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredSpareParts.map((part) => {
               const stockStatus = getStockStatus(part);
               const isSelected = selectedSpareParts.includes(part.id);
               return (
-                <GlassCard key={part.id} className={`hover:shadow-lg transition-shadow ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                  <div className="p-3">
-                    {/* Header with Selection */}
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-start gap-2 flex-1 min-w-0">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleSelectPart(part.id)}
-                          className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                <GlassCard key={part.id} className={`overflow-hidden hover:shadow-lg transition-all ${isSelected ? 'ring-2 ring-orange-500 bg-orange-50' : ''}`}>
+                  {/* Image Section */}
+                  <div className="relative">
+                    <div className="w-full h-40 bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
+                      {part.images && part.images.length > 0 ? (
+                        <SafeImage
+                          src={part.images[0]}
+                          alt={part.name}
+                          className="w-full h-full object-cover"
                         />
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-gray-900 truncate text-sm">{part.name}</h3>
-                          <p className="text-xs text-gray-500">{part.part_number}</p>
-                        </div>
-                      </div>
-                      <div className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${stockStatus.bg} ${stockStatus.color}`}>
-                        {stockStatus.status.replace('-', ' ')}
-                      </div>
+                      ) : (
+                        <Package className="w-16 h-16 text-gray-400" />
+                      )}
                     </div>
+                    {/* Status Badge */}
+                    <div className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-semibold ${stockStatus.bg} ${stockStatus.color} shadow-sm`}>
+                      {stockStatus.status.replace('-', ' ')}
+                    </div>
+                    {/* Checkbox */}
+                    <div className="absolute top-2 left-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSelectPart(part.id)}
+                        className="h-5 w-5 text-orange-600 focus:ring-orange-500 border-gray-300 rounded shadow-sm"
+                      />
+                    </div>
+                  </div>
 
-                    {/* Image */}
-                    <div className="mb-2">
-                      <div className="w-full h-24 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
-                        {part.images && part.images.length > 0 ? (
-                          <SafeImage
-                            src={part.images[0]}
-                            alt={part.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <Package className="w-12 h-12 text-gray-400" />
-                        )}
-                      </div>
+                  <div className="p-4">
+                    {/* Header */}
+                    <div className="mb-3">
+                      <h3 className="font-bold text-gray-900 truncate text-base">{part.name}</h3>
+                      <p className="text-sm text-gray-500">{part.part_number}</p>
                     </div>
 
                     {/* Description */}
                     {part.description && (
-                      <p className="text-xs text-gray-600 mb-2 line-clamp-2">{part.description}</p>
+                      <p className="text-xs text-gray-600 mb-3 line-clamp-2">{part.description}</p>
                     )}
 
-                    {/* Details */}
-                    <div className="space-y-1 mb-3">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Category:</span>
-                        <span className="font-medium">{getCategoryName(part.category_id)}</span>
+                    {/* Details Grid */}
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      <div className="bg-gray-50 rounded-lg p-2">
+                        <p className="text-xs text-gray-500 mb-1">Category</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{getCategoryName(part.category_id)}</p>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Qty:</span>
-                        <span className={`font-medium ${part.quantity <= part.min_quantity ? 'text-red-600' : 'text-green-600'}`}>
+                      <div className="bg-gray-50 rounded-lg p-2">
+                        <p className="text-xs text-gray-500 mb-1">Quantity</p>
+                        <p className={`text-sm font-bold ${part.quantity <= part.min_quantity ? 'text-red-600' : 'text-green-600'}`}>
                           {part.quantity}/{part.min_quantity}
-                        </span>
+                        </p>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Cost:</span>
-                        <span className="font-medium">{format.currency(part.cost_price)}</span>
+                      <div className="bg-gray-50 rounded-lg p-2">
+                        <p className="text-xs text-gray-500 mb-1">Cost</p>
+                        <p className="text-sm font-medium text-gray-900">{format.currency(part.cost_price)}</p>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">Price:</span>
-                        <span className="font-medium">{format.currency(part.selling_price)}</span>
+                      <div className="bg-gray-50 rounded-lg p-2">
+                        <p className="text-xs text-gray-500 mb-1">Price</p>
+                        <p className="text-sm font-medium text-gray-900">{format.currency(part.selling_price)}</p>
                       </div>
-                      {part.location && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500">Location:</span>
-                          <span className="font-medium">{part.location}</span>
-                        </div>
-                      )}
                     </div>
 
+                    {part.location && (
+                      <div className="mb-4">
+                        <p className="text-xs text-gray-500">Location: <span className="font-medium text-gray-900">{part.location}</span></p>
+                      </div>
+                    )}
+
                     {/* Actions */}
-                    <div className="flex gap-1">
-                      <GlassButton
-                        size="sm"
+                    <div className="flex gap-2">
+                      <button
                         onClick={() => handleOpenDetailModal(part)}
-                        className="flex-1 bg-blue-600 text-white hover:bg-blue-700 text-xs px-2 py-1"
+                        className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium"
                       >
-                        <Eye className="w-3 h-3" />
+                        <Eye className="w-4 h-4" />
                         View
-                      </GlassButton>
-                      <GlassButton
-                        size="sm"
+                      </button>
+                      <button
                         onClick={() => {
                           setSelectedSparePartForUsage(part);
                           setShowUsageModal(true);
                         }}
                         disabled={part.quantity === 0}
-                        className="px-2 py-1"
+                        className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Use Part"
                       >
-                        <Minus className="w-3 h-3" />
-                      </GlassButton>
-                      <GlassButton
-                        size="sm"
-                        variant="outline"
+                        <Minus className="w-4 h-4 text-gray-700" />
+                      </button>
+                      <button
                         onClick={() => {
                           setEditingSparePart(part);
                           setShowSparePartForm(true);
                         }}
-                        className="px-2 py-1"
+                        className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        title="Edit Part"
                       >
-                        <Edit className="w-3 h-3" />
-                      </GlassButton>
-                      <GlassButton
-                        size="sm"
-                        variant="outline"
+                        <Edit className="w-4 h-4 text-gray-700" />
+                      </button>
+                      <button
                         onClick={() => handleDeleteSparePart(part.id)}
-                        className="text-red-600 hover:text-red-700 px-2 py-1"
+                        className="p-2 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                        title="Delete Part"
                       >
-                        <Trash2 className="w-3 h-3" />
-                      </GlassButton>
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </button>
                     </div>
                   </div>
                 </GlassCard>
@@ -994,160 +997,150 @@ const InventorySparePartsPage: React.FC = () => {
             })}
           </div>
         ) : (
-          <GlassCard>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">
+          <GlassCard className="overflow-hidden">
+            {/* Table Header - Flat Style */}
+            <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
+              <div className="grid grid-cols-12 gap-4 items-center text-xs font-semibold text-gray-700 uppercase">
+                <div className="col-span-1 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedSpareParts.length === filteredSpareParts.length && filteredSpareParts.length > 0}
+                    onChange={handleSelectAll}
+                    className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                  />
+                  <span>Image</span>
+                </div>
+                <div className="col-span-2">Part Details</div>
+                <div className="col-span-2">Category</div>
+                <div className="col-span-1 text-center">Quantity</div>
+                <div className="col-span-1">Pricing</div>
+                <div className="col-span-2">Location</div>
+                <div className="col-span-1 text-center">Status</div>
+                <div className="col-span-2 text-center">Actions</div>
+              </div>
+            </div>
+
+            {/* Table Body - Flat Style */}
+            <div className="divide-y divide-gray-200">
+              {filteredSpareParts.map((part) => {
+                const stockStatus = getStockStatus(part);
+                const isSelected = selectedSpareParts.includes(part.id);
+                return (
+                  <div key={part.id} className={`hover:bg-gray-50 transition-colors ${isSelected ? 'bg-orange-50' : ''}`}>
+                    <div className="grid grid-cols-12 gap-4 items-center px-6 py-4">
+                      {/* Checkbox & Image */}
+                      <div className="col-span-1 flex items-center gap-3">
                         <input
                           type="checkbox"
-                          checked={selectedSpareParts.length === filteredSpareParts.length && filteredSpareParts.length > 0}
-                          onChange={handleSelectAll}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          checked={isSelected}
+                          onChange={() => handleSelectPart(part.id)}
+                          className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
                         />
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Image</th>
-                      <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Name</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Part #</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Category</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Qty</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Cost</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Price</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Location</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Status</th>
-                    <th className="text-left py-2 px-3 font-medium text-gray-900 text-sm">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredSpareParts.map((part) => {
-                    const stockStatus = getStockStatus(part);
-                    const isSelected = selectedSpareParts.includes(part.id);
-                      return (
-                        <tr key={part.id} className={`border-b border-gray-100 hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}>
-                          <td className="py-2 px-3">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleSelectPart(part.id)}
-                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
+                          {part.images && part.images.length > 0 ? (
+                            <SafeImage
+                              src={part.images[0]}
+                              alt={part.name}
+                              className="w-full h-full object-cover"
                             />
-                          </td>
-                          <td className="py-2 px-3">
-                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center cursor-pointer" onClick={() => handleOpenDetailModal(part)}>
-                              {part.images && part.images.length > 0 ? (
-                                <SafeImage
-                                  src={part.images[0]}
-                                  alt={part.name}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <Package className="w-6 h-6 text-gray-400" />
-                              )}
-                            </div>
-                          </td>
-                          <td className="py-2 px-3">
-                          <div>
-                            <div className="font-medium text-gray-900 text-sm">{part.name}</div>
-                            {part.description && (
-                              <div className="text-xs text-gray-500 truncate max-w-xs">{part.description}</div>
-                            )}
+                          ) : (
+                            <Package className="w-6 h-6 text-gray-400" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Part Details */}
+                      <div className="col-span-2">
+                        <div className="font-bold text-gray-900">{part.name}</div>
+                        <div className="text-sm text-gray-500">{part.part_number}</div>
+                        {part.description && (
+                          <div className="text-xs text-gray-500 truncate mt-1">{part.description}</div>
+                        )}
+                      </div>
+
+                      {/* Category */}
+                      <div className="col-span-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                            <Package className="w-4 h-4 text-purple-600" />
                           </div>
-                        </td>
-                        <td className="py-2 px-3 text-xs text-gray-600">{part.part_number}</td>
-                        <td className="py-2 px-3 text-xs text-gray-600">{getCategoryName(part.category_id)}</td>
-                        <td className="py-2 px-3">
-                          <span className={`font-medium text-sm ${part.quantity <= part.min_quantity ? 'text-red-600' : 'text-green-600'}`}>
-                            {part.quantity}
-                          </span>
-                          <div className="text-xs text-gray-500">min: {part.min_quantity}</div>
-                        </td>
-                        <td className="py-2 px-3 text-xs font-medium">{format.currency(part.cost_price)}</td>
-                        <td className="py-2 px-3 text-xs font-medium">{format.currency(part.selling_price)}</td>
-                        <td className="py-2 px-3 text-xs text-gray-600">{part.location || '-'}</td>
-                        <td className="py-2 px-3">
-                          <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${stockStatus.bg} ${stockStatus.color}`}>
-                            {stockStatus.status.replace('-', ' ')}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3">
-                          <div className="flex gap-1">
-                            <GlassButton
-                              size="sm"
-                              onClick={() => handleOpenDetailModal(part)}
-                              className="bg-blue-600 text-white hover:bg-blue-700 px-2 py-1"
-                            >
-                              <Eye className="w-3 h-3" />
-                            </GlassButton>
-                            <GlassButton
-                              size="sm"
-                              onClick={() => {
-                                setSelectedSparePartForUsage(part);
-                                setShowUsageModal(true);
-                              }}
-                              disabled={part.quantity === 0}
-                              className="px-2 py-1"
-                            >
-                              <Minus className="w-3 h-3" />
-                            </GlassButton>
-                            <GlassButton
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingSparePart(part);
-                                setShowSparePartForm(true);
-                              }}
-                              className="px-2 py-1"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </GlassButton>
-                            <GlassButton
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDeleteSparePart(part.id)}
-                              className="text-red-600 hover:text-red-700 px-2 py-1"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </GlassButton>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          <span className="font-medium text-gray-900">{getCategoryName(part.category_id)}</span>
+                        </div>
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="col-span-1 text-center">
+                        <div className={`text-2xl font-bold ${part.quantity <= part.min_quantity ? 'text-red-600' : 'text-green-600'}`}>
+                          {part.quantity}
+                        </div>
+                        <div className="text-xs text-gray-500">Min: {part.min_quantity}</div>
+                      </div>
+
+                      {/* Pricing */}
+                      <div className="col-span-1">
+                        <div className="text-sm font-medium text-gray-900">{format.currency(part.cost_price)}</div>
+                        <div className="text-xs text-gray-500">Sell: {format.currency(part.selling_price)}</div>
+                      </div>
+
+                      {/* Location */}
+                      <div className="col-span-2">
+                        <div className="text-sm text-gray-900">{part.location || 'Not set'}</div>
+                      </div>
+
+                      {/* Status */}
+                      <div className="col-span-1 flex justify-center">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${stockStatus.bg} ${stockStatus.color}`}>
+                          {stockStatus.status.replace('-', ' ')}
+                        </span>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="col-span-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleOpenDetailModal(part)}
+                            className="p-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition-colors"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedSparePartForUsage(part);
+                              setShowUsageModal(true);
+                            }}
+                            disabled={part.quantity === 0}
+                            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Use Part"
+                          >
+                            <Minus className="w-4 h-4 text-gray-700" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingSparePart(part);
+                              setShowSparePartForm(true);
+                            }}
+                            className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                            title="Edit Part"
+                          >
+                            <Edit className="w-4 h-4 text-gray-700" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSparePart(part.id)}
+                            className="p-2 border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                            title="Delete Part"
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </GlassCard>
-        )}
-
-            {/* Empty State */}
-            {filteredSpareParts.length === 0 && (
-          <GlassCard className="text-center py-8">
-            <Package className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-            <h3 className="text-base font-medium text-gray-900 mb-2">No parts found</h3>
-            <p className="text-gray-600 text-sm mb-3">
-              {searchTerm || selectedCategory !== 'all' || stockFilter !== 'all' 
-                ? 'Try adjusting your filters or search terms'
-                : 'Get started by adding your first spare part'
-              }
-            </p>
-            {!searchTerm && selectedCategory === 'all' && stockFilter === 'all' && (
-              <GlassButton
-                onClick={() => {
-                  setEditingSparePart(null);
-                  setShowSparePartForm(true);
-                }}
-                className="text-sm px-3 py-2"
-              >
-                <Plus className="w-3 h-3 mr-1" />
-                Add First Part
-              </GlassButton>
-            )}
-          </GlassCard>
-        )}
-          </>
-        )}
-      </div>
+        ))}
 
       {/* Spare Part Form Modal */}
       {showSparePartForm && (

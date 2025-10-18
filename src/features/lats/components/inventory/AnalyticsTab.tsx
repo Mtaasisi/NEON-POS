@@ -73,7 +73,6 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
             contact_person,
             phone,
             email,
-            rating,
             total_orders,
             on_time_delivery_rate
           `);
@@ -86,9 +85,11 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
           setSupplierData({
             totalSuppliers: suppliers.length,
             topSuppliers: suppliers
-              .sort((a: any, b: any) => (b.rating || 0) - (a.rating || 0))
+              .sort((a: any, b: any) => (b.total_orders || 0) - (a.total_orders || 0))
               .slice(0, 5),
-            averageRating: suppliers.reduce((sum: number, s: any) => sum + (s.rating || 0), 0) / suppliers.length
+            averageDeliveryRate: suppliers.length > 0 
+              ? suppliers.reduce((sum: number, s: any) => sum + (s.on_time_delivery_rate || 0), 0) / suppliers.length 
+              : 0
           });
         }
 
@@ -166,22 +167,23 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
     // Value analytics - use ALL variants for accurate calculation
     const totalValue = products?.reduce((sum, product) => {
       const productValue = product.variants?.reduce((variantSum: number, variant: any) => {
-        const costPrice = variant.costPrice || 0;
-        const quantity = variant.quantity || 0;
-        return variantSum + (costPrice * quantity);
+        const costPrice = Number(variant.costPrice) || 0;
+        const quantity = Number(variant.quantity) || 0;
+        return Number(variantSum) + (costPrice * quantity);
       }, 0) || 0;
-      return sum + productValue;
+      return Number(sum) + Number(productValue);
     }, 0) || 0;
     
     const retailValue = products?.reduce((sum, product) => {
       // Calculate retail value using ALL variants for consistency
       const productRetailValue = product.variants?.reduce((variantSum: number, variant: any) => {
         // Use sellingPrice if available, otherwise calculate from cost price with markup
-        const sellingPrice = variant.sellingPrice || (variant.costPrice * 1.5) || 0; // 50% markup if no selling price
-        const quantity = variant.quantity || 0;
-        return variantSum + (sellingPrice * quantity);
+        const costPrice = Number(variant.costPrice) || 0;
+        const sellingPrice = Number(variant.sellingPrice) || (costPrice * 1.5) || 0; // 50% markup if no selling price
+        const quantity = Number(variant.quantity) || 0;
+        return Number(variantSum) + (sellingPrice * quantity);
       }, 0) || 0;
-      return sum + productRetailValue;
+      return Number(sum) + Number(productRetailValue);
     }, 0) || 0;
     
     const potentialProfit = retailValue - totalValue;
@@ -226,12 +228,13 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
       
       // Calculate category value using retail prices
       const productValue = product.variants?.reduce((sum: number, variant: any) => {
-        const sellingPrice = variant.sellingPrice || (variant.costPrice * 1.5) || 0; // 50% markup if no selling price
-        const quantity = variant.quantity || 0;
-        return sum + (sellingPrice * quantity);
+        const costPrice = Number(variant.costPrice) || 0;
+        const sellingPrice = Number(variant.sellingPrice) || (costPrice * 1.5) || 0; // 50% markup if no selling price
+        const quantity = Number(variant.quantity) || 0;
+        return Number(sum) + (sellingPrice * quantity);
       }, 0) || 0;
       
-      category.value += productValue;
+      category.value = Number(category.value) + Number(productValue);
     });
     
     const categoryStats = Array.from(categoryMap.values())
@@ -699,12 +702,12 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                   <div className="text-xs text-gray-500">Suppliers</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-yellow-600">{supplierData.averageRating.toFixed(1)}</div>
-                  <div className="text-xs text-gray-500">Avg Rating</div>
+                  <div className="text-lg font-bold text-yellow-600">{supplierData.averageDeliveryRate.toFixed(1)}%</div>
+                  <div className="text-xs text-gray-500">Avg Delivery</div>
                 </div>
                 <div className="text-center">
                   <div className="text-lg font-bold text-green-600">{supplierData.topSuppliers.length}</div>
-                  <div className="text-xs text-gray-500">Top Rated</div>
+                  <div className="text-xs text-gray-500">Top Suppliers</div>
                 </div>
               </div>
               
@@ -721,8 +724,8 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                         <span className="text-xs text-gray-700 truncate">{supplier.name}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Star className="w-3 h-3 text-yellow-500" />
-                        <span className="text-xs font-semibold text-gray-900">{supplier.rating || 0}</span>
+                        <ShoppingCart className="w-3 h-3 text-blue-500" />
+                        <span className="text-xs font-semibold text-gray-900">{supplier.total_orders || 0}</span>
                       </div>
                     </div>
                   ))}

@@ -2,12 +2,11 @@ import React, { useState, useEffect } from 'react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { 
-  Calendar, Clock, Users, MapPin, Phone, Mail, Plus, Edit, Trash2, 
-  ChevronLeft, ChevronRight, Filter, RefreshCw, Eye, EyeOff,
-  CheckCircle, AlertTriangle, XCircle, CalendarDays, User, Building
+  ChevronLeft, ChevronRight, RefreshCw, Edit, XCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { fetchAllAppointments } from '../../../lib/customerApi/appointments';
+import { fetchAllAppointments, updateAppointment, createAppointment } from '../../../lib/customerApi/appointments';
+import AppointmentModal from '../../customers/components/forms/AppointmentModal';
 
 interface CalendarViewTabProps {
   isActive: boolean;
@@ -34,10 +33,12 @@ interface CalendarEvent {
 
 const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   useEffect(() => {
     if (isActive) {
@@ -239,6 +240,11 @@ const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
     }
   };
 
+  const handleDateClick = (date: Date) => {
+    setSelectedDate(date);
+    setShowCreateModal(true);
+  };
+
   if (!isActive) return null;
 
   if (loading) {
@@ -285,27 +291,6 @@ const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
         
         <div className="flex gap-2">
           <GlassButton
-            onClick={() => setViewMode('month')}
-            variant={viewMode === 'month' ? 'primary' : 'secondary'}
-            size="sm"
-          >
-            Month
-          </GlassButton>
-          <GlassButton
-            onClick={() => setViewMode('week')}
-            variant={viewMode === 'week' ? 'primary' : 'secondary'}
-            size="sm"
-          >
-            Week
-          </GlassButton>
-          <GlassButton
-            onClick={() => setViewMode('day')}
-            variant={viewMode === 'day' ? 'primary' : 'secondary'}
-            size="sm"
-          >
-            Day
-          </GlassButton>
-          <GlassButton
             onClick={loadCalendarEvents}
             icon={<RefreshCw size={16} />}
             variant="secondary"
@@ -338,9 +323,16 @@ const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
             return (
               <div
                 key={index}
-                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg transition-colors hover:bg-gray-50 ${
+                className={`min-h-[120px] p-2 border border-gray-200 rounded-lg transition-colors hover:bg-gray-50 cursor-pointer ${
                   isCurrentMonth ? 'bg-white' : 'bg-gray-50'
                 } ${isToday ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+                onClick={(e) => {
+                  // Only open create modal if clicking on empty space, not on an event
+                  if ((e.target as HTMLElement).closest('.event-item')) {
+                    return;
+                  }
+                  handleDateClick(day);
+                }}
               >
                 <div className={`text-sm font-medium mb-1 ${
                   isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
@@ -352,8 +344,11 @@ const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
                   {dayEvents.slice(0, 3).map(event => (
                     <div
                       key={event.id}
-                      className={`p-1 rounded text-xs cursor-pointer border-l-4 transition-all hover:shadow-sm ${getPriorityColor(event.priority)} ${getStatusColor(event.status)}`}
-                      onClick={() => setSelectedEvent(event)}
+                      className={`event-item p-1 rounded text-xs cursor-pointer border-l-4 transition-all hover:shadow-sm ${getPriorityColor(event.priority)} ${getStatusColor(event.status)}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEvent(event);
+                      }}
                       title={`${event.title} - ${formatTime(event.start)}`}
                     >
                       <div className="font-medium truncate">{event.title}</div>
@@ -435,7 +430,7 @@ const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
             <div className="flex gap-2 mt-6">
               <GlassButton
                 onClick={() => {
-                  toast('Edit functionality coming soon');
+                  setEditingEvent(selectedEvent);
                   setSelectedEvent(null);
                 }}
                 icon={<Edit size={14} />}
@@ -452,6 +447,92 @@ const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
               </GlassButton>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Edit Appointment Modal */}
+      {editingEvent && (
+        <AppointmentModal
+          isOpen={true}
+          onClose={() => setEditingEvent(null)}
+          mode="edit"
+          appointment={{
+            id: editingEvent.id,
+            customer_id: editingEvent.customerName || '',
+            service_type: editingEvent.serviceType || '',
+            appointment_date: editingEvent.start.split('T')[0],
+            appointment_time: new Date(editingEvent.start).toTimeString().split(' ')[0],
+            status: editingEvent.status as any,
+            notes: editingEvent.notes,
+            duration_minutes: 60,
+            priority: editingEvent.priority,
+            technician_id: '',
+            created_at: '',
+            updated_at: ''
+          }}
+          onSave={async (appointmentData) => {
+            try {
+              await updateAppointment(editingEvent.id, appointmentData);
+              toast.success('Appointment updated successfully');
+              setEditingEvent(null);
+              // Refresh calendar
+              await loadCalendarEvents();
+            } catch (error) {
+              console.error('Error updating appointment:', error);
+              toast.error('Failed to update appointment');
+              throw error;
+            }
+          }}
+        />
+      )}
+
+      {/* Create Appointment Modal from Calendar */}
+      {showCreateModal && selectedDate && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <GlassCard className="w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Quick Appointment</h3>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setSelectedDate(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <XCircle size={20} />
+              </button>
+            </div>
+            
+            <p className="text-sm text-gray-600 mb-4">
+              Creating appointment for {selectedDate.toLocaleDateString()}
+            </p>
+            
+            <p className="text-sm text-gray-700 mb-4">
+              Note: This is a quick create. For full appointment details with customer selection, 
+              please use the "New Appointment" button in the management tab.
+            </p>
+
+            <div className="flex gap-2">
+              <GlassButton
+                variant="secondary"
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setSelectedDate(null);
+                }}
+              >
+                Cancel
+              </GlassButton>
+              <GlassButton
+                onClick={() => {
+                  toast.info('Please use "New Appointment" button in Management tab to create appointments with customer details');
+                  setShowCreateModal(false);
+                  setSelectedDate(null);
+                }}
+              >
+                Go to Management
+              </GlassButton>
+            </div>
+          </GlassCard>
         </div>
       )}
     </div>

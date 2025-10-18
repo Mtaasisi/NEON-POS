@@ -516,23 +516,6 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
           {/* Enhanced Product Info Grid - Only show in Inventory Management mode */}
           {showActions ? (
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-              {/* SKU & Barcode Row */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex flex-col min-w-0">
-                  <span className="text-gray-500 font-medium">SKU</span>
-                  <span className="text-gray-900 font-mono text-sm truncate" title={primaryVariant?.sku || 'N/A'}>
-                    {primaryVariant?.sku || 'N/A'}
-                  </span>
-                </div>
-                {showBarcodes && primaryVariant?.barcode && (
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-gray-500 font-medium">Barcode</span>
-                    <span className="text-gray-900 font-mono text-sm truncate" title={primaryVariant.barcode}>
-                      {primaryVariant.barcode}
-                    </span>
-                  </div>
-                )}
-              </div>
 
               {/* Pricing & Margin Row */}
               {showPrices && (
@@ -591,7 +574,6 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   <span className="text-gray-600">
                     <span className="font-semibold text-indigo-700">{product.variants.length}</span> variants available
                   </span>
-                  <span className="text-indigo-600 font-medium">Click to select</span>
                 </div>
               )}
             </div>
@@ -678,19 +660,6 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
               </div>
             </div>
           ) : null}
-
-          {/* Stock Warning */}
-          {primaryVariant && primaryVariant.quantity <= 5 && primaryVariant.quantity > 0 && (
-            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                <div className="text-sm">
-                  <span className="font-medium text-amber-900">Low Stock:</span>
-                  <span className="text-amber-700 ml-1">Only {primaryVariant.quantity} units remaining</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
 

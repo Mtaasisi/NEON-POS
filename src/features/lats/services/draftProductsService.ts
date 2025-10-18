@@ -106,7 +106,7 @@ class DraftProductsService {
         .from('lats_product_validation')
         .select(`
           *,
-          product:lats_products(*)
+          product:lats_products!product_id(*)
         `)
         .eq('shipping_id', shippingId);
 

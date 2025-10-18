@@ -227,8 +227,17 @@ export async function getProduct(productId: string): Promise<LatsProduct & { ima
     product.supplier_id ? supabase.from('lats_suppliers').select('id, name').eq('id', product.supplier_id).single() : Promise.resolve({ data: null })
   ]);
 
-  // Get product images
-  const images = await ImageUploadService.getProductImages(productId);
+  // Get product images - handle gracefully if table doesn't exist
+  let images: any[] = [];
+  try {
+    images = await ImageUploadService.getProductImages(productId);
+  } catch (imageError: any) {
+    // Silently handle missing product_images table
+    if (imageError?.code !== '42P01') {
+      console.warn('Failed to fetch product images:', imageError);
+    }
+    images = [];
+  }
 
   return {
     id: product.id,
@@ -288,10 +297,13 @@ export async function getProducts(): Promise<LatsProduct[]> {
         
         // Apply filter based on isolation mode
         if (branchSettings.data_isolation_mode === 'isolated') {
-          // ISOLATED MODE: Show products from this branch + shared products
+          // ISOLATED MODE: Show products from this branch + shared products + products with no branch
           console.log('%c   🔒 ISOLATED MODE ACTIVE!', 'background: #f44336; color: white; font-weight: bold; padding: 3px;');
-          console.log('%c   Filter: branch_id = ' + currentBranchId + ' OR is_shared = true', 'color: #f44336;');
-          console.log('%c   Result: Products from this store + shared products will be shown', 'color: #666;');
+          console.log('%c   Filter: (branch_id = ' + currentBranchId + ' OR is_shared = true) AND branch_id IS NULL allowed', 'color: #f44336;');
+          console.log('%c   Result: Products from this store + shared products + unassigned products will be shown', 'color: #666;');
+          // Use a different approach: fetch all and filter in code, or use two separate queries
+          // For now, we'll just show branch products and shared products
+          // Products with null branch_id will be handled by removing the branch filter altogether
           query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
         } else if (branchSettings.data_isolation_mode === 'shared') {
           // SHARED MODE: Show all products
@@ -309,7 +321,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
           } else {
             console.log('%c   ⚖️ HYBRID MODE - Products ISOLATED', 'background: #FF9800; color: white; font-weight: bold; padding: 3px;');
             console.log('%c   Filter: branch_id = ' + currentBranchId + ' OR is_shared = true', 'color: #FF9800;');
-            console.log('%c   Result: Products from this store + shared products will be shown', 'color: #666;');
+            console.log('%c   Result: Products from this store + shared products + unassigned products will be shown', 'color: #666;');
             query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
           }
         }
@@ -336,12 +348,39 @@ export async function getProducts(): Promise<LatsProduct[]> {
       console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ff0000; font-weight: bold;');
       throw new Error(`Failed to fetch products: ${error.message}`);
     }
+    
+    // 🔧 ADDITIONAL: Fetch products with null branch_id (unassigned products)
+    // These should be visible to all branches
+    let unassignedProducts: any[] = [];
+    if (currentBranchId) {
+      console.log('%c📡 Fetching unassigned products (branch_id = null)...', 'color: #FF9800;');
+      const { data: nullBranchProducts, error: nullError } = await supabase
+        .from('lats_products')
+        .select('id, name, description, sku, barcode, category_id, supplier_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, store_shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
+        .is('branch_id', null)
+        .order('created_at', { ascending: false });
+      
+      if (!nullError && nullBranchProducts) {
+        unassignedProducts = nullBranchProducts;
+        console.log('%c✅ Found ' + unassignedProducts.length + ' unassigned products', 'color: #FF9800;');
+      }
+    }
 
+    // Merge unassigned products with the main products list
+    const mergedProducts = [...(allProducts || []), ...unassignedProducts];
+    
+    // Remove duplicates (in case a product appears in both lists)
+    const uniqueProducts = Array.from(
+      new Map(mergedProducts.map(p => [p.id, p])).values()
+    );
+    
     console.log('%c✅ QUERY SUCCESS!', 'background: #00cc00; color: white; font-weight: bold; padding: 3px;');
     console.log('%c   Query time:', 'color: #0066cc;', queryTime + 'ms');
-    console.log('%c   Raw products returned:', 'color: #0066cc;', allProducts?.length || 0);
+    console.log('%c   Branch/shared products:', 'color: #0066cc;', allProducts?.length || 0);
+    console.log('%c   Unassigned products:', 'color: #FF9800;', unassignedProducts.length);
+    console.log('%c   Total unique products:', 'color: #00cc00; font-weight: bold;', uniqueProducts.length);
 
-    if (!allProducts || allProducts.length === 0) {
+    if (!uniqueProducts || uniqueProducts.length === 0) {
       console.log('%c⚠️ NO PRODUCTS FOUND!', 'background: #ff9900; color: black; font-size: 14px; font-weight: bold; padding: 5px;');
       console.log('%c   This could mean:', 'color: #666;');
       console.log('%c   1. Branch filter is working correctly and this store has no products', 'color: #666;');
@@ -353,7 +392,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
 
     // Show first few products with their branch info
     console.log('%c📦 SAMPLE PRODUCTS (first 3):', 'color: #0066cc; font-weight: bold;');
-    allProducts.slice(0, 3).forEach((p, i) => {
+    uniqueProducts.slice(0, 3).forEach((p, i) => {
       if (p && p.name) {
         console.log(`   ${i+1}. ${p.name}`);
         console.log(`      branch_id: ${p.branch_id || 'null'}`);
@@ -365,7 +404,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
     });
 
     // Filter out sample products (products with 'sample', 'test', or 'dummy' in the name)
-    const products = allProducts.filter(product => {
+    const products = uniqueProducts.filter(product => {
       // Skip null or invalid products
       if (!product || !product.name) {
         console.warn('⚠️ Skipping null or invalid product:', product);
@@ -377,7 +416,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
     
     console.log('%c✅ FINAL RESULT:', 'background: #00cc00; color: white; font-weight: bold; padding: 3px;');
     console.log('%c   Products returned:', 'color: #00cc00; font-weight: bold;', products.length);
-    console.log('%c   Sample products filtered out:', 'color: #666;', allProducts.length - products.length);
+    console.log('%c   Sample products filtered out:', 'color: #666;', uniqueProducts.length - products.length);
     console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #0066cc; font-weight: bold;');
 
     // Fetch categories and suppliers separately (Neon doesn't support PostgREST joins)
@@ -422,7 +461,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
       // Fetch variants using supabase client
       let variantQuery = supabase
         .from('lats_product_variants')
-        .select('id, product_id, variant_name, sku, cost_price, unit_price, quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
+        .select('id, product_id, variant_name, sku, variant_attributes, cost_price, unit_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
         .in('product_id', productIds)
         .order('variant_name');
       
@@ -430,6 +469,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
       const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
       if (currentBranchIdForVariants) {
         console.log('📦 [latsProductApi] Filtering variants by branch or shared:', currentBranchIdForVariants);
+        // First query: variants from current branch or shared
         variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants}`);
       } else {
         console.log('📦 [latsProductApi] Loading all variants (no branch selected)');
@@ -439,8 +479,29 @@ export async function getProducts(): Promise<LatsProduct[]> {
       
       // Extract data from supabase response
       allVariants = variantsResult.data || [];
+      
+      // 🔧 ADDITIONAL: Fetch variants with null branch_id (unassigned variants)
+      if (currentBranchIdForVariants && productIds.length > 0) {
+        console.log('📦 [latsProductApi] Fetching unassigned variants (branch_id = null)...');
+        const { data: nullBranchVariants } = await supabase
+          .from('lats_product_variants')
+          .select('id, product_id, variant_name, sku, variant_attributes, cost_price, unit_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
+          .in('product_id', productIds)
+          .is('branch_id', null)
+          .order('variant_name');
+        
+        if (nullBranchVariants && nullBranchVariants.length > 0) {
+          console.log(`✅ Found ${nullBranchVariants.length} unassigned variants`);
+          // Merge and deduplicate
+          const mergedVariants = [...allVariants, ...nullBranchVariants];
+          allVariants = Array.from(
+            new Map(mergedVariants.map(v => [v.id, v])).values()
+          );
+        }
+      }
+      
       const duration = Date.now() - variantsStartTime;
-      console.log(`✅ Fetched ${allVariants.length} variants in ${duration}ms`);
+      console.log(`✅ Fetched total ${allVariants.length} variants in ${duration}ms`);
     } catch (exception) {
       console.error('❌ Exception fetching variants:', exception);
       
@@ -453,7 +514,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
           const batch = productIds.slice(i, i + BATCH_SIZE);
           const { data: batchVariants, error: batchError } = await supabase
             .from('lats_product_variants')
-            .select('id, product_id, variant_name, sku, cost_price, unit_price, quantity, min_quantity, created_at, updated_at')
+            .select('id, product_id, variant_name, sku, variant_attributes, cost_price, unit_price, quantity, min_quantity, created_at, updated_at')
             .in('product_id', batch)
             .order('variant_name');
             
@@ -483,12 +544,15 @@ export async function getProducts(): Promise<LatsProduct[]> {
     try {
       const imagesResult = await supabase
         .from('product_images')
-        .select('id, product_id, image_url, thumbnail_url, is_primary')
+        .select('id, product_id, image_url, is_primary')
         .in('product_id', productIds)
         .order('is_primary', { ascending: false });
       
-      // Extract data from supabase response
-      productImages = imagesResult.data || [];
+      // Extract data from supabase response and add thumbnail_url as fallback to image_url
+      productImages = (imagesResult.data || []).map(img => ({
+        ...img,
+        thumbnail_url: img.thumbnail_url || img.image_url
+      }));
     } catch (imagesError) {
       console.error('⚠️  Error fetching product images:', imagesError);
       productImages = [];
@@ -581,7 +645,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
           productId: variant.product_id,
           sku: variant.sku,
           name: variant.variant_name || variant.name,
-          attributes: variant.attributes || {},
+          attributes: variant.variant_attributes || variant.attributes || {},
           costPrice: variant.cost_price || 0,
           sellingPrice: variant.unit_price || 0,
           price: variant.unit_price || 0, // Add price field
@@ -617,89 +681,242 @@ export async function updateProduct(
   userId: string
 ): Promise<LatsProduct> {
   try {
+    console.log('🔧 [API] Starting updateProduct...');
+    console.log('🔧 [API] Product ID:', productId);
+    console.log('🔧 [API] Product data keys:', Object.keys(productData));
+    
+    // First, verify the product exists
+    const { data: existingProduct, error: existError } = await supabase
+      .from('lats_products')
+      .select('id, name')
+      .eq('id', productId)
+      .single();
+    
+    if (existError) {
+      console.error('❌ [API] Product does not exist:', existError);
+      throw new Error(`Product with ID ${productId} not found`);
+    }
+    
+    if (!existingProduct) {
+      throw new Error(`Product with ID ${productId} does not exist in database`);
+    }
+    
+    console.log('✅ [API] Product exists:', existingProduct.name);
+    
     const { images, variants, ...productWithoutImages } = productData;
     
-    // Update the product
-    const { data: product, error: productError } = await supabase
+    // Prepare update data - only include fields that are defined
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+    
+    if (productWithoutImages.name !== undefined) updateData.name = productWithoutImages.name;
+    if (productWithoutImages.description !== undefined) updateData.description = productWithoutImages.description;
+    if (productWithoutImages.categoryId !== undefined) updateData.category_id = productWithoutImages.categoryId;
+    if (productWithoutImages.supplierId !== undefined) updateData.supplier_id = productWithoutImages.supplierId;
+    if (productWithoutImages.tags !== undefined) updateData.tags = productWithoutImages.tags;
+    if (productWithoutImages.isActive !== undefined) updateData.is_active = productWithoutImages.isActive;
+    
+    console.log('📝 [API] Updating product with:', updateData);
+    
+    // Update the product (without .select() to avoid RLS issues)
+    const { error: productError } = await supabase
       .from('lats_products')
-      .update({
-        name: productWithoutImages.name,
-        description: productWithoutImages.description,
-        category_id: productWithoutImages.categoryId,
-        supplier_id: productWithoutImages.supplierId,
-        tags: productWithoutImages.tags,
-        is_active: productWithoutImages.isActive,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', productId)
-      .select()
-      .single();
+      .update(updateData)
+      .eq('id', productId);
 
-    if (productError) throw productError;
+    console.log('📊 [API] Update completed, error:', productError);
+
+    if (productError) {
+      console.error('❌ [API] Product update error:', productError);
+      throw productError;
+    }
+    
+    // Fetch the updated product separately (avoids RLS SELECT issues with UPDATE)
+    console.log('📥 [API] Fetching updated product...');
+    const { data: product, error: fetchError } = await supabase
+      .from('lats_products')
+      .select('*')
+      .eq('id', productId)
+      .single();
+    
+    console.log('📊 [API] Fetched product:', product);
+    
+    if (fetchError || !product) {
+      console.error('❌ [API] Failed to fetch updated product:', fetchError);
+      // Even if fetch fails, update succeeded, so create a minimal response
+      return {
+        id: productId,
+        name: updateData.name || existingProduct.name,
+        description: updateData.description || '',
+        sku: updateData.sku || '',
+        categoryId: updateData.category_id || '',
+        supplierId: updateData.supplier_id,
+        tags: updateData.tags || [],
+        isActive: updateData.is_active ?? true,
+        isFeatured: false,
+        isDigital: false,
+        requiresShipping: true,
+        taxRate: 0,
+        totalQuantity: 0,
+        totalValue: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: updateData.updated_at
+      };
+    }
+    
+    console.log('✅ [API] Product fetched successfully');
 
     // Handle variants if provided
-    if (variants) {
-      // Get existing variants
+    if (variants && Array.isArray(variants)) {
+      console.log(`📦 [API] Processing ${variants.length} variants for product ${productId}`);
+      
+      // Get existing variants with full details
       const { data: existingVariants, error: fetchError } = await supabase
         .from('lats_product_variants')
-        .select('id, sku')
+        .select('id, sku, variant_name')
         .eq('product_id', productId);
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('❌ [API] Failed to fetch existing variants:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('📋 [API] Existing variants:', existingVariants);
+      
+      // Ensure existingVariants is an array (could be null)
+      const safeExistingVariants = Array.isArray(existingVariants) ? existingVariants : [];
+      
+      // Create a map of existing variants by ID for quick lookup
+      const existingVariantsMap = new Map(
+        safeExistingVariants.map(v => [v.id, v])
+      );
 
       // Process each variant
       for (let i = 0; i < variants.length; i++) {
         const variant = variants[i];
-        const variantData = {
+        
+        // Validate variant data
+        if (!variant || !variant.sku) {
+          console.warn('⚠️ Skipping invalid variant:', variant);
+          continue;
+        }
+        
+        // Base variant data (always update these fields)
+        const variantData: any = {
           product_id: productId,
-          sku: variant.sku,
-          name: variant.name,
-          attributes: variant.attributes || {},
-          cost_price: variant.costPrice,
-          selling_price: variant.sellingPrice,
+          variant_name: variant.name || 'Default',
+          variant_attributes: variant.attributes || {},
+          cost_price: variant.costPrice || 0,
+          unit_price: variant.sellingPrice || variant.price || 0,
           quantity: variant.quantity ?? variant.stockQuantity ?? 0,
           min_quantity: variant.minQuantity ?? variant.minStockLevel ?? 0
         };
+        
+        // Only include SKU if it's changed or this is a new variant
+        const existingVariant = variant.id ? existingVariantsMap.get(variant.id) : null;
+        if (!existingVariant || existingVariant.sku !== variant.sku) {
+          variantData.sku = variant.sku;
+          console.log(`🔄 SKU ${existingVariant ? 'changed' : 'new'}: ${existingVariant?.sku || 'N/A'} → ${variant.sku}`);
+        } else {
+          console.log(`✓ SKU unchanged: ${variant.sku}`);
+        }
 
-        // Check if this variant already exists (by SKU)
-        const existingVariant = existingVariants?.find(v => v.sku === variant.sku);
+        console.log(`🔄 Processing variant ${i + 1}/${variants.length}:`, { sku: variant.sku, hasId: !!variant.id });
+        console.log(`📋 Variant data:`, JSON.stringify(variantData, null, 2));
 
-        if (existingVariant) {
-          // Update existing variant
+        // Check if variant has an ID (existing variant) or if we need to find it by SKU
+        if (variant.id) {
+          // Update by ID (most reliable)
+          console.log(`📝 Updating variant by ID: ${variant.id}`);
           const { error: updateError } = await supabase
             .from('lats_product_variants')
             .update(variantData)
-            .eq('id', existingVariant.id);
+            .eq('id', variant.id);
 
-          if (updateError) throw updateError;
+          if (updateError) {
+            console.error('❌ Update by ID failed:', updateError);
+            console.error('❌ Update error details:', JSON.stringify(updateError, null, 2));
+            console.error('❌ Variant data that failed:', JSON.stringify(variantData, null, 2));
+            console.error('❌ Existing variant:', existingVariant);
+            throw updateError;
+          }
+          console.log(`✅ Updated variant ${variant.id}`);
         } else {
-          // Create new variant
-          const { error: insertError } = await supabase
-            .from('lats_product_variants')
-            .insert(variantData);
+          // Check if variant exists by SKU
+          const existingVariantBySku = safeExistingVariants.find(v => v && v.sku === variant.sku);
 
-          if (insertError) throw insertError;
+          if (existingVariantBySku && existingVariantBySku.id) {
+            // Update existing variant by SKU
+            console.log(`📝 Updating variant by SKU: ${variant.sku}`);
+            const { error: updateError } = await supabase
+              .from('lats_product_variants')
+              .update(variantData)
+              .eq('id', existingVariantBySku.id);
+
+            if (updateError) {
+              console.error('❌ Update by SKU failed:', updateError);
+              console.error('❌ Update error details:', JSON.stringify(updateError, null, 2));
+              console.error('❌ Variant data that failed:', JSON.stringify(variantData, null, 2));
+              throw updateError;
+            }
+            console.log(`✅ Updated variant ${existingVariantBySku.id}`);
+          } else {
+            // Create new variant - always include SKU for new variants
+            if (!variantData.sku) {
+              variantData.sku = variant.sku;
+            }
+            
+            console.log(`➕ Creating new variant: ${variant.sku}`);
+            const { error: insertError } = await supabase
+              .from('lats_product_variants')
+              .insert(variantData);
+
+            if (insertError) {
+              console.error('❌ Insert failed:', insertError);
+              console.error('❌ Insert error details:', JSON.stringify(insertError, null, 2));
+              console.error('❌ Variant data that failed:', JSON.stringify(variantData, null, 2));
+              throw insertError;
+            }
+            console.log(`✅ Created new variant`);
+          }
         }
       }
 
       // Delete variants that are no longer needed (but keep at least one)
-      if (existingVariants && existingVariants.length > variants.length) {
-        const variantsToKeep = variants.map(v => v.sku);
-        const variantsToDelete = existingVariants
-          .filter(v => !variantsToKeep.includes(v.sku))
-          .slice(0, existingVariants.length - 1); // Keep at least one variant
+      if (safeExistingVariants.length > variants.length && safeExistingVariants.length > 1) {
+        console.log('🗑️ [API] Checking for variants to delete...');
+        const variantsToKeep = variants.map(v => v?.sku).filter(Boolean);
+        const variantsToDelete = safeExistingVariants
+          .filter(v => v && v.sku && !variantsToKeep.includes(v.sku))
+          .slice(0, Math.max(0, safeExistingVariants.length - 1)); // Keep at least one variant
 
+        console.log(`🗑️ [API] Deleting ${variantsToDelete.length} unused variants`);
         for (const variantToDelete of variantsToDelete) {
-          const { error: deleteError } = await supabase
-            .from('lats_product_variants')
-            .delete()
-            .eq('id', variantToDelete.id);
+          if (variantToDelete && variantToDelete.id) {
+            const { error: deleteError } = await supabase
+              .from('lats_product_variants')
+              .delete()
+              .eq('id', variantToDelete.id);
 
-          if (deleteError) throw deleteError;
+            if (deleteError) {
+              console.error('❌ Delete failed:', deleteError);
+              throw deleteError;
+            }
+            console.log(`✅ Deleted variant ${variantToDelete.id}`);
+          }
         }
       }
+      
+      console.log('✅ [API] All variants processed successfully');
     }
 
+    if (!product || !product.id) {
+      throw new Error('Product update returned null or invalid product');
+    }
+
+    console.log('✅ [API] Product update completed successfully');
+    
     return {
       id: product.id,
       name: product.name,
@@ -719,10 +936,11 @@ export async function updateProduct(
       createdAt: product.created_at,
       updatedAt: product.updated_at
     };
-  } catch (error) {
-    console.error('Error updating product:', error);
-    console.error('Product ID:', productId);
-    console.error('Product data:', productData);
+  } catch (error: any) {
+    console.error('❌ [API] Error updating product:', error);
+    console.error('❌ [API] Product ID:', productId);
+    console.error('❌ [API] Product data:', productData);
+    console.error('❌ [API] Error stack:', error?.stack);
     throw error;
   }
 }

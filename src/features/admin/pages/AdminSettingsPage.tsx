@@ -550,9 +550,9 @@ const AdminSettingsPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Navigation Sidebar */}
           <div className="lg:col-span-1">
-            <GlassCard className="p-4">
+            <GlassCard className="p-4 sticky top-4 max-h-[calc(100vh-120px)]">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Settings Categories</h3>
-              <nav className="space-y-2">
+              <nav className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] pr-2 sidebar-scrollbar">
                 {[
                   { id: 'branding', label: 'Business Information', icon: Building2 },
                   { id: 'stores', label: 'Store Management', icon: MapPin },

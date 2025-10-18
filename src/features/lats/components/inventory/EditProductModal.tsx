@@ -2,11 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { X, Save, Package, AlertTriangle, Upload, Trash2, MapPin, Layers, FileText } from 'lucide-react';
+import { X, Save, Package, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassInput from '../../../shared/components/ui/GlassInput';
-import GlassSelect from '../../../shared/components/ui/GlassSelect';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import AIDescriptionGenerator from '../product/AIDescriptionGenerator';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
@@ -15,39 +14,41 @@ import { useSuccessModal } from '../../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../../components/ui/SuccessModalIcons';
 
 import CategoryInput from '../../../shared/components/ui/CategoryInput';
-import GlassBadge from '../../../shared/components/ui/GlassBadge';
-import PriceInput from '../../../../shared/components/ui/PriceInput';
-import { LATS_CLASSES } from '../../tokens';
 import { t } from '../../lib/i18n/t';
-import { format } from '../../lib/format';
-import { Product, Category, Supplier, ProductImage } from '../../types/inventory';
-import { StoreLocation } from '../../../settings/types/storeLocation';
-import { storeLocationApi } from '../../../settings/utils/storeLocationApi';
+import { Product } from '../../types/inventory';
 import { useInventoryStore } from '../../stores/useInventoryStore';
-import { storageRoomApi, StorageRoom } from '../../../settings/utils/storageRoomApi';
-import { storeShelfApi, StoreShelf } from '../../../settings/utils/storeShelfApi';
+import StorageLocationForm from '../product/StorageLocationForm';
+import PricingAndStockForm from '../product/PricingAndStockForm';
+import ProductVariantsSection from '../product/ProductVariantsSection';
+import { supabase } from '../../../../lib/supabaseClient';
+
+// Define a simplified variant type for the form
+interface FormProductVariant {
+  id?: string;
+  sku: string;
+  name: string;
+  barcode?: string;
+  price: number;
+  costPrice: number;
+  stockQuantity: number;
+  minStockLevel: number;
+  attributes?: Record<string, any>;
+}
 
 // Validation schema for product editing
 const editProductSchema = z.object({
-  name: z.string().min(1, 'Product name is required').max(200, 'Name must be less than 200 characters'),
+  name: z.string().min(1, 'Product name is required').max(100, 'Product name must be less than 100 characters'),
   description: z.string().max(200, 'Description must be less than 200 characters').optional(),
-  sku: z.string().min(1, 'SKU is required').max(100, 'SKU must be less than 100 characters'),
-  barcode: z.string().max(100, 'Barcode must be less than 100 characters').optional(),
+  sku: z.string().min(1, 'SKU is required').max(50, 'SKU must be less than 50 characters'),
   categoryId: z.string().min(1, 'Category is required'),
-
-  supplierId: z.string().optional(),
-  condition: z.enum(['new', 'used', 'refurbished'], {
-    errorMap: () => ({ message: 'Please select a condition' })
-  }),
-  storeLocationId: z.string().optional(),
-  storeShelf: z.string().optional(),
-
-  price: z.number().min(0, 'Price must be 0 or greater'),
-  costPrice: z.number().min(0, 'Cost price must be 0 or greater'),
-  stockQuantity: z.number().min(0, 'Stock quantity must be 0 or greater'),
-  minStockLevel: z.number().min(0, 'Minimum stock level must be 0 or greater'),
-  weight: z.number().min(0, 'Weight must be 0 or greater').optional(),
-  tags: z.array(z.string()).default([])
+  condition: z.string().optional(),
+  storageRoomId: z.string().optional(),
+  shelfId: z.string().optional(),
+  // Price and stock are optional when using variants
+  price: z.number().min(0, 'Price must be 0 or greater').optional().default(0),
+  costPrice: z.number().min(0, 'Cost price must be 0 or greater').optional().default(0),
+  stockQuantity: z.number().min(0, 'Stock quantity must be 0 or greater').optional().default(0),
+  minStockLevel: z.number().min(0, 'Minimum stock level must be 0 or greater').optional().default(0)
 });
 
 type EditProductFormData = z.infer<typeof editProductSchema>;
@@ -65,25 +66,19 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
   productId,
   onProductUpdated
 }) => {
-  const { categories, suppliers, updateProduct, loadCategories, loadSuppliers, getProduct } = useInventoryStore();
+  const { categories, updateProduct, loadCategories, getProduct } = useInventoryStore();
   const successModal = useSuccessModal();
-  
-  const [tagInput, setTagInput] = useState('');
-  const [currentTags, setCurrentTags] = useState<string[]>([]);
-  const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
-  const [storageRooms, setStorageRooms] = useState<StorageRoom[]>([]);
-  const [loadingStorageRooms, setLoadingStorageRooms] = useState(false);
-  const [shelves, setShelves] = useState<StoreShelf[]>([]);
-  const [loadingShelves, setLoadingShelves] = useState(false);
-  const [selectedStorageRoomId, setSelectedStorageRoomId] = useState<string>('');
-  const [selectedRow, setSelectedRow] = useState<number | undefined>(undefined);
-  const [selectedColumn, setSelectedColumn] = useState<number | undefined>(undefined);
-
-  const [loadingLocations, setLoadingLocations] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [product, setProduct] = useState<Product | null>(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  
+  // Variant states
+  const [useVariants, setUseVariants] = useState(false);
+  const [showVariants, setShowVariants] = useState(true);
+  const [variants, setVariants] = useState<FormProductVariant[]>([]);
+  const [isReorderingVariants, setIsReorderingVariants] = useState(false);
+  const [draggedVariantIndex, setDraggedVariantIndex] = useState<number | null>(null);
 
   // Prevent body scroll when modal is open
   useBodyScrollLock(isOpen);
@@ -102,111 +97,32 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       name: '',
       description: '',
       sku: '',
-      barcode: '',
-      categoryId: '',  // ✅ FIXED: Changed from null to empty string to match schema
-
-      supplierId: '',  // ✅ FIXED: Changed from null to empty string
+      categoryId: '',
       condition: 'new',
-      storeLocationId: '',
-      storeShelf: '',
-  
+      storageRoomId: '',
+      shelfId: '',
       price: 0,
       costPrice: 0,
       stockQuantity: 0,
-      minStockLevel: 0,
-      weight: 0,
-      tags: []
+      minStockLevel: 0
     }
   });
 
-  const selectedLocationId = watch('storeLocationId');
-
-  // Load store locations and shelves
-  useEffect(() => {
-    const loadStoreData = async () => {
-      try {
-        setLoadingLocations(true);
-        const locations = await storeLocationApi.getAll();
-        setStoreLocations(locations);
-      } catch (error) {
-        console.error('Error loading store locations:', error);
-        toast.error('Failed to load store locations');
-      } finally {
-        setLoadingLocations(false);
-      }
-    };
-
-    if (isOpen) {
-      loadStoreData();
-    }
-  }, [isOpen]);
-
-  // Load storage rooms when location changes
-  useEffect(() => {
-    const loadRooms = async () => {
-      if (!selectedLocationId) {
-        setStorageRooms([]);
-        setSelectedStorageRoomId('');
-        setShelves([]);
-        setSelectedRow(undefined);
-        setSelectedColumn(undefined);
-        return;
-      }
-
-      try {
-        setLoadingStorageRooms(true);
-        const rooms = await storageRoomApi.getByStoreLocation(selectedLocationId);
-        setStorageRooms(rooms);
-      } catch (error) {
-        console.error('Error loading storage rooms:', error);
-        toast.error('Failed to load storage rooms');
-      } finally {
-        setLoadingStorageRooms(false);
-      }
-    };
-
-    loadRooms();
-  }, [selectedLocationId]);
-
-  // Load shelves when storage room changes
-  useEffect(() => {
-    const loadShelvesForRoom = async () => {
-      if (!selectedStorageRoomId) {
-        setShelves([]);
-        setSelectedRow(undefined);
-        setSelectedColumn(undefined);
-        return;
-      }
-
-      try {
-        setLoadingShelves(true);
-        const roomShelves = await storeShelfApi.getShelvesByStorageRoom(selectedStorageRoomId);
-        setShelves(roomShelves);
-      } catch (error) {
-        console.error('Error loading shelves:', error);
-        toast.error('Failed to load shelves');
-      } finally {
-        setLoadingShelves(false);
-      }
-    };
-
-    loadShelvesForRoom();
-  }, [selectedStorageRoomId]);
-
-  // Load categories and suppliers when modal opens
+  // Load categories when modal opens
   useEffect(() => {
     if (isOpen) {
       loadCategories();
-      loadSuppliers();
     }
-  }, [isOpen, loadCategories, loadSuppliers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
-  // Load product data when product changes
+  // Load product data when product changes - only when modal first opens
   useEffect(() => {
     if (productId && isOpen) {
       const loadProductData = async () => {
         setIsLoading(true);
         try {
+          // Fetch product data
           const result = await getProduct(productId);
           if (result && result.data) {
             const fetchedProduct = result.data;
@@ -215,25 +131,53 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               name: fetchedProduct.name,
               description: fetchedProduct.description || '',
               sku: fetchedProduct.sku,
-              barcode: fetchedProduct.barcode || '',
-              categoryId: fetchedProduct.categoryId || '',  // ✅ FIXED: Use empty string instead of null/undefined
-
-              supplierId: fetchedProduct.supplierId || '',  // ✅ FIXED: Use empty string instead of null
-              condition: fetchedProduct.condition || 'new',
-              storeLocationId: '', // Will be set based on shelf lookup
-              storeShelf: fetchedProduct.storeShelf || '',
+              categoryId: fetchedProduct.categoryId || '',
+              condition: fetchedProduct.condition || '',
+              storageRoomId: '',
+              shelfId: '',
               price: fetchedProduct.price || 0,
               costPrice: fetchedProduct.costPrice || 0,
               stockQuantity: fetchedProduct.stockQuantity || 0,
-              minStockLevel: fetchedProduct.minStockLevel || 0,
-              weight: fetchedProduct.weight || 0,
-              tags: fetchedProduct.tags || []
+              minStockLevel: fetchedProduct.minStockLevel || 0
             });
-            setCurrentTags(fetchedProduct.tags || []);
-
-            // If product has a shelf, find the location
-            if (fetchedProduct.storeShelf) {
-              findLocationForShelf(fetchedProduct.storeShelf);
+            
+            // Fetch variants separately from the database
+            console.log('📦 Fetching variants for product:', productId);
+            const { data: variantsData, error: variantsError } = await supabase
+              .from('lats_product_variants')
+              .select('*')
+              .eq('product_id', productId);
+            
+            if (variantsError) {
+              console.warn('⚠️ Could not load variants:', variantsError);
+            } else if (variantsData && variantsData.length > 0) {
+              console.log('✅ Loaded variants:', variantsData.length);
+              console.log('📊 Variant data sample:', variantsData[0]);
+              
+              // Map the database fields to form fields with null checks
+              const mappedVariants = variantsData
+                .filter((v: any) => v && v.id) // Filter out null/undefined variants
+                .map((v: any) => ({
+                  id: v.id,
+                  sku: v.sku || '',
+                  name: v.variant_name || v.name || '',
+                  barcode: v.barcode || undefined,
+                  price: v.unit_price || v.selling_price || 0,
+                  costPrice: v.cost_price || 0,
+                  stockQuantity: v.quantity || 0,
+                  minStockLevel: v.min_quantity || 0,
+                  attributes: v.variant_attributes || v.attributes || {}
+                }));
+              
+              if (mappedVariants.length > 0) {
+                setVariants(mappedVariants);
+                setUseVariants(true);
+                console.log('✅ Mapped variants successfully:', mappedVariants.length);
+              } else {
+                console.log('⚠️ No valid variants after filtering');
+              }
+            } else {
+              console.log('ℹ️ No variants found for this product');
             }
           } else {
             toast.error('Failed to load product data');
@@ -249,22 +193,8 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       };
       loadProductData();
     }
-  }, [productId, isOpen, reset, getProduct, onClose]);
-
-  // Find location for existing shelf
-  const findLocationForShelf = async (shelfCode: string) => {
-    try {
-      const shelf = await storeShelfApi.getByCode(shelfCode);
-      if (shelf) {
-        setValue('storeLocationId', shelf.store_location_id);
-        if (shelf.storage_room_id) setSelectedStorageRoomId(shelf.storage_room_id);
-        setSelectedRow(shelf.row_number);
-        setSelectedColumn(shelf.column_number);
-      }
-    } catch (error) {
-      console.error('Error finding location for shelf:', error);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId, isOpen]);
 
   // ✅ FIXED: Conditional returns AFTER all hooks to comply with Rules of Hooks
   // Don't render if modal is not open
@@ -286,46 +216,87 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     );
   }
 
-  // Handle tag input
-  const handleTagInputKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addTag();
-    }
-  };
-
-  const addTag = () => {
-    const tag = tagInput.trim();
-    if (tag && !currentTags.includes(tag)) {
-      const newTags = [...currentTags, tag];
-      setCurrentTags(newTags);
-      setValue('tags', newTags);
-      setTagInput('');
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    const newTags = currentTags.filter(tag => tag !== tagToRemove);
-    setCurrentTags(newTags);
-    setValue('tags', newTags);
-  };
-
   const handleClose = () => {
     reset();
-    setCurrentTags([]);
-    setTagInput('');
-    setStoreLocations([]);
-    
+    setVariants([]);
+    setUseVariants(false);
     onClose();
+  };
+
+  const handleVariantSpecificationsClick = (index: number) => {
+    // You can implement a modal or expanded view for variant specifications here
+    toast.success(`Edit specifications for ${variants[index]?.name || `Variant ${index + 1}`}`);
   };
 
   const handleFormSubmit = async (data: EditProductFormData) => {
     try {
-      const result = await updateProduct(productId, data);
+      console.log('📝 Submitting product update...');
+      console.log('📋 Form data:', data);
+      console.log('📦 Variants:', variants);
+      console.log('🔢 Use Variants:', useVariants);
+      
+      // Validate variant SKUs for duplicates
+      if (useVariants && variants.length > 0) {
+        const skus = variants.map(v => v.sku).filter(Boolean);
+        const duplicateSkus = skus.filter((sku, index) => skus.indexOf(sku) !== index);
+        
+        if (duplicateSkus.length > 0) {
+          toast.error(`Duplicate SKU detected: ${duplicateSkus.join(', ')}. Each variant must have a unique SKU.`);
+          return;
+        }
+        
+        console.log('✅ SKU validation passed - no duplicates found');
+      }
+      
+      // Prepare product data with variants if enabled
+      const productData: any = {
+        name: data.name,
+        description: data.description,
+        sku: data.sku,
+        categoryId: data.categoryId,
+        condition: data.condition,
+        storageRoomId: data.storageRoomId,
+        shelfId: data.shelfId,
+        // Only include pricing/stock if NOT using variants
+        ...(!useVariants && {
+          price: data.price || 0,
+          costPrice: data.costPrice || 0,
+          stockQuantity: data.stockQuantity || 0,
+          minStockLevel: data.minStockLevel || 0
+        }),
+        // Include variants if enabled
+        ...(useVariants && variants.length > 0 && { 
+          variants: variants
+            .filter(v => v && v.sku) // Filter out null/invalid variants
+            .map(v => ({
+              id: v.id || undefined, // Include ID for existing variants
+              sku: v.sku,
+              name: v.name || '',
+              barcode: v.barcode || undefined,
+              // ✅ Ensure numbers are actually numbers, not strings
+              costPrice: typeof v.costPrice === 'string' ? parseFloat(v.costPrice) || 0 : v.costPrice || 0,
+              sellingPrice: typeof v.price === 'string' ? parseFloat(v.price) || 0 : v.price || 0,
+              price: typeof v.price === 'string' ? parseFloat(v.price) || 0 : v.price || 0,
+              quantity: typeof v.stockQuantity === 'string' ? parseInt(v.stockQuantity) || 0 : v.stockQuantity || 0,
+              stockQuantity: typeof v.stockQuantity === 'string' ? parseInt(v.stockQuantity) || 0 : v.stockQuantity || 0,
+              minQuantity: typeof v.minStockLevel === 'string' ? parseInt(v.minStockLevel) || 0 : v.minStockLevel || 0,
+              minStockLevel: typeof v.minStockLevel === 'string' ? parseInt(v.minStockLevel) || 0 : v.minStockLevel || 0,
+              attributes: v.attributes || {}
+            }))
+        })
+      };
+
+      console.log('📤 Final product data being sent:', JSON.stringify(productData, null, 2));
+
+      const result = await updateProduct(productId, productData);
+      
+      console.log('📥 Update result:', result);
+      
       if (result.ok) {
+        console.log('✅ Product updated successfully!');
         // Show success modal
         successModal.show(
-          `${data.name} has been updated successfully!`,
+          `${data.name} has been updated successfully!${useVariants ? ` with ${variants.length} variant(s)` : ''}`,
           {
             title: 'Product Updated! ✅',
             icon: SuccessIcons.productUpdated,
@@ -335,11 +306,14 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         onProductUpdated?.(result.data);
         handleClose();
       } else {
+        console.error('❌ Update failed:', result.message);
         toast.error(result.message || 'Failed to update product');
       }
-    } catch (error) {
-      console.error('Error submitting form:', error);
-      toast.error('Failed to update product');
+    } catch (error: any) {
+      console.error('❌ Exception during form submit:', error);
+      console.error('❌ Error message:', error?.message);
+      console.error('❌ Error stack:', error?.stack);
+      toast.error(error?.message || 'Failed to update product');
     }
   };
 
@@ -417,197 +391,77 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               />
             </div>
 
-            {/* Store Location and Storage Room */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Controller
-                name="storeLocationId"
-                control={control}
-                render={({ field }) => (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      <MapPin className="w-4 h-4 inline mr-2" />
-                      {t('Store Location')}
-                    </label>
-                    <GlassSelect
-                      {...field}
-                      disabled={loadingLocations}
-                      error={errors.storeLocationId?.message}
-                    >
-                      <option value="">{loadingLocations ? t('Loading...') : t('Select Store Location')}</option>
-                      {(storeLocations || [])?.map((location) => (
-                        <option key={location.id} value={location.id}>
-                          {location.name} ({location.city})
-                        </option>
-                      ))}
-                    </GlassSelect>
+            {/* Storage Location */}
+            <StorageLocationForm
+              formData={{
+                storageRoomId: watch('storageRoomId') || '',
+                shelfId: watch('shelfId') || ''
+              }}
+              setFormData={(updater: any) => {
+                const newData = typeof updater === 'function' 
+                  ? updater({ storageRoomId: watch('storageRoomId'), shelfId: watch('shelfId') })
+                  : updater;
+                setValue('storageRoomId', newData.storageRoomId);
+                setValue('shelfId', newData.shelfId);
+              }}
+              currentErrors={{
+                storageRoomId: errors.storageRoomId?.message || '',
+                shelfId: errors.shelfId?.message || ''
+              }}
+            />
+
+            {/* Pricing and Stock - Only show when NOT using variants */}
+            {!useVariants && (
+              <PricingAndStockForm
+                formData={{
+                  price: watch('price'),
+                  costPrice: watch('costPrice'),
+                  stockQuantity: watch('stockQuantity'),
+                  minStockLevel: watch('minStockLevel')
+                }}
+                setFormData={(updater: any) => {
+                  const currentData = {
+                    price: watch('price'),
+                    costPrice: watch('costPrice'),
+                    stockQuantity: watch('stockQuantity'),
+                    minStockLevel: watch('minStockLevel')
+                  };
+                  const newData = typeof updater === 'function' ? updater(currentData) : updater;
+                  
+                  if (newData.price !== undefined) setValue('price', newData.price);
+                  if (newData.costPrice !== undefined) setValue('costPrice', newData.costPrice);
+                  if (newData.stockQuantity !== undefined) setValue('stockQuantity', newData.stockQuantity);
+                  if (newData.minStockLevel !== undefined) setValue('minStockLevel', newData.minStockLevel);
+                }}
+                currentErrors={{
+                  price: errors.price?.message || '',
+                  costPrice: errors.costPrice?.message || '',
+                  stockQuantity: errors.stockQuantity?.message || '',
+                  minStockLevel: errors.minStockLevel?.message || ''
+                }}
+              />
+            )}
+
+            {/* Info message when variants are enabled */}
+            {useVariants && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
                   </div>
-                )}
-              />
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  <Layers className="w-4 h-4 inline mr-2" />
-                  {t('Storage Room')}
-                </label>
-                <select
-                  value={selectedStorageRoomId}
-                  onChange={(e) => {
-                    setSelectedStorageRoomId(e.target.value);
-                    setSelectedRow(undefined);
-                    setSelectedColumn(undefined);
-                    // Clear storeShelf when changing room
-                    setValue('storeShelf', '');
-                  }}
-                  disabled={!selectedLocationId || loadingStorageRooms}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">
-                    {!selectedLocationId
-                      ? t('Select Location First')
-                      : loadingStorageRooms
-                        ? t('Loading...')
-                        : t('Select Storage Room')}
-                  </option>
-                  {(storageRooms || []).map((room) => (
-                    <option key={room.id} value={room.id}>
-                      {room.name} ({room.code})
-                    </option>
-                  ))}
-                </select>
-                {selectedLocationId && (storageRooms || []).length === 0 && !loadingStorageRooms && (
-                  <p className="text-sm text-gray-500 mt-1">
-                    {t('No storage rooms found for this location.')} 
-                    <button
-                      type="button"
-                      onClick={() => window.open('/lats/storage-rooms', '_blank')}
-                      className="text-blue-600 hover:text-blue-800 ml-1 underline"
-                    >
-                      {t('Manage storage rooms')}
-                    </button>
-                  </p>
-                )}
+                  <div className="ml-3">
+                    <h3 className="text-sm font-medium text-blue-800">
+                      Variants Mode Enabled
+                    </h3>
+                    <p className="mt-1 text-sm text-blue-700">
+                      Pricing and stock are managed individually for each variant below. Product-level pricing is not used when variants are enabled.
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {/* Shelf Row and Column within selected Storage Room */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('Shelf row')}
-                </label>
-                <select
-                  value={selectedRow ?? ''}
-                  onChange={(e) => {
-                    const row = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                    setSelectedRow(row);
-                    // Update composed code if possible
-                    const shelf = shelves.find(s => s.row_number === row && s.column_number === selectedColumn);
-                    setValue('storeShelf', shelf?.code || '');
-                  }}
-                  disabled={!selectedStorageRoomId || loadingShelves}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">{!selectedStorageRoomId ? t('Select storage room first') : loadingShelves ? t('Loading...') : t('Select row')}</option>
-                  {Array.from(new Set((shelves || []).map(s => s.row_number).filter(Boolean))).map((row) => (
-                    <option key={`row-${row}`} value={row as number}>{row as number}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('Shelf column')}
-                </label>
-                <select
-                  value={selectedColumn ?? ''}
-                  onChange={(e) => {
-                    const col = e.target.value ? parseInt(e.target.value, 10) : undefined;
-                    setSelectedColumn(col);
-                    const shelf = shelves.find(s => s.row_number === selectedRow && s.column_number === col);
-                    setValue('storeShelf', shelf?.code || '');
-                  }}
-                  disabled={!selectedStorageRoomId || loadingShelves}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">{!selectedStorageRoomId ? t('Select storage room first') : loadingShelves ? t('Loading...') : t('Select column')}</option>
-                  {Array.from(new Set((shelves || []).map(s => s.column_number).filter(Boolean))).map((col) => (
-                    <option key={`col-${col}`} value={col as number}>{col as number}</option>
-                  ))}
-                </select>
-              </div>
-
-              <Controller
-                name="storeShelf"
-                control={control}
-                render={({ field }) => (
-                  <GlassInput
-                    {...field}
-                    label={t('Shelf code')}
-                    placeholder={t('Auto-filled from row/column')}
-                    readOnly
-                  />
-                )}
-              />
-            </div>
-
-            {/* Pricing and Stock */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Controller
-                name="price"
-                control={control}
-                render={({ field }) => (
-                  <PriceInput
-                    {...field}
-                    label={t('Price')}
-                    placeholder={t('0.00')}
-                    error={errors.price?.message}
-                  />
-                )}
-              />
-
-              <Controller
-                name="costPrice"
-                control={control}
-                render={({ field }) => (
-                  <PriceInput
-                    {...field}
-                    label={t('Cost Price')}
-                    placeholder={t('0.00')}
-                    error={errors.costPrice?.message}
-                  />
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Controller
-                name="stockQuantity"
-                control={control}
-                render={({ field }) => (
-                  <GlassInput
-                    {...field}
-                    type="number"
-                    label={t('Stock Quantity')}
-                    placeholder={t('0')}
-                    error={errors.stockQuantity?.message}
-                  />
-                )}
-              />
-
-              <Controller
-                name="minStockLevel"
-                control={control}
-                render={({ field }) => (
-                  <GlassInput
-                    {...field}
-                    type="number"
-                    label={t('Minimum Stock Level')}
-                    placeholder={t('0')}
-                    error={errors.minStockLevel?.message}
-                  />
-                )}
-              />
-            </div>
+            )}
 
             {/* Description and Condition */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -623,8 +477,8 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                       {isDescriptionExpanded ? (
                         <textarea
                           {...field}
-                          onBlur={(e) => {
-                            field.onBlur(e);
+                          onBlur={() => {
+                            field.onBlur();
                             setIsDescriptionExpanded(false);
                           }}
                           className={`w-full py-3 pl-10 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-all duration-200 resize-none ${
@@ -641,8 +495,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                         <input
                           {...field}
                           type="text"
-                          onFocus={(e) => {
-                            field.onFocus?.(e);
+                          onFocus={() => {
                             setIsDescriptionExpanded(true);
                           }}
                           className={`w-full py-3 pl-10 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-all duration-200 ${
@@ -666,8 +519,8 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                     <div className="mt-4">
                       <AIDescriptionGenerator
                         productName={watch('name')}
-                        categoryName={categories.find(c => c.id === watch('categoryId'))?.name}
-                        currentDescription={watch('description')}
+                        categoryName={categories?.find(c => c?.id === watch('categoryId'))?.name || ''}
+                        currentDescription={watch('description') || ''}
                         onDescriptionGenerated={(description) => setValue('description', description)}
                         disabled={!watch('name')?.trim()}
                       />
@@ -712,71 +565,22 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               />
             </div>
 
-            {/* Supplier */}
-            <Controller
-              name="supplierId"
-              control={control}
-              render={({ field }) => (
-                <GlassSelect
-                  {...field}
-                  label={t('Supplier')}
-                  error={errors.supplierId?.message}
-                >
-                  <option value="">{t('Select Supplier')}</option>
-                  {(suppliers || [])?.map((supplier) => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.name}
-                    </option>
-                  ))}
-                </GlassSelect>
-              )}
-            />
-
-            {/* Tags */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                {t('Tags')}
-              </label>
-              <div className="space-y-3">
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyPress={handleTagInputKeyPress}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder={t('Add a tag')}
-                  />
-                  <GlassButton
-                    type="button"
-                    onClick={addTag}
-                    variant="secondary"
-                    disabled={!tagInput.trim()}
-                  >
-                    {t('Add')}
-                  </GlassButton>
-                </div>
-                {(currentTags || [])?.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {(currentTags || [])?.map((tag, index) => (
-                      <GlassBadge
-                        key={index}
-                        variant="info"
-                        className="flex items-center space-x-1"
-                      >
-                        <span>{tag}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeTag(tag)}
-                          className="ml-1 hover:text-red-600"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </GlassBadge>
-                    ))}
-                  </div>
-                )}
-              </div>
+            {/* Product Variants Section */}
+            <div className="border-t border-gray-200 pt-6">
+              <ProductVariantsSection
+                variants={variants}
+                setVariants={setVariants}
+                useVariants={useVariants}
+                setUseVariants={setUseVariants}
+                showVariants={showVariants}
+                setShowVariants={setShowVariants}
+                isReorderingVariants={isReorderingVariants}
+                setIsReorderingVariants={setIsReorderingVariants}
+                draggedVariantIndex={draggedVariantIndex}
+                setDraggedVariantIndex={setDraggedVariantIndex}
+                onVariantSpecificationsClick={handleVariantSpecificationsClick}
+                baseSku={watch('sku') || ''}
+              />
             </div>
 
             {/* Action Buttons */}

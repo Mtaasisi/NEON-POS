@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useDevices } from '../context/DevicesContext';
@@ -19,6 +19,8 @@ import {
   Users,
   User, 
   ChevronRight as ChevronRightIcon,
+  ChevronDown,
+  ChevronUp,
   MessageCircle,
   BarChart2,
   CreditCard,
@@ -33,7 +35,8 @@ import {
   Wrench,
   Star,
   Phone,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Bell
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
@@ -68,12 +71,15 @@ const AppLayout: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNavCollapsed, setIsNavCollapsed] = useState(true);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isHoveringUserMenu, setIsHoveringUserMenu] = useState(false);
   const [readItems, setReadItems] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('navReadItems');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   const navigate = useNavigate();
   const location = useLocation();
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Check if we're on the POS page
   const isOnPOSPage = location.pathname === '/pos';
@@ -93,6 +99,24 @@ const AppLayout: React.FC = () => {
       markAsRead(location.pathname);
     }
   }, [location.pathname]);
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+        setIsHoveringUserMenu(false);
+      }
+    };
+
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserMenu]);
 
   // Calculate activity counts
   const getActivityCounts = () => {
@@ -177,21 +201,21 @@ const AppLayout: React.FC = () => {
         {
           path: '/dashboard',
           label: 'Dashboard',
-          icon: <LayoutDashboard size={20} />,
+          icon: <LayoutDashboard size={20} strokeWidth={1.5} />,
           roles: ['technician'],
           count: activityCounts.activeDevices
         },
         {
           path: '/devices',
           label: 'My Devices',
-          icon: <Smartphone size={20} />,
+          icon: <Smartphone size={20} strokeWidth={1.5} />,
           roles: ['technician'],
           count: activityCounts.activeDevices + activityCounts.overdueDevices
         },
         {
           path: '/lats/spare-parts',
           label: 'Spare Parts',
-          icon: <Package size={20} />,
+          icon: <Package size={20} strokeWidth={1.5} />,
           roles: ['technician'],
           count: Math.floor(Math.random() * 2)
         },
@@ -203,7 +227,7 @@ const AppLayout: React.FC = () => {
       {
         path: '/dashboard',
         label: 'Dashboard',
-        icon: <LayoutDashboard size={20} />,
+        icon: <LayoutDashboard size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care', 'technician'],
         count: activityCounts.activeDevices
       },
@@ -212,35 +236,50 @@ const AppLayout: React.FC = () => {
       {
         path: '/devices',
         label: 'Devices',
-        icon: <Smartphone size={20} />,
+        icon: <Smartphone size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care', 'technician'],
         count: activityCounts.activeDevices + activityCounts.overdueDevices
       },
       {
         path: '/customers',
         label: 'Customers',
-        icon: <Users size={20} />,
+        icon: <Users size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care', 'technician'],
         count: activityCounts.newCustomers
       },
       {
         path: '/pos',
         label: 'POS System',
-        icon: <ShoppingCart size={20} />,
+        icon: <ShoppingCart size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care'],
         count: 0
       },
       {
         path: '/appointments',
         label: 'Appointments',
-        icon: <Calendar size={20} />,
+        icon: <Calendar size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care', 'technician'],
         count: 0
       },
       {
+        path: '/reminders',
+        label: 'Reminders',
+        icon: <Bell size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'customer-care', 'technician'],
+        count: 0
+      },
+      {
+        path: '/reminders/enhanced',
+        label: 'Smart Reminders',
+        icon: <Bell size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'customer-care', 'technician'],
+        count: 0,
+        badge: '⚡' // Shows this is the enhanced version
+      },
+      {
         path: '/services',
         label: 'Services',
-        icon: <Wrench size={20} />,
+        icon: <Wrench size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
@@ -249,28 +288,28 @@ const AppLayout: React.FC = () => {
       {
         path: '/lats/unified-inventory',
         label: 'Inventory',
-        icon: <Package size={20} />,
+        icon: <Package size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
       {
         path: '/lats/spare-parts',
         label: 'Spare Parts',
-        icon: <Package size={20} />,
+        icon: <Settings size={20} strokeWidth={1.5} />,
         roles: ['admin', 'technician'],
         count: 0
       },
       {
         path: '/lats/purchase-orders',
         label: 'Purchase Orders',
-        icon: <ShoppingCart size={20} />,
+        icon: <ShoppingCart size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
       {
         path: '/lats/stock-transfers',
         label: 'Stock Transfers',
-        icon: <ArrowRightLeft size={20} />,
+        icon: <ArrowRightLeft size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
@@ -279,14 +318,7 @@ const AppLayout: React.FC = () => {
       {
         path: '/employees',
         label: 'Employees',
-        icon: <UserCheck size={20} />,
-        roles: ['admin', 'manager'],
-        count: 0
-      },
-      {
-        path: '/attendance',
-        label: 'Attendance',
-        icon: <Clock size={20} />,
+        icon: <UserCheck size={20} strokeWidth={1.5} />,
         roles: ['admin', 'manager'],
         count: 0
       },
@@ -295,37 +327,30 @@ const AppLayout: React.FC = () => {
       {
         path: '/diagnostics',
         label: 'Diagnostics',
-        icon: <Stethoscope size={20} />,
+        icon: <Stethoscope size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care', 'technician'],
         count: 0
       },
 
       // Business & Finance
       {
-        path: '/business',
-        label: 'Business',
-        icon: <Briefcase size={20} />,
-        roles: ['admin', 'manager'],
-        count: 0
-      },
-      {
         path: '/lats/sales-reports',
         label: 'Sales Reports',
-        icon: <BarChart2 size={20} />,
+        icon: <BarChart2 size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
       {
         path: '/payments',
         label: 'Payments',
-        icon: <CreditCard size={20} />,
+        icon: <CreditCard size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
       {
         path: '/lats/loyalty',
         label: 'Loyalty Program',
-        icon: <Star size={20} />,
+        icon: <Star size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
@@ -334,40 +359,15 @@ const AppLayout: React.FC = () => {
       {
         path: '/lats/whatsapp-chat',
         label: 'WhatsApp',
-        icon: <MessageCircle size={20} />,
+        icon: <MessageCircle size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care'],
         count: 0
       },
       {
         path: '/sms',
         label: 'SMS',
-        icon: <Phone size={20} />,
+        icon: <Phone size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care'],
-        count: 0
-      },
-
-      // System & Admin
-      {
-        path: '/admin-management',
-        label: 'Admin Panel',
-        icon: <Shield size={20} />,
-        roles: ['admin'],
-        count: 0
-      },
-      {
-        path: '/users',
-        label: 'Users',
-        icon: <User size={20} />,
-        roles: ['admin'],
-        count: 0
-      },
-      
-      // Settings
-      {
-        path: '/settings',
-        label: 'Settings',
-        icon: <Settings size={20} />,
-        roles: ['admin'],
         count: 0
       }
     ];
@@ -444,7 +444,7 @@ const AppLayout: React.FC = () => {
                 </div>
               ) : (
                 <div className={`p-2 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-lg ${isNavCollapsed ? 'w-10 h-10' : ''}`}>
-                  <Smartphone className={`h-6 w-6 ${isNavCollapsed ? 'scale-90' : ''}`} />
+                  <Smartphone className={`h-6 w-6 ${isNavCollapsed ? 'scale-90' : ''}`} strokeWidth={1.5} />
                 </div>
               )}
               
@@ -461,7 +461,7 @@ const AppLayout: React.FC = () => {
           </div>
 
           {/* Navigation */}
-          <nav className={`flex-1 ${isNavCollapsed ? 'p-2' : 'p-4'} overflow-y-auto`}>
+          <nav className={`flex-1 ${isNavCollapsed ? 'p-2 scrollbar-hide' : 'p-4 sidebar-scrollbar'} overflow-y-auto`}>
             <ul className="space-y-1">
               {navItems.map(item => (
                 <li key={item.path}>
@@ -517,7 +517,7 @@ const AppLayout: React.FC = () => {
                     )}
                     
                       {location.pathname === item.path && (
-                        <ChevronRightIcon size={16} className={`
+                        <ChevronRightIcon size={16} strokeWidth={1.5} className={`
                           ml-auto ${isDark ? 'text-blue-400' : 'text-blue-500'}
                           ${isNavCollapsed ? 'md:hidden' : ''}
                         `} />
@@ -541,7 +541,7 @@ const AppLayout: React.FC = () => {
           </nav>
           
           {/* User Profile & Logout */}
-          <div className={`${isNavCollapsed ? 'p-2' : 'p-4'} ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-t`}>
+          <div className={`${isNavCollapsed ? 'p-2' : 'p-4'} ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-t relative`} ref={userMenuRef}>
             <div className={`
               flex items-center gap-3 p-2 rounded-lg
               ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900' : 'bg-gradient-to-br from-gray-100 to-gray-50'}
@@ -549,20 +549,302 @@ const AppLayout: React.FC = () => {
               ${isNavCollapsed ? 'justify-center' : ''}
             `}>
               <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg">
-                <User size={20} />
+                <User size={20} strokeWidth={1.5} />
               </div>
               <div className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''} min-w-0 flex-1`}>
                 <p className={`font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{currentUser.name}</p>
-                <p className={`text-sm capitalize truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{currentUser.role.replace('-', ' ')}</p>
+                <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShowUserMenu(!showUserMenu);
+                    setIsHoveringUserMenu(false);
+                  }}
+                  onMouseEnter={() => !showUserMenu && setIsHoveringUserMenu(true)}
+                  onMouseLeave={() => setIsHoveringUserMenu(false)}
+                  className={`flex items-center gap-1 w-full text-left text-sm capitalize ${isDark ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-800'} cursor-pointer transition-colors`}
+                >
+                  <span className="truncate">{currentUser.role.replace('-', ' ')}</span>
+                  {showUserMenu ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
               </div>
             </div>
+
+            {/* Minimized Hover Preview */}
+            {isHoveringUserMenu && !showUserMenu && !isNavCollapsed && (
+              <div 
+                className={`
+                  absolute bottom-full left-0 right-0 mb-2 mx-4
+                  ${isDark 
+                    ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' 
+                    : 'bg-gradient-to-br from-white/95 to-gray-50/95'
+                  }
+                  backdrop-blur-xl rounded-lg shadow-xl border
+                  ${isDark ? 'border-slate-700/50' : 'border-white/20'}
+                  overflow-hidden
+                  animate-in fade-in duration-150
+                  p-3
+                `}
+                style={{ zIndex: 9999 }}
+                onMouseEnter={() => setIsHoveringUserMenu(true)}
+                onMouseLeave={() => setIsHoveringUserMenu(false)}
+              >
+                <div className="flex items-center justify-between">
+                  <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Click to view menu
+                  </p>
+                  <div className="flex gap-2">
+                    <Settings size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
+                    {currentUser.role === 'admin' && (
+                      <Users size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
+                    )}
+                    <User size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Minimized Hover Preview for Collapsed Sidebar */}
+            {isHoveringUserMenu && !showUserMenu && isNavCollapsed && (
+              <div 
+                className={`
+                  absolute bottom-full left-full ml-2 mb-2
+                  ${isDark 
+                    ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' 
+                    : 'bg-gradient-to-br from-white/95 to-gray-50/95'
+                  }
+                  backdrop-blur-xl rounded-lg shadow-xl border
+                  ${isDark ? 'border-slate-700/50' : 'border-white/20'}
+                  overflow-hidden
+                  animate-in fade-in duration-150
+                  px-3 py-2 flex gap-2
+                `}
+                style={{ zIndex: 9999 }}
+                onMouseEnter={() => setIsHoveringUserMenu(true)}
+                onMouseLeave={() => setIsHoveringUserMenu(false)}
+              >
+                <Settings size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
+                {currentUser.role === 'admin' && (
+                  <Users size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
+                )}
+                <User size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
+              </div>
+            )}
+
+            {/* Compact Dropdown for Collapsed Sidebar */}
+            {showUserMenu && isNavCollapsed && (
+              <div 
+                className={`
+                  absolute bottom-full left-full ml-2 mb-2
+                  ${isDark 
+                    ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' 
+                    : 'bg-gradient-to-br from-white/95 to-gray-50/95'
+                  }
+                  backdrop-blur-xl rounded-xl shadow-2xl border
+                  ${isDark ? 'border-slate-700/50' : 'border-white/20'}
+                  overflow-hidden
+                  animate-in slide-in-from-left-2 fade-in duration-200
+                  w-48
+                `}
+                style={{ zIndex: 9999 }}
+              >
+                <div className="py-2 px-2">
+                  <button
+                    onClick={() => {
+                      navigate('/admin-settings');
+                      setShowUserMenu(false);
+                    }}
+                    className={`
+                      w-full px-3 py-2 text-left text-sm rounded-lg
+                      ${isDark 
+                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
+                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                      }
+                      transition-all duration-200 flex items-center gap-3
+                    `}
+                  >
+                    <Settings size={16} strokeWidth={1.5} />
+                    <span>Settings</span>
+                  </button>
+
+                  {currentUser.role === 'admin' && (
+                    <button
+                      onClick={() => {
+                        navigate('/users');
+                        setShowUserMenu(false);
+                      }}
+                      className={`
+                        w-full px-3 py-2 text-left text-sm rounded-lg
+                        ${isDark 
+                          ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
+                          : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                        }
+                        transition-all duration-200 flex items-center gap-3
+                      `}
+                    >
+                      <Users size={16} strokeWidth={1.5} />
+                      <span>Users</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      alert(`Name: ${currentUser.name}\nRole: ${currentUser.role}\nEmail: ${currentUser.email || 'N/A'}\nID: ${currentUser.id}`);
+                      setShowUserMenu(false);
+                    }}
+                    className={`
+                      w-full px-3 py-2 text-left text-sm rounded-lg
+                      ${isDark 
+                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
+                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                      }
+                      transition-all duration-200 flex items-center gap-3
+                    `}
+                  >
+                    <User size={16} strokeWidth={1.5} />
+                    <span>Info</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* User Dropdown Menu */}
+            {showUserMenu && !isNavCollapsed && (
+              <div 
+                className={`
+                  absolute bottom-full left-0 right-0 mb-2 mx-4
+                  ${isDark 
+                    ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' 
+                    : 'bg-gradient-to-br from-white/95 to-gray-50/95'
+                  }
+                  backdrop-blur-xl rounded-xl shadow-2xl border
+                  ${isDark ? 'border-slate-700/50' : 'border-white/20'}
+                  overflow-hidden
+                  animate-in slide-in-from-bottom-2 fade-in duration-200
+                `}
+                style={{ zIndex: 9999 }}
+              >
+                {/* Header with gradient background */}
+                <div className={`
+                  p-4 
+                  ${isDark 
+                    ? 'bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border-b border-slate-700/50' 
+                    : 'bg-gradient-to-br from-indigo-50 to-purple-50 border-b border-gray-200/50'
+                  }
+                `}>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg">
+                      <User size={16} strokeWidth={1.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {currentUser.name}
+                      </p>
+                      <p className={`text-xs truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {currentUser.email || 'No email'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className={`
+                    mt-2 px-2 py-1 rounded-md inline-block text-xs font-medium capitalize
+                    ${isDark 
+                      ? 'bg-slate-800/50 text-indigo-400' 
+                      : 'bg-white/50 text-indigo-600'
+                    }
+                  `}>
+                    {currentUser.role.replace('-', ' ')}
+                  </div>
+                </div>
+
+                {/* Menu Items */}
+                <div className="py-2 px-2">
+                  <button
+                    onClick={() => {
+                      navigate('/admin-settings');
+                      setShowUserMenu(false);
+                    }}
+                    className={`
+                      w-full px-3 py-2.5 text-left text-sm rounded-lg
+                      ${isDark 
+                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
+                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                      }
+                      transition-all duration-200 flex items-center gap-3
+                      group
+                    `}
+                  >
+                    <div className={`
+                      p-1.5 rounded-md
+                      ${isDark ? 'bg-slate-700/50 group-hover:bg-indigo-600' : 'bg-gray-100 group-hover:bg-indigo-600'}
+                      transition-colors duration-200
+                    `}>
+                      <Settings size={14} className="group-hover:text-white" strokeWidth={1.5} />
+                    </div>
+                    <span className="font-medium">Settings</span>
+                  </button>
+
+                  {currentUser.role === 'admin' && (
+                    <button
+                      onClick={() => {
+                        navigate('/users');
+                        setShowUserMenu(false);
+                      }}
+                      className={`
+                        w-full px-3 py-2.5 text-left text-sm rounded-lg
+                        ${isDark 
+                          ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
+                          : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                        }
+                        transition-all duration-200 flex items-center gap-3
+                        group
+                      `}
+                    >
+                      <div className={`
+                        p-1.5 rounded-md
+                        ${isDark ? 'bg-slate-700/50 group-hover:bg-purple-600' : 'bg-gray-100 group-hover:bg-purple-600'}
+                        transition-colors duration-200
+                      `}>
+                        <Users size={14} className="group-hover:text-white" strokeWidth={1.5} />
+                      </div>
+                      <span className="font-medium">User Management</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      alert(`Name: ${currentUser.name}\nRole: ${currentUser.role}\nEmail: ${currentUser.email || 'N/A'}\nID: ${currentUser.id}`);
+                      setShowUserMenu(false);
+                    }}
+                    className={`
+                      w-full px-3 py-2.5 text-left text-sm rounded-lg
+                      ${isDark 
+                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
+                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                      }
+                      transition-all duration-200 flex items-center gap-3
+                      group
+                    `}
+                  >
+                    <div className={`
+                      p-1.5 rounded-md
+                      ${isDark ? 'bg-slate-700/50 group-hover:bg-blue-600' : 'bg-gray-100 group-hover:bg-blue-600'}
+                      transition-colors duration-200
+                    `}>
+                      <User size={14} className="group-hover:text-white" strokeWidth={1.5} />
+                    </div>
+                    <span className="font-medium">Account Info</span>
+                  </button>
+                </div>
+              </div>
+            )}
+            
             
             <GlassButton
               onClick={handleLogout} 
               variant="danger"
               className={`w-full ${isNavCollapsed ? 'justify-center px-0' : 'justify-start'}`}
             >
-              <LogOut size={18} />
+              <LogOut size={18} strokeWidth={1.5} />
               <span className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''}`}>
                 Logout
               </span>

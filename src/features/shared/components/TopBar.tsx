@@ -7,6 +7,7 @@ import { useDevices } from '../../../context/DevicesContext';
 import { useCustomers } from '../../../context/CustomersContext';
 import { useNavigationHistory } from '../../../hooks/useNavigationHistory';
 import { useNotifications } from '../../notifications/hooks/useNotifications';
+import { reminderApi } from '../../../lib/reminderApi';
 import {
   Bell,
   Menu,
@@ -107,6 +108,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
   const [isOnline, _setIsOnline] = useState(navigator.onLine);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [reminderCount, setReminderCount] = useState(0);
   
   const { handleBackClick, previousPage } = useNavigationHistory();
   
@@ -117,6 +119,29 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     }, 60000); // Update every minute
     
     return () => clearInterval(timer);
+  }, []);
+  
+  // Fetch reminder count (pending + overdue)
+  useEffect(() => {
+    const fetchReminderCount = async () => {
+      try {
+        const [pending, overdue] = await Promise.all([
+          reminderApi.getPendingReminders(),
+          reminderApi.getOverdueReminders()
+        ]);
+        
+        // Combine both counts (overdue is already included in pending, so just use overdue count for badge)
+        setReminderCount(overdue.length);
+      } catch (error) {
+        console.error('Error fetching reminder count:', error);
+      }
+    };
+    
+    fetchReminderCount();
+    
+    // Refresh count every 5 minutes
+    const interval = setInterval(fetchReminderCount, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, []);
   
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -487,6 +512,34 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                 </button>
                 <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
                   Devices
+                  <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
+                </div>
+              </div>
+              
+              {/* Reminders */}
+              <div className="relative group">
+                <button 
+                  onClick={() => navigate('/reminders')}
+                  className={`p-3 rounded-lg transition-all duration-300 backdrop-blur-sm border shadow-sm hover:scale-110 relative ${
+                    location.pathname.includes('/reminders') 
+                      ? 'bg-yellow-500 text-white border-yellow-400' 
+                      : isDark
+                        ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600'
+                        : 'bg-white/30 hover:bg-white/50 border-white/30'
+                  }`}
+                  title="Reminders"
+                >
+                  <Clock size={18} className={location.pathname.includes('/reminders') ? 'text-white' : isDark ? 'text-gray-200' : 'text-gray-700'} />
+                  {reminderCount > 0 && (
+                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
+                      <span className="text-[10px] text-white font-bold">
+                        {reminderCount > 9 ? '9+' : reminderCount}
+                      </span>
+                    </div>
+                  )}
+                </button>
+                <div className={`absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 ${isDark ? 'bg-slate-800/95 border-slate-600/50 text-gray-200' : 'bg-white/95 border-gray-200/50 text-gray-700'} backdrop-blur-sm border text-xs font-medium rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-200 whitespace-nowrap z-50`}>
+                  Reminders {reminderCount > 0 ? `(${reminderCount} overdue)` : ''}
                   <div className={`absolute bottom-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent ${isDark ? 'border-t-slate-800/95' : 'border-t-white/95'}`}></div>
                 </div>
               </div>

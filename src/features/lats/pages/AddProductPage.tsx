@@ -8,6 +8,7 @@ import { toast } from 'react-hot-toast';
 import { Save, ArrowLeft, MapPin, Store, X, Plus, Check, Layers, Palette, HardDrive, Zap, Cpu, Monitor, Battery, Camera, Ruler, FileText, Clock, Hand, Unplug, RotateCcw, Lightbulb, Fingerprint, ScanFace, Droplets, Wind, BatteryCharging, FastForward, PhoneCall, Expand, Radio, Navigation, Headphones, PenTool, Shield, Lock, Vibrate, Usb, Cable, Speaker, Mic } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { useAuth } from '../../../context/AuthContext';
+import { useBranch } from '../../../context/BranchContext';
 import { retryWithBackoff } from '../../../lib/supabaseClient';
 
 import { getActiveCategories, Category } from '../../../lib/categoryApi';
@@ -22,7 +23,6 @@ import { validateAndCreateDefaultVariant } from '../lib/variantUtils';
 // Extracted components
 import ProductInformationForm from '../components/product/ProductInformationForm';
 import PricingAndStockForm from '../components/product/PricingAndStockForm';
-import ProductImagesSection from '../components/product/ProductImagesSection';
 import ProductVariantsSection from '../components/product/ProductVariantsSection';
 import StorageLocationForm from '../components/product/StorageLocationForm';
 import ProductSuccessModal from '../components/product/ProductSuccessModal';
@@ -38,28 +38,6 @@ interface ProductVariant {
   specification?: string;
   attributes?: Record<string, any>;
 }
-
-// ProductImage interface for form validation
-const ProductImageSchema = z.object({
-  id: z.string().optional(),
-  image_url: z.string().optional(),
-  url: z.string().optional(),
-  thumbnail_url: z.string().optional(),
-  file_name: z.string().optional(),
-  fileName: z.string().optional(),
-  file_size: z.number().optional(),
-  fileSize: z.number().optional(),
-  is_primary: z.boolean().optional(),
-  isPrimary: z.boolean().optional(),
-  uploaded_by: z.string().optional(),
-  created_at: z.string().optional(),
-  uploadedAt: z.string().optional(),
-  mimeType: z.string().optional()
-}).refine((data) => {
-  return data.image_url || data.url;
-}, {
-  message: "Either image_url or url must be provided"
-});
 
 // Validation schema for product form
 const productFormSchema = z.object({
@@ -93,22 +71,17 @@ const productFormSchema = z.object({
   storageRoomId: z.string().optional(),
   shelfId: z.string().optional(),
 
-  images: z.array(ProductImageSchema).default([]),
   metadata: z.record(z.string(), z.any()).optional().default({}),
   variants: z.array(z.any()).optional().default([])
 });
 
-type ProductImage = z.infer<typeof ProductImageSchema>;
-
 const AddProductPageOptimized: React.FC = () => {
   const navigate = useNavigate();
+  const { currentBranch } = useBranch();
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
   const [currentErrors, setCurrentErrors] = useState<Record<string, string>>({});
-
-  // Generate a temporary product ID for image uploads
-  const [tempProductId] = useState(`temp-product-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
 
   // Generate auto SKU using utility function
   const generateAutoSKU = () => {
@@ -130,7 +103,6 @@ const AddProductPageOptimized: React.FC = () => {
     minStockLevel: 2, // Set default min stock level to 2 pcs
     storageRoomId: '',
     shelfId: '',
-    images: [] as ProductImage[],
     metadata: {},
     variants: []
   });
@@ -157,6 +129,20 @@ const AddProductPageOptimized: React.FC = () => {
   const [showProductCustomInput, setShowProductCustomInput] = useState(false);
   const [productCustomAttributeInput, setProductCustomAttributeInput] = useState('');
   const [selectedProductSpecCategory, setSelectedProductSpecCategory] = useState<string>('laptop');
+
+  // Prevent body scroll when modals are open
+  useEffect(() => {
+    if (showProductSpecificationsModal || showVariantSpecificationsModal) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [showProductSpecificationsModal, showVariantSpecificationsModal]);
 
   // Name checking
   const [isCheckingName, setIsCheckingName] = useState(false);
@@ -259,7 +245,6 @@ const AddProductPageOptimized: React.FC = () => {
       minStockLevel: 2,
       storageRoomId: '',
       shelfId: '',
-      images: [],
       metadata: {},
       variants: []
     });
@@ -513,11 +498,6 @@ const AddProductPageOptimized: React.FC = () => {
     const errors: Record<string, string> = {};
 
     try {
-      // Filter out invalid images (ones without URL)
-      const validImages = formData.images.filter(img => 
-        (img.image_url && img.image_url.trim()) || (img.url && img.url.trim())
-      );
-
       // Create a dynamic schema based on whether variants are used
       const dynamicSchema = useVariants 
         ? productFormSchema.omit({ 
@@ -531,7 +511,6 @@ const AddProductPageOptimized: React.FC = () => {
 
       dynamicSchema.parse({
         ...formData,
-        images: validImages,
         variants: useVariants ? variants : []
       });
 
@@ -653,6 +632,7 @@ const AddProductPageOptimized: React.FC = () => {
         // Don't set SKU, prices, stock in main product when using variants
         sku: finalSku,
         category_id: formData.categoryId || null,
+        branch_id: currentBranch?.id || null,
 
         // Only set these fields if NOT using variants
         cost_price: useVariants ? 0 : (formData.costPrice || 0),
@@ -663,7 +643,8 @@ const AddProductPageOptimized: React.FC = () => {
         total_value: totalValue,
         storage_room_id: formData.storageRoomId || null,
         store_shelf_id: formData.shelfId || null,
-        tags: [],
+        // Don't send empty array - it causes "cannot determine type" error in PostgreSQL
+        // tags: [],
         attributes: productAttributes,
         metadata: {
           useVariants: useVariants,
@@ -684,82 +665,47 @@ const AddProductPageOptimized: React.FC = () => {
           .single();
       });
 
+      console.log('🔍 INSERT result:', { 
+        data: createdProduct, 
+        error: error, 
+        hasData: !!createdProduct, 
+        hasError: !!error,
+        errorMessage: error?.message,
+        errorDetails: error?.details,
+        errorHint: error?.hint,
+        errorCode: error?.code
+      });
+
+      // Check if we have an error (even if not thrown)
       if (error) {
-        console.error('Product creation failed:', error);
+        console.error('❌ Product creation failed with error:', error);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error code:', error.code);
+        console.error('❌ Error details:', error.details);
+        console.error('❌ Error hint:', error.hint);
+        console.error('❌ Full error object:', JSON.stringify(error, null, 2));
         throw error;
       }
 
-      console.log('Product created successfully:', createdProduct);
-
-      // Save images to product_images table if we have images
-      // Filter out invalid images (ones without valid URLs)
-      const validImages = formData.images.filter(img => 
-        (img.image_url && img.image_url.trim()) || (img.url && img.url.trim())
-      );
-      
-      if (validImages.length > 0 && createdProduct) {
-        console.log('Saving images to product_images table:', validImages);
+      // Check if we got null data without an error
+      if (!createdProduct) {
+        console.error('❌ Product creation returned null WITHOUT an error!');
+        console.error('❌ This usually means:');
+        console.error('   1. RLS policy allows INSERT but blocks SELECT');
+        console.error('   2. Trigger is failing silently');
+        console.error('   3. User is not authenticated properly');
         
-        const imageData = validImages.map((image, index) => {
-          const imageUrl = image.url || image.image_url || '';
-          const thumbnailUrl = image.thumbnailUrl || image.thumbnail_url || imageUrl;
-          
-          console.log(`📸 Preparing image ${index + 1} for save:`, {
-            imageUrl: imageUrl.substring(0, 50) + '...',
-            thumbnailUrl: thumbnailUrl.substring(0, 50) + '...',
-            fileName: image.fileName || image.file_name || `image_${index + 1}`,
-            isPrimary: index === 0
-          });
-          
-          return {
-            product_id: createdProduct.id,
-            image_url: imageUrl,
-            thumbnail_url: thumbnailUrl,
-            file_name: image.fileName || image.file_name || `image_${index + 1}`,
-            file_size: image.fileSize || image.file_size || 0,
-            is_primary: image.isPrimary || image.is_primary || index === 0, // First image is primary
-            uploaded_by: currentUser?.id
-          };
-        });
-
-        const { error: imageError } = await retryWithBackoff(async () => {
-          return await supabase!
-            .from('product_images')
-            .insert(imageData);
-        });
-
-        if (imageError) {
-          console.error('❌ Error saving images:', imageError);
-          toast.error('Product created but failed to save images');
-        } else {
-          console.log(`✅ ${validImages.length} image(s) saved successfully to product_images table for product ${createdProduct.id}`);
-          // Log each saved image URL for debugging
-          imageData.forEach((img, idx) => {
-            console.log(`   Image ${idx + 1}: ${img.image_url.substring(0, 60)}...`);
-          });
-        }
-
-        // If any images were uploaded with temporary product IDs, update them
-        const tempImages = formData.images.filter(img => 
-          img.id && img.id.startsWith('temp-') && 
-          (img.url || img.image_url) && 
-          !(img.url || img.image_url).startsWith('blob:')
-        );
-
-        if (tempImages.length > 0) {
-          console.log('Updating temporary image records for product:', createdProduct.id);
-          
-          // For temporary images that were uploaded to storage, we need to update their database records
-          // This is handled by the image upload services when they detect a real product ID
-          try {
-            // The RobustImageService should handle updating temporary image records
-            // when it detects that the product ID has changed from temp to real
-            console.log('Temporary images will be updated by the image service');
-          } catch (updateError) {
-            console.error('Error updating temporary image records:', updateError);
-          }
-        }
+        // Check current user
+        const { data: { user } } = await supabase!.auth.getUser();
+        console.error('❌ Current user:', user);
+        console.error('❌ User ID:', user?.id);
+        console.error('❌ User authenticated:', !!user);
+        
+        toast.error('Product creation failed - database returned no data. Check console for details.');
+        return;
       }
+
+      console.log('✅ Product created successfully:', createdProduct);
 
       // Create variants - either the user-defined variants or a default variant
       if (createdProduct) {
@@ -841,21 +787,17 @@ const AddProductPageOptimized: React.FC = () => {
       }
 
       // Store created product info for success modal
+      if (!createdProduct) {
+        console.error('❌ Product creation returned null - likely RLS policy issue');
+        toast.error('Product creation failed - please check database permissions');
+        return;
+      }
+      
       setCreatedProductId(createdProduct.id);
       setCreatedProductName(formData.name);
       
       // Clear draft after successful submission
       clearDraft();
-      
-      // Clear image cache to ensure fresh images are loaded when viewing products
-      // This forces the product list to reload images from the database
-      try {
-        const { RobustImageService } = await import('../../../lib/robustImageService');
-        RobustImageService.clearAllCache();
-        console.log('✅ Image cache cleared after product creation');
-      } catch (cacheError) {
-        console.warn('⚠️ Could not clear image cache:', cacheError);
-      }
       
       // Show success modal instead of navigating away
       setShowSuccessModal(true);
@@ -1039,14 +981,6 @@ const AddProductPageOptimized: React.FC = () => {
                 currentErrors={currentErrors}
               />
             )}
-
-            {/* Product Images Section */}
-            <ProductImagesSection
-              images={formData.images}
-              setImages={(images: ProductImage[]) => setFormData(prev => ({ ...prev, images }))}
-              currentUser={currentUser}
-              productId={tempProductId}
-            />
 
             {/* Product Variants Section */}
             <ProductVariantsSection
@@ -1377,42 +1311,51 @@ const AddProductPageOptimized: React.FC = () => {
         </div>
       )}
 
-      {/* Product Specifications Modal */}
+      {/* Product Specifications Modal - Flat Design */}
       {showProductSpecificationsModal && (
         <div 
-          className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-2"
+          className="fixed inset-0 bg-black/20 flex items-center justify-center z-50 p-2 sm:p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="product-specifications-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowProductSpecificationsModal(false);
+          }}
         >
-          <div className="bg-white rounded-xl shadow-lg max-w-4xl w-full max-h-[85vh] overflow-hidden mx-auto">
-            {/* Header */}
-            <div className="bg-blue-600 p-4 text-white">
+          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden mx-auto flex flex-col">
+            {/* Flat Header */}
+            <div className="bg-blue-600 p-5 text-white flex-shrink-0">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5" />
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-700 rounded-xl">
+                    <FileText className="w-6 h-6" />
+                  </div>
                   <div>
-                    <h2 id="product-specifications-modal-title" className="text-lg font-semibold">
-                      Product Specs
+                    <h2 id="product-specifications-modal-title" className="text-xl font-bold">
+                      Product Specifications
                     </h2>
-                    <p className="text-blue-100 text-xs">
-                      Add product specifications
+                    <p className="text-blue-100 text-sm mt-0.5">
+                      Define technical details and features
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setShowProductSpecificationsModal(false)}
-                  className="p-1 hover:bg-white/20 rounded transition-colors"
+                  className="p-2 hover:bg-blue-700 rounded-xl transition-colors"
                   aria-label="Close modal"
                 >
-                  <X size={18} />
+                  <X size={20} />
                 </button>
               </div>
             </div>
 
-            {/* Category Tabs */}
-            <div className="bg-gray-50 border-b border-gray-200 px-4 py-2">
-              <div className="flex gap-1 overflow-x-auto">
+            {/* Flat Category Tabs */}
+            <div className="bg-gray-50 border-b border-gray-200 px-5 py-4 flex-shrink-0">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Categories</span>
+                <div className="h-px flex-1 bg-gray-200"></div>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-2">
                 {specificationCategories.map((category) => {
                   const IconComponent = category.icon;
                   const isSelected = selectedProductSpecCategory === category.id;
@@ -1420,78 +1363,136 @@ const AddProductPageOptimized: React.FC = () => {
                     <button
                       key={category.id}
                       onClick={() => setSelectedProductSpecCategory(category.id)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
                         isSelected
-                          ? `bg-${category.color}-500 text-white`
-                          : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 border-2 border-gray-200 hover:border-blue-400 hover:bg-blue-50'
                       }`}
                     >
-                      <IconComponent size={14} />
-                      {category.name}
+                      <IconComponent size={16} />
+                      <span>{category.name}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Content */}
-            <div className="p-4 overflow-y-auto max-h-[calc(85vh-140px)]">
-              <div className="space-y-4">
-                {/* Specifications Grid - Grouped by Type */}
+            {/* Content - Flat Design */}
+            <div className="p-5 overflow-y-auto bg-white flex-1 min-h-0">
+              <div className="space-y-6">
+                {/* Active Specifications Badge */}
+                {(() => {
+                  const currentSpecs = formData.specification ? JSON.parse(formData.specification) : {};
+                  const activeCount = Object.keys(currentSpecs).length;
+                  
+                  if (activeCount > 0) {
+                    return (
+                      <div className="flex items-center justify-between p-4 bg-green-50 border-2 border-green-300 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-green-500 rounded-lg">
+                            <Check size={20} className="text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold text-green-900">
+                              {activeCount} Specification{activeCount !== 1 ? 's' : ''} Active
+                            </h3>
+                            <p className="text-xs text-green-700 mt-0.5">
+                              Specifications have been configured for this product
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Clear all specifications?')) {
+                              setFormData(prev => ({ ...prev, specification: '' }));
+                              toast.success('All specifications cleared');
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-white border-2 border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors text-xs font-medium"
+                        >
+                          Clear All
+                        </button>
+                      </div>
+                    );
+                  }
+                })()}
+
+                {/* Specifications Grid - Flat Design */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-                    <Plus size={16} className="text-blue-600" />
-                    {specificationCategories.find(cat => cat.id === selectedProductSpecCategory)?.name}
-                  </h3>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-blue-100 rounded-lg">
+                      <Layers size={18} className="text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900">
+                        {specificationCategories.find(cat => cat.id === selectedProductSpecCategory)?.name}
+                      </h3>
+                      <p className="text-xs text-gray-600">Select and configure specifications</p>
+                    </div>
+                  </div>
                   
                   {Object.entries(getSpecificationsByType(selectedProductSpecCategory)).map(([type, specs]) => {
                     if (specs.length === 0) return null;
                     
                     return (
-                      <div key={type} className="mb-4">
-                        <h4 className="text-xs font-medium text-gray-700 mb-2 flex items-center gap-2">
-                          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-                            {getTypeDisplayName(type)}
+                      <div key={type} className="mb-6">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="px-3 py-1.5 bg-gray-100 border border-gray-200 rounded-lg">
+                            <span className="text-xs font-bold text-gray-700">
+                              {getTypeDisplayName(type)}
+                            </span>
+                          </div>
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                            {specs.length}
                           </span>
-                          <span className="text-xs text-gray-500">({specs.length})</span>
-                        </h4>
+                          <div className="h-px flex-1 bg-gray-200"></div>
+                        </div>
                         
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                           {specs.map((spec) => {
                             const IconComponent = spec.icon;
                             const currentSpecs = formData.specification ? JSON.parse(formData.specification) : {};
                             const currentValue = currentSpecs[spec.key] || '';
                             const isBoolean = spec.type === 'boolean';
+                            const hasValue = currentValue !== '' && currentValue !== null && currentValue !== undefined;
                             
                             return (
-                              <div key={spec.key} className="bg-white border border-gray-200 rounded-lg p-3">
-                                <label className="block text-xs font-medium text-gray-700 mb-2 flex items-center gap-1">
-                                  <IconComponent size={12} className="text-gray-500" />
-                                  {spec.name}
-                                  {spec.unit && <span className="text-xs text-gray-500">({spec.unit})</span>}
+                              <div 
+                                key={spec.key} 
+                                className={`group bg-white border-2 rounded-xl p-4 transition-all ${
+                                  hasValue 
+                                    ? 'border-green-300 bg-green-50' 
+                                    : 'border-gray-200 hover:border-blue-300'
+                                }`}
+                              >
+                                <label className="block text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                  <IconComponent size={16} className={hasValue ? 'text-green-600' : 'text-gray-500'} />
+                                  <span className="flex-1">{spec.name}</span>
+                                  {spec.unit && <span className="text-xs text-gray-500 font-normal">({spec.unit})</span>}
                                 </label>
                                 
                                 {isBoolean ? (
                                   <button
                                     type="button"
                                     onClick={() => updateProductSpecification(spec.key, !currentValue)}
-                                    className={`w-full p-2 border rounded-lg transition-colors ${
+                                    className={`w-full p-3 border-2 rounded-xl transition-colors font-medium text-sm ${
                                       currentValue
-                                        ? 'bg-green-50 border-green-300 text-green-800'
-                                        : 'bg-white border-gray-300 text-gray-600 hover:border-blue-500 hover:bg-blue-50'
+                                        ? 'bg-green-500 border-green-500 text-white'
+                                        : 'bg-white border-gray-300 text-gray-600 hover:border-blue-400 hover:bg-blue-50'
                                     }`}
                                   >
-                                    <div className="flex items-center justify-center">
-                                      <Check size={14} className={currentValue ? 'text-green-600' : 'text-gray-400'} />
+                                    <div className="flex items-center justify-center gap-2">
+                                      <Check size={16} className={currentValue ? 'text-white' : 'text-gray-400'} />
+                                      <span>{currentValue ? 'Enabled' : 'Disabled'}</span>
                                     </div>
                                   </button>
                                 ) : spec.type === 'select' && spec.options ? (
                                   <select
                                     value={currentValue as string}
                                     onChange={(e) => updateProductSpecification(spec.key, e.target.value)}
-                                    className="w-full py-1.5 px-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-xs"
+                                    className="w-full py-2.5 px-3 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none text-sm font-medium transition-colors"
                                   >
-                                    <option value="">Select</option>
+                                    <option value="">Select...</option>
                                     {spec.options.map((option) => (
                                       <option key={option} value={option}>{option}</option>
                                     ))}
@@ -1503,7 +1504,7 @@ const AddProductPageOptimized: React.FC = () => {
                                       value={currentValue as string}
                                       onChange={(e) => updateProductSpecification(spec.key, e.target.value)}
                                       placeholder={spec.placeholder || `Enter ${spec.name.toLowerCase()}`}
-                                      className="w-full py-1.5 px-2 pr-6 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-xs"
+                                      className="w-full py-2.5 px-3 pr-9 border-2 border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none text-sm transition-colors"
                                       autoComplete="off"
                                       autoCorrect="off"
                                       spellCheck={false}
@@ -1512,10 +1513,10 @@ const AddProductPageOptimized: React.FC = () => {
                                       <button
                                         type="button"
                                         onClick={() => updateProductSpecification(spec.key, '')}
-                                        className="absolute right-1 top-1.5 text-red-500 hover:text-red-700"
+                                        className="absolute right-2 top-2.5 text-red-500 hover:text-red-700 p-1 hover:bg-red-50 rounded-lg transition-colors"
                                         title="Clear value"
                                       >
-                                        <X size={12} />
+                                        <X size={14} />
                                       </button>
                                     )}
                                   </div>
@@ -1529,22 +1530,27 @@ const AddProductPageOptimized: React.FC = () => {
                   })}
                 </div>
 
-                {/* Custom Specification */}
-                <div className="border-t border-gray-200 pt-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-                    <Plus size={16} className="text-gray-600" />
-                    Custom
-                  </h3>
+                {/* Custom Specification - Flat Design */}
+                <div className="border-t-2 border-gray-200 pt-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 bg-purple-100 rounded-lg">
+                      <Plus size={18} className="text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-gray-900">Custom Specifications</h3>
+                      <p className="text-xs text-gray-600">Add your own custom fields</p>
+                    </div>
+                  </div>
                   
                   {showProductCustomInput ? (
-                    <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                      <div className="flex items-center gap-2">
+                    <div className="bg-purple-50 rounded-xl p-4 border-2 border-purple-300">
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
                         <input
                           type="text"
                           value={productCustomAttributeInput}
                           onChange={(e) => setProductCustomAttributeInput(e.target.value)}
-                          placeholder="Enter custom spec name..."
-                          className="flex-1 py-1.5 px-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-xs"
+                          placeholder="Enter custom specification name..."
+                          className="flex-1 py-2.5 px-4 border-2 border-purple-400 rounded-xl focus:border-purple-600 focus:outline-none text-sm font-medium w-full"
                           onKeyPress={(e) => {
                             if (e.key === 'Enter' && productCustomAttributeInput.trim()) {
                               handleProductCustomAttributeSubmit();
@@ -1555,103 +1561,111 @@ const AddProductPageOptimized: React.FC = () => {
                           autoCorrect="off"
                           spellCheck={false}
                         />
-                        <button 
-                          type="button" 
-                          onClick={handleProductCustomAttributeSubmit} 
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
-                        >
-                          Add
-                        </button>
-                        <button 
-                          type="button" 
-                          onClick={cancelProductCustomAttribute} 
-                          className="px-3 py-1.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-xs font-medium"
-                        >
-                          Cancel
-                        </button>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                          <button 
+                            type="button" 
+                            onClick={handleProductCustomAttributeSubmit} 
+                            className="flex-1 sm:flex-none px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-bold"
+                          >
+                            Add
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={cancelProductCustomAttribute} 
+                            className="flex-1 sm:flex-none px-4 py-2.5 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-bold"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
                     <button 
                       type="button" 
                       onClick={() => { setShowProductCustomInput(true); setProductCustomAttributeInput(''); }} 
-                      className="flex items-center gap-2 p-2 bg-white border border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors w-full"
+                      className="group flex items-center justify-center gap-3 p-4 bg-white border-2 border-dashed border-gray-300 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-colors w-full"
                     >
-                      <Plus className="w-4 h-4 text-gray-600" />
-                      <span className="text-xs font-medium text-gray-700">Add Custom</span>
+                      <div className="p-2 bg-purple-100 rounded-lg group-hover:bg-purple-200 transition-colors">
+                        <Plus className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <span className="text-sm font-bold text-gray-700 group-hover:text-purple-600">Add Custom Specification</span>
                     </button>
                   )}
                 </div>
 
-                {/* Current Specifications Summary */}
+                {/* Current Specifications Summary - Flat Cards */}
                 {(() => {
                   const currentSpecs = formData.specification ? JSON.parse(formData.specification) : {};
                   const hasSpecs = Object.keys(currentSpecs).length > 0;
                   
                   return hasSpecs ? (
-                    <div className="border-t border-gray-200 pt-4">
-                      <h3 className="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-                        <Check size={16} className="text-green-600" />
-                        Current
-                        <span className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                          {Object.keys(currentSpecs).length}
-                        </span>
-                      </h3>
+                    <div className="border-t-2 border-gray-200 pt-6">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-green-100 rounded-lg">
+                            <Check size={18} className="text-green-600" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-gray-900">Active Specifications</h3>
+                            <p className="text-xs text-gray-600">
+                              {Object.keys(currentSpecs).length} specification{Object.keys(currentSpecs).length !== 1 ? 's' : ''} configured
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                       
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {Object.entries(currentSpecs).map(([key, value]) => (
-                          <div key={key} className="bg-green-50 border border-green-200 rounded-lg p-2">
-                            <div className="flex items-center justify-between">
+                          <div 
+                            key={key} 
+                            className="group bg-green-50 border-2 border-green-300 rounded-xl p-3 hover:bg-green-100 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs font-medium text-green-800 capitalize truncate">
+                                <div className="text-sm font-bold text-green-900 capitalize truncate mb-1">
                                   {key.replace(/_/g, ' ')}
                                 </div>
-                                <div className="text-xs text-green-600 truncate">
+                                <div className="text-sm text-green-700 font-medium truncate">
                                   {String(value) || 'Not set'}
                                 </div>
                               </div>
                               <button
                                 type="button"
                                 onClick={() => removeAttributeFromProduct(key)}
-                                className="ml-1 text-red-500 hover:text-red-700 flex-shrink-0"
+                                className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-100 rounded-lg flex-shrink-0 transition-colors"
                                 title="Remove specification"
                               >
-                                <X size={12} />
+                                <X size={14} />
                               </button>
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
-                  ) : (
-                    <div className="text-center py-6">
-                      <FileText className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-                      <h3 className="text-sm font-medium text-gray-900 mb-1">No Specifications Added</h3>
-                      <p className="text-gray-500 text-xs">
-                        Click the buttons above to add specifications for this product.
-                      </p>
-                    </div>
-                  );
+                  ) : null;
                 })()}
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
-              <div className="flex justify-between items-center">
-                <div className="text-xs text-gray-600">
-                  {(() => {
-                    const currentSpecs = formData.specification ? JSON.parse(formData.specification) : {};
-                    return Object.keys(currentSpecs).length > 0 
-                      ? `${Object.keys(currentSpecs).length} spec${Object.keys(currentSpecs).length !== 1 ? 's' : ''} added`
-                      : 'No specs added yet';
-                  })()}
+            {/* Flat Footer - Fixed */}
+            <div className="bg-gray-50 px-5 py-4 border-t-2 border-gray-200 flex-shrink-0">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-sm font-medium text-gray-700">
+                    {(() => {
+                      const currentSpecs = formData.specification ? JSON.parse(formData.specification) : {};
+                      return Object.keys(currentSpecs).length > 0 
+                        ? `${Object.keys(currentSpecs).length} specification${Object.keys(currentSpecs).length !== 1 ? 's' : ''} added`
+                        : 'No specifications yet';
+                    })()}
+                  </span>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-3 w-full sm:w-auto">
                   <button
                     type="button"
                     onClick={() => setShowProductSpecificationsModal(false)}
-                    className="px-3 py-1.5 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors text-xs font-medium"
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 transition-colors text-sm font-bold"
                   >
                     Cancel
                   </button>
@@ -1659,11 +1673,11 @@ const AddProductPageOptimized: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setShowProductSpecificationsModal(false);
-                      toast.success('Product specifications saved successfully!');
+                      toast.success('Product specifications saved successfully! 🎉');
                     }}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
+                    className="flex-1 sm:flex-none px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-bold"
                   >
-                    Save
+                    Save Specifications
                   </button>
                 </div>
               </div>

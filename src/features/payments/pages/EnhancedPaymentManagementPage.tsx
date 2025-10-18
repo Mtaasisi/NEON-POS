@@ -23,7 +23,6 @@ import ConfirmationDialog from '../../shared/components/ui/ConfirmationDialog';
 import PaymentTrackingDashboard from '../components/PaymentTrackingDashboard';
 import PurchaseOrderPaymentDashboard from '../components/PurchaseOrderPaymentDashboard';
 import PaymentAccountManagement from '../components/PaymentAccountManagement';
-import PaymentTransactions from '../components/PaymentTransactions';
 import ExpenseManagement from '../components/ExpenseManagement';
 import RecurringExpenseManagement from '../components/RecurringExpenseManagement';
 import { PaymentTrackingService } from '../../lats/payments/PaymentTrackingService';
@@ -34,7 +33,7 @@ import { format } from '../../lats/lib/format';
 
 const EnhancedPaymentManagementPage: React.FC = () => {
   const { currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'tracking' | 'providers' | 'purchase-orders' | 'transactions' | 'history' | 'expenses' | 'recurring'>('tracking');
+  const [activeTab, setActiveTab] = useState<'tracking' | 'providers' | 'purchase-orders' | 'history' | 'expenses' | 'recurring'>('tracking');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Error handling
@@ -59,6 +58,8 @@ const EnhancedPaymentManagementPage: React.FC = () => {
     dateRange: '30',
     source: 'all'
   });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<ComprehensivePaymentTransaction | null>(null);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -179,6 +180,26 @@ const EnhancedPaymentManagementPage: React.FC = () => {
 
   const filteredHistoryTransactions = historyTransactions
     .filter(transaction => {
+      // Search query filter
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const searchableText = [
+          transaction.transactionId,
+          transaction.customerName,
+          transaction.method,
+          transaction.reference,
+          transaction.deviceName,
+          transaction.purchaseOrderNumber,
+          transaction.status,
+          transaction.source,
+          transaction.amount?.toString()
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        if (!searchableText.includes(query)) {
+          return false;
+        }
+      }
+      
       // Status filter
       if (historyFilter.status !== 'all') {
         const normalizedStatus = transaction.status.toLowerCase();
@@ -474,17 +495,6 @@ Reference: ${transaction.reference || 'N/A'}`;
                   Purchase Orders
                 </button>
                 <button
-                  onClick={() => setActiveTab('transactions')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                    activeTab === 'transactions'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <ArrowDownRight size={16} />
-                  Transactions
-                </button>
-                <button
                   onClick={() => setActiveTab('history')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
                     activeTab === 'history'
@@ -493,7 +503,7 @@ Reference: ${transaction.reference || 'N/A'}`;
                   }`}
                 >
                   <History size={16} />
-                  History
+                  Transactions
                 </button>
                 <button
                   onClick={() => setActiveTab('expenses')}
@@ -536,7 +546,7 @@ Reference: ${transaction.reference || 'N/A'}`;
                   console.log('Export data');
                 }}
                 onNavigateToTab={(tab) => {
-                  setActiveTab(tab as 'tracking' | 'providers' | 'purchase-orders' | 'transactions' | 'history');
+                  setActiveTab(tab as 'tracking' | 'providers' | 'purchase-orders' | 'history');
                 }}
               />
             )}
@@ -558,26 +568,6 @@ Reference: ${transaction.reference || 'N/A'}`;
                 }}
               />
             )}
-            {activeTab === 'transactions' && (
-              <PaymentTransactions
-                onViewDetails={(payment) => {
-                  // View details functionality is handled internally
-                  console.log('View transaction details:', payment);
-                }}
-                onRefund={(payment) => {
-                  // Refund functionality can be implemented here
-                  console.log('Refund transaction:', payment);
-                }}
-                onExport={() => {
-                  // Export functionality can be implemented here
-                  console.log('Export transaction data');
-                }}
-                onAccept={(payment) => {
-                  // Accept functionality is handled internally
-                  console.log('Accept transaction:', payment);
-                }}
-              />
-            )}
             {activeTab === 'expenses' && (
               <ExpenseManagement />
             )}
@@ -587,83 +577,195 @@ Reference: ${transaction.reference || 'N/A'}`;
             {activeTab === 'history' && (
               <div>
                 <div className="mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment History</h2>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Transactions</h2>
                   <p className="text-gray-600">Track all payment transactions and their status</p>
                 </div>
 
-                {/* Filters */}
-                <GlassCard className="p-4 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Source
-                      </label>
-                      <select
-                        value={historyFilter.source}
-                        onChange={(e) => setHistoryFilter(prev => ({ ...prev, source: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="all">All Sources</option>
-                        <option value="pos_sale">POS Sales</option>
-                        <option value="device_payment">Device Repairs</option>
-                        <option value="purchase_order">Purchase Orders</option>
-                      </select>
+                {/* Search and Filter Toggle */}
+                <GlassCard className="p-4 mb-4">
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Search Bar */}
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search by transaction ID, customer, amount, reference..."
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Status
-                      </label>
-                      <select
-                        value={historyFilter.status}
-                        onChange={(e) => setHistoryFilter(prev => ({ ...prev, status: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="all">All Status</option>
-                        <option value="pending">Pending</option>
-                        <option value="completed">Completed</option>
-                        <option value="failed">Failed</option>
-                        <option value="cancelled">Cancelled</option>
-                      </select>
+                    {/* Filter Toggle Button */}
+                    <button
+                      onClick={() => setShowFilters(!showFilters)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 ${
+                        showFilters
+                          ? 'bg-blue-500 text-white shadow-md'
+                          : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <Filter className="w-4 h-4" />
+                      Filters
+                      {(historyFilter.status !== 'all' || historyFilter.provider !== 'all' || historyFilter.source !== 'all' || historyFilter.dateRange !== '30') && (
+                        <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                          Active
+                        </span>
+                      )}
+                    </button>
+                  </div>
+                </GlassCard>
+
+                {/* Filters - Collapsible */}
+                {showFilters && (
+                  <GlassCard className="p-5 mb-6">
+                  <div className="space-y-4">
+                    {/* Source Filter */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm font-medium text-gray-600 min-w-[100px]">Source:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: 'all', label: 'All' },
+                          { value: 'pos_sale', label: 'POS Sales' },
+                          { value: 'device_payment', label: 'Device Repairs' },
+                          { value: 'purchase_order', label: 'Purchase Orders' }
+                        ].map(option => (
+                          <button
+                            key={option.value}
+                            onClick={() => setHistoryFilter(prev => ({ ...prev, source: option.value }))}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                              historyFilter.source === option.value
+                                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
+                                : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Payment Method
-                      </label>
-                      <select
-                        value={historyFilter.provider}
-                        onChange={(e) => setHistoryFilter(prev => ({ ...prev, provider: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="all">All Methods</option>
-                        <option value="Cash">Cash</option>
-                        <option value="M-Pesa">M-Pesa</option>
-                        <option value="Tigopesa">Tigopesa</option>
-                        <option value="Airtel Money">Airtel Money</option>
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="Card">Card</option>
-                        <option value="Credit">Credit</option>
-                      </select>
+                    {/* Status Filter */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm font-medium text-gray-600 min-w-[100px]">Status:</span>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={() => setHistoryFilter(prev => ({ ...prev, status: 'all' }))}
+                          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                            historyFilter.status === 'all'
+                              ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                          }`}
+                        >
+                          All
+                        </button>
+                        <button
+                          onClick={() => setHistoryFilter(prev => ({ ...prev, status: 'pending' }))}
+                          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                            historyFilter.status === 'pending'
+                              ? 'bg-yellow-500 text-white shadow-lg shadow-yellow-500/30'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:border-yellow-300 hover:text-yellow-600'
+                          }`}
+                        >
+                          Pending
+                        </button>
+                        <button
+                          onClick={() => setHistoryFilter(prev => ({ ...prev, status: 'completed' }))}
+                          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                            historyFilter.status === 'completed'
+                              ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:border-green-300 hover:text-green-600'
+                          }`}
+                        >
+                          Completed
+                        </button>
+                        <button
+                          onClick={() => setHistoryFilter(prev => ({ ...prev, status: 'failed' }))}
+                          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                            historyFilter.status === 'failed'
+                              ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:border-red-300 hover:text-red-600'
+                          }`}
+                        >
+                          Failed
+                        </button>
+                        <button
+                          onClick={() => setHistoryFilter(prev => ({ ...prev, status: 'cancelled' }))}
+                          className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                            historyFilter.status === 'cancelled'
+                              ? 'bg-gray-500 text-white shadow-lg shadow-gray-500/30'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300 hover:text-gray-600'
+                          }`}
+                        >
+                          Cancelled
+                        </button>
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Date Range
-                      </label>
-                      <select
-                        value={historyFilter.dateRange}
-                        onChange={(e) => setHistoryFilter(prev => ({ ...prev, dateRange: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="7">Last 7 days</option>
-                        <option value="30">Last 30 days</option>
-                        <option value="90">Last 90 days</option>
-                        <option value="365">Last year</option>
-                      </select>
+                    {/* Payment Method Filter */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm font-medium text-gray-600 min-w-[100px]">Payment:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: 'all', label: 'All' },
+                          { value: 'Cash', label: 'Cash' },
+                          { value: 'M-Pesa', label: 'M-Pesa' },
+                          { value: 'Tigopesa', label: 'Tigopesa' },
+                          { value: 'Airtel Money', label: 'Airtel' },
+                          { value: 'Bank Transfer', label: 'Bank' },
+                          { value: 'Card', label: 'Card' },
+                          { value: 'Credit', label: 'Credit' }
+                        ].map(option => (
+                          <button
+                            key={option.value}
+                            onClick={() => setHistoryFilter(prev => ({ ...prev, provider: option.value }))}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                              historyFilter.provider === option.value
+                                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
+                                : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Date Range Filter */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm font-medium text-gray-600 min-w-[100px]">Period:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { value: '7', label: '7 days' },
+                          { value: '30', label: '30 days' },
+                          { value: '90', label: '90 days' },
+                          { value: '365', label: '1 year' }
+                        ].map(option => (
+                          <button
+                            key={option.value}
+                            onClick={() => setHistoryFilter(prev => ({ ...prev, dateRange: option.value }))}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                              historyFilter.dateRange === option.value
+                                ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30'
+                                : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300 hover:text-blue-600'
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </GlassCard>
+                )}
 
                 {/* Transactions List */}
                 <GlassCard className="p-6">

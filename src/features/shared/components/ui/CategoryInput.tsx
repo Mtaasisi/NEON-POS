@@ -86,6 +86,7 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
 
   // Handle category selection
   const handleCategorySelect = (category: Category) => {
+    console.log('🎯 CategoryInput: Selecting category:', category.name, category.id);
     onChange(category.id);
     setSearchQuery(category.name);
     setShowDropdown(false);
@@ -154,10 +155,18 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
       <div key={category.id}>
         <button
           type="button"
-          onClick={() => {
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
             if (hasChildren) {
               handleCategoryExpand(category.id);
             } else {
+              handleCategorySelect(category);
+            }
+          }}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            if (!hasChildren) {
               handleCategorySelect(category);
             }
           }}
@@ -263,7 +272,15 @@ const CategoryInput: React.FC<CategoryInputProps> = ({
                 <button
                   key={category.id}
                   type="button"
-                  onClick={() => handleCategorySelect(category)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleCategorySelect(category);
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    handleCategorySelect(category);
+                  }}
                   className={`w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 focus:outline-none focus:bg-blue-50 ${
                     value === category.id ? 'bg-blue-50 border-blue-200' : ''
                   }`}

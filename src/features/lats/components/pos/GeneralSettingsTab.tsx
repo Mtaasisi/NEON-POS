@@ -58,7 +58,41 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
       ...prev,
       [key]: value
     }));
+    
+    // Apply font size immediately when changed
+    if (key === 'font_size') {
+      applyFontSize(value);
+    }
   };
+
+  // Function to apply font size to the document
+  const applyFontSize = (size: 'tiny' | 'extra-small' | 'small' | 'medium' | 'large') => {
+    const root = document.documentElement;
+    switch (size) {
+      case 'tiny':
+        root.style.fontSize = '11px'; // Polished: More readable than 10px
+        break;
+      case 'extra-small':
+        root.style.fontSize = '12px';
+        break;
+      case 'small':
+        root.style.fontSize = '14px';
+        break;
+      case 'medium':
+        root.style.fontSize = '16px';
+        break;
+      case 'large':
+        root.style.fontSize = '18px';
+        break;
+    }
+  };
+
+  // Apply font size on component mount
+  React.useEffect(() => {
+    if (settings.font_size) {
+      applyFontSize(settings.font_size);
+    }
+  }, [settings.font_size]);
 
   // Handle logo file selection
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,6 +344,19 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
               { value: '24', label: '24-hour' }
             ]}
           />
+          
+          <Select
+            label="Font Size"
+            value={settings.font_size}
+            onChange={(value) => handleSettingChange('font_size', value)}
+            options={[
+              { value: 'tiny', label: 'Tiny (11px) - Ultra Compact ✨' },
+              { value: 'extra-small', label: 'Extra Small (12px) - Very Compact' },
+              { value: 'small', label: 'Small (14px) - Compact' },
+              { value: 'medium', label: 'Medium (16px) - Default ⭐' },
+              { value: 'large', label: 'Large (18px) - Comfortable' }
+            ]}
+          />
         </div>
       </SettingsSection>
 
@@ -343,15 +390,56 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
             checked={settings.show_barcodes}
             onChange={(checked) => handleSettingChange('show_barcodes', checked)}
           />
+        </div>
+        
+        {/* Product Grid Layout */}
+        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start gap-3 mb-4">
+            <Eye className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-medium text-blue-900 mb-1">Product Grid Display</h4>
+              <p className="text-sm text-blue-700 mb-4">
+                Choose how many products to display in the POS grid. More products = more scrolling but see everything at once.
+              </p>
+            </div>
+          </div>
           
-          <NumberInput
-            label="Products Per Page"
-            value={settings.products_per_page}
-            onChange={(value) => handleSettingChange('products_per_page', value)}
-            min={10}
-            max={100}
-            step={5}
-          />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select
+              label="Products Per Page (Quick Select)"
+              value={settings.products_per_page.toString()}
+              onChange={(value) => handleSettingChange('products_per_page', parseInt(value))}
+              options={[
+                { value: '12', label: '12 Products - Minimal (3x4 grid)' },
+                { value: '16', label: '16 Products - Compact (4x4 grid)' },
+                { value: '20', label: '20 Products - Default ⭐ (4x5 grid)' },
+                { value: '24', label: '24 Products - More Items (4x6 grid)' },
+                { value: '30', label: '30 Products - Dense (5x6 grid)' },
+                { value: '40', label: '40 Products - Maximum (5x8 grid)' },
+                { value: '50', label: '50 Products - Power User (5x10 grid)' },
+                { value: '100', label: '100 Products - Show All 📋' }
+              ]}
+            />
+            
+            <NumberInput
+              label="Custom Amount (Advanced)"
+              value={settings.products_per_page}
+              onChange={(value) => handleSettingChange('products_per_page', value)}
+              min={6}
+              max={200}
+              step={1}
+            />
+          </div>
+          
+          <div className="mt-3 text-xs text-blue-600">
+            <strong>💡 Tip:</strong> 
+            <span className="ml-1">
+              Small screen? Use 12-20. Large monitor? Try 30-50. 
+              {settings.products_per_page >= 50 && ' Current: Power user mode! 🚀'}
+              {settings.products_per_page < 20 && ' Current: Comfortable viewing 👀'}
+              {settings.products_per_page >= 20 && settings.products_per_page < 50 && ' Current: Balanced ⚖️'}
+            </span>
+          </div>
         </div>
       </SettingsSection>
 

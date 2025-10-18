@@ -248,10 +248,10 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           .from('lats_spare_part_usage')
           .select(`
             *,
-            lats_spare_parts(name, part_number, cost_price, selling_price)
+            lats_spare_parts!spare_part_id(name, part_number, cost_price, selling_price)
           `)
           .eq('customer_id', customer.id)
-          .order('used_at', { ascending: false });
+          .order('used_at', { ascending: false});
 
         if (!spareError && spareData) {
           setSparePartUsage(spareData);

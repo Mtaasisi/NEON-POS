@@ -27,6 +27,7 @@ interface POSReceiptModalProps {
   onPrint: () => void;
   onSendWhatsApp: () => void;
   onSendSMS: () => void;
+  isTaxEnabled?: boolean;
 }
 
 const POSReceiptModal: React.FC<POSReceiptModalProps> = ({
@@ -36,7 +37,8 @@ const POSReceiptModal: React.FC<POSReceiptModalProps> = ({
   formatMoney,
   onPrint,
   onSendWhatsApp,
-  onSendSMS
+  onSendSMS,
+  isTaxEnabled = true
 }) => {
   const {
     isConnected: isBluetoothConnected,
@@ -132,7 +134,7 @@ const POSReceiptModal: React.FC<POSReceiptModalProps> = ({
               <span className="text-gray-600">Subtotal:</span>
               <span className="font-medium">{formatMoney(receipt.subtotal)}</span>
             </div>
-            {receipt.tax > 0 && (
+            {isTaxEnabled && receipt.tax > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Tax:</span>
                 <span className="font-medium">{formatMoney(receipt.tax)}</span>

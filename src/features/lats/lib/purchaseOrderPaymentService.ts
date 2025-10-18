@@ -334,12 +334,65 @@ class PurchaseOrderPaymentService {
         console.log(`✅ Account balance updated successfully: ${newBalance}`);
       }
 
-      // Create expense record (the database trigger will handle this automatically)
-      // But we log it here for visibility
-      console.log(`📊 Expense will be automatically tracked via database trigger`);
-      console.log(`   - Category: Purchase Orders`);
-      console.log(`   - Amount: ${requiredAmount}`);
-      console.log(`   - Account: ${paymentAccount.name}`);
+      // ✨ CREATE ACCOUNT TRANSACTION FOR SPENDING TRACKING
+      try {
+        console.log(`📊 Creating account transaction for PO payment...`);
+        
+        // Get PO details for description
+        const { data: poData } = await supabase
+          .from('lats_purchase_orders')
+          .select('po_number, supplier_id')
+          .eq('id', data.purchaseOrderId)
+          .single();
+        
+        // Get supplier name
+        let supplierName = 'Unknown Supplier';
+        if (poData?.supplier_id) {
+          const { data: supplierData } = await supabase
+            .from('lats_suppliers')
+            .select('name')
+            .eq('id', poData.supplier_id)
+            .single();
+          if (supplierData) {
+            supplierName = supplierData.name;
+          }
+        }
+        
+        const poReference = poData?.po_number || `PO-${data.purchaseOrderId.substring(0, 8)}`;
+        
+        // Create account transaction record
+        const { error: transactionError } = await supabase
+          .from('account_transactions')
+          .insert({
+            account_id: data.paymentAccountId,
+            transaction_type: 'expense', // This is spending/expense
+            amount: requiredAmount,
+            balance_before: accountBalance,
+            balance_after: newBalance,
+            description: `PO Payment: ${poReference} - ${supplierName}`,
+            reference_number: data.reference || `PO-PAY-${paymentRecord.id.substring(0, 8)}`,
+            related_entity_type: 'purchase_order_payment',
+            related_entity_id: paymentRecord.id,
+            metadata: {
+              purchase_order_id: data.purchaseOrderId,
+              po_reference: poReference,
+              supplier: supplierName,
+              payment_method: data.paymentMethod,
+              account_name: paymentAccount.name
+            },
+            created_by: validUser?.id || '00000000-0000-0000-0000-000000000001',
+            created_at: new Date().toISOString()
+          });
+        
+        if (transactionError) {
+          console.warn('⚠️ Failed to create account transaction:', transactionError);
+        } else {
+          console.log(`✅ Account transaction created - Spending tracked!`);
+        }
+      } catch (transErr) {
+        console.warn('⚠️ Error creating account transaction:', transErr);
+        // Don't fail the payment if transaction tracking fails
+      }
 
       console.log('✅ Purchase order payment created successfully:', paymentRecord);
       return paymentRecord;

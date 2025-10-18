@@ -18,7 +18,8 @@ import {
   FileText,
   Cog,
   Stethoscope,
-  Upload
+  Upload,
+  ArrowRightLeft
 } from 'lucide-react';
 
 interface QuickAction {
@@ -56,7 +57,8 @@ export const useQuickActions = () => {
     FileText,
     Cog,
     Stethoscope,
-    Upload
+    Upload,
+    ArrowRightLeft
   }), []);
 
   // Get icon component by name (memoized)
@@ -128,6 +130,18 @@ export const useQuickActions = () => {
       order: 5, 
       category: 'action',
       requiresPermission: 'customer'
+    },
+    { 
+      id: 'stock-transfers', 
+      name: 'Stock Transfers', 
+      description: 'Transfer inventory between branches', 
+      icon: 'ArrowRightLeft', 
+      path: '/lats/stock-transfers', 
+      color: 'bg-blue-500 hover:bg-blue-600', 
+      isEnabled: true, 
+      order: 6, 
+      category: 'action',
+      requiresPermission: 'admin'
     },
 
     { 

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Search, RefreshCw, Package, Command, QrCode, Filter, X, MoreHorizontal } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Search, Package, QrCode, X, MoreHorizontal, Grid, List } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantProductCard from './VariantProductCard';
+import VariantSelectionModal from './VariantSelectionModal';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../../context/AuthContext';
 import { rbacManager, type UserRole } from '../../lib/rbac';
@@ -15,6 +17,7 @@ interface Product {
   sku: string;
   price: number;
   stockQuantity: number;
+  totalQuantity?: number;
   categoryId: string;
   category?: {
     id: string;
@@ -30,8 +33,8 @@ interface Product {
     updatedAt: string;
     children?: any[];
   };
-  image: string;
-  barcode: string;
+  image?: string;
+  barcode?: string;
   variants?: any[];
 }
 
@@ -101,6 +104,11 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   const canAddProducts = rbacManager.can(userRole, 'products', 'create');
   const { playClickSound } = usePOSClickSounds();
   
+  // Reset to page 1 when productsPerPage changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [productsPerPage, setCurrentPage]);
+  
   // Session-based debug logging to prevent excessive console output
   const [hasLoggedDebug, setHasLoggedDebug] = useState(false);
   
@@ -110,6 +118,14 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   
   // Categories popup state
   const [showCategoriesPopup, setShowCategoriesPopup] = useState(false);
+  
+  // View mode state (grid or list)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Variant selection modal state
+  const [showVariantModal, setShowVariantModal] = useState(false);
+  const [selectedProductForVariants, setSelectedProductForVariants] = useState<any>(null);
+  const [selectedVariant, setSelectedVariant] = useState<any>(null);
   
   // Body scroll lock for categories popup
   useBodyScrollLock(showCategoriesPopup);
@@ -210,9 +226,6 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
     // Category filter
     if (selectedCategory && product.category?.name !== selectedCategory) return false;
     
-    // Brand filter
-    if (selectedBrand && product.brand !== selectedBrand) return false;
-    
     // Get product price and stock from variants or fallback to product level
     const primaryVariant = product.variants?.[0];
     const productPrice = primaryVariant?.sellingPrice || product.price || 0;
@@ -273,8 +286,23 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
-  // Show all products for scrolling instead of pagination
-  const displayProducts = sortedProducts;
+  // Paginate products based on productsPerPage setting
+  const startIndex = (currentPage - 1) * productsPerPage;
+  const endIndex = startIndex + productsPerPage;
+  const displayProducts = sortedProducts.slice(startIndex, endIndex);
+  
+  // Calculate total pages based on filtered products
+  const calculatedTotalPages = Math.ceil(sortedProducts.length / productsPerPage);
+
+  // Handle variant selection from modal
+  const handleVariantSelect = (variant: any) => {
+    if (selectedProductForVariants) {
+      setSelectedVariant(variant);
+      onAddToCart(selectedProductForVariants, variant);
+      setShowVariantModal(false);
+      setSelectedProductForVariants(null);
+    }
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -471,25 +499,233 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                     <QrCode className="w-4 h-4" />
                   </button>
                 </div>
+
+                {/* View Toggle Buttons */}
+                <div className="flex border border-gray-300 rounded-lg overflow-hidden ml-auto">
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setViewMode('grid');
+                    }}
+                    className={`px-3 py-2 text-sm transition-colors ${
+                      viewMode === 'grid'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title="Grid View"
+                  >
+                    <Grid className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setViewMode('list');
+                    }}
+                    className={`px-3 py-2 text-sm transition-colors ${
+                      viewMode === 'list'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                    title="List View"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
 
-        {/* Products Grid - Scrollable */}
+        {/* Products Grid/List - Scrollable */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden pos-products-scroll" style={{ minHeight: 0 }}>
           {displayProducts.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 pb-4">
-              {displayProducts.map((product) => (
-                <VariantProductCard
-                  key={product.id}
-                  product={product}
-                  onAddToCart={onAddToCart}
-                  realTimeStockData={realTimeStockData}
-                />
-              ))}
-            </div>
+            viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 pb-4">
+                {displayProducts.map((product) => (
+                  <VariantProductCard
+                    key={product.id}
+                    product={product as any}
+                    onAddToCart={onAddToCart as any}
+                    realTimeStockData={realTimeStockData}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3 pb-4">
+                {displayProducts.map((product) => {
+                  // Normalize variants data - handle both database formats
+                  const normalizedVariants = product.variants?.map((v: any) => ({
+                    ...v,
+                    id: v.id,
+                    name: v.name || v.variant_name,
+                    sku: v.sku,
+                    barcode: v.barcode,
+                    price: v.price || v.unit_price || v.sellingPrice || 0,
+                    sellingPrice: v.sellingPrice || v.price || v.unit_price || 0,
+                    costPrice: v.costPrice || v.cost_price || 0,
+                    quantity: v.quantity ?? v.stockQuantity ?? v.stock_quantity ?? 0,
+                    stockQuantity: v.stockQuantity ?? v.quantity ?? v.stock_quantity ?? 0,
+                    minStockLevel: v.minStockLevel || v.min_stock_level || v.minQuantity || v.min_quantity || 0,
+                    attributes: v.attributes || {}
+                  }));
+                  
+                  const primaryVariant = normalizedVariants?.[0];
+                  const hasMultipleVariants = normalizedVariants && normalizedVariants.length > 1;
+                  const productPrice = Number(primaryVariant?.sellingPrice || product.price || 0);
+                  
+                  // Get stock from multiple possible sources with proper fallbacks
+                  let productStock = 0;
+                  const realtimeStock = realTimeStockData.get(product.id);
+                  
+                  if (realtimeStock !== undefined && realtimeStock !== null) {
+                    // Use real-time stock data if available
+                    productStock = realtimeStock;
+                  } else if (primaryVariant) {
+                    // Use normalized variant stock
+                    productStock = primaryVariant.stockQuantity || 0;
+                  } else {
+                    // Fallback to product-level stock
+                    productStock = product.stockQuantity ?? product.totalQuantity ?? 0;
+                  }
+                  
+                  const isOutOfStock = productStock <= 0;
+                  const isLowStock = productStock > 0 && productStock <= 10;
+                  
+                  return (
+                    <div 
+                      key={product.id} 
+                      className="group bg-gradient-to-r from-white to-gray-50/30 rounded-xl border border-gray-200/80 hover:border-blue-300 hover:shadow-lg transition-all duration-200 p-4"
+                    >
+                      <div className="flex items-center gap-5">
+                        {/* Product Image with Badge */}
+                        <div className="relative flex-shrink-0">
+                          <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl overflow-hidden shadow-sm ring-2 ring-white group-hover:ring-blue-100 transition-all">
+                            {product.image ? (
+                              <img 
+                                src={product.image} 
+                                alt={product.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+                                <Package className="w-10 h-10 text-blue-300" />
+                              </div>
+                            )}
+                          </div>
+                          {/* Stock Status Badge */}
+                          <div className={`absolute -top-1 -right-1 w-6 h-6 rounded-full border-2 border-white shadow-sm ${
+                            isOutOfStock ? 'bg-red-500' : isLowStock ? 'bg-orange-500' : 'bg-green-500'
+                          }`} />
+                        </div>
+
+                        {/* Product Details */}
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          {/* Product Name */}
+                          <h4 className="font-semibold text-gray-900 text-lg truncate group-hover:text-blue-700 transition-colors">
+                            {product.name}
+                          </h4>
+                          
+                          {/* Meta Information Row */}
+                          <div className="flex items-center gap-4 flex-wrap">
+                            {/* SKU */}
+                            {(primaryVariant?.sku || product.sku) && (
+                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                <div className="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                                <span className="font-mono">{primaryVariant?.sku || product.sku}</span>
+                              </div>
+                            )}
+                            
+                            {/* Variants Badge */}
+                            {normalizedVariants && normalizedVariants.length > 1 && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200/50">
+                                <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                                </svg>
+                                {normalizedVariants.length} Variants
+                              </span>
+                            )}
+                            
+                            {/* Category Badge */}
+                            {product.category?.name && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/50">
+                                {product.category.name}
+                              </span>
+                            )}
+                            
+                            {/* Stock Status with Icon */}
+                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                              isOutOfStock 
+                                ? 'bg-red-50 text-red-700 border border-red-200/50' 
+                                : isLowStock 
+                                ? 'bg-orange-50 text-orange-700 border border-orange-200/50' 
+                                : 'bg-green-50 text-green-700 border border-green-200/50'
+                            }`}>
+                              <div className={`w-1.5 h-1.5 rounded-full ${
+                                isOutOfStock ? 'bg-red-500' : isLowStock ? 'bg-orange-500' : 'bg-green-500'
+                              }`} />
+                              {isOutOfStock ? 'Out of Stock' : `${productStock} units`}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Price and Action */}
+                        <div className="flex-shrink-0 flex items-center gap-6">
+                          {/* Price Display */}
+                          <div className="text-right">
+                            <div className="text-2xl font-bold text-gray-900 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                              TSh {productPrice.toLocaleString()}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">per unit</div>
+                          </div>
+
+                          {/* Add to Cart Button */}
+                          <button
+                            onClick={() => {
+                              playClickSound();
+                              // Create a product object with normalized variants for proper handling
+                              const productWithNormalizedVariants = {
+                                ...product,
+                                variants: normalizedVariants
+                              };
+                              
+                              if (hasMultipleVariants) {
+                                // Open variant selection modal
+                                setSelectedProductForVariants(productWithNormalizedVariants);
+                                setShowVariantModal(true);
+                              } else if (primaryVariant) {
+                                // Add single variant directly to cart
+                                onAddToCart(productWithNormalizedVariants, primaryVariant);
+                              } else {
+                                // Add product without variant
+                                onAddToCart(productWithNormalizedVariants);
+                              }
+                            }}
+                            disabled={isOutOfStock}
+                            className={`
+                              px-6 py-3 rounded-lg font-medium text-sm transition-all duration-200 whitespace-nowrap
+                              ${isOutOfStock
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : hasMultipleVariants
+                                ? 'bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800'
+                                : 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800'
+                              }
+                            `}
+                          >
+                            {isOutOfStock 
+                              ? 'Unavailable' 
+                              : hasMultipleVariants 
+                              ? 'Select Variant' 
+                              : 'Add to Cart'
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
               <Package className="w-16 h-16 mb-4 opacity-50" />
@@ -501,12 +737,92 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
           )}
         </div>
 
-        {/* Product Count Display */}
-        <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200">
-          <div className="text-sm text-gray-500 text-center">
-            Showing {displayProducts.length} products
+        {/* Pagination Controls */}
+        {calculatedTotalPages > 1 && (
+          <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Showing {startIndex + 1}-{Math.min(endIndex, sortedProducts.length)} of {sortedProducts.length} products
+                <span className="ml-2 text-blue-600 font-medium">({productsPerPage} per page)</span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setCurrentPage(Math.max(1, currentPage - 1));
+                  }}
+                  disabled={currentPage <= 1}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage <= 1
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  Previous
+                </button>
+                
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, calculatedTotalPages) }, (_, i) => {
+                    let page;
+                    if (calculatedTotalPages <= 5) {
+                      page = i + 1;
+                    } else if (currentPage <= 3) {
+                      page = i + 1;
+                    } else if (currentPage >= calculatedTotalPages - 2) {
+                      page = calculatedTotalPages - 4 + i;
+                    } else {
+                      page = currentPage - 2 + i;
+                    }
+                    
+                    const isActive = page === currentPage;
+                    
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => {
+                          playClickSound();
+                          setCurrentPage(page);
+                        }}
+                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+                </div>
+                
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setCurrentPage(Math.min(calculatedTotalPages, currentPage + 1));
+                  }}
+                  disabled={currentPage >= calculatedTotalPages}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    currentPage >= calculatedTotalPages
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+        
+        {/* Product Count Display */}
+        {calculatedTotalPages <= 1 && (
+          <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200">
+            <div className="text-sm text-gray-500 text-center">
+              Showing {displayProducts.length} products ({productsPerPage} per page)
+            </div>
+          </div>
+        )}
       </GlassCard>
 
       {/* Categories Popup Modal */}
@@ -590,6 +906,22 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Variant Selection Modal */}
+      {showVariantModal && selectedProductForVariants && createPortal(
+        <VariantSelectionModal
+          isOpen={showVariantModal}
+          onClose={() => {
+            setShowVariantModal(false);
+            setSelectedProductForVariants(null);
+            setSelectedVariant(null);
+          }}
+          product={selectedProductForVariants}
+          onSelectVariant={handleVariantSelect}
+          selectedVariant={selectedVariant}
+        />,
+        document.body
       )}
     </div>
   );

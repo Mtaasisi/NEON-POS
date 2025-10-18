@@ -331,7 +331,7 @@ export const getCategoriesWithDeviceCount = async (): Promise<(Category & { devi
       .from('lats_categories')
       .select(`
         *,
-        devices:lats_products(count)
+        devices:lats_products!category_id(count)
       `)
       .order('name');
 

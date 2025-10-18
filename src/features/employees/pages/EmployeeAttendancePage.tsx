@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import EmployeeAttendanceCard from '../components/EmployeeAttendanceCard';
 import { 
   Clock, Calendar, TrendingUp, Activity, 
-  CheckCircle, AlertTriangle, CalendarDays, BarChart3, AlertCircle
+  CheckCircle, AlertTriangle, CalendarDays, BarChart3, AlertCircle, Settings
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { mainOffice } from '../config/officeConfig';
@@ -214,19 +212,19 @@ const EmployeeAttendancePage: React.FC = () => {
             <p className="text-gray-600 mt-1">Manage your daily check-ins and view history</p>
           </div>
         </div>
-        <GlassCard className="p-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Attendance</h3>
             <p className="text-gray-600 mb-6 max-w-md">{error}</p>
-            <GlassButton
+            <button
               onClick={() => window.location.reload()}
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              className="px-5 py-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium transition-colors text-sm"
             >
               Try Again
-            </GlassButton>
+            </button>
           </div>
-        </GlassCard>
+        </div>
       </div>
     );
   }
@@ -237,7 +235,7 @@ const EmployeeAttendancePage: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
+      {/* Header - Minimal Flat */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div className="flex items-center gap-4">
           <BackButton to="/dashboard" />
@@ -246,16 +244,29 @@ const EmployeeAttendancePage: React.FC = () => {
             <p className="text-gray-600 mt-1">Manage your daily check-ins and view history</p>
           </div>
         </div>
+        
+        {/* Admin/Manager Actions - Minimal */}
+        {currentUser?.role === 'admin' || currentUser?.role === 'manager' ? (
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/employees/attendance-management')}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors text-sm"
+            >
+              <Settings size={18} />
+              Attendance Setup
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200">
+      {/* Tab Navigation - Minimal Flat */}
+      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
         <button
           onClick={() => setActiveTab('today')}
-          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+          className={`px-4 py-2 font-medium text-sm rounded-md transition-colors ${
             activeTab === 'today'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -265,10 +276,10 @@ const EmployeeAttendancePage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+          className={`px-4 py-2 font-medium text-sm rounded-md transition-colors ${
             activeTab === 'history'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -278,10 +289,10 @@ const EmployeeAttendancePage: React.FC = () => {
         </button>
         <button
           onClick={() => setActiveTab('stats')}
-          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+          className={`px-4 py-2 font-medium text-sm rounded-md transition-colors ${
             activeTab === 'stats'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -293,7 +304,7 @@ const EmployeeAttendancePage: React.FC = () => {
 
       {/* Attendance Settings Info */}
       {activeTab === 'today' && !attendanceSettings.enabled && (
-        <GlassCard className="p-4 bg-yellow-50 border-yellow-200">
+        <div className="bg-yellow-50 rounded-lg border border-yellow-200 p-4">
           <div className="flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-yellow-600" />
             <div>
@@ -301,12 +312,12 @@ const EmployeeAttendancePage: React.FC = () => {
               <p className="text-sm text-yellow-700">Contact administrator to enable attendance tracking.</p>
             </div>
           </div>
-        </GlassCard>
+        </div>
       )}
 
       {/* Verification Methods Info */}
       {activeTab === 'today' && attendanceSettings.enabled && (
-        <GlassCard className="p-4 bg-blue-50 border-blue-200">
+        <div className="bg-blue-50 rounded-lg border border-blue-200 p-4">
           <div className="flex items-center gap-3 mb-2">
             <Clock className="w-5 h-5 text-blue-600" />
             <p className="font-medium text-blue-900">Active Verification Methods</p>
@@ -333,12 +344,12 @@ const EmployeeAttendancePage: React.FC = () => {
               </span>
             )}
           </div>
-        </GlassCard>
+        </div>
       )}
 
-      {/* Today's Attendance */}
+      {/* Today's Attendance - Minimal */}
       {activeTab === 'today' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <EmployeeAttendanceCard
             employeeId={currentEmployeeId || ''}
             employeeName={currentEmployeeName || 'Loading...'}
@@ -348,13 +359,13 @@ const EmployeeAttendancePage: React.FC = () => {
             officeNetworks={mainOffice.networks}
           />
           
-          <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Summary</h3>
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-4">Today's Summary</h3>
             {todayRecord ? (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Status:</span>
-                  <span className={`font-medium capitalize ${
+                  <span className="text-sm text-gray-600">Status:</span>
+                  <span className={`text-sm font-medium capitalize ${
                     todayRecord.status === 'present' ? 'text-green-600' :
                     todayRecord.status === 'late' ? 'text-yellow-600' :
                     todayRecord.status === 'absent' ? 'text-red-600' :
@@ -364,22 +375,22 @@ const EmployeeAttendancePage: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Check In:</span>
-                  <span className="font-mono font-medium">
+                  <span className="text-sm text-gray-600">Check In:</span>
+                  <span className="text-sm font-mono font-medium">
                     {todayRecord.checkIn || 'Not checked in'}
                   </span>
                 </div>
                 {todayRecord.checkOut && (
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-gray-600">Check Out:</span>
-                    <span className="font-mono font-medium">
+                    <span className="text-sm text-gray-600">Check Out:</span>
+                    <span className="text-sm font-mono font-medium">
                       {todayRecord.checkOut}
                     </span>
                   </div>
                 )}
                 <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <span className="text-gray-600">Hours Worked:</span>
-                  <span className="font-medium">
+                  <span className="text-sm text-gray-600">Hours Worked:</span>
+                  <span className="text-sm font-medium">
                     {calculateTodayHours(todayRecord).toFixed(1)} hours
                   </span>
                 </div>
@@ -391,14 +402,14 @@ const EmployeeAttendancePage: React.FC = () => {
                 <p className="text-xs mt-1">Please check in to start tracking</p>
               </div>
             )}
-          </GlassCard>
+          </div>
         </div>
       )}
 
-      {/* Attendance History */}
+      {/* Attendance History - Minimal */}
       {activeTab === 'history' && (
-        <GlassCard className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Attendance History</h3>
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <h3 className="text-base font-semibold text-gray-900 mb-4">Attendance History</h3>
           {attendanceHistory.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full">
@@ -471,66 +482,66 @@ const EmployeeAttendancePage: React.FC = () => {
               <p className="text-xs mt-1">Check in today to start tracking your attendance!</p>
             </div>
           )}
-        </GlassCard>
+        </div>
       )}
 
-      {/* Statistics */}
+      {/* Statistics - Minimal Flat */}
       {activeTab === 'stats' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
-              <div className="flex items-center justify-between">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+              <div className="flex items-center gap-3">
+                <CalendarDays className="w-7 h-7 text-blue-600 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-blue-600">Total Days</p>
-                  <p className="text-2xl font-bold text-blue-900">{stats.totalDays}</p>
+                  <p className="text-xs text-gray-600 mb-1">Total Days</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalDays}</p>
                 </div>
-                <CalendarDays className="w-8 h-8 text-blue-600" />
               </div>
-            </GlassCard>
+            </div>
             
-            <GlassCard className="bg-gradient-to-br from-green-50 to-green-100">
-              <div className="flex items-center justify-between">
+            <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-7 h-7 text-green-600 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-green-600">Present Days</p>
-                  <p className="text-2xl font-bold text-green-900">{stats.presentDays}</p>
+                  <p className="text-xs text-gray-600 mb-1">Present Days</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.presentDays}</p>
                 </div>
-                <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
-            </GlassCard>
+            </div>
             
-            <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
-              <div className="flex items-center justify-between">
+            <div className="bg-purple-50 rounded-lg p-5 hover:bg-purple-100 transition-colors">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-7 h-7 text-purple-600 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-purple-600">Attendance Rate</p>
-                  <p className="text-2xl font-bold text-purple-900">
+                  <p className="text-xs text-gray-600 mb-1">Attendance Rate</p>
+                  <p className="text-2xl font-bold text-gray-900">
                     {(() => {
                   const formatted = stats.attendanceRate.toFixed(1);
                   return formatted.replace(/\.0$/, '');
                 })()}%
                   </p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-purple-600" />
               </div>
-            </GlassCard>
+            </div>
             
-            <GlassCard className="bg-gradient-to-br from-orange-50 to-orange-100">
-              <div className="flex items-center justify-between">
+            <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
+              <div className="flex items-center gap-3">
+                <Activity className="w-7 h-7 text-orange-600 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-orange-600">Avg. Hours</p>
-                  <p className="text-2xl font-bold text-orange-900">
+                  <p className="text-xs text-gray-600 mb-1">Avg. Hours</p>
+                  <p className="text-2xl font-bold text-gray-900">
                     {(() => {
                   const formatted = stats.avgHours.toFixed(1);
                   return formatted.replace(/\.0$/, '');
                 })()}h
                   </p>
                 </div>
-                <Activity className="w-8 h-8 text-orange-600" />
               </div>
-            </GlassCard>
+            </div>
           </div>
 
-          <GlassCard className="p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-4">
               Monthly Overview - {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
             </h3>
             <div className="grid grid-cols-7 gap-2">
@@ -583,7 +594,7 @@ const EmployeeAttendancePage: React.FC = () => {
                 <span>Today</span>
               </div>
             </div>
-          </GlassCard>
+          </div>
         </div>
       )}
     </div>

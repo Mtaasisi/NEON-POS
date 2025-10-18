@@ -126,190 +126,83 @@ const AutoLocationVerification: React.FC<AutoLocationVerificationProps> = ({
   }, []);
 
   return (
-    <GlassCard className="p-6">
-      <div className="text-center space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-center gap-3">
-          <MapPin className="w-8 h-8 text-blue-600" />
-          <h3 className="text-xl font-semibold text-gray-900">Auto Office Detection</h3>
+    <div className="space-y-4">
+      {/* Loading State */}
+      {isLoading && (
+        <div className="text-center py-6">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
+          <p className="text-gray-600">Detecting office...</p>
         </div>
-        
-        <p className="text-gray-600">
-          We're automatically detecting which office you're at using your GPS location.
-        </p>
+      )}
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-3">
-              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
-              <span className="text-gray-700">Detecting nearest office...</span>
-            </div>
-            <div className="text-sm text-gray-500">
-              Getting your location and finding the closest office
-            </div>
+      {/* Error State */}
+      {error && !isLoading && !showManualSelection && (
+        <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-2 text-red-600">
+            <AlertTriangle className="w-5 h-5" />
+            <span className="font-medium">Too Far Away</span>
           </div>
-        )}
-
-        {/* Error State */}
-        {error && !isLoading && !showManualSelection && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-3 text-red-600">
-              <AlertTriangle className="w-6 h-6" />
-              <span className="font-medium">Detection Failed</span>
-            </div>
-            <p className="text-red-600 text-sm">{error}</p>
-            <div className="flex gap-3">
-              <GlassButton
-                onClick={detectOffice}
-                className="flex-1 bg-blue-600 text-white hover:bg-blue-700"
-              >
-                <Compass className="w-4 h-4 mr-2" />
-                Try Again
-              </GlassButton>
-              <GlassButton
-                onClick={() => setShowManualSelection(true)}
-                className="flex-1 bg-gray-600 text-white hover:bg-gray-700"
-              >
-                <MapPin className="w-4 h-4 mr-2" />
-                Select Manually
-              </GlassButton>
-            </div>
-          </div>
-        )}
-
-        {/* Manual Office Selection */}
-        {showManualSelection && !isLoading && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-3 text-blue-600">
-              <MapPin className="w-6 h-6" />
-              <span className="font-medium">Select Your Office</span>
-            </div>
-            <p className="text-gray-600 text-sm">
-              Choose the office location where you're currently working
-            </p>
-            <div className="space-y-2">
-              {getAllOffices().map((office, index) => (
-                <div
-                  key={index}
-                  onClick={() => handleManualOfficeSelection(office)}
-                  className="p-4 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="text-left">
-                      <h4 className="font-medium text-gray-900">{office.name}</h4>
-                      <p className="text-sm text-gray-600">{office.address}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {office.networks.length} WiFi network(s) • {office.radius}m check-in radius
-                      </p>
-                    </div>
-                    <MapPin className="w-5 h-5 text-blue-600" />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <GlassButton
-              onClick={() => setShowManualSelection(false)}
-              variant="ghost"
-              className="text-gray-600"
+          <p className="text-red-600 text-sm">{error}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={detectOffice}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
             >
-              <Compass className="w-4 h-4 mr-2" />
-              Back to Auto-Detect
-            </GlassButton>
+              Try Again
+            </button>
+            <button
+              onClick={() => setShowManualSelection(true)}
+              className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
+            >
+              Select Manually
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Success State */}
-        {detectedOffice && isWithinRange && !isLoading && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-3 text-green-600">
-              <CheckCircle className="w-6 h-6" />
-              <span className="font-medium">Office Detected!</span>
-            </div>
-            
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h4 className="font-medium text-green-800 mb-2">{detectedOffice.name}</h4>
-              <div className="space-y-1 text-sm text-green-700">
-                <p><strong>Address:</strong> {detectedOffice.address}</p>
-                <p><strong>Distance:</strong> {Math.round(distance)}m away</p>
-                <p><strong>Check-in radius:</strong> {detectedOffice.radius}m</p>
-                <p><strong>WiFi networks:</strong> {detectedOffice.networks.length} configured</p>
-              </div>
-            </div>
-
-            <div className="text-sm text-gray-600">
-              ✅ You're within the check-in range for this office
-            </div>
+      {/* Manual Office Selection */}
+      {showManualSelection && !isLoading && (
+        <div className="space-y-3">
+          <h4 className="text-center text-gray-900 font-medium">Select Your Office</h4>
+          <div className="space-y-2">
+            {getAllOffices().map((office, index) => (
+              <button
+                key={index}
+                onClick={() => handleManualOfficeSelection(office)}
+                className="w-full p-3 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all"
+              >
+                <div className="font-medium text-gray-900">{office.name}</div>
+                <div className="text-sm text-gray-600">{office.address}</div>
+              </button>
+            ))}
           </div>
-        )}
+          <button
+            onClick={() => setShowManualSelection(false)}
+            className="w-full py-2 text-gray-600 text-sm hover:text-gray-800"
+          >
+            ← Back to Auto-Detect
+          </button>
+        </div>
+      )}
 
-        {/* Out of Range State */}
-        {detectedOffice && !isWithinRange && !isLoading && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-center gap-3 text-orange-600">
-              <AlertTriangle className="w-6 h-6" />
-              <span className="font-medium">Too Far Away</span>
-            </div>
-            
-            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-              <h4 className="font-medium text-orange-800 mb-2">{detectedOffice.name}</h4>
-              <div className="space-y-1 text-sm text-orange-700">
-                <p><strong>Address:</strong> {detectedOffice.address}</p>
-                <p><strong>Your distance:</strong> {Math.round(distance)}m away</p>
-                <p><strong>Required:</strong> Within {detectedOffice.radius}m</p>
-              </div>
-            </div>
+      {/* Success State */}
+      {detectedOffice && isWithinRange && !isLoading && (
+        <div className="text-center py-4">
+          <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-3" />
+          <h4 className="font-medium text-gray-900 mb-1">{detectedOffice.name}</h4>
+          <p className="text-sm text-green-600">✓ Within range ({Math.round(distance)}m away)</p>
+        </div>
+      )}
 
-            <div className="text-sm text-orange-600">
-              ⚠️ Please move closer to the office to check in
-            </div>
-          </div>
-        )}
-
-        {/* Location Info */}
-        {currentLocation && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-medium text-blue-800 mb-2">Your Location</h4>
-            <div className="space-y-1 text-sm text-blue-700">
-              <p><strong>Coordinates:</strong> {currentLocation.lat.toFixed(6)}, {currentLocation.lng.toFixed(6)}</p>
-              <p><strong>GPS Accuracy:</strong> ±{Math.round(currentLocation.accuracy)}m</p>
-            </div>
-          </div>
-        )}
-
-        {/* Office Networks Info */}
-        {detectedOffice && detectedOffice.networks.length > 0 && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-            <h4 className="font-medium text-purple-800 mb-2 flex items-center gap-2">
-              <Wifi className="w-4 h-4" />
-              Available WiFi Networks
-            </h4>
-            <div className="space-y-1 text-sm text-purple-700">
-              {detectedOffice.networks.map((network: any, index: number) => (
-                <p key={index}>
-                  <strong>{network.ssid}</strong>
-                  {network.description && ` - ${network.description}`}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Instructions */}
-        {!showManualSelection && (
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <h4 className="font-medium text-gray-800 mb-2">How It Works</h4>
-            <div className="space-y-1 text-sm text-gray-600">
-              <p>📍 Uses your GPS location to find the nearest office</p>
-              <p>📏 Checks if you're within the office's check-in radius</p>
-              <p>📶 Shows available WiFi networks for that office</p>
-              <p>✅ Automatically proceeds if you're in range</p>
-              <p>🏢 Can't detect? Select your office manually instead</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </GlassCard>
+      {/* Out of Range State */}
+      {detectedOffice && !isWithinRange && !isLoading && (
+        <div className="text-center py-4">
+          <AlertTriangle className="w-12 h-12 text-orange-600 mx-auto mb-3" />
+          <h4 className="font-medium text-gray-900 mb-1">{detectedOffice.name}</h4>
+          <p className="text-sm text-orange-600">⚠️ {Math.round(distance)}m away (need to be within {detectedOffice.radius}m)</p>
+        </div>
+      )}
+    </div>
   );
 };
 

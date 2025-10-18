@@ -5,16 +5,17 @@ import SearchBar from '../../../shared/components/ui/SearchBar';
 import GlassSelect from '../../../shared/components/ui/GlassSelect';
 import VariantProductCard from '../pos/VariantProductCard';
 import { SafeImage } from '../../../../components/SafeImage';
-import SimpleImageDisplay from '../../../../components/SimpleImageDisplay';
 import { ProductImage } from '../../../../lib/robustImageService';
 import { LabelPrintingModal } from '../../../../components/LabelPrintingModal';
 import GeneralProductDetailModal from '../product/GeneralProductDetailModal';
 import { 
   Package, Grid, List, Star, CheckCircle, XCircle, 
   Download, Edit, Eye, Trash2, DollarSign, TrendingUp,
-  AlertTriangle, Calculator, Printer
+  AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy, Columns
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { validateProductsBatch } from '../../lib/productUtils';
+import { toast } from 'react-hot-toast';
 
 interface EnhancedInventoryTabProps {
   products: any[];
@@ -102,11 +103,51 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   navigate,
   deleteProduct
 }) => {
+  // Format money in short form (e.g., 1.2M, 500K, 1.5B)
+  const formatShortMoney = (amount: number): string => {
+    if (amount >= 1000000000) {
+      return `TSh ${(amount / 1000000000).toFixed(1)}B`;
+    } else if (amount >= 1000000) {
+      return `TSh ${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `TSh ${(amount / 1000).toFixed(1)}K`;
+    } else {
+      return `TSh ${amount.toFixed(0)}`;
+    }
+  };
+
   const [showLabelModal, setShowLabelModal] = useState(false);
   const [selectedProductForLabel, setSelectedProductForLabel] = useState<any>(null);
   const [showProductDetailModal, setShowProductDetailModal] = useState(false);
   const [selectedProductForDetail, setSelectedProductForDetail] = useState<any>(null);
   const [bulkActionProgress, setBulkActionProgress] = useState({ current: 0, total: 0, action: '' });
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [selectedSKU, setSelectedSKU] = useState<string>('');
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [showStockTransferModal, setShowStockTransferModal] = useState(false);
+  const [selectedProductForTransfer, setSelectedProductForTransfer] = useState<any>(null);
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+  
+  // Column visibility configuration
+  const availableColumns = [
+    { id: 'product', label: 'Product', required: true },
+    { id: 'sku', label: 'SKU', required: false },
+    { id: 'category', label: 'Category', required: false },
+    { id: 'supplier', label: 'Supplier', required: false },
+    { id: 'shelf', label: 'Shelf', required: false },
+    { id: 'price', label: 'Price', required: false },
+    { id: 'stock', label: 'Stock', required: false },
+    { id: 'actions', label: 'Actions', required: true }
+  ];
+  
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('inventory-visible-columns');
+      return saved ? JSON.parse(saved) : availableColumns.map(col => col.id);
+    } catch {
+      return availableColumns.map(col => col.id);
+    }
+  });
 
   // Improved debug logging for development only - only log once per session
   const [hasLoggedNoProducts, setHasLoggedNoProducts] = useState(false);
@@ -156,9 +197,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   const [gridColumns, setGridColumns] = React.useState(() => {
     try {
       const saved = localStorage.getItem('inventory-grid-columns');
-      return saved ? parseInt(saved) : 6;
+      return saved ? parseInt(saved) : 4;
     } catch {
-      return 6;
+      return 4;
     }
   });
 
@@ -170,6 +211,85 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
       console.error('Failed to save grid columns preference:', error);
     }
   }, [gridColumns]);
+
+  // Save visible columns to localStorage
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('inventory-visible-columns', JSON.stringify(visibleColumns));
+    } catch (error) {
+      console.error('Failed to save visible columns preference:', error);
+    }
+  }, [visibleColumns]);
+
+  // Toggle column visibility
+  const toggleColumnVisibility = (columnId: string) => {
+    const column = availableColumns.find(col => col.id === columnId);
+    if (column?.required) return; // Don't toggle required columns
+    
+    setVisibleColumns(prev => 
+      prev.includes(columnId) 
+        ? prev.filter(id => id !== columnId)
+        : [...prev, columnId]
+    );
+  };
+
+  // Handler for duplicating a product
+  const handleDuplicateProduct = async (product: any) => {
+    try {
+      // Navigate to add product page with duplicate data
+      const duplicateData = {
+        ...product,
+        name: `${product.name} (Copy)`,
+        id: undefined,
+        variants: product.variants?.map((v: any, index: number) => ({
+          ...v,
+          id: undefined,
+          sku: `${v.sku}-COPY-${Date.now()}-${index}`,
+          name: `${v.name || v.attributes?.color || 'Variant'} (Copy)`
+        }))
+      };
+      
+      // Store in sessionStorage and navigate
+      sessionStorage.setItem('duplicateProductData', JSON.stringify(duplicateData));
+      navigate('/lats/add-product?duplicate=true');
+      toast.success('Opening duplicate product form...');
+    } catch (error) {
+      console.error('Failed to duplicate product:', error);
+      toast.error('Failed to duplicate product');
+    }
+  };
+
+  // Handler for stock transfer
+  const handleStockTransfer = (product: any) => {
+    try {
+      // Prepare product data for pre-selection in stock transfer modal
+      const transferProductData = {
+        productId: product.id,
+        productName: product.name,
+        variants: product.variants?.map((v: any) => ({
+          id: v.id,
+          variant_name: v.name || v.attributes?.color || 'Default',
+          sku: v.sku,
+          quantity: v.quantity || 0,
+          unit_price: v.costPrice || 0,
+          product_id: product.id,
+          product: {
+            name: product.name
+          }
+        })) || []
+      };
+      
+      // Store in sessionStorage for the stock transfer page to pick up
+      sessionStorage.setItem('preselectedTransferProduct', JSON.stringify(transferProductData));
+      
+      // Navigate to stock transfer page - it will auto-open modal with product
+      navigate('/lats/stock-transfers?autoOpen=true');
+      toast.success(`Product "${product.name}" ready for transfer`);
+    } catch (error) {
+      console.error('Failed to prepare stock transfer:', error);
+      toast.error('Failed to prepare stock transfer');
+    }
+  };
 
   // Unified filter component function
   const renderFilterSelect = (
@@ -197,38 +317,28 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Comprehensive Statistics Dashboard */}
-      <div className="grid grid-cols-5 gap-4 overflow-x-auto">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-600">Total Products</p>
-              <p className="text-2xl font-bold text-blue-900">{metrics.totalItems}</p>
+              <p className="text-2xl font-bold text-blue-900">{metrics.totalItems} <span className="text-sm font-normal text-gray-600">({metrics.activeProducts} active)</span></p>
             </div>
-            <div className="p-3 bg-blue-50/20 rounded-full">
-              <Package className="w-6 h-6 text-blue-600" />
+            <div className="p-2 bg-blue-50/20 rounded-full">
+              <Package className="w-5 h-5 text-blue-600" />
             </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">
-              {metrics.activeProducts} active, {metrics.totalItems - metrics.activeProducts} inactive
-            </span>
           </div>
         </GlassCard>
         
         <GlassCard className="bg-gradient-to-br from-orange-50 to-orange-100">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-orange-600">Stock Status</p>
-              <p className="text-2xl font-bold text-orange-900">{metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems}</p>
+              <p className="text-sm font-medium text-orange-600">In Stock</p>
+              <p className="text-2xl font-bold text-orange-900">{metrics.totalItems - metrics.lowStockItems - metrics.outOfStockItems} <span className="text-sm font-normal text-gray-600">({metrics.lowStockItems} low, {metrics.outOfStockItems} out)</span></p>
             </div>
-            <div className="p-3 bg-orange-50/20 rounded-full">
-              <CheckCircle className="w-6 h-6 text-orange-600" />
+            <div className="p-2 bg-orange-50/20 rounded-full">
+              <CheckCircle className="w-5 h-5 text-orange-600" />
             </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">
-              {metrics.lowStockItems} low, {metrics.outOfStockItems} out
-            </span>
           </div>
         </GlassCard>
         
@@ -236,14 +346,11 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-red-600">Reorder Alerts</p>
-              <p className="text-2xl font-bold text-red-900">{metrics.reorderAlerts}</p>
+              <p className="text-2xl font-bold text-red-900">{metrics.reorderAlerts} <span className="text-sm font-normal text-gray-600">(Need attention)</span></p>
             </div>
-            <div className="p-3 bg-red-50/20 rounded-full">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
+            <div className="p-2 bg-red-50/20 rounded-full">
+              <AlertTriangle className="w-5 h-5 text-red-600" />
             </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">Need attention</span>
           </div>
         </GlassCard>
         
@@ -251,14 +358,11 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-green-600">Total Value</p>
-              <p className="text-2xl font-bold text-green-900">{formatMoney(metrics.totalValue)}</p>
+              <p className="text-2xl font-bold text-green-900">{formatShortMoney(metrics.totalValue)} <span className="text-sm font-normal text-gray-600">(Cost)</span></p>
             </div>
-            <div className="p-3 bg-green-50/20 rounded-full">
-              <DollarSign className="w-6 h-6 text-green-600" />
+            <div className="p-2 bg-green-50/20 rounded-full">
+              <DollarSign className="w-5 h-5 text-green-600" />
             </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">Cost value</span>
           </div>
         </GlassCard>
         
@@ -266,14 +370,11 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-purple-600">Retail Value</p>
-              <p className="text-2xl font-bold text-purple-900">{formatMoney(metrics.retailValue || 0)}</p>
+              <p className="text-2xl font-bold text-purple-900">{formatShortMoney(metrics.retailValue || 0)} <span className="text-sm font-normal text-gray-600">(Selling)</span></p>
             </div>
-            <div className="p-3 bg-purple-50/20 rounded-full">
-              <TrendingUp className="w-6 h-6 text-purple-600" />
+            <div className="p-2 bg-purple-50/20 rounded-full">
+              <TrendingUp className="w-5 h-5 text-purple-600" />
             </div>
-          </div>
-          <div className="mt-2">
-            <span className="text-sm text-gray-600">Selling value</span>
           </div>
         </GlassCard>
       </div>
@@ -356,6 +457,17 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
               title={`Switch to ${cardVariant === 'detailed' ? 'compact' : 'detailed'} cards`}
             >
               {cardVariant === 'detailed' ? <Package size={16} /> : <Grid size={16} />}
+            </button>
+          )}
+
+          {/* Column Selector (only show in list view) */}
+          {viewMode === 'list' && (
+            <button
+              onClick={() => setShowColumnSelector(true)}
+              className="px-2 py-1.5 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-1"
+              title="Customize columns"
+            >
+              <Columns size={16} />
             </button>
           )}
 
@@ -471,15 +583,30 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
                     />
                   </th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Product</th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">SKU</th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Category</th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Supplier</th>
-                  <th className="text-left py-4 px-4 font-medium text-gray-700">Shelf</th>
-                  <th className="text-right py-4 px-4 font-medium text-gray-700">Price</th>
-                  <th className="text-right py-4 px-4 font-medium text-gray-700">Stock</th>
-                  <th className="text-center py-4 px-4 font-medium text-gray-700">Status</th>
-                  <th className="text-center py-4 px-4 font-medium text-gray-700">Actions</th>
+                  {visibleColumns.includes('product') && (
+                    <th className="text-left py-4 px-4 font-medium text-gray-700">Product</th>
+                  )}
+                  {visibleColumns.includes('sku') && (
+                    <th className="text-left py-4 px-4 font-medium text-gray-700">SKU</th>
+                  )}
+                  {visibleColumns.includes('category') && (
+                    <th className="text-left py-4 px-4 font-medium text-gray-700">Category</th>
+                  )}
+                  {visibleColumns.includes('supplier') && (
+                    <th className="text-left py-4 px-4 font-medium text-gray-700">Supplier</th>
+                  )}
+                  {visibleColumns.includes('shelf') && (
+                    <th className="text-left py-4 px-4 font-medium text-gray-700">Shelf</th>
+                  )}
+                  {visibleColumns.includes('price') && (
+                    <th className="text-right py-4 px-4 font-medium text-gray-700">Price</th>
+                  )}
+                  {visibleColumns.includes('stock') && (
+                    <th className="text-right py-4 px-4 font-medium text-gray-700">Stock</th>
+                  )}
+                  {visibleColumns.includes('actions') && (
+                    <th className="text-center py-4 px-4 font-medium text-gray-700">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -487,14 +614,21 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   const category = categories.find(c => c.id === product.categoryId);
                   const mainVariant = product.variants?.[0];
                   const totalStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) || 0;
-                  const stockStatus = totalStock <= 0 ? 'out-of-stock' : totalStock <= 10 ? 'low-stock' : 'in-stock';
+                  const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
+                  const availableStock = totalStock - reservedStock;
+                  const stockStatus = availableStock <= 0 ? 'out-of-stock' : availableStock <= 10 ? 'low-stock' : 'in-stock';
                   
                   return (
                     <tr 
                       key={product.id} 
-                      className="border-b border-gray-200/30 hover:bg-blue-50 transition-colors"
+                      className="border-b border-gray-100 hover:bg-blue-50 transition-colors cursor-pointer group"
+                      onClick={() => {
+                        setSelectedProductForDetail(product);
+                        setShowProductDetailModal(true);
+                      }}
+                      title="Click to view product details"
                     >
-                      <td className="py-4 px-4">
+                      <td className="py-3 px-4">
                         <input
                           type="checkbox"
                           checked={selectedProducts.includes(product.id)}
@@ -502,112 +636,250 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                           className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
                         />
                       </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center space-x-3">
-                          <SimpleImageDisplay
-                            images={convertToProductImages(product.images)}
-                            productName={product.name}
-                            size="lg"
-                            className="flex-shrink-0"
-                          />
+                      {visibleColumns.includes('product') && (
+                        <td className="py-3 px-4">
+                          <div className="flex items-center space-x-3">
+                            {/* Colored Flat Thumbnail */}
+                            <div className="relative flex-shrink-0">
+                              {product.images && product.images.length > 0 ? (
+                                <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-blue-200 bg-white">
+                                  <img
+                                    src={product.images[0]}
+                                    alt={product.name}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                      e.currentTarget.parentElement!.innerHTML = `
+                                        <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
+                                            <path d="M16.5 9.4 7.55 4.24"></path>
+                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                            <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                                            <line x1="12" x2="12" y1="22" y2="12"></line>
+                                          </svg>
+                                        </div>
+                                      `;
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
+                                  <Package className="w-6 h-6 text-blue-500" strokeWidth={2} />
+                                </div>
+                              )}
+                              {product.isFeatured && (
+                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-white">
+                                  <Star className="w-3 h-3 text-white fill-current" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-gray-900 truncate">{product.name}</p>
+                              {product.description && (
+                                <p className="text-sm text-gray-500 truncate max-w-[300px]">{product.description}</p>
+                              )}
+                              {mainVariant?.sku && (
+                                <p className="text-xs text-gray-400 mt-0.5">SKU: {mainVariant.sku}</p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.includes('sku') && (
+                        <td className="py-3 px-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
+                              setShowQRModal(true);
+                            }}
+                            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
+                            title="View QR Code"
+                          >
+                            <QrCode size={18} />
+                          </button>
+                        </td>
+                      )}
+                      {visibleColumns.includes('category') && (
+                        <td className="py-3 px-4">
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm">
+                            {category?.name || 'Uncategorized'}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes('supplier') && (
+                        <td className="py-3 px-4">
+                          <span className="text-sm text-gray-600">{product.supplier?.name || 'N/A'}</span>
+                        </td>
+                      )}
+                      {visibleColumns.includes('shelf') && (
+                        <td className="py-3 px-4">
+                          <span className="text-sm text-gray-600">
+                            {product.shelfName || product.shelfCode || 'N/A'}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.includes('price') && (
+                        <td className="py-3 px-4">
                           <div>
-                            <p className="font-medium text-gray-900">{product.name}</p>
-                            <p className="text-sm text-gray-600">
-                              {product.description ? `${product.description.substring(0, 50)}...` : 'No description'}
-                            </p>
-                            {product.isFeatured && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                <Star className="w-3 h-3 mr-1" />
-                                Featured
-                              </span>
+                            <p className="font-medium text-gray-900">{formatMoney(mainVariant?.sellingPrice || 0)}</p>
+                            {mainVariant?.costPrice && (
+                              <p className="text-xs text-gray-500">Cost: {formatMoney(mainVariant.costPrice)}</p>
                             )}
                           </div>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="font-mono text-sm text-gray-600">{mainVariant?.sku || product.sku || 'N/A'}</span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="text-sm text-gray-600">{category?.name || 'Uncategorized'}</span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="text-sm text-gray-600">{product.supplier?.name || 'No Supplier'}</span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="text-sm text-gray-600">
-                          {product.shelfName || product.shelfCode || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <span className="font-semibold text-gray-900">{formatMoney(mainVariant?.sellingPrice || 0)}</span>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <div>
-                          <span className="text-sm text-gray-600">{totalStock} units</span>
-                          {product.variants?.[0]?.minQuantity && totalStock <= product.variants[0].minQuantity && (
-                            <div className="text-xs text-red-600">Reorder needed</div>
+                        </td>
+                      )}
+                      {visibleColumns.includes('stock') && (
+                        <td className="py-3 px-4">
+                          <div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                              stockStatus === 'out-of-stock' 
+                                ? 'bg-red-500 text-white' 
+                                : stockStatus === 'low-stock'
+                                ? 'bg-orange-500 text-white'
+                                : 'bg-green-500 text-white'
+                            }`}>
+                              {availableStock} in stock
+                            </span>
+                            {reservedStock > 0 && (
+                              <p className="text-xs text-gray-500 mt-1">{reservedStock} reserved</p>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.includes('actions') && (
+                        <td className="py-3 px-4 text-center">
+                        <div className="relative">
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              setOpenDropdownId(openDropdownId === product.id ? null : product.id);
+                            }}
+                            className="p-2 text-gray-600 hover:text-white hover:bg-blue-500 rounded-lg transition-all duration-200 hover:shadow-md"
+                            title="Actions"
+                          >
+                            <MoreVertical className="w-5 h-5" />
+                          </button>
+                          
+                          {/* Dropdown Menu */}
+                          {openDropdownId === product.id && (
+                            <>
+                              {/* Backdrop to close dropdown */}
+                              <div 
+                                className="fixed inset-0 z-10" 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenDropdownId(null);
+                                }}
+                              />
+                              
+                              {/* Dropdown Content */}
+                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-20 overflow-hidden">
+                                <div className="py-2">
+                                  <button
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      navigate(`/lats/products/${product.id}/edit`);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-3 transition-all duration-200 group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-blue-100 group-hover:bg-blue-500 flex items-center justify-center transition-colors">
+                                      <Edit className="w-4 h-4 text-blue-600 group-hover:text-white" />
+                                    </div>
+                                    <span className="font-medium group-hover:text-blue-600">Edit Product</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      setSelectedProductForDetail(product);
+                                      setShowProductDetailModal(true);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-green-50 flex items-center gap-3 transition-all duration-200 group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-green-100 group-hover:bg-green-500 flex items-center justify-center transition-colors">
+                                      <Eye className="w-4 h-4 text-green-600 group-hover:text-white" />
+                                    </div>
+                                    <span className="font-medium group-hover:text-green-600">View Details</span>
+                                  </button>
+                                  
+                                  <div className="my-1 border-t border-gray-100"></div>
+                                  
+                                  <button
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      setSelectedProductForHistory(product.id);
+                                      setShowStockAdjustModal(true);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-orange-50 flex items-center gap-3 transition-all duration-200 group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-orange-100 group-hover:bg-orange-500 flex items-center justify-center transition-colors">
+                                      <Calculator className="w-4 h-4 text-orange-600 group-hover:text-white" />
+                                    </div>
+                                    <span className="font-medium group-hover:text-orange-600">Adjust Stock</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      setSelectedProductForLabel({
+                                        id: product.id,
+                                        name: product.name,
+                                        sku: product.variants?.[0]?.sku || product.id,
+                                        barcode: product.variants?.[0]?.sku || product.id,
+                                        price: product.variants?.[0]?.sellingPrice || 0,
+                                        size: product.variants?.[0]?.attributes?.size || '',
+                                        color: product.variants?.[0]?.attributes?.color || '',
+                                        brand: product.brand?.name || '',
+                                        category: categories.find(c => c.id === product.categoryId)?.name || ''
+                                      });
+                                      setShowLabelModal(true);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-purple-50 flex items-center gap-3 transition-all duration-200 group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-purple-100 group-hover:bg-purple-500 flex items-center justify-center transition-colors">
+                                      <Printer className="w-4 h-4 text-purple-600 group-hover:text-white" />
+                                    </div>
+                                    <span className="font-medium group-hover:text-purple-600">Print Label</span>
+                                  </button>
+                                  
+                                  <div className="my-1 border-t border-gray-100"></div>
+                                  
+                                  <button
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      handleStockTransfer(product);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-indigo-50 flex items-center gap-3 transition-all duration-200 group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-indigo-100 group-hover:bg-indigo-500 flex items-center justify-center transition-colors">
+                                      <ArrowRightLeft className="w-4 h-4 text-indigo-600 group-hover:text-white" />
+                                    </div>
+                                    <span className="font-medium group-hover:text-indigo-600">Stock Transfer</span>
+                                  </button>
+                                  <button
+                                    onClick={(e) => { 
+                                      e.stopPropagation(); 
+                                      handleDuplicateProduct(product);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-teal-50 flex items-center gap-3 transition-all duration-200 group"
+                                  >
+                                    <div className="w-8 h-8 rounded-lg bg-teal-100 group-hover:bg-teal-500 flex items-center justify-center transition-colors">
+                                      <Copy className="w-4 h-4 text-teal-600 group-hover:text-white" />
+                                    </div>
+                                    <span className="font-medium group-hover:text-teal-600">Duplicate</span>
+                                  </button>
+                                </div>
+                              </div>
+                            </>
                           )}
                         </div>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(stockStatus)}`}>
-                          {stockStatus.replace('-', ' ')}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-center">
-                        <div className="flex items-center justify-center space-x-2">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/lats/products/${product.id}/edit`); }}
-                            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                            title="Edit Product"
-                          >
-                            <Edit className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setSelectedProductForDetail(product);
-                              setShowProductDetailModal(true);
-                            }}
-                            className="p-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded"
-                            title="View Details"
-                          >
-                            <Eye className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setSelectedProductForHistory(product.id);
-                              setShowStockAdjustModal(true);
-                            }}
-                            className="p-2 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded"
-                            title="Adjust Stock"
-                          >
-                            <Calculator className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={(e) => { 
-                              e.stopPropagation(); 
-                              setSelectedProductForLabel({
-                                id: product.id,
-                                name: product.name,
-                                sku: product.variants?.[0]?.sku || product.id,
-                                barcode: product.variants?.[0]?.sku || product.id,
-                                price: product.variants?.[0]?.sellingPrice || 0,
-                                size: product.variants?.[0]?.attributes?.size || '',
-                                color: product.variants?.[0]?.attributes?.color || '',
-                                brand: product.brand?.name || '',
-                                category: categories.find(c => c.id === product.categoryId)?.name || ''
-                              });
-                              setShowLabelModal(true);
-                            }}
-                            className="p-2 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded"
-                            title="Print Label"
-                          >
-                            <Printer className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </td>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -730,7 +1002,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           <div 
             className={`grid gap-3 ${
               cardVariant === 'detailed' 
-                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' 
+                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' 
                 : ''
             }`}
             style={cardVariant === 'default' ? {
@@ -820,6 +1092,123 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
             productModals.openEditModal(product.id);
           }}
         />
+      )}
+
+      {/* QR Code Modal */}
+      {showQRModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowQRModal(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={24} />
+            </button>
+
+            {/* Modal Content */}
+            <div className="text-center">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Product QR Code</h3>
+              
+              {/* QR Code */}
+              <div className="bg-white p-4 rounded-lg border-2 border-gray-200 inline-block mb-4">
+                <QRCodeSVG value={selectedSKU} size={200} level="H" />
+              </div>
+              
+              {/* SKU Text */}
+              <div className="mt-4">
+                <p className="text-sm text-gray-500 mb-1">SKU</p>
+                <p className="font-mono text-lg font-semibold text-gray-900">{selectedSKU}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Column Selector Popup Modal */}
+      {showColumnSelector && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowColumnSelector(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X size={24} />
+            </button>
+
+            {/* Modal Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Columns className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Customize Columns</h3>
+                <p className="text-sm text-gray-500">Choose which columns to display in the table</p>
+              </div>
+            </div>
+
+            {/* Column Options */}
+            <div className="space-y-3 max-h-96 overflow-y-auto">
+              {availableColumns.map((column) => (
+                <label
+                  key={column.id}
+                  className={`flex items-center gap-3 p-4 rounded-lg border transition-all ${
+                    column.required 
+                      ? 'cursor-not-allowed bg-gray-50 border-gray-200' 
+                      : 'cursor-pointer hover:bg-blue-50 border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={visibleColumns.includes(column.id)}
+                    onChange={() => toggleColumnVisibility(column.id)}
+                    disabled={column.required}
+                    className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-900">
+                      {column.label}
+                    </span>
+                    {column.required && (
+                      <span className="text-xs text-gray-500 ml-2">(always visible)</span>
+                    )}
+                  </div>
+                  {column.required && (
+                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  )}
+                </label>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setVisibleColumns(availableColumns.map(col => col.id));
+                  toast.success('All columns enabled');
+                }}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Show All Columns
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowColumnSelector(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setShowColumnSelector(false)}
+                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

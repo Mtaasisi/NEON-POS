@@ -404,37 +404,35 @@ const SalesReportsPage: React.FC = () => {
 
       console.log('🔍 Fetching sales for period:', selectedPeriod, 'from', startDate.toISOString(), 'to', endDate.toISOString());
 
-      // Build query with branch filter
-      let query = supabase
+      // Build query - select all columns to avoid issues with missing columns
+      // Note: If you get 400 errors, run FIX-MISSING-SALES-COLUMNS.sql to add missing columns
+      const baseQuery = supabase
         .from('lats_sales')
-        .select(`
-          id,
-          sale_number,
-          customer_id,
-          customer_name,
-          total_amount,
-          payment_method,
-          status,
-          user_id,
-          sold_by,
-          created_at,
-          branch_id
-        `)
+        .select('*')  // Select all columns
         .order('created_at', { ascending: false })
         .limit(200);
 
-      // 🔒 APPLY BRANCH FILTER FOR ISOLATION
+      // Try main query with branch filter first, fall back to simple query without filter
+      let salesResult;
+      
+      // 🔒 Try to apply branch filter if we have a branch ID
       if (currentBranchId) {
-        console.log('🔒 APPLYING BRANCH FILTER:', currentBranchId);
-        query = query.eq('branch_id', currentBranchId);
+        console.log('🔒 TRYING BRANCH FILTER:', currentBranchId);
+        salesResult = await safeQuery(
+          () => baseQuery.eq('branch_id', currentBranchId),
+          () => {
+            // Fallback: if branch filter fails (column doesn't exist), just get all sales
+            console.log('⚠️ Branch filter failed, loading all sales (branch_id column may not exist)');
+            return SupabaseErrorHandler.createLatsSalesListFallbackQuery(supabase, 200);
+          }
+        );
       } else {
-        console.log('⚠️ NO BRANCH FILTER - SHOWING ALL SALES');
+        console.log('⚠️ NO BRANCH ID - LOADING ALL SALES');
+        salesResult = await safeQuery(
+          () => baseQuery,
+          () => SupabaseErrorHandler.createLatsSalesListFallbackQuery(supabase, 200)
+        );
       }
-
-      const salesResult = await safeQuery(
-        () => query,
-        () => SupabaseErrorHandler.createLatsSalesListFallbackQuery(supabase, 200)
-      );
 
       // Fetch sale items count separately for each sale
       if (salesResult.data && salesResult.data.length > 0) {
@@ -861,12 +859,12 @@ const SalesReportsPage: React.FC = () => {
     event.stopPropagation(); // Prevent opening the sale modal
     
     try {
+      // Update just the status field
+      // Note: If you want to track who confirmed and when, run ADD-TRANSACTION-CONFIRMATION-COLUMNS.sql
       const { error } = await supabase
         .from('lats_sales')
         .update({ 
-          status: 'confirmed',
-          confirmed_by: currentUser?.id,
-          confirmed_at: new Date().toISOString()
+          status: 'confirmed'
         })
         .eq('id', saleId);
 

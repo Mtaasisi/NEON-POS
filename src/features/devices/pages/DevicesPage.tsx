@@ -2,43 +2,34 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDevices } from '../../../context/DevicesContext';
 import { useAuth } from '../../../context/AuthContext';
-import { useCustomers } from '../../../context/CustomersContext';
 import { Device, DeviceStatus } from '../../../types';
 import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
+import SearchBar from '../../shared/components/ui/SearchBar';
+import GlassSelect from '../../shared/components/ui/GlassSelect';
+import { BackButton } from '../../shared/components/ui/BackButton';
 import StatusBadge from '../../shared/components/ui/StatusBadge';
-import DeviceCard from '../components/DeviceCard';
 import DeviceRepairDetailModal from '../components/DeviceRepairDetailModal';
 import DiagnosticTemplateManagerModal from '../components/DiagnosticTemplateManagerModal';
+import CBMCalculatorModal from '../../calculator/components/CBMCalculatorModal';
 import { 
-  Search, 
-  Filter, 
   Plus, 
-  RefreshCw, 
-  Download, 
-  Upload,
   Smartphone,
-  Users,
-  User,
   Calendar,
   AlertTriangle,
   CheckCircle,
-  Clock,
   Wrench,
   Eye,
   Edit,
-  Trash2,
-  MoreHorizontal,
-  LayoutGrid,
+  Grid,
   List,
-  BarChart3,
-  Filter as FilterIcon,
   X,
+  Settings,
   ChevronDown,
   ChevronUp,
   SortAsc,
   SortDesc,
-  Settings
+  Filter,
+  Calculator
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { updateDeviceInDb } from '../../../lib/deviceApi';
@@ -47,7 +38,6 @@ import { supabase } from '../../../lib/supabaseClient';
 const DevicesPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { customers } = useCustomers();
   
   
   // Safely access devices context with error handling for HMR
@@ -72,13 +62,10 @@ const DevicesPage: React.FC = () => {
   const [technicianFilter, setTechnicianFilter] = useState<string>('all');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [sortBy, setSortBy] = useState<'createdAt' | 'expectedReturnDate' | 'status' | 'customerName'>('createdAt');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
-  const [showBulkActions, setShowBulkActions] = useState(false);
-  const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [technicians, setTechnicians] = useState<any[]>([]);
   const [customersList, setCustomersList] = useState<any[]>([]);
   
@@ -90,6 +77,9 @@ const DevicesPage: React.FC = () => {
   
   // Template manager modal state
   const [showTemplateManagerModal, setShowTemplateManagerModal] = useState(false);
+  
+  // CBM Calculator modal state
+  const [showCbmCalculator, setShowCbmCalculator] = useState(false);
 
   // Fetch technicians and customers for filters
   useEffect(() => {
@@ -117,7 +107,7 @@ const DevicesPage: React.FC = () => {
   }, []);
 
   // Filter and sort devices
-  const filteredAndSortedDevices = useMemo(() => {
+  const filteredDevices = useMemo(() => {
     const filtered = devices.filter(device => {
       // Search filter
       const searchMatch = searchQuery === '' || 
@@ -134,7 +124,7 @@ const DevicesPage: React.FC = () => {
       const technicianMatch = technicianFilter === 'all' || device.assignedTo === technicianFilter;
 
       // Customer filter
-      const customerMatch = customerFilter === 'all' || device.customerName === customerFilter;
+      const customerMatch = customerFilter === 'all' || device.customerId === customerFilter;
 
       // Date filter
       let dateMatch = true;
@@ -212,51 +202,6 @@ const DevicesPage: React.FC = () => {
     return { total, active, overdue, completed, failed };
   }, [devices]);
 
-  // Handle device selection
-  const toggleDeviceSelection = (deviceId: string) => {
-    setSelectedDevices(prev => 
-      prev.includes(deviceId) 
-        ? prev.filter(id => id !== deviceId)
-        : [...prev, deviceId]
-    );
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedDevices.length === filteredAndSortedDevices.length) {
-      setSelectedDevices([]);
-    } else {
-      setSelectedDevices(filteredAndSortedDevices.map(d => d.id));
-    }
-  };
-
-  const toggleSelectionMode = () => {
-    setIsSelectionMode(!isSelectionMode);
-    if (isSelectionMode) {
-      // Clear selections when exiting selection mode
-      setSelectedDevices([]);
-    }
-  };
-
-  // Bulk actions
-  const handleBulkDelete = async () => {
-    if (!confirm(`Are you sure you want to delete ${selectedDevices.length} devices?`)) return;
-    
-    try {
-      for (const deviceId of selectedDevices) {
-        await deleteDevice(deviceId);
-      }
-      setSelectedDevices([]);
-      toast.success(`Successfully deleted ${selectedDevices.length} devices`);
-    } catch (error) {
-      toast.error('Error deleting devices');
-    }
-  };
-
-  const handleBulkAssign = async (technicianId: string) => {
-    // Implementation for bulk assignment
-    toast.success(`Assigned ${selectedDevices.length} devices to technician`);
-  };
-
   // Clear all filters
   const clearFilters = () => {
     setSearchQuery('');
@@ -264,171 +209,182 @@ const DevicesPage: React.FC = () => {
     setTechnicianFilter('all');
     setCustomerFilter('all');
     setDateFilter('all');
-    setSelectedDevices([]);
   };
 
-  const getStatusCount = (status: DeviceStatus) => {
-    return devices.filter(d => d.status === status).length;
-  };
 
+  if (loading) {
+    return (
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3498db]"></div>
+          <span className="ml-3 text-gray-600 font-medium">Loading devices...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'transparent' }}>
-      <div className="container mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      {/* Header - Modern Flat Design */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+        <div className="flex items-center gap-4">
+          <BackButton to="/dashboard" />
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Devices for Repair</h1>
-            <div className="flex items-center gap-4">
-              <span className="text-gray-500">Manage all devices in the repair system</span>
-              <span className="text-sm text-gray-400">• {stats.total} total devices</span>
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <GlassButton
-              onClick={() => navigate('/devices/new')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2"
-            >
-              <Plus size={16} />
-              New Device
-            </GlassButton>
-            <GlassButton
-              onClick={toggleSelectionMode}
-              variant={isSelectionMode ? "danger" : "secondary"}
-              className="px-4 py-2"
-            >
-              {isSelectionMode ? (
-                <>
-                  <X size={16} />
-                  Cancel Select
-                </>
-              ) : (
-                <>
-                  <CheckCircle size={16} />
-                  Select
-                </>
-              )}
-            </GlassButton>
-            <GlassButton
-              onClick={() => window.location.reload()}
-              variant="secondary"
-              className="px-4 py-2"
-            >
-              <RefreshCw size={16} />
-            </GlassButton>
-            {currentUser?.role === 'admin' && (
-              <GlassButton
-                onClick={() => setShowTemplateManagerModal(true)}
-                variant="secondary"
-                className="px-4 py-2"
-              >
-                <Settings size={16} />
-                Templates
-              </GlassButton>
-            )}
+            <h1 className="text-3xl font-bold text-gray-900">Device Management</h1>
+            <p className="text-gray-600 mt-1">Manage all devices in the repair system</p>
           </div>
         </div>
 
-        {/* Statistics Cards - Enhanced Design */}
-        <div className="mb-8">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
-                  <Smartphone className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <div className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">Total Devices</div>
-              <div className="text-xl font-bold text-blue-900">{stats.total}</div>
-            </div>
+        <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={() => setShowCbmCalculator(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors text-sm"
+            title="CBM Calculator"
+          >
+            <Calculator size={18} />
+            CBM
+          </button>
+          <button 
+            onClick={() => navigate('/devices/new')}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+          >
+            <Plus size={18} />
+            Add Device
+          </button>
+          {currentUser?.role === 'admin' && (
+            <button 
+              onClick={() => setShowTemplateManagerModal(true)}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+            >
+              <Settings size={18} />
+            </button>
+          )}
+        </div>
+      </div>
 
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
-                  <Wrench className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <div className="text-xs font-medium text-orange-700 uppercase tracking-wide mb-1">Active</div>
-              <div className="text-xl font-bold text-orange-900">{stats.active}</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-red-50 to-red-100 border border-red-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 bg-red-500 rounded-lg flex items-center justify-center">
-                  <AlertTriangle className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <div className="text-xs font-medium text-red-700 uppercase tracking-wide mb-1">Overdue</div>
-              <div className="text-xl font-bold text-red-900">{stats.overdue}</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <div className="text-xs font-medium text-green-700 uppercase tracking-wide mb-1">Completed</div>
-              <div className="text-xl font-bold text-green-900">{stats.completed}</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-gray-50 to-gray-100 border border-gray-200 rounded-xl p-5 shadow-sm">
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center">
-                  <X className="w-4 h-4 text-white" />
-                </div>
-              </div>
-              <div className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-1">Failed</div>
-              <div className="text-xl font-bold text-gray-900">{stats.failed}</div>
+      {/* Statistics - Minimal Flat Design */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
+          <div className="flex items-center gap-3">
+            <Smartphone className="w-7 h-7 text-blue-600 flex-shrink-0" />
+            <div>
+              <p className="text-xs text-gray-600 mb-1">Total Devices</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
             </div>
           </div>
         </div>
-
-
-        {/* Filters and Search - Enhanced Design */}
-        <div className="bg-white border border-gray-200 rounded-xl p-6 mb-6">
-          <div className="flex items-center gap-2 pb-4 border-b border-gray-100 mb-4">
-            <FilterIcon className="w-5 h-5 text-blue-600" />
-            <h3 className="text-sm font-semibold text-gray-800">Filters & Search</h3>
+        
+        <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
+          <div className="flex items-center gap-3">
+            <Wrench className="w-7 h-7 text-orange-600 flex-shrink-0" />
+            <div>
+              <p className="text-xs text-gray-600 mb-1">Active</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+            </div>
           </div>
-          
-          {/* Search and View Controls */}
+        </div>
+        
+        <div className="bg-red-50 rounded-lg p-5 hover:bg-red-100 transition-colors">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-7 h-7 text-red-600 flex-shrink-0" />
+            <div>
+              <p className="text-xs text-gray-600 mb-1">Overdue</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.overdue}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-7 h-7 text-green-600 flex-shrink-0" />
+            <div>
+              <p className="text-xs text-gray-600 mb-1">Completed</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 rounded-lg p-5 hover:bg-gray-100 transition-colors">
+          <div className="flex items-center gap-3">
+            <X className="w-7 h-7 text-gray-600 flex-shrink-0" />
+            <div>
+              <p className="text-xs text-gray-600 mb-1">Failed</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.failed}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Search and Filters */}
+      <GlassCard className="p-6">
+        <div className="flex flex-col gap-4">
+          {/* Main Search and Controls */}
           <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search devices, customers, or serial numbers..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            <div className="flex-1">
+              <SearchBar
+                onSearch={setSearchQuery}
+                placeholder="Search devices by brand, model, serial number, or customer..."
+                className="w-full"
+                suggestions={devices.map(d => `${d.brand} ${d.model}`)}
+                searchKey="device_search"
               />
             </div>
-            
-            <div className="flex items-center gap-3">
-              <GlassButton
+
+            <div className="flex flex-wrap gap-3">
+              <GlassSelect
+                options={[
+                  { value: 'all', label: 'All Status' },
+                  { value: 'assigned', label: 'Assigned' },
+                  { value: 'diagnosis-started', label: 'Diagnosis Started' },
+                  { value: 'awaiting-parts', label: 'Awaiting Parts' },
+                  { value: 'in-repair', label: 'In Repair' },
+                  { value: 'reassembled-testing', label: 'Testing' },
+                  { value: 'repair-complete', label: 'Repair Complete' },
+                  { value: 'returned-to-customer-care', label: 'Returned to Care' },
+                  { value: 'done', label: 'Done' },
+                  { value: 'failed', label: 'Failed' }
+                ]}
+                value={statusFilter}
+                onChange={(value) => setStatusFilter(value as DeviceStatus | 'all')}
+                placeholder="Filter by Status"
+                className="min-w-[150px]"
+              />
+              <button
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                variant="secondary"
-                className="flex items-center gap-2 px-4 py-2"
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  showAdvancedFilters 
+                    ? 'bg-blue-600 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               >
-                <FilterIcon size={16} />
-                Filters
+                <Filter size={16} />
+                More Filters
                 {showAdvancedFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </GlassButton>
-              
-              <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden">
+              </button>
+              {/* View Mode Toggle - Minimal */}
+              <div className="flex rounded-lg bg-gray-100 p-1">
                 <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-2 transition-colors ${viewMode === 'grid' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
-                >
-                  <LayoutGrid size={16} />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-2 transition-colors ${viewMode === 'list' ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                  onClick={() => setViewMode('table')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'table'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600'
+                  }`}
                 >
                   <List size={16} />
+                  Table
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600'
+                  }`}
+                >
+                  <Grid size={16} />
+                  Grid
                 </button>
               </div>
             </div>
@@ -436,379 +392,270 @@ const DevicesPage: React.FC = () => {
 
           {/* Advanced Filters */}
           {showAdvancedFilters && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Status</label>
-                <select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as DeviceStatus | 'all')}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="diagnosis-started">Diagnosis Started</option>
-                  <option value="awaiting-parts">Awaiting Parts</option>
-                  <option value="in-repair">In Repair</option>
-                  <option value="reassembled-testing">Testing</option>
-                  <option value="repair-complete">Repair Complete</option>
-                  <option value="returned-to-customer-care">Returned to Care</option>
-                  <option value="done">Done</option>
-                  <option value="failed">Failed</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Technician</label>
-                <select
+            <div className="pt-4 border-t border-gray-200 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <GlassSelect
+                  options={[
+                    { value: 'all', label: 'All Technicians' },
+                    ...technicians.map(tech => ({ value: tech.id, label: tech.full_name }))
+                  ]}
                   value={technicianFilter}
-                  onChange={(e) => setTechnicianFilter(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Technicians</option>
-                  {technicians.map(tech => (
-                    <option key={tech.id} value={tech.id}>{tech.full_name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Customer</label>
-                <select
+                  onChange={setTechnicianFilter}
+                  placeholder="Filter by Technician"
+                  className="w-full"
+                />
+                <GlassSelect
+                  options={[
+                    { value: 'all', label: 'All Customers' },
+                    ...customersList.map(customer => ({ value: customer.id, label: customer.name }))
+                  ]}
                   value={customerFilter}
-                  onChange={(e) => setCustomerFilter(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Customers</option>
-                  {customersList.map(customer => (
-                    <option key={customer.id} value={customer.name}>{customer.name}</option>
-                  ))}
-                </select>
+                  onChange={setCustomerFilter}
+                  placeholder="Filter by Customer"
+                  className="w-full"
+                />
+                <GlassSelect
+                  options={[
+                    { value: 'all', label: 'All Time' },
+                    { value: 'today', label: 'Today' },
+                    { value: 'week', label: 'This Week' },
+                    { value: 'month', label: 'This Month' }
+                  ]}
+                  value={dateFilter}
+                  onChange={(value) => setDateFilter(value as any)}
+                  placeholder="Filter by Date"
+                  className="w-full"
+                />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide">Date Range</label>
-                <select
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value as any)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              {/* Sort Controls */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-gray-600 font-medium">Sort by:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#3498db] focus:border-transparent bg-white"
+                  >
+                    <option value="createdAt">Date Created</option>
+                    <option value="expectedReturnDate">Return Date</option>
+                    <option value="status">Status</option>
+                    <option value="customerName">Customer Name</option>
+                  </select>
+                  <button
+                    onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                  >
+                    {sortOrder === 'asc' ? <SortAsc size={18} /> : <SortDesc size={18} />}
+                  </button>
+                </div>
+
+                <button
+                  onClick={clearFilters}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
-                  <option value="all">All Time</option>
-                  <option value="today">Today</option>
-                  <option value="week">This Week</option>
-                  <option value="month">This Month</option>
-                </select>
+                  Clear All Filters
+                </button>
               </div>
             </div>
           )}
-
-          {/* Sort Controls */}
-          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600 font-medium">Sort by:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="createdAt">Date Created</option>
-                <option value="expectedReturnDate">Return Date</option>
-                <option value="status">Status</option>
-                <option value="customerName">Customer Name</option>
-              </select>
-              <button
-                onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                {sortOrder === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {isSelectionMode && filteredAndSortedDevices.length > 0 && (
-                <label className="flex items-center gap-2 text-sm text-gray-600">
-                  <input
-                    type="checkbox"
-                    checked={selectedDevices.length === filteredAndSortedDevices.length && filteredAndSortedDevices.length > 0}
-                    onChange={toggleSelectAll}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  Select All
-                </label>
-              )}
-              {isSelectionMode && selectedDevices.length > 0 && (
-                <span className="text-sm text-gray-600">
-                  {selectedDevices.length} selected
-                </span>
-              )}
-              <GlassButton
-                onClick={clearFilters}
-                variant="secondary"
-                size="sm"
-                className="px-3 py-1"
-              >
-                Clear Filters
-              </GlassButton>
-            </div>
-          </div>
         </div>
+      </GlassCard>
 
-        {/* Bulk Actions */}
-        {isSelectionMode && selectedDevices.length > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <span className="text-blue-800 font-medium">
-                {selectedDevices.length} device(s) selected
-              </span>
-              <div className="flex items-center gap-2">
-                <GlassButton
-                  onClick={handleBulkDelete}
-                  variant="danger"
-                  size="sm"
-                  className="px-3 py-1"
-                >
-                  <Trash2 size={16} />
-                  Delete Selected
-              </GlassButton>
-                <GlassButton
-                  onClick={() => setSelectedDevices([])}
-                  variant="secondary"
-                  size="sm"
-                  className="px-3 py-1"
-                >
-                  Clear Selection
-                </GlassButton>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Devices List */}
-        {loading ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-12">
-            <div className="flex items-center justify-center">
-              <RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
-              <span className="ml-2 text-gray-600">Loading devices...</span>
-            </div>
-          </div>
-        ) : filteredAndSortedDevices.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-12">
-            <div className="text-center">
-              <Smartphone className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No devices found</h3>
-              <p className="text-gray-600 mb-4">
-                {searchQuery || statusFilter !== 'all' || technicianFilter !== 'all' || customerFilter !== 'all' || dateFilter !== 'all'
-                  ? 'Try adjusting your filters or search terms.'
-                  : 'Get started by adding your first device for repair.'
-                }
-              </p>
-              <GlassButton
-                onClick={() => navigate('/devices/new')}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2"
-              >
-                <Plus size={16} />
-                Add New Device
-              </GlassButton>
-            </div>
-          </div>
-        ) : viewMode === 'list' ? (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-200/50 bg-gray-50/50">
-                    {isSelectionMode && (
-                      <th className="text-left py-6 px-4 font-medium text-gray-700">
-                        <input
-                          type="checkbox"
-                          checked={selectedDevices.length === filteredAndSortedDevices.length && filteredAndSortedDevices.length > 0}
-                          onChange={toggleSelectAll}
-                          className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                        />
-                      </th>
-                    )}
-                    <th className="text-left py-6 px-4 font-medium text-gray-700">Device</th>
-                    <th className="text-left py-6 px-4 font-medium text-gray-700">Serial</th>
-                    <th className="text-left py-6 px-4 font-medium text-gray-700">Issue & Notes</th>
-                    <th className="text-center py-6 px-4 font-medium text-gray-700">Status</th>
-                    <th className="text-center py-6 px-4 font-medium text-gray-700">Est. Hours</th>
-                    <th className="text-left py-6 px-4 font-medium text-gray-700">Timeline</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAndSortedDevices.map((device, index) => (
-                    <tr 
-                      key={device.id} 
-                      className={`border-b border-gray-100 hover:bg-blue-50/70 cursor-pointer transition-all duration-200 hover:shadow-sm ${
-                        selectedDevices.includes(device.id) ? 'bg-blue-50/50' : ''
-                      } ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}
-                      onClick={() => {
-                        setSelectedDeviceForDetail(device.id);
-                        setShowDeviceDetailModal(true);
-                      }}
-                    >
-                      {/* Selection Checkbox */}
-                      {isSelectionMode && (
-                        <td className="py-6 px-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedDevices.includes(device.id)}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              toggleDeviceSelection(device.id);
-                            }}
-                            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2"
-                          />
-                        </td>
+      {/* Devices List */}
+      <GlassCard className="p-6">
+        {viewMode === 'table' ? (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Device</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Customer</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Issue</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Return Date</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredDevices.map((device) => (
+                  <tr key={device.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-[#3498db]/10 rounded-lg flex items-center justify-center">
+                          <Smartphone className="w-5 h-5 text-[#3498db]" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{device.brand} {device.model}</p>
+                          {device.serialNumber && (
+                            <p className="text-xs text-gray-500">S/N: {device.serialNumber}</p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div>
+                        <p className="font-medium text-gray-900">{device.customerName}</p>
+                        <p className="text-sm text-gray-500">{device.phoneNumber}</p>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <p className="text-sm text-gray-700 truncate max-w-[250px]" title={device.issueDescription || device.issue}>
+                        {device.issueDescription || device.issue || 'No description'}
+                      </p>
+                      {device.estimatedHours && (
+                        <p className="text-xs text-gray-500 mt-1">Est: {device.estimatedHours}h</p>
                       )}
-
-                      {/* Device Info */}
-                      <td className="py-6 px-4 max-w-xs">
-                        <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Smartphone className="w-6 h-6 text-blue-600" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-medium text-gray-900 truncate" title={`${device.brand} ${device.model}`}>
-                              {device.brand} {device.model}
-                            </div>
-                            {device.unlockCode && (
-                              <div className="text-xs text-orange-600">
-                                Unlock: {device.unlockCode}
-                              </div>
-                            )}
-                            {device.deviceCondition && Object.keys(device.deviceCondition).length > 0 && (
-                              <div className="text-xs text-red-600 mt-1">
-                                {Object.entries(device.deviceCondition)
-                                  .filter(([_, value]) => value)
-                                  .map(([key, _]) => key.replace(/([A-Z])/g, ' $1').toLowerCase())
-                                  .slice(0, 1)
-                                  .join(', ')}
-                                {Object.values(device.deviceCondition).filter(Boolean).length > 1 && '...'}
-                              </div>
-                            )}
-                            {device.blacklistCheckResult && device.blacklistCheckResult !== 'clean' && (
-                              <div className="text-xs text-red-600">
-                                Blacklist: {device.blacklistCheckResult}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Serial Number */}
-                      <td className="py-6 px-4 max-w-xs">
-                        <div className="text-sm text-gray-700 font-mono truncate" title={device.serialNumber || '-'}>
-                          {device.serialNumber || '-'}
-                        </div>
-                      </td>
-
-                      {/* Issue & Notes */}
-                      <td className="py-6 px-4">
-                        <div className="max-w-xs">
-                          <div className="text-sm text-gray-700 truncate" title={device.issueDescription || device.issue}>
-                            {device.issueDescription || device.issue || 'No issue description'}
-                          </div>
-                          {device.deviceNotes && (
-                            <div className="text-xs text-gray-500 truncate mt-1" title={device.deviceNotes}>
-                              Note: {device.deviceNotes}
-                            </div>
-                          )}
-                          {device.diagnosisRequired && (
-                            <div className="text-xs text-orange-600 mt-1">
-                              Diagnosis Required
-                            </div>
-                          )}
-                          {device.deviceImages && device.deviceImages.length > 0 && (
-                            <div className="text-xs text-blue-600 mt-1">
-                              {device.deviceImages.length} image{device.deviceImages.length > 1 ? 's' : ''}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-6 px-4">
-                        <div className="flex justify-center">
-                          <StatusBadge status={device.status} />
-                        </div>
-                        {device.remarks && device.remarks.length > 0 && (
-                          <div className="text-xs text-center text-blue-600 mt-1">
-                            {device.remarks.length} remark{device.remarks.length > 1 ? 's' : ''}
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Estimated Hours */}
-                      <td className="py-6 px-4">
-                        <div className="flex justify-center">
-                          <div className="text-center">
-                            <div className="text-sm font-medium text-gray-900">
-                              {device.estimatedHours ? `${device.estimatedHours}h` : '-'}
-                            </div>
-                            {device.estimatedHours && (
-                              <div className="text-xs text-gray-500 mt-1">
-                                {device.estimatedHours <= 2 ? 'Quick' : 
-                                 device.estimatedHours <= 4 ? 'Medium' : 'Complex'}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Timeline */}
-                      <td className="py-6 px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm text-gray-700">
-                              {device.expectedReturnDate 
-                                ? new Date(device.expectedReturnDate).toLocaleDateString()
-                                : 'Not set'
-                              }
-                            </span>
-                          </div>
-                          {device.lastReturnDate && (
-                            <div className="text-xs text-gray-500">
-                              Last: {new Date(device.lastReturnDate).toLocaleDateString()}
-                            </div>
-                          )}
-                          {device.pickupScheduledDate && (
-                            <div className="text-xs text-green-600">
-                              Pickup: {new Date(device.pickupScheduledDate).toLocaleDateString()}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <StatusBadge status={device.status} />
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1">
+                        <Calendar size={14} className="text-gray-400" />
+                        <span className="text-sm text-gray-700">
+                          {device.expectedReturnDate 
+                            ? new Date(device.expectedReturnDate).toLocaleDateString()
+                            : 'Not set'
+                          }
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-1.5">
+                        <button 
+                          onClick={() => {
+                            setSelectedDeviceForDetail(device.id);
+                            setShowDeviceDetailModal(true);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                        >
+                          <Eye size={13} />
+                          View
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setSelectedDeviceForEdit(device);
+                            setShowDeviceEditModal(true);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                        >
+                          <Edit size={13} />
+                          Edit
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredAndSortedDevices.map(device => (
-              <DeviceCard
-                key={device.id}
-                device={device}
-                variant="default"
-                showDetails={true}
-                selected={selectedDevices.includes(device.id)}
-                onSelect={toggleDeviceSelection}
-                showSelection={false}
-              />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {filteredDevices.map((device) => (
+              <div key={device.id} className="bg-white rounded-lg border border-gray-200 p-4 hover:border-gray-300 transition-colors">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2.5 flex-1">
+                    <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Smartphone className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 text-sm truncate">{device.brand} {device.model}</h3>
+                      <p className="text-xs text-gray-500 truncate">{device.serialNumber || 'No S/N'}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Customer</span>
+                    <span className="text-sm font-medium text-gray-900 truncate ml-2" title={device.customerName}>{device.customerName}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Status</span>
+                    <StatusBadge status={device.status} />
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Issue</span>
+                    <span className="text-xs text-gray-700 truncate ml-2 max-w-[150px]" title={device.issueDescription || device.issue}>
+                      {device.issueDescription || device.issue || 'No description'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-500">Return Date</span>
+                    <div className="flex items-center gap-1">
+                      <Calendar size={14} className="text-gray-400" />
+                      <span className="text-xs text-gray-700">
+                        {device.expectedReturnDate 
+                          ? new Date(device.expectedReturnDate).toLocaleDateString()
+                          : 'Not set'
+                        }
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {device.estimatedHours && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Estimated</span>
+                      <span className="text-sm font-medium text-gray-900">{device.estimatedHours}h</span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex gap-1.5 pt-3 border-t border-gray-100">
+                  <button 
+                    onClick={() => {
+                      setSelectedDeviceForDetail(device.id);
+                      setShowDeviceDetailModal(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    <Eye size={13} />
+                    View
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setSelectedDeviceForEdit(device);
+                      setShowDeviceEditModal(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"
+                  >
+                    <Edit size={13} />
+                    Edit
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         )}
 
-        {/* Results Summary */}
-        {filteredAndSortedDevices.length > 0 && (
-          <div className="text-center text-sm text-gray-600 mt-6">
-            Showing {filteredAndSortedDevices.length} of {devices.length} devices
+        {filteredDevices.length === 0 && (
+          <div className="text-center py-8">
+            <Smartphone className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No devices found</h3>
+            <p className="text-gray-500 mb-6">
+              {searchQuery || statusFilter !== 'all' || technicianFilter !== 'all' || customerFilter !== 'all' || dateFilter !== 'all'
+                ? 'Try adjusting your search or filters'
+                : 'Get started by adding your first device'
+              }
+            </p>
+            {!searchQuery && statusFilter === 'all' && technicianFilter === 'all' && customerFilter === 'all' && dateFilter === 'all' && (
+              <button 
+                onClick={() => navigate('/devices/new')}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors mx-auto"
+              >
+                <Plus size={18} />
+                Add Your First Device
+              </button>
+            )}
           </div>
         )}
-      </div>
-      
+      </GlassCard>
+
       {/* Device Detail Modal */}
       {selectedDeviceForDetail && (
         <DeviceRepairDetailModal
@@ -862,8 +709,8 @@ const DevicesPage: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={selectedDeviceForEdit.brand || ''}
-                      onChange={(e) => setSelectedDeviceForEdit({
+                      value={selectedDeviceForEdit?.brand || ''}
+                      onChange={(e) => selectedDeviceForEdit && setSelectedDeviceForEdit({
                         ...selectedDeviceForEdit,
                         brand: e.target.value
                       })}
@@ -877,8 +724,8 @@ const DevicesPage: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={selectedDeviceForEdit.model || ''}
-                      onChange={(e) => setSelectedDeviceForEdit({
+                      value={selectedDeviceForEdit?.model || ''}
+                      onChange={(e) => selectedDeviceForEdit && setSelectedDeviceForEdit({
                         ...selectedDeviceForEdit,
                         model: e.target.value
                       })}
@@ -892,8 +739,8 @@ const DevicesPage: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      value={selectedDeviceForEdit.serialNumber || ''}
-                      onChange={(e) => setSelectedDeviceForEdit({
+                      value={selectedDeviceForEdit?.serialNumber || ''}
+                      onChange={(e) => selectedDeviceForEdit && setSelectedDeviceForEdit({
                         ...selectedDeviceForEdit,
                         serialNumber: e.target.value
                       })}
@@ -906,8 +753,8 @@ const DevicesPage: React.FC = () => {
                       Issue Description
                     </label>
                     <textarea
-                      value={selectedDeviceForEdit.issueDescription || ''}
-                      onChange={(e) => setSelectedDeviceForEdit({
+                      value={selectedDeviceForEdit?.issueDescription || ''}
+                      onChange={(e) => selectedDeviceForEdit && setSelectedDeviceForEdit({
                         ...selectedDeviceForEdit,
                         issueDescription: e.target.value
                       })}
@@ -921,8 +768,8 @@ const DevicesPage: React.FC = () => {
                       Status
                     </label>
                     <select
-                      value={selectedDeviceForEdit.status || ''}
-                      onChange={(e) => setSelectedDeviceForEdit({
+                      value={selectedDeviceForEdit?.status || ''}
+                      onChange={(e) => selectedDeviceForEdit && setSelectedDeviceForEdit({
                         ...selectedDeviceForEdit,
                         status: e.target.value as DeviceStatus
                       })}
@@ -970,6 +817,12 @@ const DevicesPage: React.FC = () => {
       <DiagnosticTemplateManagerModal
         isOpen={showTemplateManagerModal}
         onClose={() => setShowTemplateManagerModal(false)}
+      />
+
+      {/* CBM Calculator Modal */}
+      <CBMCalculatorModal
+        isOpen={showCbmCalculator}
+        onClose={() => setShowCbmCalculator(false)}
       />
     </div>
   );

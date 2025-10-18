@@ -8,6 +8,7 @@ import {
   NotificationStats 
 } from '../types';
 import { notificationHelpers } from '../utils/notificationHelpers';
+import { transformNotificationsFromDB, transformNotificationFromDB } from '../utils/notificationTransformer';
 
 export const useNotifications = () => {
   const { currentUser } = useAuth();
@@ -72,16 +73,18 @@ export const useNotifications = () => {
 
       if (error) throw error;
 
+      // Transform database data to TypeScript format
+      let transformedData = transformNotificationsFromDB(data || []);
+      
       // Apply search filter in memory
-      let filteredData = data || [];
       if (filters.search) {
-        filteredData = notificationHelpers.filterNotifications(
-          filteredData as Notification[], 
+        transformedData = notificationHelpers.filterNotifications(
+          transformedData, 
           { search: filters.search }
         );
       }
 
-      setNotifications(filteredData as Notification[]);
+      setNotifications(transformedData);
     } catch (err) {
       console.error('Error fetching notifications:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch notifications');
@@ -289,10 +292,12 @@ export const useNotifications = () => {
         }, 
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setNotifications(prev => [payload.new as Notification, ...prev]);
+            const transformed = transformNotificationFromDB(payload.new);
+            setNotifications(prev => [transformed, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
+            const transformed = transformNotificationFromDB(payload.new);
             setNotifications(prev => 
-              prev.map(n => n.id === payload.new.id ? payload.new as Notification : n)
+              prev.map(n => n.id === transformed.id ? transformed : n)
             );
           } else if (payload.eventType === 'DELETE') {
             setNotifications(prev => prev.filter(n => n.id !== payload.old.id));

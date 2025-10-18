@@ -8,10 +8,7 @@ import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
 import { 
-  Calendar, Clock, User, Phone, Plus, Edit, Trash2, 
-  CheckCircle, XCircle, AlertTriangle, MessageSquare, Send,
-  CalendarDays, Users, MapPin, ChevronLeft, ChevronRight, 
-  Filter, RefreshCw, Eye, EyeOff, Building
+  Calendar, Plus, CheckCircle, CalendarDays, RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -153,11 +150,12 @@ const UnifiedAppointmentPage: React.FC = () => {
             <GlassSelect
               options={[
                 { value: 'all', label: 'All Status' },
-                { value: 'scheduled', label: 'Scheduled' },
+                { value: 'pending', label: 'Pending' },
                 { value: 'confirmed', label: 'Confirmed' },
                 { value: 'in-progress', label: 'In Progress' },
                 { value: 'completed', label: 'Completed' },
-                { value: 'cancelled', label: 'Cancelled' }
+                { value: 'cancelled', label: 'Cancelled' },
+                { value: 'no-show', label: 'No Show' }
               ]}
               value={statusFilter}
               onChange={(value) => setStatusFilter(value)}

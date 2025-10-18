@@ -4,6 +4,7 @@ import { getProducts as getProductsApi, getProduct as getProductApi } from '@/li
 import { getCategories as getCategoriesApi } from '@/lib/categoryApi';
 import { getActiveSuppliers, getAllSuppliers } from '@/lib/supplierApi';
 import { PurchaseOrderService } from '@/features/lats/services/purchaseOrderService';
+import { latsEventBus } from './eventBus';
 
 const supabaseProvider = {
   // Query data from a table
@@ -471,6 +472,10 @@ const supabaseProvider = {
 
   updateProduct: async (id: string, data: any) => {
     try {
+      console.log('🔧 [Provider] Starting product update...');
+      console.log('🔧 [Provider] Product ID:', id);
+      console.log('🔧 [Provider] Raw data received:', data);
+      
       // Map the product data to the format expected by latsProductApi
       const updateData = {
         name: data.name,
@@ -482,31 +487,58 @@ const supabaseProvider = {
         tags: data.tags || [],
         isActive: data.isActive !== undefined ? data.isActive : true,
         // Handle variants if provided
-        variants: data.variants ? data.variants.map((v: any) => ({
-          sku: v.sku,
-          name: v.name || v.variant_name,
-          attributes: v.attributes || {},
-          costPrice: v.costPrice ?? v.cost_price ?? 0,
-          sellingPrice: v.sellingPrice ?? v.unit_price ?? v.price ?? 0,
-          quantity: v.quantity ?? v.stockQuantity ?? 0,
-          minQuantity: v.minQuantity ?? v.minStockLevel ?? 0
-        })) : undefined
+        variants: data.variants ? data.variants.map((v: any, index: number) => {
+          console.log(`🔧 [Provider] Mapping variant ${index + 1}:`, v);
+          return {
+            id: v?.id, // ✅ Include ID for existing variants
+            sku: v?.sku,
+            name: v?.name || v?.variant_name || 'Default',
+            attributes: v?.attributes || {},
+            costPrice: typeof v?.costPrice === 'number' ? v.costPrice : (v?.cost_price ?? 0),
+            sellingPrice: typeof v?.sellingPrice === 'number' ? v.sellingPrice : (v?.unit_price ?? v?.price ?? 0),
+            quantity: typeof v?.quantity === 'number' ? v.quantity : (v?.stockQuantity ?? 0),
+            minQuantity: typeof v?.minQuantity === 'number' ? v.minQuantity : (v?.minStockLevel ?? 0)
+          };
+        }) : undefined
       };
 
+      console.log('🔧 [Provider] Mapped update data:', JSON.stringify(updateData, null, 2));
+
       // Call the latsProductApi updateProduct function
+      console.log('🔧 [Provider] Calling API updateProduct...');
       const { updateProduct: apiUpdateProduct } = await import('../../../../lib/latsProductApi');
       const updatedProduct = await apiUpdateProduct(id, updateData, '');
+      
+      console.log('✅ [Provider] Product updated successfully:', updatedProduct);
       
       return {
         ok: true,
         data: updatedProduct,
         message: 'Product updated successfully'
       };
-    } catch (error) {
-      console.error('Error updating product:', error);
+    } catch (error: any) {
+      console.error('❌ [Provider] Error updating product:', error);
+      console.error('❌ [Provider] Error stack:', error?.stack);
+      console.error('❌ [Provider] Error details:', JSON.stringify(error, null, 2));
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to update product';
+      if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // Check for common database errors
+      if (error?.code === '23505') {
+        errorMessage = 'Duplicate SKU detected. Each variant must have a unique SKU.';
+      } else if (error?.code === '23503') {
+        errorMessage = 'Invalid reference: Category or Supplier does not exist.';
+      } else if (error?.code === '42703') {
+        errorMessage = 'Database column mismatch. Please contact support.';
+      }
+      
       return {
         ok: false,
-        message: error instanceof Error ? error.message : 'Failed to update product'
+        message: errorMessage
       };
     }
   },
@@ -1173,6 +1205,15 @@ const supabaseProvider = {
       }
 
       console.log('✅ Purchase order received successfully:', data);
+      
+      // 🔥 EMIT EVENT: Notify inventory page to refresh
+      latsEventBus.emit('lats:purchase-order.received', {
+        purchaseOrderId: id,
+        userId: user.id,
+        notes: 'Received via PO system'
+      });
+      
+      console.log('✅ [Provider] Purchase order received event emitted');
       
       // Get updated purchase order (without nested select - Neon doesn't support this)
       const { data: updatedPO, error: fetchError } = await supabase

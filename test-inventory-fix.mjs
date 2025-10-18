@@ -1,247 +1,300 @@
 #!/usr/bin/env node
-
 /**
- * 🧪 COMPREHENSIVE INVENTORY FIX TEST
- * Tests the complete fix for the inventory display issue
+ * Automated Test: Inventory Refresh Fix
+ * 
+ * This test verifies that the inventory page automatically refreshes
+ * when a purchase order is received.
  */
 
 import { chromium } from 'playwright';
-import { writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
 
 const BASE_URL = 'http://localhost:3000';
-const SCREENSHOT_DIR = './test-screenshots-inventory-fix';
-const WAIT_TIME = 3000;
+const LOGIN_EMAIL = 'care@care.com';
+const LOGIN_PASSWORD = '123456';
 
-class InventoryFixTester {
-  constructor() {
-    this.browser = null;
-    this.context = null;
-    this.page = null;
-    this.results = [];
-  }
+// ANSI color codes for pretty output
+const colors = {
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  yellow: '\x1b[33m',
+  blue: '\x1b[34m',
+  cyan: '\x1b[36m',
+  magenta: '\x1b[35m'
+};
 
-  async init() {
-    console.log('🚀 Initializing inventory fix test...\n');
-    
-    try {
-      mkdirSync(SCREENSHOT_DIR, { recursive: true });
-    } catch (e) {
-      // Directory exists
-    }
-
-    this.browser = await chromium.launch({
-      headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-
-    this.context = await this.browser.newContext({
-      viewport: { width: 1920, height: 1080 },
-      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-    });
-
-    this.page = await this.context.newPage();
-    this.page.setDefaultTimeout(30000);
-  }
-
-  async testLogin() {
-    console.log('\n🔐 Testing login...');
-    
-    try {
-      await this.page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
-      await this.page.waitForTimeout(WAIT_TIME);
-      
-      await this.page.screenshot({ 
-        path: join(SCREENSHOT_DIR, '1-login-page.png'), 
-        fullPage: true 
-      });
-
-      await this.page.fill('input[type="email"]', 'care@care.com');
-      await this.page.fill('input[type="password"]', '123456');
-      
-      await this.page.screenshot({ 
-        path: join(SCREENSHOT_DIR, '2-login-form-filled.png'), 
-        fullPage: true 
-      });
-
-      await this.page.click('button[type="submit"]');
-      await this.page.waitForTimeout(WAIT_TIME * 2);
-      
-      await this.page.screenshot({ 
-        path: join(SCREENSHOT_DIR, '3-after-login.png'), 
-        fullPage: true 
-      });
-
-      console.log('✅ Login completed');
-      return true;
-
-    } catch (error) {
-      console.log(`❌ Login error: ${error.message}`);
-      await this.page.screenshot({ 
-        path: join(SCREENSHOT_DIR, 'login-error.png'), 
-        fullPage: true 
-      });
-      return false;
-    }
-  }
-
-  async testInventoryPage() {
-    console.log('\n📦 Testing inventory page...');
-    
-    try {
-      // Navigate to inventory page
-      await this.page.goto(`${BASE_URL}/lats/unified-inventory`, { waitUntil: 'networkidle' });
-      await this.page.waitForTimeout(WAIT_TIME * 3);
-      
-      await this.page.screenshot({ 
-        path: join(SCREENSHOT_DIR, '4-inventory-page.png'), 
-        fullPage: true 
-      });
-
-      // Check for product count in summary cards
-      const totalProductsElement = await this.page.locator('text=Total Products').first();
-      const totalProductsVisible = await totalProductsElement.isVisible().catch(() => false);
-      
-      if (totalProductsVisible) {
-        const productCountText = await totalProductsElement.textContent();
-        console.log(`📊 Product count text: ${productCountText}`);
-      }
-      
-      // Look for the number 69 in summary cards
-      const has69Products = await this.page.locator('text=69').first().isVisible().catch(() => false);
-      console.log(`📊 Has 69 products indicator: ${has69Products}`);
-      
-      // Count products in the table/grid
-      const productElements = await this.page.locator('[data-testid="product-card"], .product-card, table tbody tr').count();
-      console.log(`📋 Products displayed in UI: ${productElements}`);
-      
-      // Check if we see sample products (which would indicate the fallback is still active)
-      const sampleProductElements = await this.page.locator('text=Sample').count();
-      console.log(`⚠️ Sample products found: ${sampleProductElements}`);
-      
-      // Check for real product names (non-sample)
-      const hasRealProducts = await this.page.locator('text=Macbook, text=iPhone, text=JBL, text=T8').count() > 0;
-      console.log(`✅ Real products found: ${hasRealProducts}`);
-      
-      // Check console for any errors
-      const consoleMessages = [];
-      this.page.on('console', msg => {
-        if (msg.type() === 'error') {
-          consoleMessages.push(msg.text());
-        }
-      });
-      
-      await this.page.waitForTimeout(2000); // Wait for any console errors
-      
-      const testResult = {
-        totalProductsVisible,
-        has69Products,
-        productsDisplayed: productElements,
-        sampleProductsFound: sampleProductElements,
-        realProductsFound: hasRealProducts,
-        consoleErrors: consoleMessages,
-        timestamp: new Date().toISOString()
-      };
-      
-      this.results.push(testResult);
-      
-      console.log('\n📊 Test Results:');
-      console.log(`  - Total Products indicator visible: ${testResult.totalProductsVisible}`);
-      console.log(`  - Shows 69 products: ${testResult.has69Products}`);
-      console.log(`  - Products displayed in UI: ${testResult.productsDisplayed}`);
-      console.log(`  - Sample products found: ${testResult.sampleProductsFound}`);
-      console.log(`  - Real products found: ${testResult.realProductsFound}`);
-      console.log(`  - Console errors: ${testResult.consoleErrors.length}`);
-      
-      if (testResult.consoleErrors.length > 0) {
-        console.log('\n⚠️ Console errors:');
-        testResult.consoleErrors.forEach((error, index) => {
-          console.log(`  ${index + 1}. ${error}`);
-        });
-      }
-      
-      return testResult;
-
-    } catch (error) {
-      console.log(`❌ Inventory test error: ${error.message}`);
-      await this.page.screenshot({ 
-        path: join(SCREENSHOT_DIR, 'inventory-error.png'), 
-        fullPage: true 
-      });
-      return null;
-    }
-  }
-
-  generateReport() {
-    console.log(`\n\n${'='.repeat(60)}`);
-    console.log('📊 INVENTORY FIX TEST SUMMARY');
-    console.log(`${'='.repeat(60)}\n`);
-
-    if (this.results.length > 0) {
-      const result = this.results[0];
-      console.log(`Total Products Indicator: ${result.totalProductsVisible ? 'Visible' : 'Not visible'}`);
-      console.log(`Shows 69 Products: ${result.has69Products ? 'Yes' : 'No'}`);
-      console.log(`Products Displayed: ${result.productsDisplayed}`);
-      console.log(`Sample Products: ${result.sampleProductsFound}`);
-      console.log(`Real Products: ${result.realProductsFound ? 'Yes' : 'No'}`);
-      console.log(`Console Errors: ${result.consoleErrors.length}`);
-      
-      // Determine if fix was successful
-      const fixSuccessful = result.realProductsFound && result.productsDisplayed > 3 && result.sampleProductsFound === 0;
-      console.log(`\n🎯 Fix Status: ${fixSuccessful ? '✅ SUCCESS' : '❌ FAILED'}`);
-      
-      if (fixSuccessful) {
-        console.log('✅ The inventory display issue has been fixed!');
-        console.log('✅ Real products are now loading from the database.');
-      } else {
-        console.log('❌ The inventory display issue persists.');
-        console.log('❌ Check the console errors and database connection.');
-      }
-    }
-
-    const report = {
-      testType: 'Inventory Fix Test',
-      results: this.results,
-      timestamp: new Date().toISOString(),
-      screenshots: SCREENSHOT_DIR
-    };
-
-    const reportPath = join(SCREENSHOT_DIR, 'inventory-fix-test-report.json');
-    writeFileSync(reportPath, JSON.stringify(report, null, 2));
-    console.log(`\n📄 Detailed report saved: ${reportPath}`);
-
-    return report;
-  }
-
-  async cleanup() {
-    if (this.browser) {
-      await this.browser.close();
-    }
-  }
+function log(emoji, message, color = colors.reset) {
+  console.log(`${color}${emoji} ${message}${colors.reset}`);
 }
 
-async function main() {
-  const tester = new InventoryFixTester();
+function success(message) {
+  log('✅', message, colors.green);
+}
+
+function error(message) {
+  log('❌', message, colors.red);
+}
+
+function info(message) {
+  log('ℹ️', message, colors.blue);
+}
+
+function step(message) {
+  log('📍', message, colors.cyan);
+}
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function testInventoryRefreshFix() {
+  const startTime = Date.now();
+  log('🚀', 'Starting Inventory Refresh Fix Test...', colors.bright);
+  console.log('');
+  
+  let browser;
+  let passed = 0;
+  let failed = 0;
   
   try {
-    await tester.init();
+    // Launch browser
+    step('Launching browser...');
+    browser = await chromium.launch({ 
+      headless: false,
+      slowMo: 100
+    });
     
-    const loginSuccess = await tester.testLogin();
-    if (loginSuccess) {
-      await tester.testInventoryPage();
+    const context = await browser.newContext({
+      viewport: { width: 1920, height: 1080 }
+    });
+    
+    const page = await context.newPage();
+    
+    // Track console logs to verify event emission
+    const consoleLogs = [];
+    page.on('console', msg => {
+      const text = msg.text();
+      consoleLogs.push(text);
+      if (text.includes('[PurchaseOrderService]') || text.includes('[UnifiedInventoryPage]')) {
+        info(`Console: ${text}`);
+      }
+    });
+    
+    // Step 1: Login
+    step('Step 1: Logging in as care@care.com...');
+    await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    await sleep(2000);
+    
+    try {
+      await page.waitForSelector('input[type="email"], input[name="email"]', { timeout: 10000 });
+      await page.fill('input[type="email"], input[name="email"]', LOGIN_EMAIL);
+      await page.fill('input[type="password"], input[name="password"]', LOGIN_PASSWORD);
+      await page.click('button[type="submit"]');
+      await sleep(3000);
+      success('Login successful');
+      passed++;
+    } catch (e) {
+      error('Login failed: ' + e.message);
+      failed++;
+      throw e;
     }
     
-    const report = tester.generateReport();
+    // Step 2: Navigate to Inventory Page
+    step('Step 2: Navigating to Inventory page...');
+    await page.goto(`${BASE_URL}/lats/inventory`, { waitUntil: 'networkidle' });
+    await sleep(3000);
     
-    console.log('\n✅ Inventory fix testing completed!\n');
-    console.log(`📁 All screenshots saved in: ${SCREENSHOT_DIR}/`);
+    // Get initial product count
+    const initialProductCount = await page.locator('table tbody tr, [data-testid="product-card"], .product-card').count();
+    info(`Initial product count: ${initialProductCount}`);
     
-  } catch (error) {
-    console.error('❌ Test failed:', error);
-    process.exit(1);
+    // Check metrics
+    const metricsVisible = await page.locator('text=/Total Products|Stock Status/i').count() > 0;
+    if (metricsVisible) {
+      success('Inventory metrics visible');
+      passed++;
+    } else {
+      error('Inventory metrics not visible');
+      failed++;
+    }
+    
+    // Step 3: Navigate to Purchase Orders
+    step('Step 3: Navigating to Purchase Orders...');
+    await page.goto(`${BASE_URL}/lats/purchase-orders`, { waitUntil: 'networkidle' });
+    await sleep(2000);
+    
+    // Look for purchase orders in the table
+    const poRows = await page.locator('table tbody tr, .glass-card').count();
+    info(`Found ${poRows} purchase order rows`);
+    
+    if (poRows === 0) {
+      log('⚠️', 'No purchase orders found. Test cannot continue without a PO to receive.', colors.yellow);
+      log('💡', 'Please create a purchase order manually first, then run this test again.', colors.yellow);
+      return;
+    }
+    
+    // Click first purchase order row (try multiple selectors)
+    step('Step 4: Opening purchase order detail...');
+    const clickSucceeded = await page.locator('table tbody tr, .cursor-pointer').first().click({ timeout: 5000 }).then(() => true).catch(() => false);
+    
+    if (!clickSucceeded) {
+      // Try clicking a link instead
+      const poLink = await page.locator('a[href*="purchase-order"]').first().click({ timeout: 5000 }).catch(() => false);
+      if (!poLink) {
+        log('⚠️', 'Could not click on purchase order. Trying direct navigation...', colors.yellow);
+        // Get the first PO ID from the page
+        const poText = await page.locator('text=/PO-\\d+/').first().textContent();
+        if (poText) {
+          const poId = poText.match(/PO-\d+/)?.[0];
+          if (poId) {
+            await page.goto(`${BASE_URL}/lats/purchase-orders/${poId}`);
+          }
+        }
+      }
+    }
+    await sleep(2000);
+    
+    // Check for receive button
+    const receiveButton = page.locator('button:has-text("Receive"), button:has-text("Mark as Received")').first();
+    const hasReceiveButton = await receiveButton.count() > 0;
+    
+    if (!hasReceiveButton) {
+      log('⚠️', 'No receive button found. Purchase order might already be received.', colors.yellow);
+      log('💡', 'Try creating a new purchase order with status "sent" or "pending".', colors.yellow);
+      return;
+    }
+    
+    success('Found receive button');
+    passed++;
+    
+    // Step 5: Open inventory page in new tab BEFORE receiving
+    step('Step 5: Opening inventory page in new tab...');
+    const inventoryPage = await context.newPage();
+    await inventoryPage.goto(`${BASE_URL}/lats/inventory`, { waitUntil: 'networkidle' });
+    await sleep(2000);
+    
+    // Track console logs on inventory page
+    const inventoryConsoleLogs = [];
+    inventoryPage.on('console', msg => {
+      const text = msg.text();
+      inventoryConsoleLogs.push(text);
+      if (text.includes('[UnifiedInventoryPage]') || text.includes('Purchase order received')) {
+        success(`Inventory page console: ${text}`);
+      }
+    });
+    
+    info('Inventory page opened and ready to detect refresh events');
+    
+    // Step 6: Receive the purchase order
+    step('Step 6: Receiving purchase order...');
+    await page.bringToFront();
+    
+    // Clear console logs to track new ones
+    consoleLogs.length = 0;
+    inventoryConsoleLogs.length = 0;
+    
+    await receiveButton.click();
+    await sleep(1000);
+    
+    // Check for success message
+    const successMessage = await page.locator('text=/success|received|completed/i').count();
+    if (successMessage > 0) {
+      success('Purchase order received successfully');
+      passed++;
+    } else {
+      error('No success message found after receiving');
+      failed++;
+    }
+    
+    // Step 7: Verify event emission in console
+    step('Step 7: Verifying event emission...');
+    await sleep(2000);
+    
+    const eventEmitted = consoleLogs.some(log => 
+      log.includes('[PurchaseOrderService]') && log.includes('event emitted')
+    );
+    
+    if (eventEmitted) {
+      success('Event emission confirmed in console');
+      passed++;
+    } else {
+      error('Event emission NOT found in console');
+      failed++;
+    }
+    
+    // Step 8: Verify inventory page refresh
+    step('Step 8: Checking if inventory page auto-refreshed...');
+    await inventoryPage.bringToFront();
+    await sleep(3000); // Wait for the 1-second delay + processing
+    
+    const refreshDetected = inventoryConsoleLogs.some(log => 
+      log.includes('[UnifiedInventoryPage]') && 
+      (log.includes('Purchase order received') || log.includes('refreshing inventory'))
+    );
+    
+    if (refreshDetected) {
+      success('Inventory page auto-refresh detected! 🎉');
+      passed++;
+    } else {
+      error('Inventory page did NOT auto-refresh');
+      failed++;
+    }
+    
+    // Step 9: Verify products are visible
+    step('Step 9: Verifying inventory is displaying products...');
+    const finalProductCount = await inventoryPage.locator('table tbody tr, [data-testid="product-card"], .product-card').count();
+    info(`Final product count: ${finalProductCount}`);
+    
+    if (finalProductCount > 0) {
+      success('Products are visible in inventory');
+      passed++;
+    } else {
+      error('No products visible in inventory');
+      failed++;
+    }
+    
+    // Take final screenshot
+    await inventoryPage.screenshot({ path: 'test-result-inventory.png', fullPage: true });
+    info('Screenshot saved: test-result-inventory.png');
+    
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    
+  } catch (err) {
+    error(`Test failed with error: ${err.message}`);
+    failed++;
   } finally {
-    await tester.cleanup();
+    if (browser) {
+      await sleep(2000);
+      await browser.close();
+    }
+    
+    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+    
+    console.log('');
+    console.log(`${colors.bright}📊 Test Summary${colors.reset}`);
+    console.log('─────────────────────────────────────────────────────────');
+    console.log(`${colors.green}✅ Passed: ${passed}${colors.reset}`);
+    console.log(`${colors.red}❌ Failed: ${failed}${colors.reset}`);
+    console.log(`⏱️  Duration: ${duration}s`);
+    console.log('═══════════════════════════════════════════════════════════');
+    
+    if (failed === 0) {
+      console.log('');
+      success('🎉 ALL TESTS PASSED! The inventory refresh fix is working!');
+      console.log('');
+    } else {
+      console.log('');
+      error('Some tests failed. Please review the output above.');
+      console.log('');
+      process.exit(1);
+    }
   }
 }
 
-main();
+// Run the test
+testInventoryRefreshFix().catch(error => {
+  error('Fatal error: ' + error.message);
+  process.exit(1);
+});

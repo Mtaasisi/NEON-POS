@@ -257,8 +257,8 @@ export const getBranchProducts = async () => {
     .from('lats_products')
     .select(`
       *,
-      category:lats_categories(*),
-      variants:lats_product_variants(*)
+      category:lats_categories!category_id(*),
+      variants:lats_product_variants!product_id(*)
     `)
     .eq('is_active', true);
 

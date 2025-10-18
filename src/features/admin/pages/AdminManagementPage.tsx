@@ -9,7 +9,8 @@ import {
   Building, Settings, Database, HardDrive, Shield, FileText,
   Users, CreditCard, BarChart2, Package, Calendar, Smartphone,
   MessageCircle, MessageSquare, Stethoscope, Plus, Edit, Trash2,
-  Eye, Download, Upload, RefreshCw, CheckCircle, AlertTriangle, MapPin, Layers
+  Eye, Download, Upload, RefreshCw, CheckCircle, AlertTriangle, MapPin, Layers,
+  ArrowRightLeft
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useDevices } from '../../../context/DevicesContext';
@@ -98,6 +99,15 @@ const AdminManagementPage: React.FC = () => {
       icon: <Package size={24} />,
       path: '/lats/spare-parts',
       color: 'from-orange-500 to-orange-600',
+      category: 'inventory'
+    },
+    {
+      id: 'stock-transfers',
+      title: 'Stock Transfers',
+      description: 'Transfer stock between branches',
+      icon: <ArrowRightLeft size={24} />,
+      path: '/lats/stock-transfers',
+      color: 'from-blue-500 to-blue-600',
       category: 'inventory'
     },
 
@@ -282,7 +292,7 @@ const AdminManagementPage: React.FC = () => {
         return {
           title: 'Inventory Management Tools',
           description: 'Comprehensive tools for managing product inventory, categories, and procurement.',
-                      features: ['Category Management', 'Purchase Order Processing', 'Spare Parts Inventory', 'Supplier Management'],
+          features: ['Category Management', 'Purchase Order Processing', 'Spare Parts Inventory', 'Supplier Management', 'Stock Transfers'],
           icon: <Package size={24} />
         };
       case 'system':
@@ -353,7 +363,7 @@ const AdminManagementPage: React.FC = () => {
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin Management Overview</h2>
           <p className="text-gray-600 max-w-3xl mx-auto">
-            Comprehensive administrative control center with 17 tools organized across 5 categories. 
+            Comprehensive administrative control center with 18 tools organized across 5 categories. 
             Manage inventory, system settings, security, data operations, and communications from one central location.
           </p>
         </div>
@@ -364,8 +374,8 @@ const AdminManagementPage: React.FC = () => {
               <Package size={20} />
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">Inventory</h3>
-            <p className="text-sm text-gray-600">4 tools</p>
-            <p className="text-xs text-gray-500 mt-1">Categories, Orders, Parts</p>
+            <p className="text-sm text-gray-600">7 tools</p>
+            <p className="text-xs text-gray-500 mt-1">Categories, Orders, Transfers</p>
           </div>
           
           <div className="text-center p-4 bg-white rounded-xl shadow-sm border border-gray-100">

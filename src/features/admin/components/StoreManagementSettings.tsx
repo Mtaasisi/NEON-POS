@@ -1,8 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
-import GlassInput from '../../shared/components/ui/EnhancedInput';
 import { 
   Building2, 
   MapPin, 
@@ -11,14 +8,18 @@ import {
   Trash2, 
   Save, 
   Phone, 
-  Mail,
   Clock,
   Users,
-  Package,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  X,
+  Package,
+  Settings
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import GlassCard from '../../shared/components/ui/GlassCard';
+import GlassInput from '../../shared/components/ui/GlassInput';
+import GlassButton from '../../shared/components/ui/GlassButton';
 
 interface Store {
   id?: string;
@@ -70,7 +71,7 @@ const StoreManagementSettings: React.FC = () => {
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  const emptyStore: Store = {
+  const emptyStore: Store = useMemo(() => ({
     name: '',
     code: '',
     address: '',
@@ -107,7 +108,7 @@ const StoreManagementSettings: React.FC = () => {
     // Permissions
     can_view_other_branches: false,
     can_transfer_to_branches: []
-  };
+  }), []);
 
   useEffect(() => {
     loadStores();
@@ -235,9 +236,12 @@ const StoreManagementSettings: React.FC = () => {
           console.error('Error loading draft:', error);
           localStorage.removeItem(DRAFT_KEY);
         }
+      } else {
+        // Set initial data only if no draft
+        setFormData(store);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [DRAFT_KEY]);
 
     // Auto-save draft when form data changes (faster, silent)
     useEffect(() => {
@@ -278,149 +282,200 @@ const StoreManagementSettings: React.FC = () => {
     };
 
     return (
-      <div className="space-y-6">
-        {/* Form Header */}
-        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-lg p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-bold flex items-center gap-2">
-                  <Building2 className="w-5 h-5" />
-                  {store.id ? 'Edit Store' : 'Add New Store'}
-                </h3>
-                {hasDraft && lastSavedDraft && (
-                  <span className="inline-flex items-center gap-1.5 bg-white/20 text-white text-xs px-2.5 py-1 rounded-full">
-                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                    Auto-saved
-                  </span>
-                )}
-              </div>
-              <p className="text-sm opacity-90 mt-1">
-                Fill in all required fields marked with * • Changes auto-save as you type
-              </p>
+      <div className="bg-white rounded-lg shadow-lg p-6 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6 pb-4 border-b">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">
+                {store.id ? 'Edit Store' : 'Add New Store'}
+              </h3>
+              <p className="text-xs text-gray-500">Fill in all required fields marked with *</p>
             </div>
           </div>
+          {hasDraft && lastSavedDraft && (
+            <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs px-3 py-1.5 rounded-full">
+              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+              Auto-saved
+            </span>
+          )}
         </div>
 
-        {/* Basic Information */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-            <Building2 className="h-5 w-5 text-blue-600 mr-2" />
-            Basic Information
-          </h4>
+        {/* All Form Fields in One Container */}
+        <div className="space-y-4">
+          {/* Basic Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <GlassInput
-              label="Store Name *"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
-            />
-            <GlassInput
-              label="Store Code *"
-              value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-              placeholder="e.g., STORE-001"
-              required
-            />
-          </div>
-        </div>
-
-        {/* Location Details */}
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-            <MapPin className="h-5 w-5 text-green-600 mr-2" />
-            Location Details
-          </h4>
-          <div className="grid grid-cols-1 gap-4">
-            <GlassInput
-              label="Address *"
-              value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              required
-            />
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <GlassInput
-                label="City *"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Store Name *
+              </label>
+              <input
+                type="text"
+                value={formData.name || ''}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Enter store name"
                 required
               />
-              <GlassInput
-                label="State/Province"
-                value={formData.state}
-                onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-              />
-              <GlassInput
-                label="ZIP/Postal Code"
-                value={formData.zip_code}
-                onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Store Code *
+              </label>
+              <input
+                type="text"
+                value={formData.code || ''}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="e.g., STORE-001"
+                required
               />
             </div>
-            <GlassInput
-              label="Country *"
-              value={formData.country}
-              onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-              required
-            />
           </div>
-        </div>
 
-        {/* Contact Information */}
-        <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-            <Phone className="h-5 w-5 text-purple-600 mr-2" />
-            Contact Information
-          </h4>
+          {/* Location Details */}
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Address *
+              </label>
+              <input
+                type="text"
+                value={formData.address || ''}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Street address"
+                required
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  City *
+                </label>
+                <input
+                  type="text"
+                  value={formData.city || ''}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="City"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  State/Province
+                </label>
+                <input
+                  type="text"
+                  value={formData.state || ''}
+                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="State"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ZIP/Postal Code
+                </label>
+                <input
+                  type="text"
+                  value={formData.zip_code || ''}
+                  onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="ZIP"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Country *
+              </label>
+              <input
+                type="text"
+                value={formData.country || ''}
+                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Country"
+                required
+              />
+            </div>
+          </div>
+
+          {/* Contact Information */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={formData.phone || ''}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Phone number"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <input
+                type="email"
+                value={formData.email || ''}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Email address"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Store Manager
+              </label>
+              <input
+                type="text"
+                value={formData.manager_name || ''}
+                onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                placeholder="Manager name"
+              />
+            </div>
+          </div>
+
+          {/* Operating Hours */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <GlassInput
-              label="Phone Number"
-              type="tel"
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            />
-            <GlassInput
-              label="Email"
-              type="email"
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            />
-            <GlassInput
-              label="Store Manager"
-              value={formData.manager_name}
-              onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Opening Time
+              </label>
+              <input
+                type="time"
+                value={formData.opening_time || ''}
+                onChange={(e) => setFormData({ ...formData, opening_time: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Closing Time
+              </label>
+              <input
+                type="time"
+                value={formData.closing_time || ''}
+                onChange={(e) => setFormData({ ...formData, closing_time: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Operating Hours */}
-        <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-            <Clock className="h-5 w-5 text-orange-600 mr-2" />
-            Operating Hours
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <GlassInput
-              label="Opening Time"
-              type="time"
-              value={formData.opening_time}
-              onChange={(e) => setFormData({ ...formData, opening_time: e.target.value })}
-            />
-            <GlassInput
-              label="Closing Time"
-              type="time"
-              value={formData.closing_time}
-              onChange={(e) => setFormData({ ...formData, closing_time: e.target.value })}
-            />
-          </div>
-        </div>
-
-        {/* Data Isolation Mode */}
-        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-            <Package className="h-5 w-5 text-purple-600 mr-2" />
-            Data Isolation Model
-          </h4>
-          
+          {/* Data Isolation Mode */}
+          <div className="border-t pt-4 mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Data Isolation Model
+            </label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             {[
               {
@@ -526,16 +581,15 @@ const StoreManagementSettings: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+          </div>
 
-        {/* Transfer & Sync Options */}
-        <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-            <Package className="h-5 w-5 text-orange-600 mr-2" />
-            Transfer & Synchronization
-          </h4>
+          {/* Transfer & Sync Options */}
+          <div className="border-t pt-4 mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Transfer & Synchronization
+            </label>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div>
                 <span className="text-sm font-medium text-gray-700">Allow Stock Transfers</span>
                 <p className="text-xs text-gray-500">Enable transferring stock between branches</p>
@@ -552,7 +606,7 @@ const StoreManagementSettings: React.FC = () => {
             </div>
 
             {formData.allow_stock_transfer && (
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+              <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
                 <div>
                   <span className="text-sm font-medium text-gray-700">Require Approval for Transfers</span>
                   <p className="text-xs text-gray-500">Transfers need manager approval</p>
@@ -569,7 +623,7 @@ const StoreManagementSettings: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div>
                 <span className="text-sm font-medium text-gray-700">Auto-Sync Products</span>
                 <p className="text-xs text-gray-500">Automatically sync product catalog changes</p>
@@ -585,7 +639,7 @@ const StoreManagementSettings: React.FC = () => {
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div>
                 <span className="text-sm font-medium text-gray-700">Auto-Sync Prices</span>
                 <p className="text-xs text-gray-500">Keep prices synchronized across branches</p>
@@ -601,16 +655,15 @@ const StoreManagementSettings: React.FC = () => {
               </label>
             </div>
           </div>
-        </div>
+          </div>
 
-        {/* Branch Configuration */}
-        <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-            <Package className="h-5 w-5 text-cyan-600 mr-2" />
-            Branch Configuration
-          </h4>
+          {/* Branch Configuration */}
+          <div className="border-t pt-4 mt-4">
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Branch Configuration
+            </label>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div>
                 <span className="text-sm font-medium text-gray-700">Main Store</span>
                 <p className="text-xs text-gray-500">This is the primary/headquarters location</p>
@@ -626,7 +679,7 @@ const StoreManagementSettings: React.FC = () => {
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div>
                 <span className="text-sm font-medium text-gray-700">Active</span>
                 <p className="text-xs text-gray-500">Store is currently operational</p>
@@ -642,7 +695,7 @@ const StoreManagementSettings: React.FC = () => {
               </label>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+            <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg">
               <div>
                 <span className="text-sm font-medium text-gray-700">Can View Other Branches</span>
                 <p className="text-xs text-gray-500">Branch staff can view data from other branches</p>
@@ -663,7 +716,7 @@ const StoreManagementSettings: React.FC = () => {
               <select
                 value={formData.pricing_model}
                 onChange={(e) => setFormData({ ...formData, pricing_model: e.target.value as 'centralized' | 'location-specific' })}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
               >
                 <option value="centralized">Centralized Pricing (Same prices for all stores)</option>
                 <option value="location-specific">Location-Specific Pricing</option>
@@ -671,42 +724,48 @@ const StoreManagementSettings: React.FC = () => {
             </div>
 
             {formData.pricing_model === 'location-specific' && (
-              <GlassInput
-                label="Tax Rate Override (%)"
-                type="number"
-                step="0.01"
-                value={formData.tax_rate_override || ''}
-                onChange={(e) => setFormData({ ...formData, tax_rate_override: parseFloat(e.target.value) })}
-                placeholder="Leave empty to use default tax rate"
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tax Rate Override (%)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.tax_rate_override || ''}
+                  onChange={(e) => setFormData({ ...formData, tax_rate_override: parseFloat(e.target.value) })}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="Leave empty to use default tax rate"
+                />
+              </div>
             )}
+          </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-4 border-t-2 border-gray-300">
-          <GlassButton
+        <div className="flex gap-3 pt-6 mt-6 border-t">
+          <button
             onClick={handleSubmit}
             disabled={isSaving || !formData.name || !formData.code}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3"
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
             {isSaving ? 'Saving...' : (store.id ? 'Update Store' : 'Create Store')}
-          </GlassButton>
+          </button>
           
-          <GlassButton
+          <button
             onClick={handleCancel}
-            variant="outline"
-            className="flex items-center gap-2 px-6 py-3"
             disabled={isSaving}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
+            <X className="w-4 h-4" />
             Cancel
-          </GlassButton>
+          </button>
         </div>
 
         {/* Auto-Save Status Info */}
         {hasDraft && lastSavedDraft && (
-          <div className="flex items-center justify-between text-xs bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 p-3 rounded-lg">
+          <div className="flex items-center justify-between text-xs bg-green-50 border border-green-200 p-3 rounded-lg mt-4">
             <div className="flex items-center gap-2">
               <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
               <span className="text-green-700 font-medium">
@@ -723,38 +782,41 @@ const StoreManagementSettings: React.FC = () => {
   };
 
   return (
-    <GlassCard className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Building2 className="w-6 h-6 text-blue-600" />
-          <div>
-            <h2 className="text-xl font-semibold text-gray-800">Store & Branch Management</h2>
-            <p className="text-sm text-gray-600">Manage your store locations and branches</p>
+    <div>
+      {!showAddForm && !editingStore && (
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Building2 className="w-6 h-6 text-blue-600" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Store & Branch Management</h2>
+                <p className="text-sm text-gray-500">Manage your store locations and branches</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add Store
+            </button>
           </div>
         </div>
-        {!showAddForm && !editingStore && (
-          <GlassButton
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4" />
-            Add Store
-          </GlassButton>
-        )}
-      </div>
+      )}
 
       {/* Add/Edit Form */}
       {(showAddForm || editingStore) && (
-        <div className="mb-6">
-          <StoreForm
-            store={editingStore || emptyStore}
-            onSave={handleSaveStore}
-            onCancel={() => {
-              setShowAddForm(false);
-              setEditingStore(null);
-            }}
-          />
-        </div>
+        <StoreForm
+          key={editingStore?.id || 'new-store'}
+          store={editingStore || emptyStore}
+          onSave={handleSaveStore}
+          onCancel={() => {
+            setShowAddForm(false);
+            setEditingStore(null);
+          }}
+        />
       )}
 
       {/* Stores List */}
@@ -860,7 +922,7 @@ const StoreManagementSettings: React.FC = () => {
           )}
         </div>
       )}
-    </GlassCard>
+    </div>
   );
 };
 

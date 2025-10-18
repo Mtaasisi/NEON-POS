@@ -416,23 +416,23 @@ const LocationVerification: React.FC<LocationVerificationProps> = ({
           </div>
         )}
 
-        {/* Action Button */}
+        {/* Action Button - CBM Calculator Style */}
         {!showFallback && (
           <div className="flex gap-3">
-            <GlassButton
+            <button
               onClick={verifyLocation}
               disabled={isLoading}
-              icon={<MapPin size={18} />}
-              className={`flex-1 ${
+              className={`flex-1 px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50 ${
                 verificationStatus === 'success' 
-                  ? 'bg-green-600 text-white' 
+                  ? 'bg-green-600 text-white hover:bg-green-700' 
                   : verificationStatus === 'failed'
-                  ? 'bg-red-600 text-white'
-                  : 'bg-blue-600 text-white'
+                  ? 'bg-red-600 text-white hover:bg-red-700'
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
               }`}
             >
+              <MapPin size={18} />
               {isLoading ? 'Verifying...' : getStatusText()}
-            </GlassButton>
+            </button>
           </div>
         )}
 

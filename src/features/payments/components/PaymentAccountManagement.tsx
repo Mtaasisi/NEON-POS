@@ -9,22 +9,28 @@ import {
   Settings, Plus, Edit3, Trash2, Save, X, 
   CheckCircle, XCircle, AlertTriangle, RefreshCw,
   TrendingUp, TrendingDown, Eye, EyeOff, Wallet,
-  BarChart3, DollarSign, CreditCard, Building, Smartphone
+  BarChart3, DollarSign, CreditCard, Building, Smartphone,
+  History, Filter, Calendar, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePaymentMethodsContext } from '../../../context/PaymentMethodsContext';
 import { financeAccountService, FinanceAccount } from '../../../lib/financeAccountService';
 
+interface Transaction {
+  id: string;
+  transaction_type: string;
+  amount: number;
+  description: string;
+  created_at: string;
+  balance_after: number;
+  balance_before: number;
+  reference_number?: string;
+  metadata?: any;
+}
+
 interface AccountWithTransactions extends FinanceAccount {
-  recentTransactions: Array<{
-    id: string;
-    transaction_type: string;
-    amount: number;
-    description: string;
-    created_at: string;
-    balance_after: number;
-  }>;
+  recentTransactions: Transaction[];
   totalReceived: number;
   totalSpent: number;
 }
@@ -37,6 +43,13 @@ const PaymentAccountManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState<FinanceAccount | null>(null);
   const [currencyFilter, setCurrencyFilter] = useState('all');
+  
+  // History modal state
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<AccountWithTransactions | null>(null);
+  const [accountTransactions, setAccountTransactions] = useState<Transaction[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState<string>('all');
 
   // Form state
   const [formData, setFormData] = useState<Partial<FinanceAccount>>({
@@ -296,6 +309,34 @@ const PaymentAccountManagement: React.FC = () => {
     setShowAddModal(true);
   };
 
+  // Load all transactions for an account
+  const loadAccountTransactions = async (accountId: string) => {
+    setIsLoadingTransactions(true);
+    try {
+      const { data, error } = await supabase
+        .from('account_transactions')
+        .select('*')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAccountTransactions(data || []);
+    } catch (error) {
+      console.error('Error loading account transactions:', error);
+      toast.error('Failed to load transaction history');
+    } finally {
+      setIsLoadingTransactions(false);
+    }
+  };
+
+  // Open history modal for an account
+  const handleViewHistory = async (account: AccountWithTransactions) => {
+    setSelectedAccount(account);
+    setShowHistoryModal(true);
+    setTransactionTypeFilter('all');
+    await loadAccountTransactions(account.id);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -306,222 +347,255 @@ const PaymentAccountManagement: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Payment Accounts</h2>
-          <p className="text-gray-600">Manage your payment accounts and view balances</p>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-1">Payment Accounts</h2>
+            <p className="text-gray-500">Track balances and manage your payment methods</p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={fetchAccounts}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 hover:border-gray-300 hover:shadow-sm text-gray-700 rounded-xl transition-all font-medium"
+            >
+              <RefreshCw size={18} />
+              <span>Refresh</span>
+            </button>
+            <button
+              onClick={handleAdd}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all font-medium shadow-lg shadow-blue-500/30"
+            >
+              <Plus size={18} />
+              <span>Add Account</span>
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={fetchAccounts}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
-          <button
-            onClick={handleAdd}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <Plus size={16} />
-            Add Account
-          </button>
+
+        {/* Currency Filter */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Filter size={18} className="text-gray-400" />
+              <select
+                value={currencyFilter}
+                onChange={(e) => setCurrencyFilter(e.target.value)}
+                className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-sm font-medium"
+              >
+                <option value="all">All Currencies</option>
+                <option value="TZS">Tanzanian Shilling (TZS)</option>
+                <option value="USD">US Dollar (USD)</option>
+                <option value="EUR">Euro (EUR)</option>
+                <option value="GBP">British Pound (GBP)</option>
+              </select>
+            </div>
+            {currencyFilter !== 'all' && (
+              <button
+                onClick={() => setCurrencyFilter('all')}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+              >
+                <X size={14} />
+                Clear Filter
+              </button>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Currency Filter */}
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Filter by Currency:</label>
-          <select
-            value={currencyFilter}
-            onChange={(e) => setCurrencyFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-          >
-            <option value="all">All Currencies</option>
-            <option value="TZS">Tanzanian Shilling (TZS)</option>
-            <option value="USD">US Dollar (USD)</option>
-            <option value="EUR">Euro (EUR)</option>
-            <option value="GBP">British Pound (GBP)</option>
-          </select>
-        </div>
-        {currencyFilter !== 'all' && (
-          <button
-            onClick={() => setCurrencyFilter('all')}
-            className="text-sm text-blue-600 hover:text-blue-800 underline"
-          >
-            Clear Filter
-          </button>
-        )}
-      </div>
-
-      {/* Summary Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <GlassCard className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600">Total Accounts</p>
-              <p className="text-2xl font-bold text-blue-900">{summaryStats.totalAccounts}</p>
-            </div>
-            <div className="p-3 bg-blue-500 rounded-lg">
-              <Wallet className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-green-600">Total Balance</p>
-              <p className="text-2xl font-bold text-green-900">{formatMoney(summaryStats.totalBalance)}</p>
-            </div>
-            <div className="p-3 bg-green-500 rounded-lg">
-              <DollarSign className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-purple-600">Active Accounts</p>
-              <p className="text-2xl font-bold text-purple-900">{summaryStats.activeAccounts}</p>
-            </div>
-            <div className="p-3 bg-purple-500 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-orange-600">Net Flow</p>
-              <p className="text-2xl font-bold text-orange-900">{formatMoney(summaryStats.netFlow)}</p>
-            </div>
-            <div className="p-3 bg-orange-500 rounded-lg">
-              <BarChart3 className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Accounts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredAccounts.map((account) => (
-          <GlassCard key={account.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
-            {/* Header */}
+        {/* Summary Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Total Accounts */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <AccountThumbnail type={account.type} size="md" />
+              <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg shadow-blue-500/30">
+                <Wallet className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 font-medium mb-1">Total Accounts</p>
+              <p className="text-3xl font-bold text-gray-900">{summaryStats.totalAccounts}</p>
+            </div>
+          </div>
+
+          {/* Total Balance */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg shadow-emerald-500/30">
+                <DollarSign className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 font-medium mb-1">Total Balance</p>
+              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalBalance)}</p>
+            </div>
+          </div>
+
+          {/* Active Accounts */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg shadow-purple-500/30">
+                <CheckCircle className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 font-medium mb-1">Active Accounts</p>
+              <p className="text-3xl font-bold text-gray-900">{summaryStats.activeAccounts}</p>
+            </div>
+          </div>
+
+          {/* Net Flow */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between mb-4">
+              <div className="p-3 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg shadow-orange-500/30">
+                <BarChart3 className="w-5 h-5 text-white" />
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 font-medium mb-1">Net Flow</p>
+              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.netFlow)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Accounts Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredAccounts.map((account) => (
+            <div 
+              key={account.id} 
+              className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-xl hover:border-gray-300 transition-all group"
+            >
+              {/* Header with gradient background */}
+              <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-6 border-b border-gray-200">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <AccountThumbnail type={account.type} size="md" />
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-lg">{account.name}</h3>
+                      <p className="text-xs text-gray-500 capitalize flex items-center gap-1 mt-0.5">
+                        {account.type === 'cash' && <DollarSign className="w-3 h-3" />}
+                        {account.type === 'bank' && <Building className="w-3 h-3" />}
+                        {account.type === 'mobile_money' && <Smartphone className="w-3 h-3" />}
+                        {account.type === 'credit_card' && <CreditCard className="w-3 h-3" />}
+                        {account.type.replace('_', ' ')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEdit(account);
+                      }}
+                      className="p-2 bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 rounded-lg transition-all border border-gray-200 shadow-sm"
+                      title="Edit account"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(account.id);
+                      }}
+                      className="p-2 bg-white hover:bg-red-50 text-gray-600 hover:text-red-600 rounded-lg transition-all border border-gray-200 shadow-sm"
+                      title="Delete account"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Balance */}
                 <div>
-                  <h3 className="font-semibold text-gray-900">{account.name}</h3>
-                  <p className="text-sm text-gray-500 capitalize flex items-center gap-1">
-                    {account.type === 'cash' && <DollarSign className="w-3 h-3" />}
-                    {account.type === 'bank' && <Building className="w-3 h-3" />}
-                    {account.type === 'mobile_money' && <Smartphone className="w-3 h-3" />}
-                    {account.type === 'credit_card' && <CreditCard className="w-3 h-3" />}
-                    {account.type.replace('_', ' ')}
+                  <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Current Balance</p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    {formatMoney(account.balance)}
                   </p>
                 </div>
               </div>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => handleEdit(account)}
-                  className="flex items-center justify-center p-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
-                  title="Edit account"
-                >
-                  <Edit3 size={14} />
-                </button>
-                <button
-                  onClick={() => handleDelete(account.id)}
-                  className="flex items-center justify-center p-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
-                  title="Delete account"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
 
-            {/* Balance */}
-            <div className="mb-4">
-              <div className="text-3xl font-bold text-gray-900">
-                {formatMoney(account.balance)}
-              </div>
-              <div className="text-sm text-gray-500">
-                <span>Current Balance</span>
-              </div>
-            </div>
-
-            {/* Financial Stats */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="p-3 bg-green-50 rounded-lg">
-                <div className="flex items-center gap-1 text-green-600 mb-1">
-                  <TrendingUp size={14} />
-                  <span className="text-xs font-medium">Received</span>
-                </div>
-                <div className="text-sm font-semibold text-green-700">{formatMoney(account.totalReceived)}</div>
-              </div>
-              <div className="p-3 bg-red-50 rounded-lg">
-                <div className="flex items-center gap-1 text-red-600 mb-1">
-                  <TrendingDown size={14} />
-                  <span className="text-xs font-medium">Spent</span>
-                </div>
-                <div className="text-sm font-semibold text-red-700">{formatMoney(account.totalSpent)}</div>
-              </div>
-            </div>
-
-            {/* Recent Transactions */}
-            {account.recentTransactions.length > 0 && (
-              <div className="mb-4">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Recent Activity</h4>
-                <div className="space-y-2">
-                  {account.recentTransactions.slice(0, 2).map((transaction) => (
-                    <div key={transaction.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="text-xs text-gray-600 truncate">{transaction.description}</div>
-                        <div className="text-xs text-gray-400">
-                          {new Date(transaction.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <div className={`text-xs font-medium ${
-                        transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' 
-                          ? 'text-green-600' 
-                          : 'text-red-600'
-                      }`}>
-                        {transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' ? '+' : '-'}
-                        {formatMoney(transaction.amount)}
-                      </div>
+              {/* Content */}
+              <div className="p-6">
+                {/* Financial Stats */}
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl p-4 border border-emerald-200">
+                    <div className="flex items-center gap-1.5 text-emerald-700 mb-1">
+                      <TrendingUp size={14} />
+                      <span className="text-xs font-semibold uppercase tracking-wide">Received</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Footer */}
-            <div className="pt-4 border-t border-gray-100">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-500">Status</span>
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs ${
-                    account.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {account.is_active ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                    {account.is_active ? 'Active' : 'Inactive'}
+                    <div className="text-base font-bold text-emerald-900">{formatMoney(account.totalReceived)}</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
+                    <div className="flex items-center gap-1.5 text-red-700 mb-1">
+                      <TrendingDown size={14} />
+                      <span className="text-xs font-semibold uppercase tracking-wide">Spent</span>
+                    </div>
+                    <div className="text-base font-bold text-red-900">{formatMoney(account.totalSpent)}</div>
                   </div>
                 </div>
-                {account.is_payment_method && (
-                  <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded-full">
-                    <CreditCard size={10} />
-                    Payment Method
+
+                {/* Recent Transactions */}
+                {account.recentTransactions.length > 0 && (
+                  <div className="mb-5">
+                    <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Recent Activity</h4>
+                    <div className="space-y-2">
+                      {account.recentTransactions.slice(0, 2).map((transaction) => {
+                        const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+                        return (
+                          <div key={transaction.id} className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors border border-gray-100">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs text-gray-900 font-medium truncate">{transaction.description}</div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {new Date(transaction.created_at).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <div className={`text-sm font-bold ml-3 ${
+                              isIncoming ? 'text-emerald-600' : 'text-red-600'
+                            }`}>
+                              {isIncoming ? '+' : '-'}
+                              {formatMoney(transaction.amount)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
+
+                {/* Footer */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${
+                        account.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {account.is_active ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                        {account.is_active ? 'Active' : 'Inactive'}
+                      </div>
+                    </div>
+                    {account.is_payment_method && (
+                      <div className="flex items-center gap-1 text-xs text-blue-700 bg-blue-100 px-3 py-1.5 rounded-lg font-medium">
+                        <CreditCard size={12} />
+                        Payment Method
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* View History Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewHistory(account);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all font-semibold text-sm shadow-lg shadow-blue-500/30 hover:shadow-xl"
+                  >
+                    <History size={16} />
+                    View Full History
+                  </button>
+                </div>
               </div>
             </div>
-          </GlassCard>
-        ))}
+          ))}
+        </div>
       </div>
 
       {/* Add/Edit Modal */}
@@ -668,6 +742,195 @@ const PaymentAccountManagement: React.FC = () => {
               >
                 <Save size={16} />
                 {editingAccount ? 'Update Account' : 'Create Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction History Modal */}
+      {showHistoryModal && selectedAccount && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="relative p-8 border-b border-gray-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="p-4 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg shadow-blue-500/30">
+                    <History className="w-7 h-7 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">Transaction History</h3>
+                    <p className="text-sm text-gray-600 mt-0.5">{selectedAccount.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowHistoryModal(false)}
+                  className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl transition-all"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* Account Summary */}
+            <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Current Balance</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatMoney(selectedAccount.balance)}</div>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 rounded-2xl border border-emerald-200 hover:shadow-md transition-shadow">
+                  <div className="text-xs text-emerald-700 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <TrendingUp size={14} />
+                    Received
+                  </div>
+                  <div className="text-2xl font-bold text-emerald-900">{formatMoney(selectedAccount.totalReceived)}</div>
+                </div>
+                <div className="bg-gradient-to-br from-red-50 to-red-100 p-5 rounded-2xl border border-red-200 hover:shadow-md transition-shadow">
+                  <div className="text-xs text-red-700 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                    <TrendingDown size={14} />
+                    Spent
+                  </div>
+                  <div className="text-2xl font-bold text-red-900">{formatMoney(selectedAccount.totalSpent)}</div>
+                </div>
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Total Transactions</div>
+                  <div className="text-2xl font-bold text-gray-900">{accountTransactions.length}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="p-6 bg-white border-b border-gray-200">
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-3 flex-1">
+                  <Filter size={18} className="text-gray-400" />
+                  <select
+                    value={transactionTypeFilter}
+                    onChange={(e) => setTransactionTypeFilter(e.target.value)}
+                    className="px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-sm font-medium bg-white"
+                  >
+                    <option value="all">All Transactions</option>
+                    <option value="payment_received">Money In</option>
+                    <option value="expense">Expenses</option>
+                    <option value="payment_made">Payments Made</option>
+                    <option value="transfer_in">Transfers In</option>
+                    <option value="transfer_out">Transfers Out</option>
+                  </select>
+                </div>
+                <div className="text-sm text-gray-500 bg-gray-100 px-4 py-2.5 rounded-xl font-medium">
+                  {transactionTypeFilter === 'all' 
+                    ? `${accountTransactions.length} transactions`
+                    : `${accountTransactions.filter(t => t.transaction_type === transactionTypeFilter).length} transactions`
+                  }
+                </div>
+              </div>
+            </div>
+
+            {/* Transactions List */}
+            <div className="flex-1 overflow-y-auto p-8">
+              {isLoadingTransactions ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
+                  <span className="mt-4 text-gray-600 font-medium">Loading transactions...</span>
+                </div>
+              ) : accountTransactions.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl mb-4">
+                    <History size={36} className="text-gray-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No transactions yet</h3>
+                  <p className="text-gray-500">This account has no transaction history.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {accountTransactions
+                    .filter(t => transactionTypeFilter === 'all' || t.transaction_type === transactionTypeFilter)
+                    .map((transaction) => {
+                      const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+                      const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
+                      
+                      return (
+                        <div 
+                          key={transaction.id} 
+                          className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                {isIncoming && (
+                                  <div className="p-1 bg-green-100 rounded">
+                                    <ArrowDownRight size={14} className="text-green-600" />
+                                  </div>
+                                )}
+                                {isOutgoing && (
+                                  <div className="p-1 bg-red-100 rounded">
+                                    <ArrowUpRight size={14} className="text-red-600" />
+                                  </div>
+                                )}
+                                <h4 className="font-medium text-gray-900">{transaction.description || 'No description'}</h4>
+                              </div>
+                              
+                              <div className="flex items-center gap-4 text-sm text-gray-600">
+                                <div className="flex items-center gap-1">
+                                  <Calendar size={12} />
+                                  {new Date(transaction.created_at).toLocaleString()}
+                                </div>
+                                {transaction.reference_number && (
+                                  <div className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                    Ref: {transaction.reference_number}
+                                  </div>
+                                )}
+                                <div className={`text-xs px-2 py-1 rounded capitalize ${
+                                  isIncoming ? 'bg-green-100 text-green-700' : 
+                                  isOutgoing ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {transaction.transaction_type.replace('_', ' ')}
+                                </div>
+                              </div>
+                              
+                              {/* Show metadata if it's a PO payment */}
+                              {transaction.metadata?.type === 'purchase_order_payment' && (
+                                <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
+                                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">
+                                    PO: {transaction.metadata.po_reference}
+                                  </span>
+                                  {transaction.metadata.supplier && (
+                                    <span>Supplier: {transaction.metadata.supplier}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="text-right ml-4">
+                              <div className={`text-xl font-bold ${
+                                isIncoming ? 'text-green-600' : 
+                                isOutgoing ? 'text-red-600' : 'text-gray-900'
+                              }`}>
+                                {isIncoming && '+'}
+                                {isOutgoing && '-'}
+                                {formatMoney(transaction.amount)}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                Balance: {formatMoney(transaction.balance_after)}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
+              >
+                Close
               </button>
             </div>
           </div>

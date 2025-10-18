@@ -6,7 +6,7 @@ import {
   FileText, Layers, Truck, QrCode, ShoppingCart,
   Target, Calculator, Banknote, Receipt, 
   Copy, Download, Building,
-  Info, CheckCircle2, ArrowUp
+  Info, CheckCircle2, ArrowUp, Plus, Trash2, Save
 } from 'lucide-react';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { Product } from '../../types/inventory';
@@ -49,6 +49,19 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
   const [adjustmentQuantity, setAdjustmentQuantity] = useState(0);
   const [adjustmentReason, setAdjustmentReason] = useState('');
   const [isAdjustingStock, setIsAdjustingStock] = useState(false);
+
+  // Variant management state
+  const [editingVariantId, setEditingVariantId] = useState<string | null>(null);
+  const [editingVariantData, setEditingVariantData] = useState<any>(null);
+  const [showAddVariantForm, setShowAddVariantForm] = useState(false);
+  const [newVariantData, setNewVariantData] = useState({
+    name: '',
+    sku: '',
+    costPrice: 0,
+    sellingPrice: 0,
+    quantity: 0,
+    minQuantity: 2
+  });
 
   // Update current product when prop changes
   useEffect(() => {
@@ -223,6 +236,150 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
       }, 1000);
     } catch (error) {
       toast.error('Failed to add to cart');
+    }
+  };
+
+  // Variant Management Functions
+  const handleEditVariant = (variant: any) => {
+    setEditingVariantId(variant.id);
+    setEditingVariantData({
+      name: variant.name,
+      sku: variant.sku,
+      costPrice: variant.costPrice || 0,
+      sellingPrice: variant.sellingPrice || 0,
+      quantity: variant.quantity || 0,
+      minQuantity: variant.minQuantity || 2
+    });
+  };
+
+  const handleCancelEditVariant = () => {
+    setEditingVariantId(null);
+    setEditingVariantData(null);
+  };
+
+  const handleSaveVariant = async () => {
+    if (!editingVariantId || !editingVariantData) return;
+    
+    try {
+      const { supabase } = await import('../../../../lib/supabaseClient');
+      
+      const { error } = await supabase
+        .from('lats_product_variants')
+        .update({
+          name: editingVariantData.name,
+          sku: editingVariantData.sku,
+          cost_price: editingVariantData.costPrice,
+          unit_price: editingVariantData.sellingPrice,
+          selling_price: editingVariantData.sellingPrice,
+          quantity: editingVariantData.quantity,
+          min_quantity: editingVariantData.minQuantity,
+        })
+        .eq('id', editingVariantId);
+
+      if (error) throw error;
+
+      toast.success('Variant updated successfully!');
+      setEditingVariantId(null);
+      setEditingVariantData(null);
+      
+      // Refresh product data
+      const refreshedProduct = await getProduct(product.id);
+      if (refreshedProduct) {
+        setCurrentProduct(refreshedProduct);
+      }
+    } catch (error: any) {
+      console.error('Error updating variant:', error);
+      toast.error(`Failed to update variant: ${error.message}`);
+    }
+  };
+
+  const handleDeleteVariant = async (variantId: string, variantName: string) => {
+    if (!confirm(`Are you sure you want to delete variant "${variantName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const { supabase } = await import('../../../../lib/supabaseClient');
+      
+      const { error } = await supabase
+        .from('lats_product_variants')
+        .delete()
+        .eq('id', variantId);
+
+      if (error) {
+        // Check if it's a foreign key constraint error
+        if (error.code === '23503') {
+          toast.error('Cannot delete variant: it is referenced in orders or other records');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success('Variant deleted successfully!');
+      
+      // Refresh product data
+      const refreshedProduct = await getProduct(product.id);
+      if (refreshedProduct) {
+        setCurrentProduct(refreshedProduct);
+      }
+    } catch (error: any) {
+      console.error('Error deleting variant:', error);
+      toast.error(`Failed to delete variant: ${error.message}`);
+    }
+  };
+
+  const handleAddNewVariant = async () => {
+    if (!newVariantData.name || !newVariantData.sku) {
+      toast.error('Please fill in variant name and SKU');
+      return;
+    }
+
+    try {
+      const { supabase } = await import('../../../../lib/supabaseClient');
+      
+      const { error } = await supabase
+        .from('lats_product_variants')
+        .insert({
+          product_id: product.id,
+          name: newVariantData.name,
+          sku: newVariantData.sku,
+          cost_price: newVariantData.costPrice,
+          unit_price: newVariantData.sellingPrice,
+          selling_price: newVariantData.sellingPrice,
+          quantity: newVariantData.quantity,
+          min_quantity: newVariantData.minQuantity,
+          is_active: true
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          toast.error('SKU already exists. Please use a unique SKU.');
+        } else {
+          throw error;
+        }
+        return;
+      }
+
+      toast.success('Variant added successfully!');
+      setShowAddVariantForm(false);
+      setNewVariantData({
+        name: '',
+        sku: '',
+        costPrice: 0,
+        sellingPrice: 0,
+        quantity: 0,
+        minQuantity: 2
+      });
+      
+      // Refresh product data
+      const refreshedProduct = await getProduct(product.id);
+      if (refreshedProduct) {
+        setCurrentProduct(refreshedProduct);
+      }
+    } catch (error: any) {
+      console.error('Error adding variant:', error);
+      toast.error(`Failed to add variant: ${error.message}`);
     }
   };
 
@@ -1689,79 +1846,288 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
           {/* Variants Tab */}
           {activeTab === 'variants' && (
             <div className="space-y-6">
+              {/* Add New Variant Button */}
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold text-gray-800">Manage Variants ({currentProduct.variants?.length || 0})</h3>
+                <button
+                  onClick={() => setShowAddVariantForm(!showAddVariantForm)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add New Variant
+                </button>
+              </div>
+
+              {/* Add New Variant Form */}
+              {showAddVariantForm && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-4">
+                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-blue-600" />
+                    Add New Variant
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Variant Name*</label>
+                      <input
+                        type="text"
+                        value={newVariantData.name}
+                        onChange={(e) => setNewVariantData({ ...newVariantData, name: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., 256GB Blue"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">SKU*</label>
+                      <input
+                        type="text"
+                        value={newVariantData.sku}
+                        onChange={(e) => setNewVariantData({ ...newVariantData, sku: e.target.value })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="e.g., PROD-001-256-BLU"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
+                      <input
+                        type="number"
+                        value={newVariantData.costPrice}
+                        onChange={(e) => setNewVariantData({ ...newVariantData, costPrice: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0.00"
+                        step="0.01"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
+                      <input
+                        type="number"
+                        value={newVariantData.sellingPrice}
+                        onChange={(e) => setNewVariantData({ ...newVariantData, sellingPrice: parseFloat(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0.00"
+                        step="0.01"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
+                      <input
+                        type="number"
+                        value={newVariantData.quantity}
+                        onChange={(e) => setNewVariantData({ ...newVariantData, quantity: parseInt(e.target.value) || 0 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Min Stock Level</label>
+                      <input
+                        type="number"
+                        value={newVariantData.minQuantity}
+                        onChange={(e) => setNewVariantData({ ...newVariantData, minQuantity: parseInt(e.target.value) || 2 })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="2"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAddNewVariant}
+                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                    >
+                      <Save className="w-4 h-4" />
+                      Save Variant
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAddVariantForm(false);
+                        setNewVariantData({ name: '', sku: '', costPrice: 0, sellingPrice: 0, quantity: 0, minQuantity: 2 });
+                      }}
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Complete Variant Table */}
-          {product.variants && product.variants.length > 0 && (
+              {currentProduct.variants && currentProduct.variants.length > 0 && (
                 <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
                   <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
                     <Layers className="w-5 h-5 text-indigo-600" />
-                    <h3 className="text-sm font-semibold text-gray-800">Complete Variant Information ({product.variants.length} variants)</h3>
+                    <h3 className="text-sm font-semibold text-gray-800">Variant List</h3>
                   </div>
                   <div className="overflow-x-auto -mx-4 px-4">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-200">
-                      <th className="text-left p-3 font-medium text-gray-700">Variant Name</th>
-                      <th className="text-left p-3 font-medium text-gray-700 hidden sm:table-cell">SKU</th>
-                      <th className="text-left p-3 font-medium text-gray-700">Stock</th>
-                      <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">Min Level</th>
-                      <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Cost Price</th>
-                      <th className="text-left p-3 font-medium text-gray-700">Selling Price</th>
-                      <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Markup</th>
-                      <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Profit/Unit</th>
-                      <th className="text-left p-3 font-medium text-gray-700">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {product.variants.map((variant) => {
-                      const markup = variant.costPrice > 0 ? ((variant.sellingPrice - variant.costPrice) / variant.costPrice * 100) : 0;
-                      const profitPerUnit = variant.sellingPrice - variant.costPrice;
-                      return (
-                        <tr key={variant.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="p-3">
-                            <div className="flex items-center gap-2">
-                              {variant.isPrimary && <Star className="w-4 h-4 text-yellow-500" />}
-                              <div>
-                                <span className="font-medium text-sm">{variant.name}</span>
-                                <p className="text-xs text-gray-500 sm:hidden">{variant.sku}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="p-3 font-mono text-xs hidden sm:table-cell">{variant.sku}</td>
-                          <td className="p-3">
-                            <span className={`font-medium text-sm ${
-                              variant.quantity <= 0 ? 'text-red-600' : 
-                              variant.quantity <= variant.minQuantity ? 'text-orange-600' : 'text-green-600'
-                            }`}>
-                              {variant.quantity}
-                            </span>
-                          </td>
-                          <td className="p-3 text-gray-600 text-sm hidden md:table-cell">{variant.minQuantity}</td>
-                          <td className="p-3 font-medium text-sm hidden lg:table-cell">{format.money(variant.costPrice)}</td>
-                          <td className="p-3 font-medium text-sm">{format.money(variant.sellingPrice)}</td>
-                          <td className="p-3 hidden lg:table-cell">
-                            <span className={`font-medium text-sm ${markup > 50 ? 'text-green-600' : markup > 20 ? 'text-orange-600' : 'text-red-600'}`}>
-                              {markup.toFixed(1)}%
-                            </span>
-                          </td>
-                          <td className="p-3 font-medium text-sm hidden lg:table-cell">
-                            <span className={profitPerUnit > 0 ? 'text-green-600' : 'text-red-600'}>
-                              {format.money(profitPerUnit)}
-                            </span>
-                          </td>
-                          <td className="p-3">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="text-left p-3 font-medium text-gray-700">Variant Name</th>
+                          <th className="text-left p-3 font-medium text-gray-700 hidden sm:table-cell">SKU</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Stock</th>
+                          <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">Min Level</th>
+                          <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Cost Price</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Selling Price</th>
+                          <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Markup</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Status</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {currentProduct.variants.map((variant) => {
+                          const markup = variant.costPrice > 0 ? ((variant.sellingPrice - variant.costPrice) / variant.costPrice * 100) : 0;
+                          const isEditing = editingVariantId === variant.id;
+                          
+                          if (isEditing && editingVariantData) {
+                            return (
+                              <tr key={variant.id} className="border-b border-gray-100 bg-blue-50">
+                                <td className="p-3">
+                                  <input
+                                    type="text"
+                                    value={editingVariantData.name}
+                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, name: e.target.value })}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                  />
+                                </td>
+                                <td className="p-3 hidden sm:table-cell">
+                                  <input
+                                    type="text"
+                                    value={editingVariantData.sku}
+                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, sku: e.target.value })}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={editingVariantData.quantity}
+                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, quantity: parseInt(e.target.value) || 0 })}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                  />
+                                </td>
+                                <td className="p-3 hidden md:table-cell">
+                                  <input
+                                    type="number"
+                                    value={editingVariantData.minQuantity}
+                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, minQuantity: parseInt(e.target.value) || 0 })}
+                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                  />
+                                </td>
+                                <td className="p-3 hidden lg:table-cell">
+                                  <input
+                                    type="number"
+                                    value={editingVariantData.costPrice}
+                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, costPrice: parseFloat(e.target.value) || 0 })}
+                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    step="0.01"
+                                  />
+                                </td>
+                                <td className="p-3">
+                                  <input
+                                    type="number"
+                                    value={editingVariantData.sellingPrice}
+                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, sellingPrice: parseFloat(e.target.value) || 0 })}
+                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    step="0.01"
+                                  />
+                                </td>
+                                <td className="p-3 hidden lg:table-cell">-</td>
+                                <td className="p-3">-</td>
+                                <td className="p-3">
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={handleSaveVariant}
+                                      className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                      title="Save"
+                                    >
+                                      <Save className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={handleCancelEditVariant}
+                                      className="p-1 text-gray-600 hover:bg-gray-50 rounded"
+                                      title="Cancel"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                          
+                          return (
+                            <tr key={variant.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="p-3">
+                                <div className="flex items-center gap-2">
+                                  {variant.isPrimary && <Star className="w-4 h-4 text-yellow-500" />}
+                                  <div>
+                                    <span className="font-medium text-sm">{variant.name}</span>
+                                    <p className="text-xs text-gray-500 sm:hidden">{variant.sku}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-3 font-mono text-xs hidden sm:table-cell">{variant.sku}</td>
+                              <td className="p-3">
+                                <span className={`font-medium text-sm ${
+                                  variant.quantity <= 0 ? 'text-red-600' : 
+                                  variant.quantity <= variant.minQuantity ? 'text-orange-600' : 'text-green-600'
+                                }`}>
+                                  {variant.quantity}
+                                </span>
+                              </td>
+                              <td className="p-3 text-gray-600 text-sm hidden md:table-cell">{variant.minQuantity}</td>
+                              <td className="p-3 font-medium text-sm hidden lg:table-cell">{format.money(variant.costPrice)}</td>
+                              <td className="p-3 font-medium text-sm">{format.money(variant.sellingPrice)}</td>
+                              <td className="p-3 hidden lg:table-cell">
+                                <span className={`font-medium text-sm ${markup > 50 ? 'text-green-600' : markup > 20 ? 'text-orange-600' : 'text-red-600'}`}>
+                                  {markup.toFixed(1)}%
+                                </span>
+                              </td>
+                              <td className="p-3">
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                   variant.quantity > variant.minQuantity ? 'bg-green-100 text-green-700' : 
                                   variant.quantity > 0 ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
                                 }`}>
-                              {variant.quantity > variant.minQuantity ? 'Good' : variant.quantity > 0 ? 'Low' : 'Empty'}
+                                  {variant.quantity > variant.minQuantity ? 'Good' : variant.quantity > 0 ? 'Low' : 'Empty'}
                                 </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleEditVariant(variant)}
+                                    className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                                    title="Edit variant"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteVariant(variant.id, variant.name)}
+                                    className="p-1 text-red-600 hover:bg-red-50 rounded"
+                                    title="Delete variant"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              
+              {(!currentProduct.variants || currentProduct.variants.length === 0) && !showAddVariantForm && (
+                <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+                  <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                  <p className="text-gray-600 mb-4">No variants found for this product</p>
+                  <button
+                    onClick={() => setShowAddVariantForm(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add First Variant
+                  </button>
                 </div>
               )}
             </div>

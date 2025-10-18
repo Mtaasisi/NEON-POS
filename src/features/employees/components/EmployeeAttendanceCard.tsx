@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import SecureAttendanceVerification from './SecureAttendanceVerification';
 import LeaveRequestModal from './LeaveRequestModal';
-import { Clock, CheckCircle, AlertTriangle, Calendar, LogIn, LogOut, Shield } from 'lucide-react';
+import { Clock, CheckCircle, AlertTriangle, Calendar, LogIn, LogOut, Shield, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAttendanceSettings } from '../../../hooks/useAttendanceSettings';
 import { employeeService } from '../../../services/employeeService';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface EmployeeAttendanceCardProps {
   employeeId: string;
@@ -173,6 +172,31 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
     }
   };
 
+  const handleResetToday = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Delete today's attendance record
+      const { error } = await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('employee_id', employeeId)
+        .eq('attendance_date', today);
+
+      if (error) throw error;
+
+      // Reset UI state
+      setTodayAttendance({ status: 'not-started' });
+      toast.success('Today\'s attendance cleared! You can now test check-in.');
+      
+      // Reload to ensure sync
+      await loadTodayAttendance();
+    } catch (error) {
+      console.error('Failed to reset attendance:', error);
+      toast.error('Failed to clear today\'s attendance');
+    }
+  };
+
   const formatTime = (time: Date) => {
     return time.toLocaleTimeString('en-US', {
       hour12: false,
@@ -206,7 +230,7 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
 
   return (
     <>
-      <GlassCard className="p-6">
+      <div className="bg-white rounded-lg border border-gray-200 p-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -267,74 +291,77 @@ const EmployeeAttendanceCard: React.FC<EmployeeAttendanceCardProps> = ({
             </div>
           )}
 
-          {/* Action Buttons */}
+          {/* Action Buttons - CBM Calculator Style */}
           <div className="flex gap-3">
             {todayAttendance.status === 'not-started' && (
-              <GlassButton
+              <button
                 onClick={handleCheckIn}
-                icon={<LogIn size={18} />}
-                className="flex-1 bg-gradient-to-r from-green-500 to-green-600 text-white"
+                className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
               >
+                <LogIn size={18} />
                 Check In
-              </GlassButton>
+              </button>
             )}
             
             {todayAttendance.status === 'checked-in' && (
-              <GlassButton
+              <button
                 onClick={handleCheckOut}
-                icon={<LogOut size={18} />}
-                className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
               >
+                <LogOut size={18} />
                 Check Out
-              </GlassButton>
+              </button>
             )}
             
             {todayAttendance.status === 'checked-out' && (
-              <div className="flex-1 text-center text-sm text-gray-500 py-2">
+              <div className="flex-1 text-center text-sm text-gray-500 py-3 px-4 bg-gray-50 rounded-lg border border-gray-200">
                 Day completed
               </div>
             )}
           </div>
 
-          {/* Quick Actions */}
+          {/* Quick Actions - CBM Calculator Style */}
           <div className="pt-4 border-t border-gray-200">
             <div className="grid grid-cols-2 gap-2">
-              <GlassButton
-                variant="ghost"
-                size="sm"
-                icon={<Calendar size={16} />}
-                className="text-gray-600"
+              <button
+                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
               >
+                <Calendar size={16} />
                 View History
-              </GlassButton>
-              <GlassButton
-                variant="ghost"
-                size="sm"
-                icon={<Clock size={16} />}
-                className="text-gray-600"
+              </button>
+              <button
                 onClick={() => setShowLeaveRequestModal(true)}
+                className="px-3 py-2 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
               >
+                <Clock size={16} />
                 Request Leave
-              </GlassButton>
+              </button>
             </div>
+            
+            {/* Reset Button for Testing */}
+            {(todayAttendance.status === 'checked-in' || todayAttendance.status === 'checked-out') && (
+              <button
+                onClick={handleResetToday}
+                className="w-full mt-2 px-3 py-2 border-2 border-orange-200 rounded-lg text-sm font-medium text-orange-700 hover:bg-orange-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={16} />
+                Reset Today (Testing)
+              </button>
+            )}
           </div>
           </div>
         )}
-      </GlassCard>
+      </div>
 
       {/* Security Verification Modal */}
       {showSecurityVerification && officeLocation && officeNetworks && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <SecureAttendanceVerification
-              onAllVerificationsComplete={handleSecurityVerificationComplete}
-              onVerificationFailed={handleSecurityVerificationFailed}
-              employeeName={employeeName}
-              officeLocation={officeLocation}
-              officeNetworks={officeNetworks}
-            />
-          </div>
-        </div>
+        <SecureAttendanceVerification
+          onAllVerificationsComplete={handleSecurityVerificationComplete}
+          onVerificationFailed={handleSecurityVerificationFailed}
+          employeeName={employeeName}
+          officeLocation={officeLocation}
+          officeNetworks={officeNetworks}
+        />
       )}
 
       {/* Leave Request Modal */}

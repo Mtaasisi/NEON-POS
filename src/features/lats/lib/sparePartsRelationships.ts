@@ -77,8 +77,8 @@ class SparePartsRelationshipService {
         .from('lats_spare_parts')
         .select(`
           *,
-          category:lats_categories(name, description),
-          supplier:lats_suppliers(name, email, phone, address)
+          category:lats_categories!category_id(name, description),
+          supplier:lats_suppliers!supplier_id(name, email, phone, address)
         `)
         .eq('id', sparePartId)
         .single();
@@ -243,8 +243,8 @@ class SparePartsRelationshipService {
         .from('lats_spare_parts')
         .select(`
           *,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name)
+          category:lats_categories!category_id(name),
+          supplier:lats_suppliers!supplier_id(name)
         `)
         .neq('id', sparePartId)
         .eq('is_active', true);

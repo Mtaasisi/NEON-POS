@@ -248,6 +248,9 @@ const POSPageOptimized: React.FC = () => {
   const [selectedDeliveryArea, setSelectedDeliveryArea] = useState<string>('');
   const { settings: searchFilterSettings } = useSearchFilterSettings();
   const { settings: advancedSettings } = useAdvancedSettings();
+  
+  // Get products per page from settings (fallback to 20 if not set)
+  const productsPerPageFromSettings = generalSettings?.products_per_page || 20;
 
   // Database state management
   const { 
@@ -1337,8 +1340,9 @@ const POSPageOptimized: React.FC = () => {
     }
   };
 
-  // Tax rate - can be made configurable later
-  const TAX_RATE = 18; // 18% VAT for Tanzania
+  // Tax rate from settings
+  const TAX_RATE = generalSettings?.tax_rate || 18; // Default 18% VAT for Tanzania
+  const isTaxEnabled = generalSettings?.enable_tax !== false; // Default to true if not set
 
   // Calculate totals with validation
   const totalAmount = useMemo(() => {
@@ -1360,7 +1364,7 @@ const POSPageOptimized: React.FC = () => {
   const discountAmount = manualDiscount || 0;
   const discountPercentage = totalAmount > 0 ? Math.round((discountAmount / totalAmount) * 100) : 0;
   const subtotalAfterDiscount = totalAmount - discountAmount;
-  const taxAmount = (subtotalAfterDiscount * TAX_RATE) / 100;
+  const taxAmount = isTaxEnabled ? (subtotalAfterDiscount * TAX_RATE) / 100 : 0;
   const finalAmount = subtotalAfterDiscount + taxAmount;
 
   // Check if barcode scanner is enabled
@@ -1464,7 +1468,7 @@ const POSPageOptimized: React.FC = () => {
             currentPage={currentPage}
             setCurrentPage={setCurrentPage}
             totalPages={totalPages}
-            productsPerPage={PRODUCTS_PER_PAGE}
+            productsPerPage={productsPerPageFromSettings}
             />
           </div>
 
@@ -1500,6 +1504,7 @@ const POSPageOptimized: React.FC = () => {
             taxRate={TAX_RATE}
             finalAmount={finalAmount}
             onEditCustomer={(_customer) => setShowCustomerEditModal(true)}
+            isTaxEnabled={isTaxEnabled}
           />
         </div>
       </div>

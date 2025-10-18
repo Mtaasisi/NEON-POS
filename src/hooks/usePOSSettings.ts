@@ -33,6 +33,7 @@ const defaultGeneralSettings: GeneralSettings = {
   timezone: 'Africa/Dar_es_Salaam',
   date_format: 'DD/MM/YYYY',
   time_format: '24',
+  font_size: 'medium',
   show_product_images: true,
   show_stock_levels: true,
   show_prices: true,

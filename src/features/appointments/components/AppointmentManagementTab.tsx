@@ -19,17 +19,19 @@ interface AppointmentManagementTabProps {
 
 interface Appointment {
   id: string;
+  customer_id?: string;
   customer_name: string;
   customer_phone: string;
-  customer_email: string;
+  customer_email?: string;
   service_type: string;
-  date: string;
-  time: string;
-  duration: number;
-  status: 'scheduled' | 'confirmed' | 'in-progress' | 'completed' | 'cancelled';
+  appointment_date: string;
+  appointment_time: string;
+  duration_minutes: number;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no-show' | 'scheduled' | 'in-progress';
   priority: 'low' | 'medium' | 'high' | 'urgent';
   notes?: string;
   technician_name?: string;
+  technician_id?: string;
   location?: string;
 }
 
@@ -42,6 +44,7 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
 }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [stats, setStats] = useState({
     total: 0,
     today: 0,
@@ -67,15 +70,20 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
       // Transform the data to match our interface
       const transformedAppointments = appointmentsData.map(appointment => ({
         id: appointment.id,
+        customer_id: appointment.customer_id,
         customer_name: appointment.customer_name || 'Unknown Customer',
         customer_phone: appointment.customer_phone || 'No Phone',
+        customer_email: appointment.customer_email,
         service_type: appointment.service_type,
         appointment_date: appointment.appointment_date,
         appointment_time: appointment.appointment_time,
+        duration_minutes: appointment.duration_minutes || 60,
         status: appointment.status,
         notes: appointment.notes,
-        priority: appointment.priority,
-        technician_name: appointment.technician_name || 'No Technician'
+        priority: appointment.priority || 'medium',
+        technician_name: appointment.technician_name || 'Unassigned',
+        technician_id: appointment.technician_id,
+        location: appointment.location
       }));
       
       setAppointments(transformedAppointments);
@@ -125,6 +133,7 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'pending':
       case 'scheduled':
         return 'text-blue-600 bg-blue-100';
       case 'confirmed':
@@ -134,6 +143,7 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
       case 'completed':
         return 'text-purple-600 bg-purple-100';
       case 'cancelled':
+      case 'no-show':
         return 'text-red-600 bg-red-100';
       default:
         return 'text-gray-600 bg-gray-100';
@@ -292,11 +302,11 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
                       </div>
                       <div>
                         <span className="text-gray-600">Date & Time:</span>
-                        <p className="font-medium">{appointment.date} at {appointment.time}</p>
+                        <p className="font-medium">{new Date(appointment.appointment_date).toLocaleDateString()} at {appointment.appointment_time}</p>
                       </div>
                       <div>
                         <span className="text-gray-600">Duration:</span>
-                        <p className="font-medium">{appointment.duration} minutes</p>
+                        <p className="font-medium">{appointment.duration_minutes} minutes</p>
                       </div>
                       <div>
                         <span className="text-gray-600">Technician:</span>
@@ -317,16 +327,22 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
                       size="sm"
                       variant="secondary"
                       icon={<Edit size={14} />}
+                      onClick={() => setEditingAppointment(appointment)}
                     >
                       Edit
                     </GlassButton>
-                    <GlassButton
-                      size="sm"
-                      variant="secondary"
-                      icon={<MessageSquare size={14} />}
+                    <select
+                      value={appointment.status}
+                      onChange={(e) => handleStatusUpdate(appointment.id, e.target.value)}
+                      className="text-xs px-2 py-1 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
-                      Message
-                    </GlassButton>
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                      <option value="no-show">No Show</option>
+                    </select>
                     <GlassButton
                       size="sm"
                       variant="secondary"
@@ -343,7 +359,7 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
         </div>
       </GlassCard>
 
-      {/* Appointment Modal */}
+      {/* Create Appointment Modal */}
       <AppointmentModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
@@ -363,6 +379,43 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
           }
         }}
       />
+
+      {/* Edit Appointment Modal */}
+      {editingAppointment && (
+        <AppointmentModal
+          isOpen={true}
+          onClose={() => setEditingAppointment(null)}
+          mode="edit"
+          appointment={{
+            id: editingAppointment.id,
+            customer_id: editingAppointment.customer_id || '',
+            service_type: editingAppointment.service_type,
+            appointment_date: editingAppointment.appointment_date,
+            appointment_time: editingAppointment.appointment_time,
+            status: editingAppointment.status as any,
+            notes: editingAppointment.notes,
+            duration_minutes: editingAppointment.duration_minutes,
+            priority: editingAppointment.priority,
+            technician_id: editingAppointment.technician_id,
+            created_at: '',
+            updated_at: ''
+          }}
+          onSave={async (appointmentData) => {
+            try {
+              await updateAppointment(editingAppointment.id, appointmentData);
+              toast.success('Appointment updated successfully');
+              setEditingAppointment(null);
+              // Refresh appointments
+              await loadAppointments();
+              await loadStats();
+            } catch (error) {
+              console.error('Error updating appointment:', error);
+              toast.error('Failed to update appointment');
+              throw error;
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

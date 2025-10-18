@@ -8,7 +8,8 @@ import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import { 
   Sparkles, CreditCard, DollarSign, BarChart2, Receipt, Users,
   Calendar, TrendingUp, Package, FileText, MessageCircle, Settings,
-  Eye, Plus, Edit, Trash2, Download, Upload, RefreshCw, CheckCircle
+  Eye, Plus, Edit, Trash2, Download, Upload, RefreshCw, CheckCircle,
+  ArrowRightLeft
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -114,6 +115,15 @@ const BusinessManagementPage: React.FC = () => {
       icon: <BarChart2 size={24} />,
       path: '/lats',
       color: 'from-blue-400 to-blue-500',
+      category: 'tools'
+    },
+    {
+      id: 'stock-transfers',
+      title: 'Stock Transfers',
+      description: 'Transfer inventory between branches',
+      icon: <ArrowRightLeft size={24} />,
+      path: '/lats/stock-transfers',
+      color: 'from-blue-500 to-blue-600',
       category: 'tools'
     }
   ];

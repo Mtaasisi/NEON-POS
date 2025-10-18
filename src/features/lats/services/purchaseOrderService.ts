@@ -1,5 +1,6 @@
 import { supabase } from '../../../lib/supabaseClient';
 import { ErrorLogger, logPurchaseOrderError, validateProductId, withErrorHandling } from '../lib/errorLogger';
+import { latsEventBus } from '../lib/data/eventBus';
 
 export interface PurchaseOrderMessage {
   id?: string;
@@ -522,7 +523,7 @@ export class PurchaseOrderService {
       const { error } = await supabase
         .from('lats_purchase_order_items')
         .update({
-          received_quantity: receivedQuantity,
+          quantity_received: receivedQuantity,
           notes: notes || null,
           updated_at: new Date().toISOString()
         })
@@ -584,7 +585,7 @@ export class PurchaseOrderService {
       // First, get existing items with validation data
       const { data: existingItems, error: fetchError } = await supabase
         .from('lats_purchase_order_items')
-        .select('id, purchase_order_id, quantity, received_quantity')
+        .select('id, purchase_order_id, quantity_ordered, quantity_received')
         .eq('purchase_order_id', purchaseOrderId);
 
       if (fetchError) {
@@ -657,7 +658,7 @@ export class PurchaseOrderService {
       // Check if all items were updated successfully
       const { data: updatedItems, error: verifyError } = await supabase
         .from('lats_purchase_order_items')
-        .select('id, received_quantity')
+        .select('id, quantity_received')
         .eq('purchase_order_id', purchaseOrderId)
         .in('id', validItems.map(item => item.id));
 
@@ -669,7 +670,7 @@ export class PurchaseOrderService {
       const successfullyUpdated = updatedItems?.filter(item => 
         validItems.find(validItem => 
           validItem.id === item.id && 
-          validItem.receivedQuantity === item.received_quantity
+          validItem.receivedQuantity === item.quantity_received
         )
       ).length || 0;
 
@@ -1208,6 +1209,15 @@ export class PurchaseOrderService {
       // Get receive summary
       const summaryResult = await this.getReceiveSummary(purchaseOrderId);
       
+      // 🔥 EMIT EVENT: Notify inventory page to refresh
+      latsEventBus.emit('lats:purchase-order.received', {
+        purchaseOrderId,
+        userId,
+        notes: receiveNotes
+      });
+      
+      console.log('✅ [PurchaseOrderService] Complete receive event emitted');
+      
       return { 
         success: true, 
         message: 'Purchase order received successfully',
@@ -1601,7 +1611,7 @@ export class PurchaseOrderService {
       // Fetch order items separately to avoid nested select issues
       const { data: items, error: itemsError } = await supabase
         .from('lats_purchase_order_items')
-        .select('id, quantity, received_quantity')
+        .select('id, quantity_ordered, quantity_received')
         .eq('purchase_order_id', purchaseOrderId);
 
       if (itemsError) {
@@ -1625,8 +1635,8 @@ export class PurchaseOrderService {
       const orderWithItems = { ...order, items };
 
       // Check if order has received items but status is still sent
-      const hasReceivedItems = items.some((item: any) => item.received_quantity > 0);
-      const hasFullyReceivedItems = items.some((item: any) => item.received_quantity >= item.quantity);
+      const hasReceivedItems = items.some((item: any) => item.quantity_received > 0);
+      const hasFullyReceivedItems = items.some((item: any) => item.quantity_received >= item.quantity_ordered);
       
       let newStatus = order.status;
       let statusChanged = false;
@@ -1804,6 +1814,16 @@ export class PurchaseOrderService {
         });
 
       if (error) throw error;
+      
+      // 🔥 EMIT EVENT: Notify inventory page to refresh
+      latsEventBus.emit('lats:purchase-order.received', {
+        purchaseOrderId,
+        userId,
+        notes
+      });
+      
+      console.log('✅ [PurchaseOrderService] Purchase order received event emitted');
+      
       return { success: true, message: 'Purchase order marked as received' };
     } catch (error) {
       console.error('Error marking as received:', error);

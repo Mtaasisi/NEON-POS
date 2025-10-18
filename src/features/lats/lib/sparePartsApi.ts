@@ -232,9 +232,8 @@ export const getSpareParts = async (
       .from('lats_spare_parts')
       .select(`
         *,
-        category:lats_categories(name),
-        supplier:lats_suppliers(name, email, phone),
-        variants:lats_spare_part_variants(*)
+        category:lats_categories!category_id(name),
+        variants:lats_spare_part_variants!spare_part_id(*)
       `);
 
     // Apply filters
@@ -349,9 +348,8 @@ export const getSparePart = async (id: string): Promise<SparePartResponse> => {
       .from('lats_spare_parts')
       .select(`
         *,
-        category:lats_categories(name),
-        supplier:lats_suppliers(name, email, phone),
-        variants:lats_spare_part_variants(*)
+        category:lats_categories!category_id(name),
+        variants:lats_spare_part_variants!spare_part_id(*)
       `)
       .eq('id', id)
       .single();
@@ -854,8 +852,7 @@ export const findSparePartByPartNumber = async (partNumber: string): Promise<{ d
       .from('lats_spare_parts')
       .select(`
         *,
-        category:lats_categories(name),
-        supplier:lats_suppliers(name, email, phone)
+        category:lats_categories!category_id(name)
       `)
       .eq('part_number', partNumber)
       .maybeSingle();
@@ -1018,9 +1015,8 @@ export const searchSpareParts = async (searchTerm: string): Promise<SparePart[]>
       .from('lats_spare_parts')
       .select(`
         *,
-        category:lats_categories(name),
-        supplier:lats_suppliers(name),
-        variants:lats_spare_part_variants(*)
+        category:lats_categories!category_id(name),
+        variants:lats_spare_part_variants!spare_part_id(*)
       `)
       .in('id', sparePartIds)
       .eq('is_active', true)
@@ -1047,9 +1043,8 @@ export const searchSparePartsWithVariants = async (searchTerm: string): Promise<
       .from('lats_spare_parts')
       .select(`
         *,
-        category:lats_categories(name),
-        supplier:lats_suppliers(name),
-        variants:lats_spare_part_variants(*)
+        category:lats_categories!category_id(name),
+        variants:lats_spare_part_variants!spare_part_id(*)
       `)
       .or(`part_number.ilike.%${searchTerm}%,name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
       .eq('is_active', true);
@@ -1065,8 +1060,7 @@ export const searchSparePartsWithVariants = async (searchTerm: string): Promise<
         *,
         spare_part:lats_spare_parts(
           *,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name)
+          category:lats_categories!category_id(name)
         )
       `)
       .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`)
@@ -1130,8 +1124,7 @@ export const searchVariantsByAttributes = async (searchTerm: string): Promise<Sp
         *,
         spare_part:lats_spare_parts(
           *,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name)
+          category:lats_categories!category_id(name)
         )
       `)
       .eq('spare_part.is_active', true);
@@ -1368,8 +1361,7 @@ export const getVariantsWithFilters = async (filters: {
         *,
         spare_part:lats_spare_parts(
           *,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name)
+          category:lats_categories!category_id(name)
         )
       `, { count: 'exact' });
 
@@ -1539,8 +1531,7 @@ export const searchVariantsComprehensive = async (searchTerm: string): Promise<{
         *,
         spare_part:lats_spare_parts(
           *,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name)
+          category:lats_categories!category_id(name)
         )
       `)
       .or(`name.ilike.%${searchTerm}%,sku.ilike.%${searchTerm}%`);
@@ -1559,8 +1550,7 @@ export const searchVariantsComprehensive = async (searchTerm: string): Promise<{
         *,
         spare_part:lats_spare_parts(
           *,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name)
+          category:lats_categories!category_id(name)
         )
       `)
       .ilike('spare_part.name', `%${searchTerm}%`);
@@ -1904,7 +1894,7 @@ export const getRepairParts = async (deviceId: string): Promise<RepairPartsRespo
       .from('repair_parts')
       .select(`
         *,
-        spare_part:lats_spare_parts(
+        spare_part:lats_spare_parts!spare_part_id(
           id,
           name,
           part_number,
@@ -1919,19 +1909,7 @@ export const getRepairParts = async (deviceId: string): Promise<RepairPartsRespo
           min_quantity,
           is_active,
           created_at,
-          updated_at,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name, email, phone),
-          variants:lats_spare_part_variants(
-            id,
-            name,
-            sku,
-            quantity,
-            selling_price,
-            cost_price,
-            variant_attributes,
-            image_url
-          )
+          updated_at
         )
       `)
       .eq('device_id', deviceId)
@@ -2062,7 +2040,7 @@ export const createRepairParts = async (dataArray: CreateRepairPartData[]): Prom
       .insert(repairPartsData)
       .select(`
         *,
-        lats_spare_parts(
+        spare_part:lats_spare_parts!spare_part_id(
           id,
           name,
           part_number,
@@ -2077,19 +2055,7 @@ export const createRepairParts = async (dataArray: CreateRepairPartData[]): Prom
           min_quantity,
           is_active,
           created_at,
-          updated_at,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name, email, phone),
-          variants:lats_spare_part_variants(
-            id,
-            name,
-            sku,
-            quantity,
-            selling_price,
-            cost_price,
-            variant_attributes,
-            image_url
-          )
+          updated_at
         )
       `);
 
@@ -2268,7 +2234,7 @@ export const createRepairPart = async (data: CreateRepairPartData): Promise<Repa
       })
       .select(`
         *,
-        lats_spare_parts(
+        spare_part:lats_spare_parts!spare_part_id(
           id,
           name,
           part_number,
@@ -2283,19 +2249,7 @@ export const createRepairPart = async (data: CreateRepairPartData): Promise<Repa
           min_quantity,
           is_active,
           created_at,
-          updated_at,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name, email, phone),
-          variants:lats_spare_part_variants(
-            id,
-            name,
-            sku,
-            quantity,
-            selling_price,
-            cost_price,
-            variant_attributes,
-            image_url
-          )
+          updated_at
         )
       `)
       .single();
@@ -2378,7 +2332,7 @@ export const acceptSpareParts = async (repairPartIds: string[]): Promise<{
       .in('id', repairPartIds)
       .select(`
         *,
-        lats_spare_parts(
+        spare_part:lats_spare_parts!spare_part_id(
           id,
           name,
           part_number,
@@ -2393,19 +2347,7 @@ export const acceptSpareParts = async (repairPartIds: string[]): Promise<{
           min_quantity,
           is_active,
           created_at,
-          updated_at,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name, email, phone),
-          variants:lats_spare_part_variants(
-            id,
-            name,
-            sku,
-            quantity,
-            selling_price,
-            cost_price,
-            variant_attributes,
-            image_url
-          )
+          updated_at
         )
       `);
 
@@ -2457,7 +2399,7 @@ export const rejectSpareParts = async (repairPartIds: string[], reason?: string)
       .in('id', repairPartIds)
       .select(`
         *,
-        lats_spare_parts(
+        spare_part:lats_spare_parts!spare_part_id(
           id,
           name,
           part_number,
@@ -2472,19 +2414,7 @@ export const rejectSpareParts = async (repairPartIds: string[], reason?: string)
           min_quantity,
           is_active,
           created_at,
-          updated_at,
-          category:lats_categories(name),
-          supplier:lats_suppliers(name, email, phone),
-          variants:lats_spare_part_variants(
-            id,
-            name,
-            sku,
-            quantity,
-            selling_price,
-            cost_price,
-            variant_attributes,
-            image_url
-          )
+          updated_at
         )
       `);
 

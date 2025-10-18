@@ -1140,37 +1140,36 @@ const WhatsAppChatPage: React.FC = () => {
   };
 
   return (
-    <div className="h-[90vh] max-h-[90vh] bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col overflow-hidden rounded-2xl">
+    <div className="h-[90vh] max-h-[90vh] bg-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-green-500 to-green-600 text-white p-3 flex items-center gap-3 shadow-lg flex-shrink-0 rounded-t-2xl">
-        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+      <div className="bg-green-600 text-white p-3 flex items-center gap-3 border-b border-green-700 flex-shrink-0">
+        <div className="w-8 h-8 bg-green-500 rounded flex items-center justify-center">
           <MessageCircle size={16} />
         </div>
         <div className="flex-1">
-          <h3 className="font-bold text-base">WhatsApp Business Chat</h3>
-          <div className="flex items-center gap-3 mt-1">
+          <h3 className="font-semibold text-sm">WhatsApp Chat</h3>
+          <div className="flex items-center gap-2 mt-0.5">
             {/* Instance Selector */}
             <div className="relative instance-selector">
               <button
                 onClick={() => setShowInstanceSelector(!showInstanceSelector)}
-                className="flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-sm hover:bg-white/30 transition-all duration-200"
+                className="flex items-center gap-2 px-2 py-1 bg-green-500 rounded text-xs hover:bg-green-700"
               >
-                <div className={`w-2 h-2 rounded-full ${
-                  selectedInstance?.status === 'connected' ? 'bg-green-300' : 
+                <div className={`w-1.5 h-1.5 rounded-full ${
+                  selectedInstance?.status === 'connected' ? 'bg-white' : 
                   selectedInstance?.status === 'connecting' ? 'bg-yellow-300' : 'bg-red-300'
                 }`}></div>
-                <span className="font-medium">
+                <span className="text-xs">
                   {selectedInstance ? selectedInstance.instance_name || selectedInstance.instance_id : 'Select Instance'}
                 </span>
-                <ChevronRight size={12} className={`transition-transform ${showInstanceSelector ? 'rotate-90' : ''}`} />
+                <ChevronRight size={10} className={showInstanceSelector ? 'rotate-90' : ''} />
               </button>
               
               {/* Instance Dropdown */}
               {showInstanceSelector && (
-                <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-200 z-50">
-                  <div className="p-3 border-b border-gray-100">
-                    <h4 className="font-semibold text-gray-800 text-sm">Select WhatsApp Instance</h4>
-                    <p className="text-gray-500 text-xs">Choose which instance to use for messaging</p>
+                <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded border border-gray-300 shadow-md z-50">
+                  <div className="p-2 border-b border-gray-200">
+                    <h4 className="font-medium text-gray-900 text-xs">Select Instance</h4>
                   </div>
                   <div className="max-h-48 overflow-y-auto">
                     {instances && instances.length > 0 ? (
@@ -1180,41 +1179,38 @@ const WhatsAppChatPage: React.FC = () => {
                           onClick={() => {
                             setSelectedInstance(instance);
                             setShowInstanceSelector(false);
-                            toast.success(`Selected WhatsApp instance: ${instance.instance_name || instance.instance_id}`);
+                            toast.success(`Selected: ${instance.instance_name || instance.instance_id}`);
                           }}
-                          className={`w-full p-3 text-left hover:bg-gray-50 transition-colors ${
-                            selectedInstance?.id === instance.id ? 'bg-green-50 border-r-2 border-green-500' : ''
+                          className={`w-full p-2 text-left hover:bg-gray-100 ${
+                            selectedInstance?.id === instance.id ? 'bg-green-50' : ''
                           }`}
                         >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-3 h-3 rounded-full ${
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${
                               instance.status === 'connected' ? 'bg-green-500' : 
                               instance.status === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
                             }`}></div>
                             <div className="flex-1">
-                              <p className="font-medium text-gray-900 text-sm">
+                              <p className="font-medium text-gray-900 text-xs">
                                 {instance.instance_name || instance.instance_id}
                               </p>
                               <p className="text-gray-500 text-xs">
-                                {instance.phone_number ? `+${instance.phone_number}` : 'No phone number'}
+                                {instance.phone_number ? `+${instance.phone_number}` : 'No phone'}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                instance.status === 'connected' ? 'bg-green-100 text-green-800' :
-                                instance.status === 'connecting' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {instance.status}
-                              </span>
-                            </div>
+                            <span className={`px-1.5 py-0.5 rounded text-xs ${
+                              instance.status === 'connected' ? 'bg-green-100 text-green-700' :
+                              instance.status === 'connecting' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {instance.status}
+                            </span>
                           </div>
                         </button>
                       ))
                     ) : (
-                      <div className="p-4 text-center text-gray-500">
-                        <p className="text-sm">No WhatsApp instances found</p>
-                        <p className="text-xs mt-1">Create an instance in the WhatsApp Dashboard</p>
+                      <div className="p-3 text-center text-gray-500">
+                        <p className="text-xs">No instances found</p>
                       </div>
                     )}
                   </div>
@@ -1222,105 +1218,103 @@ const WhatsAppChatPage: React.FC = () => {
               )}
             </div>
             
-            <div className="text-green-100 text-xs flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-300 rounded-full animate-pulse"></div>
+            <div className="text-white text-xs flex items-center gap-1">
+              <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
               {instances?.filter(i => i.status === 'connected')?.length || 0} connected
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={loadCustomers}
-            className="p-1.5 hover:bg-white/20 rounded-full transition-all duration-200 hover:scale-110"
-          >
-            <RefreshCw size={14} />
-          </button>
-        </div>
+        <button 
+          onClick={loadCustomers}
+          className="p-1.5 hover:bg-green-500 rounded"
+        >
+          <RefreshCw size={14} />
+        </button>
       </div>
 
       {/* Content Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
-        <div className="w-96 bg-white border-r border-gray-200 flex flex-col shadow-lg h-full rounded-l-2xl">
+        <div className="w-80 bg-gray-50 border-r border-gray-300 flex flex-col h-full">
           {/* Tabs */}
-          <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex-shrink-0">
-            <div className="flex bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl p-2 mb-4">
+          <div className="p-3 border-b border-gray-300 bg-white flex-shrink-0">
+            <div className="flex gap-1 bg-gray-100 rounded p-1 mb-3">
               <button
                 onClick={() => setActiveTab('chat')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold text-base transition-all duration-300 ${
+                className={`flex-1 py-2 px-3 rounded text-xs font-medium ${
                   activeTab === 'chat'
-                    ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:text-gray-800 hover:bg-white/50'
+                    ? 'bg-green-600 text-white'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <div className="flex items-center justify-center gap-3">
-                  <MessageCircle size={20} />
+                <div className="flex items-center justify-center gap-1.5">
+                  <MessageCircle size={14} />
                   Chat
                 </div>
               </button>
               <button
                 onClick={() => setActiveTab('contacts')}
-                className={`flex-1 py-3 px-6 rounded-xl font-semibold text-base transition-all duration-300 ${
+                className={`flex-1 py-2 px-3 rounded text-xs font-medium ${
                   activeTab === 'contacts'
-                    ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
-                    : 'text-gray-600 hover:text-gray-800 hover:bg-white/50'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <div className="flex items-center justify-center gap-3">
-                  <User size={20} />
+                <div className="flex items-center justify-center gap-1.5">
+                  <User size={14} />
                   Contacts
                 </div>
               </button>
             </div>
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
               <input
                 type="text"
                 placeholder="Search customers..."
                 value={customerSearchTerm}
                 onChange={(e) => setCustomerSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 bg-white shadow-sm text-sm"
+                className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-xs focus:border-green-500 focus:outline-none"
               />
             </div>
             <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
               <span>{filteredCustomers.length} customers</span>
-              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
+              <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-xs">
                 {instances?.filter(i => i.status === 'connected')?.length || 0} Connected
               </span>
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 min-h-0">
+          <div className="flex-1 overflow-y-auto min-h-0">
             {activeTab === 'chat' ? (
               // Chat tab content - show recent chats or empty state
-                <div className="p-4 text-center text-gray-500">
-                  <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                    <MessageCircle size={32} className="text-white" />
+                <div className="p-3 text-center text-gray-500">
+                  <div className="w-12 h-12 bg-green-100 rounded flex items-center justify-center mx-auto mb-3">
+                    <MessageCircle size={24} className="text-green-600" />
                   </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Recent Chats</h3>
-                <p className="text-sm text-gray-600 mb-4">Your recent conversations will appear here</p>
-                <div className="space-y-2">
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
-                      <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                <h3 className="text-sm font-medium text-gray-900 mb-1">Recent Chats</h3>
+                <p className="text-xs text-gray-600 mb-3">Your conversations will appear here</p>
+                <div className="space-y-1">
+                  <div className="p-2 bg-white rounded border border-gray-200">
+                      <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-medium text-xs">
                         A
                         </div>
                       <div className="flex-1 text-left">
-                        <h4 className="font-medium text-gray-900 text-sm">Abdalah</h4>
+                        <h4 className="font-medium text-gray-900 text-xs">Abdalah</h4>
                         <p className="text-xs text-gray-500">Hello! How can I help you?</p>
                             </div>
-                      <div className="text-xs text-gray-400">2m ago</div>
+                      <div className="text-xs text-gray-400">2m</div>
                           </div>
                           </div>
-                  <div className="p-3 bg-gray-50 rounded-xl border border-gray-200">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                  <div className="p-2 bg-white rounded border border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-purple-600 rounded flex items-center justify-center text-white font-medium text-xs">
                         S
                         </div>
                       <div className="flex-1 text-left">
-                        <h4 className="font-medium text-gray-900 text-sm">Sarah</h4>
+                        <h4 className="font-medium text-gray-900 text-xs">Sarah</h4>
                         <p className="text-xs text-gray-500">Thank you for your help!</p>
                         </div>
-                      <div className="text-xs text-gray-400">1h ago</div>
+                      <div className="text-xs text-gray-400">1h</div>
                       </div>
                 </div>
                 </div>
@@ -1329,48 +1323,42 @@ const WhatsAppChatPage: React.FC = () => {
               // Contacts tab content - show customer list
               <>
                 {filteredCustomers.length === 0 ? (
-              <div className="p-4 text-center text-gray-500">
-                <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                  <User size={20} className="text-gray-400" />
+              <div className="p-3 text-center text-gray-500">
+                <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center mx-auto mb-2">
+                  <User size={16} className="text-gray-400" />
                 </div>
-                <p className="text-sm font-medium">No customers found</p>
-                <p className="text-xs mt-1">Try adjusting your search terms</p>
+                <p className="text-xs font-medium">No customers found</p>
+                <p className="text-xs mt-1">Try adjusting your search</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-gray-200">
                 {filteredCustomers.map((customer) => (
                   <button
                     key={customer.id}
                     onClick={() => selectCustomerForChat(customer)}
-                    className={`w-full p-4 pl-8 text-left hover:bg-gray-50 transition-all duration-200 group ${
+                    className={`w-full p-2 text-left hover:bg-gray-100 ${
                       selectedCustomer?.id === customer.id 
-                        ? 'bg-gradient-to-r from-green-50 to-green-100 border-r-4 border-green-500 shadow-sm' 
+                        ? 'bg-green-50 border-l-2 border-green-600' 
                         : ''
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-base shadow-lg transition-all duration-200 ${
+                    <div className="flex items-center gap-2">
+                      <div className={`w-10 h-10 rounded flex items-center justify-center text-white font-medium text-xs ${
                         selectedCustomer?.id === customer.id 
-                          ? 'bg-gradient-to-br from-green-500 to-green-600 scale-110' 
-                          : 'bg-gradient-to-br from-blue-500 to-blue-600 group-hover:scale-105'
+                          ? 'bg-green-600' 
+                          : 'bg-blue-600'
                       }`}>
                         {customer.name?.charAt(0)?.toUpperCase() || 'C'}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-gray-900 truncate group-hover:text-green-600 transition-colors text-base">
+                        <h4 className="font-medium text-gray-900 truncate text-xs">
                           {customer.name || 'Unknown Customer'}
                         </h4>
-                        <p className="text-sm text-gray-500 truncate">
-                          {customer.phone || customer.email || 'No contact info'}
+                        <p className="text-xs text-gray-500 truncate">
+                          {customer.phone || customer.email || 'No contact'}
                         </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="w-2.5 h-2.5 bg-green-500 rounded-full"></div>
-                          <span className="text-sm text-green-600 font-medium">Available</span>
-                        </div>
                       </div>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ChevronRight size={16} className="text-gray-400" />
-                      </div>
+                      <ChevronRight size={14} className="text-gray-400" />
                     </div>
                   </button>
                 ))}
@@ -1381,25 +1369,25 @@ const WhatsAppChatPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col bg-gradient-to-br from-gray-50 to-white h-full min-h-0 rounded-r-2xl">
+        <div className="flex-1 flex flex-col bg-white h-full min-h-0">
           {selectedCustomer ? (
             <>
               {/* Instance Status Bar */}
               {selectedInstance && (
-                <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-3 border-b border-blue-200 flex-shrink-0">
+                <div className="bg-blue-50 p-2 border-b border-blue-200 flex-shrink-0">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-3 h-3 rounded-full ${
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${
                         selectedInstance.status === 'connected' ? 'bg-green-500' : 
                         selectedInstance.status === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
                       }`}></div>
-                      <span className="text-sm font-medium text-blue-800">
+                      <span className="text-xs font-medium text-blue-800">
                         Using: {selectedInstance.instance_name || selectedInstance.instance_id}
                       </span>
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        selectedInstance.status === 'connected' ? 'bg-green-100 text-green-800' :
-                        selectedInstance.status === 'connecting' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+                      <span className={`px-1.5 py-0.5 rounded text-xs ${
+                        selectedInstance.status === 'connected' ? 'bg-green-100 text-green-700' :
+                        selectedInstance.status === 'connecting' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
                       }`}>
                         {selectedInstance.status}
                       </span>
@@ -1414,63 +1402,55 @@ const WhatsAppChatPage: React.FC = () => {
               )}
 
               {/* Chat Header */}
-              <div className="bg-white p-5 border-b border-gray-200 shadow-sm flex-shrink-0 rounded-tr-2xl">
-                <div className="flex items-center gap-5">
-                  <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
+              <div className="bg-gray-50 p-3 border-b border-gray-300 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-green-600 rounded flex items-center justify-center text-white font-medium text-sm">
                     {selectedCustomer.name?.charAt(0)?.toUpperCase() || 'C'}
                   </div>
                   <div className="flex-1">
-                    <h4 className="font-bold text-gray-900 text-xl">{selectedCustomer.name || 'Unknown Customer'}</h4>
-                    <p className="text-base text-gray-500 flex items-center gap-2">
-                      <span>{selectedCustomer.phone || selectedCustomer.email}</span>
-                      <span>•</span>
-                      <span className="text-green-600 font-medium">Online</span>
+                    <h4 className="font-medium text-gray-900 text-sm">{selectedCustomer.name || 'Unknown Customer'}</h4>
+                    <p className="text-xs text-gray-500">
+                      {selectedCustomer.phone || selectedCustomer.email}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1">
                     <button 
                       onClick={() => setShowChatSearch(!showChatSearch)}
-                      className="p-3 text-orange-500 hover:text-orange-600 hover:bg-orange-50 rounded-full transition-all duration-200"
-                      title="Search in chat"
+                      className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
+                      title="Search"
                     >
-                      <Search size={20} />
+                      <Search size={16} />
                     </button>
                     <button 
                       onClick={openSettingsModal}
-                      className="p-3 text-green-500 hover:text-green-600 hover:bg-green-50 rounded-full transition-all duration-200"
-                      title="Green API Settings"
+                      className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded"
+                      title="Settings"
                     >
-                      <Settings size={20} />
+                      <Settings size={16} />
                     </button>
-                    <button className="p-3 text-blue-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-all duration-200" title="Voice call">
-                      <Phone size={20} />
-                    </button>
-                    <button className="p-3 text-purple-500 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-all duration-200" title="Video call">
-                      <Video size={20} />
-                    </button>
-                    <button className="p-3 text-gray-500 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200" title="More options">
-                      <MoreVertical size={20} />
+                    <button className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded" title="More">
+                      <MoreVertical size={16} />
                     </button>
                   </div>
                 </div>
                 
                 {/* Chat Search Bar */}
                 {showChatSearch && (
-                  <div className="mt-4 relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                  <div className="mt-2 relative">
+                    <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
                     <input
                       type="text"
                       placeholder="Search in chat..."
                       value={chatSearchTerm}
                       onChange={(e) => setChatSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm text-sm"
+                      className="w-full pl-8 pr-8 py-1.5 border border-gray-300 rounded text-xs focus:border-green-500 focus:outline-none"
                     />
                     {chatSearchTerm && (
                       <button
                         onClick={() => setChatSearchTerm('')}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600"
                       >
-                        <XCircle size={16} />
+                        <XCircle size={14} />
                       </button>
                     )}
                   </div>
@@ -1478,35 +1458,25 @@ const WhatsAppChatPage: React.FC = () => {
               </div>
 
               {/* Chat Messages */}
-              <div className="flex-1 bg-gradient-to-br from-gray-50 to-gray-100 p-3 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent min-h-0">
+              <div className="flex-1 bg-gray-100 p-3 overflow-y-auto min-h-0">
                 {chatHistory.length === 0 ? (
-                  <div className="text-center py-6">
-                    <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-lg">
-                      <MessageCircle size={28} className="text-green-500" />
+                  <div className="text-center py-4">
+                    <div className="w-12 h-12 bg-white rounded flex items-center justify-center mx-auto mb-2 border border-gray-200">
+                      <MessageCircle size={20} className="text-green-600" />
                     </div>
-                    <h3 className="text-base font-bold text-gray-900 mb-2">Start a conversation</h3>
-                    <p className="text-gray-600 mb-3 max-w-md mx-auto text-sm">
-                      Send your first message to {selectedCustomer.name}. Your messages will appear here.
+                    <h3 className="text-sm font-medium text-gray-900 mb-1">Start a conversation</h3>
+                    <p className="text-gray-600 text-xs">
+                      Send your first message to {selectedCustomer.name}
                     </p>
-                    <div className="flex items-center justify-center gap-3 text-xs text-gray-500">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle size={14} className="text-green-500" />
-                        <span>End-to-end encrypted</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <CheckCircle size={14} className="text-green-500" />
-                        <span>Instant delivery</span>
-                      </div>
-                    </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-2">
                     {(chatSearchTerm ? filteredChatHistory : chatHistory).map((message, index) => (
                       <div key={message.id}>
                         {/* Date Separator */}
                         {shouldShowDateSeparator(message, chatHistory[index - 1]) && (
-                          <div className="flex justify-center my-4">
-                            <div className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
+                          <div className="flex justify-center my-2">
+                            <div className="bg-white text-gray-600 px-2 py-1 rounded text-xs border border-gray-200">
                               {formatMessageTime(message.timestamp)}
                             </div>
                           </div>
@@ -1515,137 +1485,82 @@ const WhatsAppChatPage: React.FC = () => {
                         <div className={`flex ${message.sender === 'business' ? 'justify-end' : 'justify-start'}`}>
                           <div className="relative group">
                             <div
-                              className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl shadow-sm ${
+                              className={`max-w-xs lg:max-w-md px-3 py-2 rounded ${
                                 message.sender === 'business'
-                                  ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
-                                  : 'bg-white text-gray-900 border border-gray-200'
+                                  ? 'bg-green-600 text-white'
+                                  : 'bg-white text-gray-900 border border-gray-300'
                               }`}
                             >
                               {message.type === 'image' && message.imageUrl && (
-                                <div className="mb-2">
+                                <div className="mb-1">
                                   <img 
                                     src={message.imageUrl} 
                                     alt="Shared image" 
-                                    className="w-full h-32 object-cover rounded-lg"
+                                    className="w-full h-32 object-cover rounded"
                                   />
                                 </div>
                               )}
                               
                               {message.type === 'document' && message.fileName && (
-                                <div className="mb-2 p-3 bg-white/10 rounded-lg">
-                                  <div className="flex items-center gap-3">
+                                <div className="mb-1 p-2 bg-black/10 rounded">
+                                  <div className="flex items-center gap-2">
                                     {getFileIcon(message.fileName)}
                                     <div className="flex-1">
-                                      <p className="text-sm font-medium truncate">{message.fileName}</p>
+                                      <p className="text-xs font-medium truncate">{message.fileName}</p>
                                       <p className="text-xs opacity-80">{formatFileSize(message.fileSize || 0)}</p>
                                     </div>
-                                    <button className="p-1 hover:bg-white/20 rounded">
-                                      <Download size={16} />
+                                    <button className="p-1 hover:bg-black/10 rounded">
+                                      <Download size={14} />
                                     </button>
                                   </div>
                                 </div>
                               )}
                               
                               {message.type === 'audio' && message.audioUrl && (
-                                <div className="mb-2 p-3 bg-white/10 rounded-lg">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                                      <Music size={16} />
+                                <div className="mb-1 p-2 bg-black/10 rounded">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 bg-black/10 rounded flex items-center justify-center">
+                                      <Music size={12} />
                                     </div>
                                     <div className="flex-1">
-                                      <p className="text-sm font-medium">Voice Message</p>
+                                      <p className="text-xs font-medium">Voice Message</p>
                                       <p className="text-xs opacity-80">{message.audioDuration}</p>
                                     </div>
-                                    <button className="p-2 bg-white/20 rounded-full hover:bg-white/30">
-                                      <Play size={16} />
+                                    <button className="p-1 bg-black/10 rounded hover:bg-black/20">
+                                      <Play size={12} />
                                     </button>
                                   </div>
                                 </div>
                               )}
                               
-                              <p className="text-sm leading-relaxed">{message.content}</p>
+                              <p className="text-xs">{message.content}</p>
                               
                               {message.type === 'button' && message.buttons && (
-                                <div className="mt-2 space-y-2">
+                                <div className="mt-1 space-y-1">
                                   {message.buttons.map((button: any, btnIndex: number) => (
-                                    <div key={btnIndex} className="p-2 bg-white/10 rounded-lg border border-white/20 text-center">
-                                      <span className="text-sm font-medium">{button.text}</span>
+                                    <div key={btnIndex} className="p-1.5 bg-black/10 rounded border border-white/20 text-center">
+                                      <span className="text-xs font-medium">{button.text}</span>
                                     </div>
                                   ))}
                                   {message.buttonFooter && (
-                                    <p className="text-xs opacity-80 mt-1">{message.buttonFooter}</p>
+                                    <p className="text-xs opacity-80 mt-0.5">{message.buttonFooter}</p>
                                   )}
                                 </div>
                               )}
                               
                               <div className={`flex items-center justify-between mt-1 ${
-                                message.sender === 'business' ? 'text-green-100' : 'text-gray-500'
+                                message.sender === 'business' ? 'text-white/70' : 'text-gray-500'
                               }`}>
                                 <span className="text-xs">
                                   {formatMessageTime(message.timestamp)}
                                 </span>
                                 {message.sender === 'business' && (
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex items-center gap-0.5">
                                     {getMessageStatusIcon(messageStatuses[message.id] || 'sent')}
-                                    <span className="text-xs">
-                                      {messageStatuses[message.id] === 'sending' && 'Sending...'}
-                                      {messageStatuses[message.id] === 'sent' && 'Sent'}
-                                      {messageStatuses[message.id] === 'delivered' && 'Delivered'}
-                                      {messageStatuses[message.id] === 'read' && 'Read'}
-                                      {!messageStatuses[message.id] && 'Sent'}
-                                    </span>
                                   </div>
                                 )}
                               </div>
                             </div>
-                            
-                            {/* Message Reactions */}
-                            {messageReactions[message.id] && messageReactions[message.id].length > 0 && (
-                              <div className="absolute -bottom-6 left-0 bg-white rounded-full px-2 py-1 shadow-lg border border-gray-200">
-                                <div className="flex items-center gap-1">
-                                  {messageReactions[message.id].map((reaction, reactionIndex) => (
-                                    <button
-                                      key={reactionIndex}
-                                      onClick={() => removeReaction(message.id, reactionIndex)}
-                                      className="text-sm hover:scale-110 transition-transform"
-                                    >
-                                      {reaction}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Reaction Picker */}
-                            {showReactionPicker === message.id && (
-                              <div className="absolute -bottom-12 left-0 bg-white rounded-full px-3 py-2 shadow-lg border border-gray-200">
-                                <div className="flex items-center gap-2">
-                                  {quickReactions.map((emoji, emojiIndex) => (
-                                    <button
-                                      key={emojiIndex}
-                                      onClick={() => addReaction(message.id, emoji)}
-                                      className="text-lg hover:scale-125 transition-transform"
-                                    >
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                  <button
-                                    onClick={() => setShowReactionPicker(null)}
-                                    className="text-gray-400 hover:text-gray-600 ml-2"
-                                  >
-                                    <XCircle size={16} />
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Reaction Button */}
-                            <button
-                              onClick={() => setShowReactionPicker(showReactionPicker === message.id ? null : message.id)}
-                              className="absolute -top-2 -right-2 w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-gray-200"
-                            >
-                              <Smile size={12} className="text-gray-600" />
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -1654,12 +1569,12 @@ const WhatsAppChatPage: React.FC = () => {
                     {/* Typing Indicator */}
                     {isTyping && (
                       <div className="flex justify-start">
-                        <div className="bg-white text-gray-900 border border-gray-200 max-w-xs lg:max-w-md px-4 py-2 rounded-2xl shadow-sm">
-                          <div className="flex items-center gap-2">
+                        <div className="bg-white text-gray-900 border border-gray-300 px-3 py-2 rounded">
+                          <div className="flex items-center gap-1.5">
                             <div className="flex space-x-1">
-                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                              <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></div>
+                              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                              <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                             </div>
                             <span className="text-xs text-gray-500">typing...</span>
                           </div>
@@ -1671,74 +1586,71 @@ const WhatsAppChatPage: React.FC = () => {
               </div>
 
               {/* Message Input */}
-              <div className="bg-white p-4 border-t border-gray-200 shadow-lg flex-shrink-0 rounded-br-2xl">
+              <div className="bg-white p-3 border-t border-gray-300 flex-shrink-0">
                 {/* Image Preview */}
                 {imagePreview && (
-                  <div className="mb-3 p-3 bg-gray-50 rounded-2xl border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Image Preview</span>
+                  <div className="mb-2 p-2 bg-gray-50 rounded border border-gray-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">Image</span>
                       <button
                         onClick={removeImage}
-                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        className="p-0.5 text-gray-400 hover:text-red-500"
                       >
-                        <XCircle size={14} />
+                        <XCircle size={12} />
                       </button>
                     </div>
                     <img 
                       src={imagePreview} 
                       alt="Preview" 
-                      className="w-full h-24 object-cover rounded-lg"
+                      className="w-full h-20 object-cover rounded"
                     />
                   </div>
                 )}
 
                 {/* File Preview */}
                 {filePreview && selectedFile && (
-                  <div className="mb-3 p-3 bg-gray-50 rounded-2xl border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">File Preview</span>
+                  <div className="mb-2 p-2 bg-gray-50 rounded border border-gray-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">File</span>
                       <button
                         onClick={removeFile}
-                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        className="p-0.5 text-gray-400 hover:text-red-500"
                       >
-                        <XCircle size={14} />
+                        <XCircle size={12} />
                       </button>
                     </div>
-                    <div className="flex items-center gap-3 p-2 bg-white rounded-lg">
+                    <div className="flex items-center gap-2 p-1.5 bg-white rounded">
                       {getFileIcon(selectedFile.name)}
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">{selectedFile.name}</p>
+                        <p className="text-xs font-medium text-gray-900 truncate">{selectedFile.name}</p>
                         <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
                       </div>
-                      <button className="p-1 text-blue-500 hover:text-blue-600">
-                        <Download size={16} />
-                      </button>
                     </div>
                   </div>
                 )}
 
                 {/* Audio Preview */}
                 {audioUrl && audioBlob && (
-                  <div className="mb-3 p-3 bg-gray-50 rounded-2xl border border-gray-200">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-700">Voice Message</span>
+                  <div className="mb-2 p-2 bg-gray-50 rounded border border-gray-200">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-gray-700">Voice</span>
                       <button
                         onClick={removeAudio}
-                        className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                        className="p-0.5 text-gray-400 hover:text-red-500"
                       >
-                        <XCircle size={14} />
+                        <XCircle size={12} />
                       </button>
                     </div>
-                    <div className="flex items-center gap-3 p-2 bg-white rounded-lg">
-                      <div className="w-10 h-10 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
-                        <Music size={20} className="text-white" />
+                    <div className="flex items-center gap-2 p-1.5 bg-white rounded">
+                      <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center">
+                        <Music size={14} className="text-white" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">Voice Message</p>
+                        <p className="text-xs font-medium text-gray-900">Voice Message</p>
                         <p className="text-xs text-gray-500">{formatRecordingTime(recordingTime)}</p>
                       </div>
-                      <button className="p-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
-                        <Play size={16} />
+                      <button className="p-1.5 bg-green-600 text-white rounded hover:bg-green-700">
+                        <Play size={12} />
                       </button>
                     </div>
                   </div>
@@ -1746,85 +1658,42 @@ const WhatsAppChatPage: React.FC = () => {
 
                 {/* Interactive Buttons Builder */}
                 {showInteractiveButtons && (
-                  <div className="mb-4 p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-3xl border border-blue-200 shadow-lg">
-                    <div className="flex items-center justify-between mb-4">
+                  <div className="mb-3 p-3 bg-blue-50 rounded border border-blue-200">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 110 2h-1v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6H3a1 1 0 110-2h4zM6 6v12h12V6H6z" />
-                          </svg>
-                        </div>
-                        <span className="text-base font-semibold text-blue-800">Interactive Buttons</span>
-                        <div className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded-full font-medium">
-                          ⚠️ May not work on all devices
-                        </div>
+                        <span className="text-sm font-medium text-blue-800">Interactive Buttons</span>
+                        <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded">
+                          ⚠️ May not work
+                        </span>
                       </div>
                       <button
                         onClick={() => {
                           setShowInteractiveButtons(false);
                           setMessageType('text');
                         }}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-full transition-all duration-200"
+                        className="p-1 text-gray-400 hover:text-gray-600"
                       >
-                        <XCircle size={18} />
+                        <XCircle size={14} />
                       </button>
                     </div>
                     
-                    {/* Format Toggle */}
-                    <div className="mb-4 p-3 bg-white/50 rounded-xl border border-blue-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-blue-800">Message Format:</span>
-                          <span className="text-xs text-blue-600">
-                            {useTextFormatForButtons ? 'Text with numbers' : 'Interactive buttons'}
-                          </span>
-                        </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={useTextFormatForButtons}
-                            onChange={(e) => setUseTextFormatForButtons(e.target.checked)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                      </div>
-                      <p className="text-xs text-blue-600 mt-2">
-                        {useTextFormatForButtons 
-                          ? '📝 Will send as numbered options (works on all devices)' 
-                          : '🔘 Will try interactive buttons first, fallback to text if needed'
-                        }
-                      </p>
-                    </div>
-                    
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Message Text</label>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Message Text</label>
                         <textarea
                           value={buttonMessage}
                           onChange={(e) => setButtonMessage(e.target.value)}
-                          placeholder="Enter your message text..."
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200 resize-none"
+                          placeholder="Enter message..."
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:border-blue-500 focus:outline-none resize-none"
                           rows={2}
                         />
                       </div>
                       
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Footer (Optional)</label>
-                        <input
-                          type="text"
-                          value={buttonFooter}
-                          onChange={(e) => setButtonFooter(e.target.value)}
-                          placeholder="Add footer text..."
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-all duration-200"
-                        />
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Buttons</label>
-                        <div className="space-y-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Buttons</label>
+                        <div className="space-y-1">
                           {interactiveButtons.map((button, index) => (
-                            <div key={index} className="flex items-center gap-2">
+                            <div key={index} className="flex items-center gap-1">
                               <input
                                 type="text"
                                 value={button.text}
@@ -1833,17 +1702,17 @@ const WhatsAppChatPage: React.FC = () => {
                                   newButtons[index].text = e.target.value;
                                   setInteractiveButtons(newButtons);
                                 }}
-                                placeholder={`Button ${index + 1} text...`}
-                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                                placeholder={`Button ${index + 1}`}
+                                className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs focus:border-blue-500 focus:outline-none"
                               />
                               <button
                                 onClick={() => {
                                   setInteractiveButtons(prev => prev.filter((_, i) => i !== index));
                                 }}
-                                className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-1 text-red-500 hover:bg-red-50 rounded"
                                 disabled={interactiveButtons.length === 1}
                               >
-                                <XCircle size={16} />
+                                <XCircle size={12} />
                               </button>
                             </div>
                           ))}
@@ -1856,40 +1725,12 @@ const WhatsAppChatPage: React.FC = () => {
                                   text: `Button ${prev.length + 1}`
                                 }]);
                               }}
-                              className="w-full py-2 border-2 border-dashed border-blue-300 text-blue-600 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-all duration-200 text-sm font-medium"
+                              className="w-full py-1 border border-dashed border-blue-300 text-blue-600 rounded hover:bg-blue-50 text-xs"
                             >
                               + Add Button
                             </button>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 mt-1">Up to 3 buttons allowed</p>
-                      </div>
-                    </div>
-                    
-                    {/* Warning Message */}
-                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
-                      <div className="flex items-start gap-2">
-                        <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
-                        </svg>
-                        <div className="text-sm flex-1">
-                          <p className="font-medium text-yellow-800">Interactive Button Limitations</p>
-                          <p className="text-yellow-700">
-                            • Only works within 24 hours of customer's last message<br />
-                            • May not display on all WhatsApp versions<br />
-                            • If buttons fail, message will be sent as formatted text
-                          </p>
-                        </div>
-                        <button
-                          onClick={async () => {
-                            if (selectedInstance && selectedCustomer) {
-                              toast.success('Interactive buttons test - check your WhatsApp instance status');
-                            }
-                          }}
-                          className="px-3 py-1 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors text-xs font-medium"
-                        >
-                          Test
-                        </button>
                       </div>
                     </div>
                   </div>
@@ -1897,39 +1738,32 @@ const WhatsAppChatPage: React.FC = () => {
 
                 {/* Enhanced Quick Replies */}
                 {showQuickReplies && (
-                  <div className="mb-4 bg-white rounded-3xl border border-gray-200 shadow-lg overflow-hidden">
+                  <div className="mb-3 bg-white rounded border border-gray-300 overflow-hidden">
                     {/* Header */}
-                    <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-4 text-white">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center">
-                            <MessageCircle size={16} />
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-lg">Quick Replies</h3>
-                            <p className="text-purple-100 text-sm">Select a message to send instantly</p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setShowQuickReplies(false)}
-                          className="p-2 hover:bg-white/20 rounded-full transition-all duration-200"
-                        >
-                          <XCircle size={20} />
-                        </button>
+                    <div className="bg-purple-600 p-2 text-white flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle size={14} />
+                        <h3 className="font-medium text-sm">Quick Replies</h3>
                       </div>
+                      <button
+                        onClick={() => setShowQuickReplies(false)}
+                        className="p-0.5 hover:bg-white/20 rounded"
+                      >
+                        <XCircle size={14} />
+                      </button>
                     </div>
 
                     {/* Category Tabs */}
-                    <div className="bg-gray-50 p-3 border-b border-gray-200">
-                      <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-                        {['Frequently Used', 'Recent', 'Favorites', 'Greetings', 'Customer Service', 'Sales & Orders', 'Technical Support', 'Appointments'].map((category) => (
+                    <div className="bg-gray-100 p-2 border-b border-gray-300">
+                      <div className="flex gap-1 overflow-x-auto">
+                        {['Frequently Used', 'Recent', 'Favorites', 'Greetings', 'Customer Service'].map((category) => (
                           <button
                             key={category}
                             onClick={() => setQuickReplyCategory(category)}
-                            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-200 ${
+                            className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
                               quickReplyCategory === category
-                                ? 'bg-purple-500 text-white shadow-lg'
-                                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-200 border border-gray-300'
                             }`}
                           >
                             {category}
@@ -1938,143 +1772,63 @@ const WhatsAppChatPage: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Quick Reply Messages - Grid Layout */}
-                    <div className="p-4 max-h-80 overflow-y-auto">
+                    {/* Quick Reply Messages */}
+                    <div className="p-2 max-h-60 overflow-y-auto">
                       {getQuickRepliesToShow().length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
                           {getQuickRepliesToShow().map((reply, index) => (
                             <div
                               key={index}
-                              className="group relative bg-white rounded-xl p-3 hover:bg-purple-50 transition-all duration-200 cursor-pointer border border-gray-200 hover:border-purple-300 hover:shadow-md transform hover:scale-105"
+                              className="bg-gray-50 rounded p-2 hover:bg-purple-50 border border-gray-200"
                             >
-                              {/* Quick Reply Content */}
-                              <div className="mb-3">
-                                <p className="text-sm text-gray-800 leading-relaxed line-clamp-3">
-                                  {reply}
-                                </p>
-                              </div>
+                              <p className="text-xs text-gray-800 mb-1 line-clamp-2">
+                                {reply}
+                              </p>
                               
-                              {/* Action Buttons */}
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      addToFavorites(reply);
-                                    }}
-                                    className={`p-1.5 rounded-full transition-all duration-200 ${
-                                      isFavorite(reply)
-                                        ? 'bg-red-100 text-red-500 hover:bg-red-200'
-                                        : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-red-500'
-                                    }`}
-                                    title={isFavorite(reply) ? "Remove from favorites" : "Add to favorites"}
-                                  >
-                                    <svg className="w-3 h-3" fill={isFavorite(reply) ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                                    </svg>
-                                  </button>
-                                  
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      navigator.clipboard.writeText(reply);
-                                      toast.success('Copied to clipboard!');
-                                    }}
-                                    className="p-1.5 bg-gray-100 text-gray-400 rounded-full hover:bg-gray-200 hover:text-blue-500 transition-all duration-200"
-                                    title="Copy to clipboard"
-                                  >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                  </button>
-                                </div>
-                                
-                                {/* Send Button */}
-                                <button
-                                  onClick={() => sendQuickReply(reply)}
-                                  className="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg text-xs font-medium hover:from-purple-600 hover:to-purple-700 transition-all duration-200 shadow-sm hover:shadow-md transform hover:scale-105"
-                                >
-                                  Send
-                                </button>
-                              </div>
-                              
-                              {/* Hover Overlay for Quick Send */}
-                              <div className="absolute inset-0 bg-purple-500 bg-opacity-0 group-hover:bg-opacity-5 rounded-xl transition-all duration-200 pointer-events-none" />
+                              <button
+                                onClick={() => sendQuickReply(reply)}
+                                className="px-2 py-0.5 bg-purple-600 text-white rounded text-xs hover:bg-purple-700"
+                              >
+                                Send
+                              </button>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div className="text-center py-8">
-                          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <MessageCircle size={24} className="text-gray-400" />
-                          </div>
-                          <p className="text-gray-500 text-sm">
+                        <div className="text-center py-4">
+                          <p className="text-gray-500 text-xs">
                             {quickReplyCategory === 'Favorites' 
-                              ? 'No favorite replies yet. Click the heart icon to add favorites!'
+                              ? 'No favorites'
                               : quickReplyCategory === 'Recent'
-                              ? 'No recent replies yet. Send some messages to see them here!'
-                              : 'No replies in this category.'
+                              ? 'No recent replies'
+                              : 'No replies'
                             }
                           </p>
                         </div>
                       )}
                     </div>
-
-                                         {/* Quick Actions */}
-                     <div className="bg-gray-50 p-3 border-t border-gray-200">
-                       <div className="flex items-center justify-between text-sm text-gray-600">
-                         <span>
-                           {getQuickRepliesToShow().length} replies in {quickReplyCategory}
-                         </span>
-                         <div className="flex items-center gap-2">
-                           <button
-                             onClick={() => {
-                               const customReply = prompt('Enter your custom quick reply:');
-                               if (customReply && customReply.trim()) {
-                                 sendQuickReply(customReply.trim());
-                               }
-                             }}
-                             className="px-3 py-1 bg-purple-500 text-white rounded-full hover:bg-purple-600 transition-colors text-xs"
-                           >
-                             Custom Reply
-                           </button>
-                           <button
-                             onClick={() => setShowQuickReplyManager(true)}
-                             className="px-3 py-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors text-xs"
-                           >
-                             Manage Replies
-                           </button>
-                         </div>
-                       </div>
-                     </div>
                   </div>
                 )}
 
                 {/* Attachment Menu */}
                 {showAttachmentMenu && (
-                  <div className="mb-4 p-4 bg-gradient-to-br from-white to-gray-50 rounded-3xl border border-gray-200 shadow-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                          <Plus size={16} className="text-white" />
-                        </div>
-                        <span className="text-base font-semibold text-gray-800">Add Attachment</span>
-                      </div>
+                  <div className="mb-2 p-2 bg-white rounded border border-gray-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-800">Add Attachment</span>
                       <button
                         onClick={() => setShowAttachmentMenu(false)}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
+                        className="p-0.5 text-gray-400 hover:text-gray-600"
                       >
-                        <XCircle size={18} />
+                        <XCircle size={12} />
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="group relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200 hover:border-blue-400 hover:from-blue-100 hover:to-blue-200 transition-all duration-300 cursor-pointer transform hover:scale-105 hover:shadow-lg">
-                        <div className="p-4 flex flex-col items-center">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                            <Image size={24} className="text-white" />
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <label className="bg-blue-50 rounded p-2 hover:bg-blue-100 cursor-pointer border border-blue-200">
+                        <div className="flex flex-col items-center">
+                          <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center mb-1">
+                            <Image size={14} className="text-white" />
                           </div>
-                          <span className="text-sm font-medium text-blue-700">Photo & Video</span>
-                          <span className="text-xs text-blue-600 mt-1">Share images</span>
+                          <span className="text-xs font-medium text-blue-700">Image</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -2084,13 +1838,12 @@ const WhatsAppChatPage: React.FC = () => {
                         </div>
                       </label>
                       
-                      <label className="group relative overflow-hidden bg-gradient-to-br from-purple-50 to-purple-100 rounded-2xl border-2 border-purple-200 hover:border-purple-400 hover:from-purple-100 hover:to-purple-200 transition-all duration-300 cursor-pointer transform hover:scale-105 hover:shadow-lg">
-                        <div className="p-4 flex flex-col items-center">
-                          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                            <FileText size={24} className="text-white" />
+                      <label className="bg-purple-50 rounded p-2 hover:bg-purple-100 cursor-pointer border border-purple-200">
+                        <div className="flex flex-col items-center">
+                          <div className="w-8 h-8 bg-purple-600 rounded flex items-center justify-center mb-1">
+                            <FileText size={14} className="text-white" />
                           </div>
-                          <span className="text-sm font-medium text-purple-700">Document</span>
-                          <span className="text-xs text-purple-600 mt-1">Share files</span>
+                          <span className="text-xs font-medium text-purple-700">File</span>
                           <input
                             type="file"
                             accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
@@ -2101,64 +1854,16 @@ const WhatsAppChatPage: React.FC = () => {
                       </label>
                       
                       <button 
-                        onClick={() => {
-                          setShowInteractiveButtons(true);
-                          setShowAttachmentMenu(false);
-                          setMessageType('button');
-                        }}
-                        className="group relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100 rounded-2xl border-2 border-blue-200 hover:border-blue-400 hover:from-blue-100 hover:to-blue-200 transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
-                      >
-                        <div className="p-4 flex flex-col items-center">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 110 2h-1v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6H3a1 1 0 110-2h4zM6 6v12h12V6H6z" />
-                            </svg>
-                          </div>
-                          <span className="text-sm font-medium text-blue-700">Interactive Buttons</span>
-                          <span className="text-xs text-blue-600 mt-1">
-                            {checkInteractiveButtonsSupport() ? 'Add buttons' : '⚠️ 24h window expired'}
-                          </span>
-                        </div>
-                      </button>
-                      
-                      <button 
                         onClick={isRecording ? stopRecording : startRecording}
-                        className="group relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100 rounded-2xl border-2 border-red-200 hover:border-red-400 hover:from-red-100 hover:to-red-200 transition-all duration-300 transform hover:scale-105 hover:shadow-lg"
+                        className={`bg-red-50 rounded p-2 hover:bg-red-100 border border-red-200 ${isRecording ? 'animate-pulse' : ''}`}
                       >
-                        <div className="p-4 flex flex-col items-center">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300 ${
-                            isRecording 
-                              ? 'bg-gradient-to-br from-red-500 to-red-600 animate-pulse' 
-                              : 'bg-gradient-to-br from-red-500 to-red-600'
-                          }`}>
-                            <Mic size={24} className="text-white" />
+                        <div className="flex flex-col items-center">
+                          <div className="w-8 h-8 bg-red-600 rounded flex items-center justify-center mb-1">
+                            <Mic size={14} className="text-white" />
                           </div>
-                          <span className="text-sm font-medium text-red-700">
-                            {isRecording ? 'Stop Recording' : 'Voice Message'}
+                          <span className="text-xs font-medium text-red-700">
+                            {isRecording ? 'Stop' : 'Voice'}
                           </span>
-                          <span className="text-xs text-red-600 mt-1">
-                            {isRecording ? formatRecordingTime(recordingTime) : 'Record audio'}
-                          </span>
-                        </div>
-                      </button>
-                      
-                      <button className="group relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100 rounded-2xl border-2 border-green-200 hover:border-green-400 hover:from-green-100 hover:to-green-200 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-                        <div className="p-4 flex flex-col items-center">
-                          <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                            <MapPin size={24} className="text-white" />
-                          </div>
-                          <span className="text-sm font-medium text-green-700">Location</span>
-                          <span className="text-xs text-green-600 mt-1">Share location</span>
-                        </div>
-                      </button>
-                      
-                      <button className="group relative overflow-hidden bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl border-2 border-orange-200 hover:border-orange-400 hover:from-orange-100 hover:to-orange-200 transition-all duration-300 transform hover:scale-105 hover:shadow-lg">
-                        <div className="p-4 flex flex-col items-center">
-                          <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                            <User size={24} className="text-white" />
-                          </div>
-                          <span className="text-sm font-medium text-orange-700">Contact</span>
-                          <span className="text-xs text-orange-600 mt-1">Share contact</span>
                         </div>
                       </button>
                     </div>
@@ -2167,27 +1872,22 @@ const WhatsAppChatPage: React.FC = () => {
 
                 {/* Emoji Picker */}
                 {showEmojiPicker && (
-                  <div className="mb-4 p-4 bg-white rounded-3xl border border-gray-200 shadow-lg">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center">
-                          <Smile size={16} className="text-white" />
-                        </div>
-                        <span className="text-base font-semibold text-gray-800">Emoji</span>
-                      </div>
+                  <div className="mb-2 p-2 bg-white rounded border border-gray-300">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-medium text-gray-800">Emoji</span>
                       <button
                         onClick={() => setShowEmojiPicker(false)}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200"
+                        className="p-0.5 text-gray-400 hover:text-gray-600"
                       >
-                        <XCircle size={18} />
+                        <XCircle size={12} />
                       </button>
                     </div>
-                    <div className="grid grid-cols-8 gap-2 max-h-48 overflow-y-auto">
-                      {emojis.map((emoji, index) => (
+                    <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto">
+                      {emojis.slice(0, 56).map((emoji, index) => (
                         <button
                           key={index}
                           onClick={() => addEmoji(emoji)}
-                          className="p-2 text-2xl hover:bg-gray-100 rounded-lg transition-all duration-200 hover:scale-110"
+                          className="p-1 text-base hover:bg-gray-100 rounded"
                         >
                           {emoji}
                         </button>
@@ -2196,22 +1896,22 @@ const WhatsAppChatPage: React.FC = () => {
                   </div>
                 )}
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
                   <button 
                     onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-                    className="p-3 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all duration-200 hover:scale-110"
+                    className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded"
                   >
-                    <Plus size={20} />
+                    <Plus size={16} />
                   </button>
                   <button 
                     onClick={() => setShowQuickReplies(!showQuickReplies)}
-                    className={`p-3 rounded-full transition-all duration-200 hover:scale-110 ${
+                    className={`p-2 rounded ${
                       showQuickReplies 
-                        ? 'bg-purple-500 text-white shadow-lg' 
-                        : 'text-purple-500 hover:text-purple-600 hover:bg-purple-50'
+                        ? 'bg-purple-600 text-white' 
+                        : 'text-purple-600 hover:bg-purple-50'
                     }`}
                   >
-                    <MessageCircle size={20} />
+                    <MessageCircle size={16} />
                   </button>
                   <div className="flex-1 relative">
                     <input
@@ -2219,64 +1919,47 @@ const WhatsAppChatPage: React.FC = () => {
                       value={chatMessage}
                       onChange={(e) => handleTyping(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendChatMessage()}
-                      placeholder={`Type a message to ${selectedCustomer.name}...`}
-                      className="w-full px-5 py-4 border border-gray-300 rounded-full focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-1 transition-all duration-200 bg-gray-50 focus:bg-white shadow-sm text-base"
+                      placeholder={`Message ${selectedCustomer.name}...`}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded text-xs focus:border-green-500 focus:outline-none"
                     />
-                                          <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-                        <button 
-                          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                          className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                          <Smile size={18} />
-                        </button>
-                      </div>
-                  </div>
-                                      <button
-                      onClick={handleSendChatMessage}
-                      disabled={
-                        (messageType === 'text' && !chatMessage.trim()) ||
-                        (messageType === 'button' && (!buttonMessage.trim() || interactiveButtons.length === 0)) ||
-                        (messageType === 'image' && !selectedImage) ||
-                        (messageType === 'document' && !selectedFile) ||
-                        (messageType === 'audio' && !audioBlob) ||
-                        isSendingChatMessage
-                      }
-                      className="p-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full hover:from-green-600 hover:to-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-110 shadow-lg"
+                    <button 
+                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                      className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
                     >
-                      {isSendingChatMessage ? (
-                        <RefreshCw size={20} className="animate-spin" />
-                      ) : (
-                        <Send size={20} />
-                      )}
+                      <Smile size={14} />
                     </button>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
-                  <span>Press Enter to send, Shift+Enter for new line</span>
-                  <span>{chatMessage.length}/1000 characters</span>
+                  </div>
+                  <button
+                    onClick={handleSendChatMessage}
+                    disabled={
+                      (messageType === 'text' && !chatMessage.trim()) ||
+                      (messageType === 'button' && (!buttonMessage.trim() || interactiveButtons.length === 0)) ||
+                      (messageType === 'image' && !selectedImage) ||
+                      (messageType === 'document' && !selectedFile) ||
+                      (messageType === 'audio' && !audioBlob) ||
+                      isSendingChatMessage
+                    }
+                    className="p-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSendingChatMessage ? (
+                      <RefreshCw size={16} className="animate-spin" />
+                    ) : (
+                      <Send size={16} />
+                    )}
+                  </button>
                 </div>
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-r-2xl">
+            <div className="flex-1 flex items-center justify-center bg-gray-100">
               <div className="text-center max-w-md">
-                <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-xl">
-                  <MessageCircle size={40} className="text-white" />
+                <div className="w-16 h-16 bg-green-600 rounded flex items-center justify-center mx-auto mb-3">
+                  <MessageCircle size={32} className="text-white" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-3">Select a customer</h3>
-                <p className="text-gray-600 mb-4 leading-relaxed">
-                  Choose a customer from the list to start a WhatsApp conversation. 
-                  You can search by name, phone number, or email address.
+                <h3 className="text-base font-medium text-gray-900 mb-2">Select a customer</h3>
+                <p className="text-gray-600 text-sm">
+                  Choose a customer from the list to start chatting
                 </p>
-                <div className="flex items-center justify-center gap-4 text-sm text-gray-500">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle size={16} className="text-green-500" />
-                    <span>Real-time messaging</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle size={16} className="text-green-500" />
-                    <span>Secure & private</span>
-                  </div>
-                </div>
               </div>
             </div>
           )}

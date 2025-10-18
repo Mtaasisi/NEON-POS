@@ -1,4 +1,5 @@
-import { supabase } from './supabaseClient';
+import { supabase, sql } from './supabaseClient';
+import { latsEventBus } from '../features/lats/lib/data/eventBus';
 
 // ============================================================================
 // TYPES
@@ -49,6 +50,12 @@ export interface StockTransfer {
     sku: string;
     quantity: number;
     reserved_quantity: number;
+    product_id: string;
+    product?: {
+      id: string;
+      name: string;
+      sku: string;
+    };
   };
   requested_by_user?: {
     id: string;
@@ -135,7 +142,7 @@ async function checkDuplicateTransfer(
 
 /**
  * Get all stock transfers for the current branch
- * FIXED: Now includes complete variant and product information
+ * FIXED: Now uses direct SQL query to avoid PostgREST syntax issues
  */
 export const getStockTransfers = async (
   branchId?: string,
@@ -146,69 +153,146 @@ export const getStockTransfers = async (
     console.log('📦 [DEBUG] Branch ID type:', typeof branchId, 'Value:', branchId);
     console.log('📦 [DEBUG] Branch ID empty?', !branchId || branchId === '');
 
-    // Build the base query with complete joins
-    // FIXED: Simplified the query to avoid nested join syntax errors
-    let baseQuery = supabase
-      .from('branch_transfers')
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(
-          id, 
-          name, 
-          code, 
-          city, 
-          is_active
-        ),
-        to_branch:store_locations!to_branch_id(
-          id, 
-          name, 
-          code, 
-          city, 
-          is_active
-        ),
-        variant:lats_product_variants!entity_id(
-          id,
-          variant_name,
-          sku,
-          quantity,
-          reserved_quantity,
-          product_id
-        )
-      `)
-      .eq('transfer_type', 'stock')
-      .order('created_at', { ascending: false });
-
-    // Apply filters
-    if (branchId) {
-      console.log('📦 [DEBUG] Applying branch filter:', `from_branch_id.eq.${branchId},to_branch_id.eq.${branchId}`);
-      baseQuery = baseQuery.or(`from_branch_id.eq.${branchId},to_branch_id.eq.${branchId}`);
-    } else {
-      console.warn('⚠️ [WARNING] No branch ID provided - fetching ALL transfers');
-    }
-
-    if (status && status !== 'all') {
-      console.log('📦 [DEBUG] Applying status filter:', status);
-      baseQuery = baseQuery.eq('status', status);
-    }
-
-    const { data, error } = await baseQuery;
-
-    if (error) {
-      console.error('❌ Error fetching transfers:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      });
-      throw error;
-    }
-
-    console.log(`✅ Fetched ${data?.length || 0} transfers`);
+    // Use direct SQL query to avoid PostgREST syntax issues
     
-    if (data && data.length > 0) {
-      console.log('📦 [DEBUG] Sample transfer:', data[0]);
-      console.log('📦 [DEBUG] Transfer IDs:', data.map((t: any) => t.id));
+    let data: any[];
+    
+    if (branchId && status && status !== 'all') {
+      // Both branch and status filters
+      console.log('📦 [DEBUG] Applying branch and status filters:', { branchId, status });
+      data = await sql`
+        SELECT 
+          bt.*,
+          json_build_object(
+            'id', fb.id, 
+            'name', fb.name, 
+            'code', fb.code, 
+            'city', fb.city, 
+            'is_active', fb.is_active
+          ) as from_branch,
+          json_build_object(
+            'id', tb.id, 
+            'name', tb.name, 
+            'code', tb.code, 
+            'city', tb.city, 
+            'is_active', tb.is_active
+          ) as to_branch,
+          json_build_object(
+            'id', pv.id,
+            'variant_name', pv.variant_name,
+            'sku', pv.sku,
+            'quantity', pv.quantity,
+            'reserved_quantity', pv.reserved_quantity,
+            'product_id', pv.product_id,
+            'product', json_build_object(
+              'id', p.id,
+              'name', p.name,
+              'sku', p.sku
+            )
+          ) as variant
+        FROM branch_transfers bt
+        LEFT JOIN store_locations fb ON bt.from_branch_id = fb.id
+        LEFT JOIN store_locations tb ON bt.to_branch_id = tb.id
+        LEFT JOIN lats_product_variants pv ON bt.entity_id = pv.id
+        LEFT JOIN lats_products p ON pv.product_id = p.id
+        WHERE bt.transfer_type = 'stock'
+        AND (bt.from_branch_id = ${branchId} OR bt.to_branch_id = ${branchId})
+        AND bt.status = ${status}
+        ORDER BY bt.created_at DESC
+      `;
+    } else if (branchId) {
+      // Only branch filter
+      console.log('📦 [DEBUG] Applying branch filter only:', branchId);
+      data = await sql`
+        SELECT 
+          bt.*,
+          json_build_object(
+            'id', fb.id, 
+            'name', fb.name, 
+            'code', fb.code, 
+            'city', fb.city, 
+            'is_active', fb.is_active
+          ) as from_branch,
+          json_build_object(
+            'id', tb.id, 
+            'name', tb.name, 
+            'code', tb.code, 
+            'city', tb.city, 
+            'is_active', tb.is_active
+          ) as to_branch,
+          json_build_object(
+            'id', pv.id,
+            'variant_name', pv.variant_name,
+            'sku', pv.sku,
+            'quantity', pv.quantity,
+            'reserved_quantity', pv.reserved_quantity,
+            'product_id', pv.product_id,
+            'product', json_build_object(
+              'id', p.id,
+              'name', p.name,
+              'sku', p.sku
+            )
+          ) as variant
+        FROM branch_transfers bt
+        LEFT JOIN store_locations fb ON bt.from_branch_id = fb.id
+        LEFT JOIN store_locations tb ON bt.to_branch_id = tb.id
+        LEFT JOIN lats_product_variants pv ON bt.entity_id = pv.id
+        LEFT JOIN lats_products p ON pv.product_id = p.id
+        WHERE bt.transfer_type = 'stock'
+        AND (bt.from_branch_id = ${branchId} OR bt.to_branch_id = ${branchId})
+        ORDER BY bt.created_at DESC
+      `;
+    } else {
+      // No filters - get all transfers
+      console.warn('⚠️ [WARNING] No branch ID provided - fetching ALL transfers');
+      data = await sql`
+        SELECT 
+          bt.*,
+          json_build_object(
+            'id', fb.id, 
+            'name', fb.name, 
+            'code', fb.code, 
+            'city', fb.city, 
+            'is_active', fb.is_active
+          ) as from_branch,
+          json_build_object(
+            'id', tb.id, 
+            'name', tb.name, 
+            'code', tb.code, 
+            'city', tb.city, 
+            'is_active', tb.is_active
+          ) as to_branch,
+          json_build_object(
+            'id', pv.id,
+            'variant_name', pv.variant_name,
+            'sku', pv.sku,
+            'quantity', pv.quantity,
+            'reserved_quantity', pv.reserved_quantity,
+            'product_id', pv.product_id,
+            'product', json_build_object(
+              'id', p.id,
+              'name', p.name,
+              'sku', p.sku
+            )
+          ) as variant
+        FROM branch_transfers bt
+        LEFT JOIN store_locations fb ON bt.from_branch_id = fb.id
+        LEFT JOIN store_locations tb ON bt.to_branch_id = tb.id
+        LEFT JOIN lats_product_variants pv ON bt.entity_id = pv.id
+        LEFT JOIN lats_products p ON pv.product_id = p.id
+        WHERE bt.transfer_type = 'stock'
+        ORDER BY bt.created_at DESC
+      `;
+    }
+
+    // Handle Neon client response format
+    const transfers = Array.isArray(data) ? data : (data?.rows || []);
+    
+    console.log(`✅ Fetched ${transfers?.length || 0} transfers`);
+    
+    if (transfers && transfers.length > 0) {
+      console.log('📦 [DEBUG] Sample transfer:', transfers[0]);
+      console.log('📦 [DEBUG] Transfer IDs:', transfers.map((t: any) => t.id));
     } else {
       console.warn('⚠️ [WARNING] No transfers found! Check:');
       console.warn('  1. Branch ID in localStorage:', localStorage.getItem('current_branch_id'));
@@ -216,7 +300,7 @@ export const getStockTransfers = async (
       console.warn('  3. Foreign key constraints');
     }
     
-    return data || [];
+    return transfers || [];
   } catch (error: any) {
     console.error('❌ Failed to fetch transfers:', error);
     console.error('❌ Stack trace:', error.stack);
@@ -336,6 +420,15 @@ export const createStockTransfer = async (
     }
 
     console.log('✅ Transfer created with stock reserved:', data);
+    
+    // ✅ Emit event to refresh inventory (stock was reserved)
+    latsEventBus.emit('lats:stock.updated', {
+      variantId: transfer.entity_id,
+      action: 'transfer_created',
+      quantity: transfer.quantity,
+      reserved: true
+    });
+    
     return data;
   } catch (error) {
     console.error('❌ Failed to create transfer:', error);
@@ -477,6 +570,15 @@ export const rejectStockTransfer = async (
     }
 
     console.log('✅ Transfer rejected and stock released:', data);
+    
+    // ✅ Emit event to refresh inventory (reserved stock was released)
+    latsEventBus.emit('lats:stock.updated', {
+      variantId: transfer.entity_id,
+      action: 'transfer_rejected',
+      quantity: transfer.quantity,
+      released: true
+    });
+    
     return data;
   } catch (error) {
     console.error('❌ Failed to reject transfer:', error);
@@ -557,6 +659,28 @@ export const completeStockTransfer = async (
   try {
     console.log('✅ [stockTransferApi] Completing transfer:', transferId);
 
+    // First, check current status to prevent duplicate completion attempts
+    const { data: currentTransfer, error: statusError } = await supabase
+      .from('branch_transfers')
+      .select('status')
+      .eq('id', transferId)
+      .single();
+
+    if (statusError) {
+      console.error('❌ Error checking transfer status:', statusError);
+      throw new Error('Failed to verify transfer status');
+    }
+
+    if (currentTransfer.status === 'completed') {
+      console.warn('⚠️ Transfer already completed:', transferId);
+      throw new Error('This transfer has already been completed');
+    }
+
+    if (currentTransfer.status !== 'in_transit' && currentTransfer.status !== 'approved') {
+      console.error('❌ Invalid status for completion:', currentTransfer.status);
+      throw new Error(`Transfer must be approved or in_transit to complete. Current status: ${currentTransfer.status}`);
+    }
+
     // Call the comprehensive database function
     const { data: result, error: rpcError } = await supabase.rpc(
       'complete_stock_transfer_transaction',
@@ -586,7 +710,7 @@ export const completeStockTransfer = async (
           sku,
           quantity,
           reserved_quantity,
-          product:lats_products(id, name, sku)
+          product:lats_products!product_id(id, name, sku)
         )
       `)
       .eq('id', transferId)
@@ -598,6 +722,44 @@ export const completeStockTransfer = async (
     }
 
     console.log('✅ Transfer completed with full details:', transfer);
+    
+    if (!transfer) {
+      console.warn('⚠️ Transfer details not found after completion, fetching without joins');
+      // Fallback: fetch without joins if the join query failed
+      const { data: simpleTransfer, error: simpleError } = await supabase
+        .from('branch_transfers')
+        .select('*')
+        .eq('id', transferId)
+        .single();
+      
+      if (simpleError || !simpleTransfer) {
+        console.error('❌ Error fetching transfer:', simpleError);
+        throw new Error('Transfer completed but could not retrieve details');
+      }
+      
+      // Emit event with simple transfer data
+      latsEventBus.emit('lats:stock.updated', {
+        variantId: simpleTransfer.entity_id,
+        transferId: transferId,
+        action: 'transfer_completed',
+        fromBranchId: simpleTransfer.from_branch_id,
+        toBranchId: simpleTransfer.to_branch_id,
+        quantity: simpleTransfer.quantity
+      });
+      
+      return simpleTransfer as StockTransfer;
+    }
+    
+    // ✅ Emit event to refresh inventory displays
+    latsEventBus.emit('lats:stock.updated', {
+      variantId: transfer.entity_id,
+      transferId: transferId,
+      action: 'transfer_completed',
+      fromBranchId: transfer.from_branch_id,
+      toBranchId: transfer.to_branch_id,
+      quantity: transfer.quantity
+    });
+    
     return transfer;
   } catch (error) {
     console.error('❌ Failed to complete transfer:', error);
@@ -663,6 +825,15 @@ export const cancelStockTransfer = async (
     }
 
     console.log('✅ Transfer cancelled and stock released:', data);
+    
+    // ✅ Emit event to refresh inventory (reserved stock was released)
+    latsEventBus.emit('lats:stock.updated', {
+      variantId: transfer.entity_id,
+      action: 'transfer_cancelled',
+      quantity: transfer.quantity,
+      released: true
+    });
+    
     return data;
   } catch (error) {
     console.error('❌ Failed to cancel transfer:', error);
@@ -672,37 +843,38 @@ export const cancelStockTransfer = async (
 
 /**
  * Get transfer statistics for a branch
+ * FIXED: Now uses direct SQL query to avoid PostgREST syntax issues
  */
 export const getTransferStats = async (branchId: string): Promise<TransferStats> => {
   try {
     console.log('📊 [stockTransferApi] Fetching transfer stats for branch:', branchId);
     console.log('📊 [DEBUG] Stats query - Branch ID:', branchId);
 
-    const { data, error } = await supabase
-      .from('branch_transfers')
-      .select('status, quantity')
-      .or(`from_branch_id.eq.${branchId},to_branch_id.eq.${branchId}`)
-      .eq('transfer_type', 'stock');
+    
+    const data = await sql`
+      SELECT status, quantity
+      FROM branch_transfers
+      WHERE transfer_type = 'stock'
+      AND (from_branch_id = ${branchId} OR to_branch_id = ${branchId})
+    `;
 
-    if (error) {
-      console.error('❌ Error fetching transfer stats:', error);
-      throw error;
-    }
-
-    console.log('📊 [DEBUG] Stats query returned:', data?.length, 'transfers');
-    if (data && data.length > 0) {
-      console.log('📊 [DEBUG] Stats raw data:', data);
+    // Handle Neon client response format
+    const transfers = Array.isArray(data) ? data : (data?.rows || []);
+    
+    console.log('📊 [DEBUG] Stats query returned:', transfers?.length, 'transfers');
+    if (transfers && transfers.length > 0) {
+      console.log('📊 [DEBUG] Stats raw data:', transfers);
     }
 
     const stats: TransferStats = {
-      total: data?.length || 0,
-      pending: data?.filter((t: any) => t.status === 'pending').length || 0,
-      approved: data?.filter((t: any) => t.status === 'approved').length || 0,
-      in_transit: data?.filter((t: any) => t.status === 'in_transit').length || 0,
-      completed: data?.filter((t: any) => t.status === 'completed').length || 0,
-      rejected: data?.filter((t: any) => t.status === 'rejected').length || 0,
-      cancelled: data?.filter((t: any) => t.status === 'cancelled').length || 0,
-      total_items: data?.reduce((sum: number, t: any) => sum + (t.quantity || 0), 0) || 0
+      total: transfers?.length || 0,
+      pending: transfers?.filter((t: any) => t.status === 'pending').length || 0,
+      approved: transfers?.filter((t: any) => t.status === 'approved').length || 0,
+      in_transit: transfers?.filter((t: any) => t.status === 'in_transit').length || 0,
+      completed: transfers?.filter((t: any) => t.status === 'completed').length || 0,
+      rejected: transfers?.filter((t: any) => t.status === 'rejected').length || 0,
+      cancelled: transfers?.filter((t: any) => t.status === 'cancelled').length || 0,
+      total_items: transfers?.reduce((sum: number, t: any) => sum + (t.quantity || 0), 0) || 0
     };
 
     console.log('✅ Transfer stats:', stats);

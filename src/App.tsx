@@ -63,7 +63,6 @@ import { ErrorBoundary } from './features/shared/components/ErrorBoundary';
 import DynamicImportErrorBoundary from './features/shared/components/DynamicImportErrorBoundary';
 import UrlValidatedRoute from './components/UrlValidatedRoute';
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
-const AdminManagementPage = lazy(() => import('./features/admin/pages/AdminManagementPage'));
 const IntegrationsTestPage = lazy(() => import('./features/admin/pages/IntegrationsTestPage'));
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
 const UnifiedSupplierManagementPage = lazy(() => import('./features/settings/pages/UnifiedSupplierManagementPage'));
@@ -73,11 +72,12 @@ const SMSControlCenterPage = lazy(() => import('./features/sms/pages/SMSControlC
 const EnhancedPaymentManagementPage = lazy(() => import('./features/payments/pages/EnhancedPaymentManagementPage'));
 const EmployeeManagementPage = lazy(() => import('./features/employees/pages/EmployeeManagementPage'));
 const EmployeeAttendancePage = lazy(() => import('./features/employees/pages/EmployeeAttendancePage'));
+const AttendanceManagementPage = lazy(() => import('./features/employees/pages/AttendanceManagementPage'));
 
 const ServiceManagementPage = lazy(() => import('./features/services/pages/ServiceManagementPage'));
 
 const UnifiedAppointmentPage = lazy(() => import('./features/appointments/pages/UnifiedAppointmentPage'));
-const BusinessManagementPage = lazy(() => import('./features/business/pages/BusinessManagementPage'));
+const RemindersPage = lazy(() => import('./features/reminders/pages/RemindersPage'));
 const MobileOptimizationPage = lazy(() => import('./features/mobile/pages/MobileOptimizationPage'));
 const GlobalSearchPage = lazy(() => import('./features/shared/pages/GlobalSearchPage'));
 const ProductAdGeneratorPage = lazy(() => import('./features/shared/pages/ProductAdGeneratorPage'));
@@ -578,8 +578,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </RoleProtectedRoute>
           } />
 
-
-
         <Route path="/category-management" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><CategoryManagementPage /></Suspense></RoleProtectedRoute>} />
                   <Route path="/supplier-management" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><UnifiedSupplierManagementPage /></Suspense></RoleProtectedRoute>} />
         <Route path="/store-locations" element={
@@ -685,13 +683,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </RoleProtectedRoute>
           } />
           <Route path="/integrations-test" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><IntegrationsTestPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/admin-management" element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <AdminManagementPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
           <Route path="/users" element={
             <RoleProtectedRoute allowedRoles={['admin']}>
               <Suspense fallback={<DynamicPageLoader />}>
@@ -705,6 +696,9 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           {/* Appointment Management Routes */}
           <Route path="/appointments" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care', 'technician']}><Suspense fallback={<DynamicPageLoader />}><UnifiedAppointmentPage /></Suspense></RoleProtectedRoute>} />
           
+          {/* Reminders Routes */}
+          <Route path="/reminders" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care', 'technician']}><Suspense fallback={<DynamicPageLoader />}><RemindersPage /></Suspense></RoleProtectedRoute>} />
+          
           {/* Service Management Routes */}
           <Route path="/services" element={
             <RoleProtectedRoute allowedRoles={['admin']}>
@@ -716,20 +710,11 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* Employee Management Routes */}
           <Route path="/employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><EmployeeManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/employees/attendance" element={
-            <RoleProtectedRoute allowedRoles={['admin', 'manager']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <EmployeeAttendancePage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
-          <Route path="/attendance" element={
-            <RoleProtectedRoute allowedRoles={['admin', 'manager']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <EmployeeAttendancePage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
+          
+          {/* Redirect old attendance routes to employees page with appropriate tab */}
+          <Route path="/employees/attendance" element={<Navigate to="/employees?tab=attendance" replace />} />
+          <Route path="/employees/attendance-management" element={<Navigate to="/employees?tab=attendance-setup" replace />} />
+          <Route path="/attendance" element={<Navigate to="/employees?tab=attendance" replace />} />
           
           {/* Calendar View Routes */}
 
@@ -743,15 +728,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </RoleProtectedRoute>
           } />
           
-          {/* Consolidated Management Routes */}
-          <Route path="/business" element={
-            <RoleProtectedRoute allowedRoles={['admin', 'manager']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <BusinessManagementPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
-
           {/* Diagnostics Routes - Admin and Customer Care only */}
           <Route path="/diagnostics" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/diagnostics/new" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
@@ -940,6 +916,38 @@ function App() {
   // Initialize cache
   useEffect(() => {
     initializeCache();
+  }, []);
+
+  // Apply font size from localStorage on app load
+  useEffect(() => {
+    const applyFontSize = (size: 'tiny' | 'extra-small' | 'small' | 'medium' | 'large') => {
+      const root = document.documentElement;
+      switch (size) {
+        case 'tiny':
+          root.style.fontSize = '11px'; // Polished: More readable than 10px
+          break;
+        case 'extra-small':
+          root.style.fontSize = '12px';
+          break;
+        case 'small':
+          root.style.fontSize = '14px';
+          break;
+        case 'medium':
+          root.style.fontSize = '16px';
+          break;
+        case 'large':
+          root.style.fontSize = '18px';
+          break;
+      }
+    };
+
+    const savedFontSize = localStorage.getItem('fontSize') as 'tiny' | 'extra-small' | 'small' | 'medium' | 'large' | null;
+    if (savedFontSize) {
+      applyFontSize(savedFontSize);
+    } else {
+      // Default to medium if no preference saved
+      applyFontSize('medium');
+    }
   }, []);
 
   // Global error handler for unhandled promise rejections

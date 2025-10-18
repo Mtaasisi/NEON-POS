@@ -131,7 +131,7 @@ export class PurchaseOrderActionsService {
         const duplicateItems = originalItems.map(item => ({
           ...item,
           purchase_order_id: newOrder.id,
-          received_quantity: 0,
+          quantity_received: 0,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }));

@@ -18,7 +18,7 @@ const useDebounce = (value: string, delay: number) => {
   return debouncedValue;
 };
 
-export const usePOSSearch = () => {
+export const usePOSSearch = (productsPerPageSetting: number = 20) => {
   const { products: dbProducts, categories, getSoldQuantity } = useInventoryStore();
   
   // Search state
@@ -31,7 +31,8 @@ export const usePOSSearch = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
+  // Use the products per page from settings (with fallback to 20)
+  const itemsPerPage = productsPerPageSetting || 20;
 
   // Debounced search for performance
   const debouncedSearchQuery = useDebounce(searchQuery, 300);

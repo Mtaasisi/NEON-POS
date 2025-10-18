@@ -1093,22 +1093,29 @@ export const useInventoryStore = create<InventoryState>()(
         set({ isUpdating: true, error: null });
         
         try {
+          console.log('🏪 [Store] updateProduct called with:', { id, product });
           const provider = getLatsProvider();
+          console.log('🏪 [Store] Provider obtained, calling updateProduct...');
           const response = await provider.updateProduct(id, product);
+          console.log('🏪 [Store] Provider response:', response);
           
           if (response.ok) {
+            console.log('✅ [Store] Update successful, reloading products...');
             await get().loadProducts();
             latsAnalytics.track('product_updated', { productId: id });
           } else {
+            console.error('❌ [Store] Update failed:', response.message);
             set({ error: response.message || 'Failed to update product' });
           }
           
           return response;
-        } catch (error) {
+        } catch (error: any) {
           const errorMsg = 'Failed to update product';
-          console.error('Error updating product:', error);
+          console.error('❌ [Store] Exception in updateProduct:', error);
+          console.error('❌ [Store] Error message:', error?.message);
+          console.error('❌ [Store] Error stack:', error?.stack);
           set({ error: errorMsg });
-          return { ok: false, message: errorMsg };
+          return { ok: false, message: error?.message || errorMsg };
         } finally {
           set({ isUpdating: false });
         }

@@ -6,8 +6,8 @@ import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
 import PageHeader from '../components/ui/PageHeader';
 import { 
-  Package, Crown, Users, MapPin, Settings, Plus, Edit, Trash2, 
-  Building, Tag, Truck, Store, Database, Shield, Bell, BarChart3, Layers, ArrowRightLeft
+  Package, MapPin, Plus, 
+  Building, Tag, Truck, Layers, ArrowRightLeft
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -16,10 +16,9 @@ import CategoriesTab from '../components/inventory-management/CategoriesTab';
 import SuppliersTab from '../components/inventory-management/SuppliersTab';
 import StoreLocationsTab from '../components/inventory-management/StoreLocationsTab';
 import StorageRoomManagementPage from './StorageRoomManagementPage';
-import SystemSettingsTab from '../components/inventory-management/SystemSettingsTab';
 import SpecificationsTab from '../components/inventory-management/SpecificationsTab';
 
-type TabType = 'categories' | 'suppliers' | 'store-locations' | 'storage-room' | 'specifications' | 'system-settings';
+type TabType = 'categories' | 'suppliers' | 'store-locations' | 'storage-room' | 'specifications';
 
 interface TabConfig {
   id: TabType;
@@ -64,13 +63,6 @@ const TAB_CONFIGS: TabConfig[] = [
     icon: Layers,
     color: 'blue',
     description: 'Manage product specifications and attributes'
-  },
-  {
-    id: 'system-settings',
-    label: 'System Settings',
-    icon: Settings,
-    color: 'gray',
-    description: 'Configure inventory system preferences'
   }
 ];
 
@@ -80,8 +72,7 @@ const TAB_STYLES: Record<string, { active: string; hover: string }> = {
   purple: { active: 'bg-purple-500 text-white shadow-lg', hover: 'text-purple-600 hover:bg-purple-50' },
   orange: { active: 'bg-orange-500 text-white shadow-lg', hover: 'text-orange-600 hover:bg-orange-50' },
   indigo: { active: 'bg-indigo-500 text-white shadow-lg', hover: 'text-indigo-600 hover:bg-indigo-50' },
-  blue: { active: 'bg-blue-500 text-white shadow-lg', hover: 'text-blue-600 hover:bg-blue-50' },
-  gray: { active: 'bg-gray-500 text-white shadow-lg', hover: 'text-gray-600 hover:bg-gray-50' }
+  blue: { active: 'bg-blue-500 text-white shadow-lg', hover: 'text-blue-600 hover:bg-blue-50' }
 };
 
 const InventoryManagementPage: React.FC = () => {
@@ -128,8 +119,6 @@ const InventoryManagementPage: React.FC = () => {
         return <StorageRoomManagementPage />;
       case 'specifications':
         return <SpecificationsTab />;
-      case 'system-settings':
-        return <SystemSettingsTab />;
       default:
         return <CategoriesTab />;
     }

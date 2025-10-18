@@ -170,7 +170,7 @@ class EmployeeService {
         .from('employees')
         .select(`
           *,
-          branch:store_locations(id, name, code, is_main)
+          branch:store_locations!branch_id(id, name, code, is_main)
         `)
         .order('created_at', { ascending: false});
 
@@ -192,7 +192,7 @@ class EmployeeService {
         .from('employees')
         .select(`
           *,
-          branch:store_locations(id, name, code, is_main)
+          branch:store_locations!branch_id(id, name, code, is_main)
         `)
         .eq('id', id)
         .single();
@@ -234,7 +234,7 @@ class EmployeeService {
         .from('employees')
         .select(`
           *,
-          branch:store_locations(id, name, code, is_main)
+          branch:store_locations!branch_id(id, name, code, is_main)
         `)
         .eq('status', 'active')
         .order('first_name', { ascending: true });
@@ -344,7 +344,7 @@ class EmployeeService {
         .from('employees')
         .select(`
           *,
-          branch:store_locations(id, name, code, is_main)
+          branch:store_locations!branch_id(id, name, code, is_main)
         `)
         .eq('department', department)
         .order('first_name', { ascending: true });
@@ -366,7 +366,7 @@ class EmployeeService {
         .from('employees')
         .select(`
           *,
-          branch:store_locations(id, name, code, is_main)
+          branch:store_locations!branch_id(id, name, code, is_main)
         `)
         .eq('branch_id', branchId)
         .order('first_name', { ascending: true });
@@ -390,7 +390,7 @@ class EmployeeService {
         .eq('id', employeeId)
         .select(`
           *,
-          branch:store_locations(id, name, code, is_main)
+          branch:store_locations!branch_id(id, name, code, is_main)
         `)
         .single();
 
@@ -416,7 +416,7 @@ class EmployeeService {
         .eq('id', employeeId)
         .select(`
           *,
-          branch:store_locations(id, name, code, is_main)
+          branch:store_locations!branch_id(id, name, code, is_main)
         `)
         .single();
 

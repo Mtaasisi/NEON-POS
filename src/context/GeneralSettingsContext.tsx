@@ -121,6 +121,29 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     localStorage.setItem('timezone', timezone);
   };
 
+  // Apply font size
+  const applyFontSize = (size: 'tiny' | 'extra-small' | 'small' | 'medium' | 'large') => {
+    const root = document.documentElement;
+    switch (size) {
+      case 'tiny':
+        root.style.fontSize = '11px'; // Polished: More readable than 10px
+        break;
+      case 'extra-small':
+        root.style.fontSize = '12px';
+        break;
+      case 'small':
+        root.style.fontSize = '14px';
+        break;
+      case 'medium':
+        root.style.fontSize = '16px';
+        break;
+      case 'large':
+        root.style.fontSize = '18px';
+        break;
+    }
+    localStorage.setItem('fontSize', size);
+  };
+
   // Apply display settings
   const applyDisplaySettings = (settings: GeneralSettings) => {
     const root = document.documentElement;
@@ -164,6 +187,11 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     // Apply timezone
     applyTimezone(settings.timezone);
     
+    // Apply font size
+    if (settings.font_size) {
+      applyFontSize(settings.font_size);
+    }
+    
     // Apply display settings
     applyDisplaySettings(settings);
     
@@ -181,6 +209,14 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
       applySettingsToUI(settings);
     }
   }, [settings]);
+
+  // Load font size from localStorage on mount (for immediate application)
+  useEffect(() => {
+    const savedFontSize = localStorage.getItem('fontSize') as 'tiny' | 'extra-small' | 'small' | 'medium' | 'large' | null;
+    if (savedFontSize) {
+      applyFontSize(savedFontSize);
+    }
+  }, []);
 
   // Listen for settings update events
   useEffect(() => {

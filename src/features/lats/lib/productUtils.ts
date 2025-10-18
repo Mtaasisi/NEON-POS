@@ -132,7 +132,7 @@ Generated: ${new Date().toLocaleString()}
 /**
  * Validate product data before submission
  */
-export const validateProductData = (productData: ProductData): { isValid: boolean; errors: string[] } => {
+export const validateProductData = (productData: any): { isValid: boolean; errors: string[] } => {
   const errors: string[] = [];
 
   if (!productData.name?.trim()) {
@@ -143,19 +143,26 @@ export const validateProductData = (productData: ProductData): { isValid: boolea
     errors.push('SKU is required');
   }
 
-  if (!productData.categoryId) {
+  // Support both camelCase and snake_case for category
+  const categoryId = productData.categoryId || productData.category_id;
+  if (!categoryId) {
     errors.push('Category is required');
   }
 
-  if (productData.price < 0) {
+  // Support both camelCase and snake_case for price fields
+  const price = productData.price ?? productData.unit_price ?? 0;
+  const costPrice = productData.costPrice ?? productData.cost_price ?? 0;
+  const stockQuantity = productData.stockQuantity ?? productData.stock_quantity ?? 0;
+
+  if (price < 0) {
     errors.push('Price cannot be negative');
   }
 
-  if (productData.costPrice < 0) {
+  if (costPrice < 0) {
     errors.push('Cost price cannot be negative');
   }
 
-  if (productData.stockQuantity < 0) {
+  if (stockQuantity < 0) {
     errors.push('Stock quantity cannot be negative');
   }
 

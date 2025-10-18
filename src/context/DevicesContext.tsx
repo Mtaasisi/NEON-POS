@@ -172,7 +172,7 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
         // Add a note about the points being added
         try {
           const noteData = {
-            content: `+${pointsToAdd} points for new device: ${deviceData.brand} ${deviceData.model}`,
+            note: `+${pointsToAdd} points for new device: ${deviceData.brand} ${deviceData.model}`,
             created_by: currentUser.id,
             customer_id: customerId
           };

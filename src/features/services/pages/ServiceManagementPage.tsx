@@ -8,7 +8,8 @@ import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import { 
   Wrench, DollarSign, Clock, Users, Plus, Edit, Trash2, 
-  CheckCircle, AlertTriangle, Package, Star, TrendingUp, X
+  CheckCircle, AlertTriangle, Package, Star, TrendingUp, X,
+  Grid, List
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -51,6 +52,7 @@ const ServiceManagementPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateService, setShowCreateService] = useState(false);
   const [showCreateRequest, setShowCreateRequest] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
 
   // Mock data loading
   useEffect(() => {
@@ -115,8 +117,8 @@ const ServiceManagementPage: React.FC = () => {
     return (
       <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600">Loading services...</span>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#3498db]"></div>
+          <span className="ml-3 text-gray-600 font-medium">Loading services...</span>
         </div>
       </div>
     );
@@ -136,50 +138,50 @@ const ServiceManagementPage: React.FC = () => {
 
         <div className="flex flex-wrap gap-3">
           {activeTab === 'services' ? (
-            <GlassButton
+            <button 
               onClick={() => setShowCreateService(true)}
-              icon={<Plus size={18} />}
-              className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+              className="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold bg-[#2ecc71] text-white hover:bg-[#27ae60] transition-colors shadow-lg"
             >
+              <Plus size={20} />
               Add Service
-            </GlassButton>
+            </button>
           ) : (
-            <GlassButton
+            <button 
               onClick={() => setShowCreateRequest(true)}
-              icon={<Plus size={18} />}
-              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+              className="flex items-center gap-2 px-6 py-3 rounded-lg font-semibold bg-[#9b59b6] text-white hover:bg-[#8e44ad] transition-colors shadow-lg"
             >
+              <Plus size={20} />
               New Request
-            </GlassButton>
+            </button>
           )}
         </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex border-b border-gray-200">
+      <div className="flex border-b-2 border-gray-200">
         <button
           onClick={() => setActiveTab('services')}
-          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+          className={`px-6 py-3 font-semibold text-sm border-b-4 transition-all ${
             activeTab === 'services'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-[#3498db] text-[#3498db] bg-[#3498db]/10'
+              : 'border-transparent text-gray-500 hover:text-[#3498db] hover:bg-gray-50'
           }`}
         >
           <div className="flex items-center gap-2">
-            <Wrench size={16} />
+            <Wrench size={18} />
             Services ({services.length})
           </div>
         </button>
         <button
           onClick={() => setActiveTab('requests')}
-          className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${
+          className={`px-6 py-3 font-semibold text-sm border-b-4 transition-all ${
             activeTab === 'requests'
-              ? 'border-blue-500 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-[#9b59b6] text-[#9b59b6] bg-[#9b59b6]/10'
+              : 'border-transparent text-gray-500 hover:text-[#9b59b6] hover:bg-gray-50'
           }`}
         >
           <div className="flex items-center gap-2">
-            <Package size={16} />
+            <Package size={18} />
             Service Requests ({serviceRequests.length})
           </div>
         </button>
@@ -188,33 +190,33 @@ const ServiceManagementPage: React.FC = () => {
       {/* Statistics */}
       {activeTab === 'services' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
+          <div className="bg-[#3498db] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">Total Services</p>
-                <p className="text-2xl font-bold text-blue-900">{services.length}</p>
+                <p className="text-sm font-medium text-white/90">Total Services</p>
+                <p className="text-3xl font-bold text-white">{services.length}</p>
               </div>
-              <Wrench className="w-8 h-8 text-blue-600" />
+              <Wrench className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
           
-          <GlassCard className="bg-gradient-to-br from-green-50 to-green-100">
+          <div className="bg-[#2ecc71] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-600">Active Services</p>
-                <p className="text-2xl font-bold text-green-900">
+                <p className="text-sm font-medium text-white/90">Active Services</p>
+                <p className="text-3xl font-bold text-white">
                   {services.filter(s => s.status === 'active').length}
                 </p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
+              <CheckCircle className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
           
-          <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
+          <div className="bg-[#9b59b6] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-600">Total Value</p>
-                <p className="text-2xl font-bold text-purple-900">
+                <p className="text-sm font-medium text-white/90">Total Value</p>
+                <p className="text-2xl font-bold text-white">
                   {new Intl.NumberFormat('en-TZ', {
                     style: 'currency',
                     currency: 'TZS',
@@ -223,15 +225,15 @@ const ServiceManagementPage: React.FC = () => {
                   }).format(services.reduce((sum, s) => sum + s.price, 0))}
                 </p>
               </div>
-              <DollarSign className="w-8 h-8 text-purple-600" />
+              <DollarSign className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
           
-          <GlassCard className="bg-gradient-to-br from-orange-50 to-orange-100">
+          <div className="bg-[#e67e22] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-orange-600">Avg. Price</p>
-                <p className="text-2xl font-bold text-orange-900">
+                <p className="text-sm font-medium text-white/90">Avg. Price</p>
+                <p className="text-2xl font-bold text-white">
                   {services.length > 0 ? new Intl.NumberFormat('en-TZ', {
                     style: 'currency',
                     currency: 'TZS',
@@ -240,51 +242,51 @@ const ServiceManagementPage: React.FC = () => {
                   }).format(services.reduce((sum, s) => sum + s.price, 0) / services.length) : 'TZS 0'}
                 </p>
               </div>
-              <TrendingUp className="w-8 h-8 text-orange-600" />
+              <TrendingUp className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <GlassCard className="bg-gradient-to-br from-blue-50 to-blue-100">
+          <div className="bg-[#3498db] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-blue-600">Total Requests</p>
-                <p className="text-2xl font-bold text-blue-900">{serviceRequests.length}</p>
+                <p className="text-sm font-medium text-white/90">Total Requests</p>
+                <p className="text-3xl font-bold text-white">{serviceRequests.length}</p>
               </div>
-              <Package className="w-8 h-8 text-blue-600" />
+              <Package className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
           
-          <GlassCard className="bg-gradient-to-br from-yellow-50 to-yellow-100">
+          <div className="bg-[#f39c12] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-yellow-600">Pending</p>
-                <p className="text-2xl font-bold text-yellow-900">
+                <p className="text-sm font-medium text-white/90">Pending</p>
+                <p className="text-3xl font-bold text-white">
                   {serviceRequests.filter(r => r.status === 'pending').length}
                 </p>
               </div>
-              <AlertTriangle className="w-8 h-8 text-yellow-600" />
+              <AlertTriangle className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
           
-          <GlassCard className="bg-gradient-to-br from-green-50 to-green-100">
+          <div className="bg-[#2ecc71] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-green-600">Completed</p>
-                <p className="text-2xl font-bold text-green-900">
+                <p className="text-sm font-medium text-white/90">Completed</p>
+                <p className="text-3xl font-bold text-white">
                   {serviceRequests.filter(r => r.status === 'completed').length}
                 </p>
               </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
+              <CheckCircle className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
           
-          <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
+          <div className="bg-[#1abc9c] rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow border-none">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-purple-600">Revenue</p>
-                <p className="text-2xl font-bold text-purple-900">
+                <p className="text-sm font-medium text-white/90">Revenue</p>
+                <p className="text-2xl font-bold text-white">
                   {new Intl.NumberFormat('en-TZ', {
                     style: 'currency',
                     currency: 'TZS',
@@ -293,9 +295,9 @@ const ServiceManagementPage: React.FC = () => {
                   }).format(serviceRequests.filter(r => r.status === 'completed').reduce((sum, r) => sum + r.estimatedCost, 0))}
                 </p>
               </div>
-              <DollarSign className="w-8 h-8 text-purple-600" />
+              <DollarSign className="w-10 h-10 text-white/80" />
             </div>
-          </GlassCard>
+          </div>
         </div>
       )}
 
@@ -347,6 +349,31 @@ const ServiceManagementPage: React.FC = () => {
                   placeholder="Filter by Status"
                   className="min-w-[150px]"
                 />
+                {/* View Mode Toggle */}
+                <div className="flex rounded-lg border border-gray-300 bg-white">
+                  <button
+                    onClick={() => setViewMode('table')}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-l-lg transition-colors ${
+                      viewMode === 'table'
+                        ? 'bg-[#3498db] text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <List size={16} />
+                    Table
+                  </button>
+                  <button
+                    onClick={() => setViewMode('grid')}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-r-lg transition-colors ${
+                      viewMode === 'grid'
+                        ? 'bg-[#3498db] text-white'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Grid size={16} />
+                    Grid
+                  </button>
+                </div>
               </>
             ) : (
               <GlassSelect
@@ -371,58 +398,166 @@ const ServiceManagementPage: React.FC = () => {
       {/* Services List */}
       {activeTab === 'services' && (
         <GlassCard className="p-6">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Service</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Category</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Duration</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Price</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Popularity</th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {services
-                  .filter(service => {
-                    const matchesSearch = !searchQuery || 
-                      service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      service.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                      (service.category && service.category.toLowerCase().includes(searchQuery.toLowerCase()));
-                    const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter;
-                    const matchesStatus = statusFilter === 'all' || service.status === statusFilter;
-                    return matchesSearch && matchesCategory && matchesStatus;
-                  })
-                  .map((service) => (
-                  <tr key={service.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="py-3 px-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{service.name}</p>
-                        <p className="text-sm text-gray-500 truncate max-w-[300px]">{service.description}</p>
-                        <p className="text-xs text-gray-400">Warranty: {service.warrantyDays} days</p>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+          {viewMode === 'table' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Service</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Category</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Duration</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Price</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Popularity</th>
+                    <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {services
+                    .filter(service => {
+                      const matchesSearch = !searchQuery || 
+                        service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        service.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        (service.category && service.category.toLowerCase().includes(searchQuery.toLowerCase()));
+                      const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter;
+                      const matchesStatus = statusFilter === 'all' || service.status === statusFilter;
+                      return matchesSearch && matchesCategory && matchesStatus;
+                    })
+                    .map((service) => (
+                    <tr key={service.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-gray-900">{service.name}</p>
+                          <p className="text-sm text-gray-500 truncate max-w-[300px]">{service.description}</p>
+                          <p className="text-xs text-gray-400">Warranty: {service.warrantyDays} days</p>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="px-3 py-1 rounded-full text-xs font-semibold bg-[#3498db] text-white shadow-sm">
+                          {service.category}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          <Clock size={14} className="text-gray-400" />
+                          <span className="text-sm text-gray-600">
+                            {service.duration >= 60 
+                              ? `${Math.floor(service.duration / 60)}h ${service.duration % 60}m`
+                              : `${service.duration}m`
+                            }
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {new Intl.NumberFormat('en-TZ', {
+                              style: 'currency',
+                              currency: 'TZS',
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 0
+                            }).format(service.price)}
+                          </p>
+                          <p className="text-xs text-gray-500">Cost: {new Intl.NumberFormat('en-TZ', {
+                            style: 'currency',
+                            currency: 'TZS',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0
+                          }).format(service.cost)}</p>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                          service.status === 'active' ? 'bg-[#2ecc71] text-white' :
+                          service.status === 'inactive' ? 'bg-[#e74c3c] text-white' :
+                          'bg-[#95a5a6] text-white'
+                        }`}>
+                          {service.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1">
+                          {Array.from({ length: 5 }, (_, i) => (
+                            <Star
+                              key={i}
+                              size={16}
+                              className={i < service.popularity ? 'text-[#f39c12] fill-current' : 'text-gray-300'}
+                            />
+                          ))}
+                          <span className="text-xs text-gray-600 font-medium ml-1">({service.popularity})</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-2">
+                          <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#3498db] text-white hover:bg-[#2980b9] transition-colors shadow-sm">
+                            <Edit size={14} />
+                            Edit
+                          </button>
+                          <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#e74c3c] text-white hover:bg-[#c0392b] transition-colors shadow-sm">
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {services
+                .filter(service => {
+                  const matchesSearch = !searchQuery || 
+                    service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    service.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    (service.category && service.category.toLowerCase().includes(searchQuery.toLowerCase()));
+                  const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter;
+                  const matchesStatus = statusFilter === 'all' || service.status === statusFilter;
+                  return matchesSearch && matchesCategory && matchesStatus;
+                })
+                .map((service) => (
+                <div key={service.id} className="bg-white rounded-xl border border-gray-200 p-6 shadow-lg hover:shadow-xl transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-lg mb-2">{service.name}</h3>
+                      <p className="text-sm text-gray-600 mb-2">{service.description}</p>
+                      <p className="text-xs text-gray-400">Warranty: {service.warrantyDays} days</p>
+                    </div>
+                    <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                      service.status === 'active' ? 'bg-[#2ecc71] text-white' :
+                      service.status === 'inactive' ? 'bg-[#e74c3c] text-white' :
+                      'bg-[#95a5a6] text-white'
+                    }`}>
+                      {service.status}
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Category</span>
+                      <span className="px-2 py-1 rounded text-xs font-medium bg-[#3498db] text-white">
                         {service.category}
                       </span>
-                    </td>
-                    <td className="py-3 px-4">
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Duration</span>
                       <div className="flex items-center gap-1">
                         <Clock size={14} className="text-gray-400" />
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-gray-700">
                           {service.duration >= 60 
                             ? `${Math.floor(service.duration / 60)}h ${service.duration % 60}m`
                             : `${service.duration}m`
                           }
                         </span>
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div>
-                        <p className="font-medium text-gray-900">
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Price</span>
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">
                           {new Intl.NumberFormat('en-TZ', {
                             style: 'currency',
                             currency: 'TZS',
@@ -430,59 +565,46 @@ const ServiceManagementPage: React.FC = () => {
                             maximumFractionDigits: 0
                           }).format(service.price)}
                         </p>
-                        <p className="text-xs text-gray-500">Cost: {new Intl.NumberFormat('en-TZ', {
-                          style: 'currency',
-                          currency: 'TZS',
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0
-                        }).format(service.cost)}</p>
+                        <p className="text-xs text-gray-500">
+                          Cost: {new Intl.NumberFormat('en-TZ', {
+                            style: 'currency',
+                            currency: 'TZS',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0
+                          }).format(service.cost)}
+                        </p>
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        service.status === 'active' ? 'bg-green-100 text-green-800' :
-                        service.status === 'inactive' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {service.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Popularity</span>
                       <div className="flex items-center gap-1">
                         {Array.from({ length: 5 }, (_, i) => (
                           <Star
                             key={i}
-                            size={16}
-                            className={i < service.popularity ? 'text-yellow-400 fill-current' : 'text-gray-300'}
+                            size={14}
+                            className={i < service.popularity ? 'text-[#f39c12] fill-current' : 'text-gray-300'}
                           />
                         ))}
-                        <span className="text-xs text-gray-500 ml-1">({service.popularity})</span>
+                        <span className="text-xs text-gray-600 ml-1">({service.popularity})</span>
                       </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex gap-2">
-                        <GlassButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Edit size={16} />}
-                        >
-                          Edit
-                        </GlassButton>
-                        <GlassButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Trash2 size={16} />}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          Delete
-                        </GlassButton>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-2 pt-3 border-t border-gray-100">
+                    <button className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-[#3498db] text-white hover:bg-[#2980b9] transition-colors shadow-sm">
+                      <Edit size={14} />
+                      Edit
+                    </button>
+                    <button className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold bg-[#e74c3c] text-white hover:bg-[#c0392b] transition-colors shadow-sm">
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {services.filter(service => {
             const matchesSearch = !searchQuery || 
@@ -503,13 +625,13 @@ const ServiceManagementPage: React.FC = () => {
                 }
               </p>
               {!searchQuery && categoryFilter === 'all' && statusFilter === 'all' && (
-                <GlassButton
+                <button 
                   onClick={() => setShowCreateService(true)}
-                  icon={<Plus size={18} />}
-                  className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+                  className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold bg-[#2ecc71] text-white hover:bg-[#27ae60] transition-colors shadow-lg"
                 >
+                  <Plus size={18} />
                   Add Your First Service
-                </GlassButton>
+                </button>
               )}
             </div>
           )}
@@ -559,22 +681,22 @@ const ServiceManagementPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        request.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        request.status === 'approved' ? 'bg-blue-100 text-blue-800' :
-                        request.status === 'in-progress' ? 'bg-purple-100 text-purple-800' :
-                        request.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        'bg-red-100 text-red-800'
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                        request.status === 'pending' ? 'bg-[#f39c12] text-white' :
+                        request.status === 'approved' ? 'bg-[#3498db] text-white' :
+                        request.status === 'in-progress' ? 'bg-[#9b59b6] text-white' :
+                        request.status === 'completed' ? 'bg-[#2ecc71] text-white' :
+                        'bg-[#e74c3c] text-white'
                       }`}>
                         {request.status.replace('-', ' ')}
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        request.priority === 'urgent' ? 'bg-red-100 text-red-800' :
-                        request.priority === 'high' ? 'bg-orange-100 text-orange-800' :
-                        request.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-green-100 text-green-800'
+                      <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                        request.priority === 'urgent' ? 'bg-[#e74c3c] text-white' :
+                        request.priority === 'high' ? 'bg-[#e67e22] text-white' :
+                        request.priority === 'medium' ? 'bg-[#f39c12] text-white' :
+                        'bg-[#2ecc71] text-white'
                       }`}>
                         {request.priority}
                       </span>
@@ -596,21 +718,14 @@ const ServiceManagementPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
-                        <GlassButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Edit size={16} />}
-                        >
+                        <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#3498db] text-white hover:bg-[#2980b9] transition-colors shadow-sm">
+                          <Edit size={14} />
                           Edit
-                        </GlassButton>
-                        <GlassButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Trash2 size={16} />}
-                          className="text-red-600 hover:text-red-700"
-                        >
+                        </button>
+                        <button className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#e74c3c] text-white hover:bg-[#c0392b] transition-colors shadow-sm">
+                          <Trash2 size={14} />
                           Delete
-                        </GlassButton>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -636,13 +751,13 @@ const ServiceManagementPage: React.FC = () => {
                 }
               </p>
               {!searchQuery && statusFilter === 'all' && (
-                <GlassButton
+                <button 
                   onClick={() => setShowCreateRequest(true)}
-                  icon={<Plus size={18} />}
-                  className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                  className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold bg-[#9b59b6] text-white hover:bg-[#8e44ad] transition-colors shadow-lg"
                 >
+                  <Plus size={18} />
                   Create Your First Request
-                </GlassButton>
+                </button>
               )}
             </div>
           )}
@@ -658,7 +773,7 @@ const ServiceManagementPage: React.FC = () => {
                 <h2 className="text-xl font-semibold text-gray-900">Add New Service</h2>
                 <button
                   onClick={() => setShowCreateService(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-[#e74c3c] transition-colors"
                 >
                   <X size={24} />
                 </button>
@@ -674,7 +789,7 @@ const ServiceManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                       placeholder="e.g., iPhone Screen Replacement"
                     />
                   </div>
@@ -683,7 +798,7 @@ const ServiceManagementPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Category
                     </label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <select className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors">
                       <option value="">Select Category</option>
                       <option value="Device Repair">Device Repair</option>
                       <option value="Diagnostics">Diagnostics</option>
@@ -700,7 +815,7 @@ const ServiceManagementPage: React.FC = () => {
                   </label>
                   <textarea
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                     placeholder="Describe the service in detail..."
                   />
                 </div>
@@ -712,7 +827,7 @@ const ServiceManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                       placeholder="60"
                     />
                   </div>
@@ -723,7 +838,7 @@ const ServiceManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                       placeholder="80000"
                     />
                   </div>
@@ -734,7 +849,7 @@ const ServiceManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                       placeholder="45000"
                     />
                   </div>
@@ -747,7 +862,7 @@ const ServiceManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                       placeholder="90"
                     />
                   </div>
@@ -756,7 +871,7 @@ const ServiceManagementPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Status
                     </label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <select className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors">
                       <option value="active">Active</option>
                       <option value="inactive">Inactive</option>
                       <option value="draft">Draft</option>
@@ -767,21 +882,21 @@ const ServiceManagementPage: React.FC = () => {
             </div>
             
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <GlassButton
+              <button
                 onClick={() => setShowCreateService(false)}
-                variant="ghost"
+                className="px-6 py-2.5 rounded-lg font-semibold bg-[#95a5a6] text-white hover:bg-[#7f8c8d] transition-colors"
               >
                 Cancel
-              </GlassButton>
-              <GlassButton
+              </button>
+              <button
                 onClick={() => {
                   toast.success('Service created successfully!');
                   setShowCreateService(false);
                 }}
-                className="bg-gradient-to-r from-green-500 to-green-600 text-white"
+                className="px-6 py-2.5 rounded-lg font-semibold bg-[#2ecc71] text-white hover:bg-[#27ae60] transition-colors shadow-lg"
               >
                 Create Service
-              </GlassButton>
+              </button>
             </div>
           </div>
         </div>
@@ -796,7 +911,7 @@ const ServiceManagementPage: React.FC = () => {
                 <h2 className="text-xl font-semibold text-gray-900">Create Service Request</h2>
                 <button
                   onClick={() => setShowCreateRequest(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-[#e74c3c] transition-colors"
                 >
                   <X size={24} />
                 </button>
@@ -812,7 +927,7 @@ const ServiceManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                       placeholder="John Doe"
                     />
                   </div>
@@ -823,7 +938,7 @@ const ServiceManagementPage: React.FC = () => {
                     </label>
                     <input
                       type="tel"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                       placeholder="+255 123 456 789"
                     />
                   </div>
@@ -835,7 +950,7 @@ const ServiceManagementPage: React.FC = () => {
                   </label>
                   <input
                     type="email"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                     placeholder="john@example.com"
                   />
                 </div>
@@ -845,7 +960,7 @@ const ServiceManagementPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Service
                     </label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <select className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors">
                       <option value="">Select Service</option>
                       {services.map(service => (
                         <option key={service.id} value={service.id}>
@@ -859,7 +974,7 @@ const ServiceManagementPage: React.FC = () => {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Priority
                     </label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <select className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors">
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
@@ -874,7 +989,7 @@ const ServiceManagementPage: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                     placeholder="80000"
                   />
                 </div>
@@ -885,7 +1000,7 @@ const ServiceManagementPage: React.FC = () => {
                   </label>
                   <textarea
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-0 focus:border-[#3498db] transition-colors"
                     placeholder="Additional notes about the service request..."
                   />
                 </div>
@@ -893,21 +1008,21 @@ const ServiceManagementPage: React.FC = () => {
             </div>
             
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <GlassButton
+              <button
                 onClick={() => setShowCreateRequest(false)}
-                variant="ghost"
+                className="px-6 py-2.5 rounded-lg font-semibold bg-[#95a5a6] text-white hover:bg-[#7f8c8d] transition-colors"
               >
                 Cancel
-              </GlassButton>
-              <GlassButton
+              </button>
+              <button
                 onClick={() => {
                   toast.success('Service request created successfully!');
                   setShowCreateRequest(false);
                 }}
-                className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+                className="px-6 py-2.5 rounded-lg font-semibold bg-[#9b59b6] text-white hover:bg-[#8e44ad] transition-colors shadow-lg"
               >
                 Create Request
-              </GlassButton>
+              </button>
             </div>
           </div>
         </div>

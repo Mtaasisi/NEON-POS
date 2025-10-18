@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
-import { Palette, Sun, Moon, Monitor, Save, Check } from 'lucide-react';
+import { Palette, Sun, Moon, Monitor, Save, Check, Type } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useTheme, Theme } from '../../../context/ThemeContext';
+import { useGeneralSettings } from '../../../hooks/usePOSSettings';
 
 interface AppearanceSettingsProps {
   isActive: boolean;
@@ -11,13 +12,22 @@ interface AppearanceSettingsProps {
 
 const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => {
   const { theme: currentTheme, setTheme } = useTheme();
+  const { settings: generalSettings, updateSettings, loading } = useGeneralSettings();
+  
   const [selectedTheme, setSelectedTheme] = useState<Theme>(currentTheme);
   const [accentColor, setAccentColor] = useState(() => 
     localStorage.getItem('accentColor') || '#3B82F6'
   );
-  const [fontSize, setFontSize] = useState(() => 
-    localStorage.getItem('fontSize') || 'medium'
+  const [fontSize, setFontSize] = useState<'tiny' | 'extra-small' | 'small' | 'medium' | 'large'>(() => 
+    (localStorage.getItem('fontSize') as 'tiny' | 'extra-small' | 'small' | 'medium' | 'large') || 'medium'
   );
+
+  // Sync font size from database settings
+  useEffect(() => {
+    if (generalSettings?.font_size) {
+      setFontSize(generalSettings.font_size);
+    }
+  }, [generalSettings]);
 
   // Update selected theme when current theme changes
   useEffect(() => {
@@ -30,10 +40,40 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => 
     toast.success(`Theme changed to ${newTheme === 'dark' ? 'Dark' : newTheme === 'dark-cards' ? 'Dark Cards' : 'Light'}`);
   };
 
+  // Apply font size to the document immediately
+  const applyFontSize = (size: 'tiny' | 'extra-small' | 'small' | 'medium' | 'large') => {
+    const root = document.documentElement;
+    const fontSizeMap = {
+      'tiny': '11px',
+      'extra-small': '12px',
+      'small': '14px',
+      'medium': '16px',
+      'large': '18px'
+    };
+    root.style.fontSize = fontSizeMap[size];
+    localStorage.setItem('fontSize', size);
+  };
+
+  const handleFontSizeChange = async (newSize: 'tiny' | 'extra-small' | 'small' | 'medium' | 'large') => {
+    setFontSize(newSize);
+    applyFontSize(newSize);
+    
+    // Save to database
+    try {
+      await updateSettings({ font_size: newSize });
+      toast.success(`Font size changed to ${newSize.replace('-', ' ')}`);
+      
+      // Dispatch event so other parts of the app can react
+      window.dispatchEvent(new CustomEvent('settingsUpdated', { detail: { type: 'general' } }));
+    } catch (error) {
+      console.error('Failed to save font size:', error);
+      toast.error('Failed to save font size setting');
+    }
+  };
+
   const handleSave = () => {
     // Save other appearance settings
     localStorage.setItem('accentColor', accentColor);
-    localStorage.setItem('fontSize', fontSize);
     toast.success('Appearance settings saved successfully');
   };
 
@@ -104,18 +144,27 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => 
 
           {/* Font Size */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Font Size
+            <label className="block text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+              <Type className="w-4 h-4 text-indigo-600" />
+              Font Size (Affects Entire App)
             </label>
-            <select
-              value={fontSize}
-              onChange={(e) => setFontSize(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            >
-              <option value="small">Small</option>
-              <option value="medium">Medium</option>
-              <option value="large">Large</option>
-            </select>
+            <div className="space-y-2">
+              <select
+                value={fontSize}
+                onChange={(e) => handleFontSizeChange(e.target.value as 'tiny' | 'extra-small' | 'small' | 'medium' | 'large')}
+                disabled={loading}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-300 rounded-lg text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                <option value="tiny">Tiny (11px) - Ultra Compact ✨</option>
+                <option value="extra-small">Extra Small (12px) - Very Compact</option>
+                <option value="small">Small (14px) - Compact</option>
+                <option value="medium">Medium (16px) - Default ⭐</option>
+                <option value="large">Large (18px) - Comfortable</option>
+              </select>
+              <p className="text-xs text-gray-500 italic">
+                💡 Changes apply immediately across all pages and components
+              </p>
+            </div>
           </div>
         </div>
 
@@ -125,8 +174,14 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => 
             className="flex items-center gap-2"
           >
             <Save className="w-4 h-4" />
-            Save Settings
+            Save Accent Color
           </GlassButton>
+        </div>
+        
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>💡 Pro Tip:</strong> Font size changes are saved automatically and apply instantly across your entire app!
+          </p>
         </div>
       </GlassCard>
     </div>

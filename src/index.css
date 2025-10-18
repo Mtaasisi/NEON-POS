@@ -48,6 +48,9 @@
 
 /* Custom CSS Variables */
 :root {
+  /* Font Size Setting - Default is 16px (medium) */
+  font-size: 16px;
+  
   --glass-bg: rgba(255, 255, 255, 0.1);
   --glass-border: rgba(255, 255, 255, 0.2);
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
@@ -82,6 +85,34 @@
   --lats-font-size-lg: 1.125rem;
   --lats-font-size-xl: 1.25rem;
   --lats-font-size-2xl: 1.5rem;
+}
+
+/* Font Size Classes - Applied by settings */
+html {
+  /* Default font size - will be overridden by settings */
+  font-size: 16px;
+  transition: font-size 0.2s ease;
+}
+
+/* These classes can be applied programmatically */
+html.font-tiny {
+  font-size: 11px; /* Polished: More readable than 10px */
+}
+
+html.font-extra-small {
+  font-size: 12px;
+}
+
+html.font-small {
+  font-size: 14px;
+}
+
+html.font-medium {
+  font-size: 16px;
+}
+
+html.font-large {
+  font-size: 18px;
 }
 
 /* Theme Variables */
@@ -584,6 +615,99 @@ code {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Safari and Chrome */
+}
+
+/* Glassy Sidebar Scrollbar - Light Mode */
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  margin: 10px 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.3) 0%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(99, 102, 241, 0.3) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 2px 8px rgba(99, 102, 241, 0.1),
+    inset 0 1px 1px rgba(255, 255, 255, 0.5);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(99, 102, 241, 0.5) 50%,
+    rgba(59, 130, 246, 0.6) 100%
+  );
+  box-shadow: 
+    0 4px 16px rgba(99, 102, 241, 0.3),
+    inset 0 1px 2px rgba(255, 255, 255, 0.6),
+    0 0 20px rgba(99, 102, 241, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scaleY(1.02);
+}
+
+/* Firefox scrollbar styles for sidebar */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.3) rgba(255, 255, 255, 0.05);
+}
+
+/* Glassy Sidebar Scrollbar - Dark Mode */
+.theme-dark .sidebar-scrollbar::-webkit-scrollbar-track,
+.theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(99, 102, 241, 0.1);
+}
+
+.theme-dark .sidebar-scrollbar::-webkit-scrollbar-thumb,
+.theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(99, 102, 241, 0.4) 0%,
+    rgba(59, 130, 246, 0.3) 50%,
+    rgba(79, 70, 229, 0.4) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  box-shadow: 
+    0 2px 8px rgba(99, 102, 241, 0.2),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+}
+
+.theme-dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover,
+.theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(99, 102, 241, 0.7) 0%,
+    rgba(59, 130, 246, 0.6) 50%,
+    rgba(79, 70, 229, 0.7) 100%
+  );
+  box-shadow: 
+    0 4px 20px rgba(99, 102, 241, 0.5),
+    inset 0 1px 2px rgba(255, 255, 255, 0.2),
+    0 0 24px rgba(99, 102, 241, 0.4);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.theme-dark .sidebar-scrollbar,
+.theme-dark-cards .sidebar-scrollbar {
+  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.4);
 }
 
 /* Glassy Assign Button Styles */

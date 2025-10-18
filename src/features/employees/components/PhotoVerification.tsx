@@ -266,53 +266,53 @@ const PhotoVerification: React.FC<PhotoVerificationProps> = ({
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* Action Buttons - CBM Calculator Style */}
         <div className="flex gap-3">
           {!isCameraActive && !capturedPhoto && (
-            <GlassButton
+            <button
               onClick={startCamera}
-              icon={<Camera size={18} />}
-              className="flex-1 bg-blue-600 text-white"
+              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
             >
+              <Camera size={18} />
               Start Camera
-            </GlassButton>
+            </button>
           )}
 
           {isCameraActive && !capturedPhoto && (
-            <GlassButton
+            <button
               onClick={capturePhoto}
-              icon={<Camera size={18} />}
-              className="flex-1 bg-green-600 text-white"
+              className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
             >
+              <Camera size={18} />
               Capture Photo
-            </GlassButton>
+            </button>
           )}
 
           {capturedPhoto && verificationStatus === 'pending' && (
-            <GlassButton
+            <button
               onClick={verifyPhoto}
               disabled={isLoading}
-              icon={<CheckCircle size={18} />}
-              className="flex-1 bg-blue-600 text-white"
+              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
             >
+              <CheckCircle size={18} />
               {isLoading ? 'Verifying...' : 'Verify Photo'}
-            </GlassButton>
+            </button>
           )}
 
           {capturedPhoto && verificationStatus === 'success' && (
-            <div className="flex-1 text-center text-sm text-green-600 py-2">
+            <div className="flex-1 text-center text-sm text-green-600 py-3 px-4 bg-green-50 rounded-lg border border-green-200">
               Photo verified successfully
             </div>
           )}
 
           {capturedPhoto && verificationStatus === 'failed' && (
-            <GlassButton
+            <button
               onClick={retakePhoto}
-              icon={<RotateCcw size={18} />}
-              className="flex-1 bg-red-600 text-white"
+              className="flex-1 px-4 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
             >
+              <RotateCcw size={18} />
               Retake Photo
-            </GlassButton>
+            </button>
           )}
         </div>
 

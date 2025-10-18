@@ -92,8 +92,37 @@ export class LiveInventoryService {
         throw productsResult.reason;
       }
 
-      const products = productsResult.value.data || [];
-      const variants = variantsResult.status === 'fulfilled' ? (variantsResult.value.data || []) : [];
+      let products = productsResult.value.data || [];
+      let variants = variantsResult.status === 'fulfilled' ? (variantsResult.value.data || []) : [];
+      
+      // 🔧 ADDITIONAL: Fetch products and variants with null branch_id (unassigned)
+      if (currentBranchId) {
+        console.log('🔧 [LiveInventoryService] Fetching unassigned products and variants...');
+        const [nullProductsResult, nullVariantsResult] = await Promise.allSettled([
+          supabase.from('lats_products')
+            .select('id, name, is_active, branch_id, is_shared')
+            .is('branch_id', null),
+          supabase.from('lats_product_variants')
+            .select('id, product_id, quantity, reserved_quantity, cost_price, unit_price, min_quantity, branch_id, is_shared')
+            .is('branch_id', null)
+        ]);
+        
+        if (nullProductsResult.status === 'fulfilled' && nullProductsResult.value.data) {
+          const nullProducts = nullProductsResult.value.data;
+          console.log(`✅ Found ${nullProducts.length} unassigned products`);
+          // Merge and deduplicate
+          const mergedProducts = [...products, ...nullProducts];
+          products = Array.from(new Map(mergedProducts.map(p => [p.id, p])).values());
+        }
+        
+        if (nullVariantsResult.status === 'fulfilled' && nullVariantsResult.value.data) {
+          const nullVariants = nullVariantsResult.value.data;
+          console.log(`✅ Found ${nullVariants.length} unassigned variants`);
+          // Merge and deduplicate
+          const mergedVariants = [...variants, ...nullVariants];
+          variants = Array.from(new Map(mergedVariants.map(v => [v.id, v])).values());
+        }
+      }
 
       // Map variants to their products
       const variantsByProduct = variants.reduce((acc: any, variant: any) => {

@@ -18,7 +18,8 @@ import {
   Settings,
   Activity,
   Smartphone,
-  MessageSquare
+  MessageSquare,
+  ArrowRightLeft
 } from 'lucide-react';
 
 
@@ -59,6 +60,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: Package,
     path: '/lats/unified-inventory',
     color: 'from-purple-500 to-purple-600',
+    category: 'inventory'
+  },
+  {
+    id: 'stock-transfers',
+    name: 'Stock Transfers',
+    description: 'Transfer inventory between branches',
+    icon: ArrowRightLeft,
+    path: '/lats/stock-transfers',
+    color: 'from-blue-500 to-blue-600',
     category: 'inventory'
   },
   {

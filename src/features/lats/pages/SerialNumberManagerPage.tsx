@@ -170,8 +170,8 @@ const SerialNumberManagerPage: React.FC = () => {
         .from('inventory_items')
         .select(`
           *,
-          product:lats_products(id, name, sku),
-          variant:lats_product_variants(id, name, sku, quantity, selling_price)
+          product:lats_products!product_id(id, name, sku),
+          variant:lats_product_variants!variant_id(id, name, sku, quantity, selling_price)
         `)
         .eq('product_id', selectedProduct.id);
 

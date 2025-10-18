@@ -258,15 +258,36 @@ export class ImageCompressionService {
           contentType: this.getMimeType(compressedImage.format)
         });
 
+      console.log('🔍 DEBUG: Thumbnail upload response:', { data, error });
+
       if (error) {
         console.error('❌ Thumbnail upload failed:', error);
+        console.error('❌ Upload error details:', {
+          message: error.message,
+          statusCode: error.statusCode,
+          details: error
+        });
         return null;
       }
 
-      // Get public URL
+      if (!data) {
+        console.error('❌ Thumbnail upload succeeded but no data returned');
+        return null;
+      }
+
+      console.log('🔍 DEBUG: Upload successful, uploaded path:', data.path);
+
+      // Get public URL using the path returned from upload
       const { data: urlData } = supabase.storage
         .from(bucket)
-        .getPublicUrl(thumbnailPath);
+        .getPublicUrl(data.path);
+
+      console.log('🔍 DEBUG: getPublicUrl response:', { urlData });
+
+      if (!urlData || !urlData.publicUrl) {
+        console.error('❌ Failed to get public URL for thumbnail');
+        return null;
+      }
 
       console.log('✅ Compressed thumbnail uploaded successfully:', {
         url: urlData.publicUrl,

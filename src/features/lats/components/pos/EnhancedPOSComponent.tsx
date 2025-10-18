@@ -15,8 +15,14 @@ import { ProductSearchResult, ProductSearchVariant, CartItem, Sale } from '../..
 import { Customer } from '../../../customers/types';
 import { useAuth } from '../../../../context/AuthContext';
 import { saleProcessingService } from '../../../../lib/saleProcessingService';
+import { useGeneralSettings } from '../../../../hooks/usePOSSettings';
 
 const EnhancedPOSComponent: React.FC = () => {
+  // Settings hooks
+  const { settings: generalSettings } = useGeneralSettings();
+  const TAX_RATE = (generalSettings?.tax_rate || 16) / 100; // Convert percentage to decimal
+  const isTaxEnabled = generalSettings?.enable_tax !== false; // Default to true if not set
+  
   // Store hooks
   const { 
     products, 
@@ -268,7 +274,7 @@ const EnhancedPOSComponent: React.FC = () => {
     }
     
     const discountedSubtotal = subtotal - discountAmount;
-    const tax = discountedSubtotal * 0.16; // 16% VAT
+    const tax = isTaxEnabled ? discountedSubtotal * TAX_RATE : 0;
     const total = discountedSubtotal + tax;
     
     return {
@@ -280,7 +286,7 @@ const EnhancedPOSComponent: React.FC = () => {
       total,
       itemCount: cartItems.length
     };
-  }, [cartItems, discountType, discountValue]);
+  }, [cartItems, discountType, discountValue, isTaxEnabled, TAX_RATE]);
 
   // Process sale
   const handleProcessSale = async () => {
@@ -557,10 +563,12 @@ const EnhancedPOSComponent: React.FC = () => {
                   <span>-{format.money(cartTotals.discountAmount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-sm">
-                <span>VAT (16%):</span>
-                <span>{format.money(cartTotals.tax)}</span>
-              </div>
+              {isTaxEnabled && (
+                <div className="flex justify-between text-sm">
+                  <span>VAT ({generalSettings?.tax_rate || 16}%):</span>
+                  <span>{format.money(cartTotals.tax)}</span>
+                </div>
+              )}
               <div className="border-t pt-2 flex justify-between font-bold text-lg">
                 <span>Total:</span>
                 <span>{format.money(cartTotals.total)}</span>

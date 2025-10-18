@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../context/AuthContext';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
@@ -19,8 +18,6 @@ import CategoryFormModal from '../components/inventory/CategoryFormModal';
 import ProductExcelImportModal from '../components/ProductExcelImportModal';
 
 import SupplierForm from '../components/inventory/SupplierForm';
-
-// AddProductModal removed - using AddProductPage instead
 import EditProductModal from '../components/inventory/EditProductModal';
 import { useProductModals } from '../hooks/useProductModals';
 
@@ -28,21 +25,18 @@ import { useProductModals } from '../hooks/useProductModals';
 import EnhancedInventoryTab from '../components/inventory/EnhancedInventoryTab';
 import PurchaseOrdersTab from '../components/inventory/PurchaseOrdersTab';
 import AnalyticsTab from '../components/inventory/AnalyticsTab';
-import SettingsTab from '../components/inventory/SettingsTab';
 
 // Import database functionality
 import { useInventoryStore } from '../stores/useInventoryStore';
 import { format } from '../lib/format';
 import { latsEventBus } from '../lib/data/eventBus';
-// import { runDatabaseDiagnostics } from '../lib/databaseDiagnostics'; // Temporarily disabled - file missing
 import { LiveInventoryService, LiveInventoryMetrics } from '../lib/liveInventoryService';
 import { Category, Supplier, StockMovement, Product } from '../types/inventory';
 
 // Tab types
-type TabType = 'inventory' | 'purchase-orders' | 'analytics' | 'settings';
+type TabType = 'inventory' | 'purchase-orders' | 'analytics';
 
 const UnifiedInventoryPage: React.FC = () => {
-  const {} = useAuth(); // Destructure to avoid unused variable warning
   const navigate = useNavigate();
   
   // Product modals
@@ -79,15 +73,13 @@ const UnifiedInventoryPage: React.FC = () => {
     forceRefreshProducts
   } = useInventoryStore();
 
-  // Minimal debug logging for products state - moved after filteredProducts definition
-
   // Database connection status
   const [dbStatus, setDbStatus] = useState<'connected' | 'connecting' | 'error'>('connecting');
   
   // Prevent multiple simultaneous data loads
   const [isDataLoading, setIsDataLoading] = useState(false);
   const [lastDataLoadTime, setLastDataLoadTime] = useState(0);
-  const DATA_LOAD_COOLDOWN = 3000; // Reduced from 5 seconds to 3 seconds
+  const DATA_LOAD_COOLDOWN = 3000;
   
   // Loading state for better UX
   const [showLoadingSkeleton, setShowLoadingSkeleton] = useState(true);
@@ -141,7 +133,6 @@ const UnifiedInventoryPage: React.FC = () => {
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<string | null>(null);
   const [showMoreActions, setShowMoreActions] = useState(false);
-  const [showBulkActions, setShowBulkActions] = useState(false);
 
 
   // Close dropdown when clicking outside
@@ -183,16 +174,6 @@ const UnifiedInventoryPage: React.FC = () => {
         setShowLoadingSkeleton(true);
         
         try {
-          // Run diagnostics only once per session or on first load
-          // Temporarily disabled - diagnostics file missing
-          // if (lastDataLoadTime === 0) {
-          //   runDatabaseDiagnostics().then(diagnosticResult => {
-          //     if (diagnosticResult.errors.length > 0) {
-          //       console.warn('⚠️ Database issues detected:', diagnosticResult.errors);
-          //     }
-          //   });
-          // }
-
           const loadingStartTime = Date.now();
           
           // Reset loading progress
@@ -217,7 +198,7 @@ const UnifiedInventoryPage: React.FC = () => {
           await Promise.all(essentialDataPromises);
 
           // Load products (most important for UI)
-          await loadProducts({ page: 1, limit: 100 }); // Increased from 50 to 100
+          await loadProducts({ page: 1, limit: 100 });
           setLoadingProgress(prev => ({ ...prev, products: true }));
 
           // Load secondary data in parallel (stock movements and sales)
@@ -259,7 +240,8 @@ const UnifiedInventoryPage: React.FC = () => {
     };
     
     loadData();
-  }, [withErrorHandling, loadProducts, loadCategories, loadSuppliers, loadStockMovements, loadSales, isDataLoading, lastDataLoadTime]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Load live inventory metrics
   const loadLiveMetrics = useCallback(async () => {
@@ -274,7 +256,7 @@ const UnifiedInventoryPage: React.FC = () => {
     } finally {
       setIsLoadingLiveMetrics(false);
     }
-  }, []); // Remove isLoadingLiveMetrics dependency to prevent infinite loop
+  }, []);
 
   // Load live metrics when products change or on initial load with debouncing
   useEffect(() => {
@@ -286,7 +268,8 @@ const UnifiedInventoryPage: React.FC = () => {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [products.length, loadLiveMetrics, isLoadingLiveMetrics]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products.length]);
 
   // Listen for stock updates and refresh live metrics
   useEffect(() => {
@@ -311,18 +294,31 @@ const UnifiedInventoryPage: React.FC = () => {
       }, 500);
     };
 
+    // 🔥 NEW: Handle purchase order received event
+    const handlePurchaseOrderReceived = (event: any) => {
+      console.log('📦 [UnifiedInventoryPage] Purchase order received, refreshing inventory...', event);
+      
+      // Refresh both products and metrics with a delay to ensure database is updated
+      setTimeout(async () => {
+        await loadProducts({ page: 1, limit: 100 });
+        loadLiveMetrics();
+      }, 1000); // Longer delay to ensure all database operations complete
+    };
+
     // Subscribe to relevant events
     const unsubscribeStock = latsEventBus.subscribe('lats:stock.updated', handleStockUpdate);
     const unsubscribeProduct = latsEventBus.subscribe('lats:product.updated', handleProductUpdate);
     const unsubscribeSale = latsEventBus.subscribe('lats:sale.completed', handleSaleCompleted);
+    const unsubscribePO = latsEventBus.subscribe('lats:purchase-order.received', handlePurchaseOrderReceived);
 
     // Cleanup subscriptions
     return () => {
       unsubscribeStock();
       unsubscribeProduct();
       unsubscribeSale();
+      unsubscribePO();
     };
-  }, [loadLiveMetrics]);
+  }, [loadLiveMetrics, loadProducts]);
 
   // Handle export functionality - defined early to avoid temporal dead zone
   const handleExport = useCallback(() => {
@@ -382,12 +378,12 @@ const UnifiedInventoryPage: React.FC = () => {
         searchInputRef.current?.blur();
       }
       
-      // Number keys 1-4: Switch tabs
-      if (e.key >= '1' && e.key <= '4' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // Number keys 1-3: Switch tabs
+      if (e.key >= '1' && e.key <= '3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const target = e.target as HTMLElement;
         // Only trigger if not in an input field
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-          const tabs: TabType[] = ['inventory', 'purchase-orders', 'analytics', 'settings'];
+          const tabs: TabType[] = ['inventory', 'purchase-orders', 'analytics'];
           const tabIndex = parseInt(e.key) - 1;
           if (tabs[tabIndex]) {
             setActiveTab(tabs[tabIndex]);
@@ -758,13 +754,13 @@ const UnifiedInventoryPage: React.FC = () => {
             </div>
             <div className="flex justify-between">
               <span>Switch Tabs</span>
-              <kbd className="px-2 py-0.5 bg-gray-100 rounded border border-gray-300">1-4</kbd>
+              <kbd className="px-2 py-0.5 bg-gray-100 rounded border border-gray-300">1-3</kbd>
             </div>
           </div>
         </div>
       </div>
       
-      <div className="p-4 sm:p-6 max-w-full mx-auto space-y-6">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div className="flex items-center gap-4">
@@ -797,16 +793,10 @@ const UnifiedInventoryPage: React.FC = () => {
 
           <div className="flex flex-wrap gap-3">
             <GlassButton
-              onClick={() => navigate('/lats/inventory-management')}
-              icon={<Settings size={18} />}
-              className="bg-gradient-to-r from-gray-500 to-gray-600 text-white"
-            >
-              Inventory Management
-            </GlassButton>
-            <GlassButton
               onClick={() => navigate('/lats/add-product')}
               icon={<Plus size={18} />}
               className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
+              title="Add a new product (⌘N)"
             >
               Add Product
             </GlassButton>
@@ -814,32 +804,48 @@ const UnifiedInventoryPage: React.FC = () => {
               onClick={() => navigate('/lats/bulk-import')}
               icon={<Upload size={18} />}
               className="bg-gradient-to-r from-green-500 to-teal-600 text-white"
+              title="Bulk import products (⌘I)"
             >
               Bulk Import
             </GlassButton>
             <GlassButton
-              onClick={loadLiveMetrics}
-              icon={<RefreshCw size={18} className={isLoadingLiveMetrics ? 'animate-spin' : ''} />}
-              className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
-              disabled={isLoadingLiveMetrics}
+              onClick={async () => {
+                setIsDataLoading(true);
+                try {
+                  await Promise.all([
+                    loadLiveMetrics(),
+                    forceRefreshProducts()
+                  ]);
+                  toast.success('Data refreshed successfully!');
+                } catch (error) {
+                  toast.error('Failed to refresh data');
+                } finally {
+                  setIsDataLoading(false);
+                }
+              }}
+              icon={<RefreshCw size={18} className={isLoadingLiveMetrics || isDataLoading ? 'animate-spin' : ''} />}
+              className="bg-gradient-to-r from-indigo-500 to-blue-600 text-white"
+              disabled={isLoadingLiveMetrics || isDataLoading}
+              title="Refresh all inventory data"
             >
-              {isLoadingLiveMetrics ? 'Refreshing...' : 'Refresh Data'}
-            </GlassButton>
-            <GlassButton
-              onClick={forceRefreshProducts}
-              icon={<Package size={18} />}
-              className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white"
-              title="Force refresh products from database (useful when new products are added)"
-            >
-              Refresh Products
+              {isLoadingLiveMetrics || isDataLoading ? 'Refreshing...' : 'Refresh'}
             </GlassButton>
             {dbStatus === 'error' && (
               <GlassButton
-                onClick={() => {
+                onClick={async () => {
                   setDbStatus('connecting');
-                  loadProducts({ page: 1, limit: 100 }); // Updated to match new limit
-                  loadCategories();
-                  loadSuppliers();
+                  try {
+                    await Promise.all([
+                      loadProducts({ page: 1, limit: 100 }),
+                      loadCategories(),
+                      loadSuppliers()
+                    ]);
+                    setDbStatus('connected');
+                    toast.success('Reconnected successfully!');
+                  } catch (error) {
+                    setDbStatus('error');
+                    toast.error('Failed to reconnect');
+                  }
                 }}
                 icon={<RefreshCw size={18} />}
                 className="bg-gradient-to-r from-red-500 to-pink-600 text-white"
@@ -896,8 +902,6 @@ const UnifiedInventoryPage: React.FC = () => {
                         </div>
                       </button>
                       
-
-                      
                       {/* Add Supplier */}
                       <button
                         onClick={() => {
@@ -922,81 +926,6 @@ const UnifiedInventoryPage: React.FC = () => {
                         </div>
                       </button>
                       
-                      {/* Bulk Stock Adjust */}
-                      <button
-                        onClick={() => {
-                          try {
-                            setShowStockAdjustModal(true);
-                            setShowMoreActions(false);
-                          } catch (error) {
-                            toast.error('Failed to open stock adjustment');
-                          }
-                        }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-orange-50 to-orange-100/50 hover:from-orange-100 hover:to-orange-200/50 border border-orange-200/30 hover:border-orange-300/50 transition-all duration-200 hover:shadow-md"
-                      >
-                        <div className="w-10 h-10 bg-orange-500/10 rounded-lg flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-                          <Package size={18} className="text-orange-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-orange-900 text-sm">Bulk Stock Adjust</div>
-                          <div className="text-xs text-orange-600">Update quantities</div>
-                        </div>
-                        <div className="w-6 h-6 bg-orange-500/10 rounded-full flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
-                          <RefreshCw size={12} className="text-orange-600" />
-                        </div>
-                      </button>
-                      
-                      {/* Bulk Actions */}
-                      <button
-                        onClick={() => {
-                          try {
-                            setShowBulkActions(true);
-                            setShowMoreActions(false);
-                          } catch (error) {
-                            toast.error('Failed to open bulk actions');
-                          }
-                        }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-indigo-100/50 hover:from-indigo-100 hover:to-indigo-200/50 border border-indigo-200/30 hover:border-indigo-300/50 transition-all duration-200 hover:shadow-md"
-                      >
-                        <div className="w-10 h-10 bg-indigo-500/10 rounded-lg flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
-                          <Settings size={18} className="text-indigo-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-indigo-900 text-sm">Bulk Actions</div>
-                          <div className="text-xs text-indigo-600">Mass operations</div>
-                        </div>
-                        <div className="w-6 h-6 bg-indigo-500/10 rounded-full flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
-                          <MoreHorizontal size={12} className="text-indigo-600" />
-                        </div>
-                      </button>
-                      
-                      {/* Delete Selected */}
-                      <button
-                        onClick={() => {
-                          try {
-                            setShowDeleteConfirmation(true);
-                            setShowMoreActions(false);
-                          } catch (error) {
-                            toast.error('Failed to open delete confirmation');
-                          }
-                        }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-red-50 to-red-100/50 hover:from-red-100 hover:to-red-200/50 border border-red-200/30 hover:border-red-300/50 transition-all duration-200 hover:shadow-md"
-                      >
-                        <div className="w-10 h-10 bg-red-500/10 rounded-lg flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-                          <Trash2 size={18} className="text-red-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-red-900 text-sm">Delete Selected</div>
-                          <div className="text-xs text-red-600">Remove products</div>
-                        </div>
-                        <div className="w-6 h-6 bg-red-500/10 rounded-full flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-                          <AlertTriangle size={12} className="text-red-600" />
-                        </div>
-                      </button>
-
-                      {/* Divider */}
-                      <div className="border-t border-gray-200 my-2"></div>
-
                       {/* Download Template */}
                       <button
                         onClick={() => {
@@ -1021,31 +950,7 @@ const UnifiedInventoryPage: React.FC = () => {
                         </div>
                       </button>
 
-                      {/* Import */}
-                      <button
-                        onClick={() => {
-                          try {
-                            handleImport();
-                            setShowMoreActions(false);
-                          } catch (error) {
-                            toast.error('Failed to start import process');
-                          }
-                        }}
-                        className="group flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r from-green-50 to-green-100/50 hover:from-green-100 hover:to-green-200/50 border border-green-200/30 hover:border-green-300/50 transition-all duration-200 hover:shadow-md"
-                      >
-                        <div className="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                          <Upload size={18} className="text-green-600" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-medium text-green-900 text-sm">Import Products</div>
-                          <div className="text-xs text-green-600">Bulk import data</div>
-                        </div>
-                        <div className="w-6 h-6 bg-green-500/10 rounded-full flex items-center justify-center group-hover:bg-green-500/20 transition-colors">
-                          <ArrowUp size={12} className="text-green-600" />
-                        </div>
-                      </button>
-
-                      {/* Export */}
+                      {/* Export Products */}
                       <button
                         onClick={() => {
                           try {
@@ -1062,7 +967,7 @@ const UnifiedInventoryPage: React.FC = () => {
                         </div>
                         <div className="flex-1 text-left">
                           <div className="font-medium text-orange-900 text-sm">Export Products</div>
-                          <div className="text-xs text-orange-600">Download data</div>
+                          <div className="text-xs text-orange-600">Download CSV data</div>
                         </div>
                         <div className="w-6 h-6 bg-orange-500/10 rounded-full flex items-center justify-center group-hover:bg-orange-500/20 transition-colors">
                           <ArrowDown size={12} className="text-orange-600" />
@@ -1107,8 +1012,7 @@ const UnifiedInventoryPage: React.FC = () => {
             {[
               { id: 'inventory', label: 'Inventory Management', icon: Package, activeClass: 'bg-blue-500 text-white shadow-lg', hoverClass: 'text-blue-600 hover:bg-blue-50' },
               { id: 'purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, activeClass: 'bg-purple-500 text-white shadow-lg', hoverClass: 'text-purple-600 hover:bg-purple-50' },
-              { id: 'analytics', label: 'Analytics', icon: BarChart3, activeClass: 'bg-green-500 text-white shadow-lg', hoverClass: 'text-green-600 hover:bg-green-50' },
-              { id: 'settings', label: 'Settings', icon: Settings, activeClass: 'bg-gray-500 text-white shadow-lg', hoverClass: 'text-gray-600 hover:bg-gray-50' }
+              { id: 'analytics', label: 'Analytics', icon: BarChart3, activeClass: 'bg-green-500 text-white shadow-lg', hoverClass: 'text-green-600 hover:bg-green-50' }
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -1189,16 +1093,7 @@ const UnifiedInventoryPage: React.FC = () => {
           />
         )}
 
-        {activeTab === 'settings' && (
-          <SettingsTab 
-            setShowCategoryForm={setShowCategoryForm}
-            setShowSupplierForm={setShowSupplierForm}
-          />
-        )}
-
         {/* Product Modals */}
-        {/* AddProductModal removed - use AddProductPage instead */}
-
         <EditProductModal
           isOpen={productModals.showEditModal}
           onClose={productModals.closeEditModal}
@@ -1277,75 +1172,6 @@ const UnifiedInventoryPage: React.FC = () => {
           />
         )}
 
-
-
-        {/* Bulk Actions Modal */}
-        {showBulkActions && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
-            onClick={() => setShowBulkActions(false)}
-          >
-            <div 
-              className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center">
-                  <Settings className="w-5 h-5 text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Bulk Actions</h3>
-                  <p className="text-sm text-gray-600">Select products to perform bulk operations</p>
-                </div>
-              </div>
-              
-              <div className="space-y-3 mb-6">
-                <button
-                  onClick={() => {
-                    handleBulkAction('export');
-                    setShowBulkActions(false);
-                  }}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors"
-                >
-                  <Download className="w-5 h-5 text-blue-600" />
-                  <span className="text-blue-900">Export Selected Products</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    handleBulkAction('feature');
-                    setShowBulkActions(false);
-                  }}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-green-50 hover:bg-green-100 border border-green-200 transition-colors"
-                >
-                  <Star className="w-5 h-5 text-green-600" />
-                  <span className="text-green-900">Feature Selected Products</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setShowDeleteConfirmation(true);
-                    setShowBulkActions(false);
-                  }}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 transition-colors"
-                >
-                  <Trash2 className="w-5 h-5 text-red-600" />
-                  <span className="text-red-900">Delete Selected Products</span>
-                </button>
-              </div>
-              
-              <div className="flex gap-3 justify-end">
-                <GlassButton
-                  variant="secondary"
-                  onClick={() => setShowBulkActions(false)}
-                  className="text-sm"
-                >
-                  Cancel
-                </GlassButton>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirmation && (

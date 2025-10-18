@@ -108,13 +108,13 @@ const DiagnosticTemplateManagerModal: React.FC<DiagnosticTemplateManagerModalPro
     try {
       const { data, error } = await supabase
         .from('diagnostic_problem_templates')
-        .select('category')
-        .not('category', 'in', `(${categories.join(',')})`);
+        .select('category');
 
       if (error) throw error;
       
-      // Get unique custom categories
-      const uniqueCategories = [...new Set(data?.map(item => item.category) || [])];
+      // Filter out default categories and get unique custom categories
+      const customCats = data?.map(item => item.category).filter(cat => !categories.includes(cat)) || [];
+      const uniqueCategories = [...new Set(customCats)];
       setCustomCategories(uniqueCategories);
     } catch (error) {
       console.error('Error loading custom categories:', error);

@@ -36,6 +36,7 @@ interface CartSummaryProps {
   showActions?: boolean;
   variant?: 'default' | 'compact' | 'minimal';
   className?: string;
+  isTaxEnabled?: boolean;
 }
 
 const CartSummary: React.FC<CartSummaryProps> = ({
@@ -52,7 +53,8 @@ const CartSummary: React.FC<CartSummaryProps> = ({
   onProceedToPayment,
   showActions = true,
   variant = 'default',
-  className = ''
+  className = '',
+  isTaxEnabled = true
 }) => {
   // Calculate summary stats
   const itemCount = items.length;
@@ -262,11 +264,13 @@ const CartSummary: React.FC<CartSummaryProps> = ({
           </div>
         )}
 
-        {/* Tax */}
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-lats-text-secondary">Tax ({taxRate}%):</span>
-          <span className="text-lats-text">{format.money(taxAmount)}</span>
-        </div>
+        {/* Tax - Only show if tax is enabled */}
+        {isTaxEnabled && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-lats-text-secondary">Tax ({taxRate}%):</span>
+            <span className="text-lats-text">{format.money(taxAmount)}</span>
+          </div>
+        )}
 
         {/* Total */}
         <div className="flex items-center justify-between text-lg font-bold border-t border-lats-glass-border pt-3">

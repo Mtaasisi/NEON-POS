@@ -21,7 +21,6 @@ import { validateProductData } from '../lib/productUtils';
 // Extracted components
 import ProductInformationForm from '../components/product/ProductInformationForm';
 import PricingAndStockForm from '../components/product/PricingAndStockForm';
-import ProductImagesSection from '../components/product/ProductImagesSection';
 import ProductVariantsSection from '../components/product/ProductVariantsSection';
 import StorageLocationForm from '../components/product/StorageLocationForm';
 
@@ -36,29 +35,6 @@ interface ProductVariant {
   specification?: string;
   attributes?: Record<string, any>;
 }
-
-// ProductImage interface for form validation
-const ProductImageSchema = z.object({
-  id: z.string().optional(),
-  image_url: z.string().optional(),
-  url: z.string().optional(),
-  thumbnail_url: z.string().optional(),
-  file_name: z.string().optional(),
-  fileName: z.string().optional(),
-  file_size: z.number().optional(),
-  fileSize: z.number().optional(),
-  is_primary: z.boolean().optional(),
-  isPrimary: z.boolean().optional(),
-  uploaded_by: z.string().optional(),
-  created_at: z.string().optional(),
-  uploadedAt: z.string().optional(),
-  mimeType: z.string().optional()
-}).refine((data) => {
-  // Allow empty objects (for new images) or objects with either image_url or url
-  return Object.keys(data).length === 0 || data.image_url || data.url;
-}, {
-  message: "Either image_url or url must be provided for non-empty image objects"
-});
 
 // Validation schema for product form
 const productFormSchema = z.object({
@@ -77,7 +53,7 @@ const productFormSchema = z.object({
   }),
   sku: z.string().min(1, 'SKU must be provided').max(50, 'SKU must be less than 50 characters'),
 
-  categoryId: z.string().min(1, 'Category must be selected'),
+  categoryId: z.string().min(1, 'Category must be selected - Please choose one from the dropdown'),
 
 
   condition: z.enum(['new', 'used', 'refurbished'], {
@@ -93,12 +69,9 @@ const productFormSchema = z.object({
   storageRoomId: z.string().optional(),
   shelfId: z.string().optional(),
 
-  images: z.array(ProductImageSchema).default([]),
   metadata: z.record(z.string(), z.any()).optional().default({}),
   variants: z.array(z.any()).optional().default([])
 });
-
-type ProductImage = z.infer<typeof ProductImageSchema>;
 
 // Context wrapper component to ensure AuthProvider is available
 const EditProductPageWithAuth: React.FC = () => {
@@ -123,19 +96,16 @@ const EditProductPageWithAuth: React.FC = () => {
 
 // Main component content
 const EditProductPageContent: React.FC = () => {
+  console.log('🎬 [DEBUG] ========== EditProductPageContent RENDER ==========');
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
   
-  // Debug: Log the product ID from URL params (only in development)
-  if (import.meta.env.MODE === 'development') {
-    console.log('🔍 EditProductPage - Product ID from URL:', productId);
-  }
+  console.log('🔍 [DEBUG] EditProductPage - Product ID from URL:', productId);
+  console.log('🔍 [DEBUG] Product ID type:', typeof productId);
+  
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [currentErrors, setCurrentErrors] = useState<Record<string, string>>({});
-
-  // Generate a temporary product ID for image uploads
-  const [tempProductId] = useState(`temp-product-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
 
   // Initial form data
   const [formData, setFormData] = useState({
@@ -152,10 +122,22 @@ const EditProductPageContent: React.FC = () => {
     minStockLevel: 2, // Set default min stock level to 2 pcs like AddProductPage
     storageRoomId: '',
     shelfId: '',
-    images: [] as ProductImage[],
     metadata: {},
     variants: []
   });
+
+  // ✅ DEBUG: Track categoryId changes
+  useEffect(() => {
+    console.log('🔄 [DEBUG] Category ID changed to:', formData.categoryId);
+    if (formData.categoryId) {
+      const matchedCategory = categories.find(c => c.id === formData.categoryId);
+      if (matchedCategory) {
+        console.log('✅ [DEBUG] Category matched:', matchedCategory.name);
+      } else {
+        console.warn('⚠️ [DEBUG] Category ID does not match any loaded category!');
+      }
+    }
+  }, [formData.categoryId, categories]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingProduct, setIsLoadingProduct] = useState(true);
@@ -185,8 +167,6 @@ const EditProductPageContent: React.FC = () => {
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [nameExists, setNameExists] = useState(false);
   const [originalProductName, setOriginalProductName] = useState<string>('');
-
-  const { currentUser } = useAuth();
 
   // Generate auto SKU using utility function
   const generateAutoSKU = () => {
@@ -236,18 +216,26 @@ const EditProductPageContent: React.FC = () => {
 
   // Handle variants toggle - automatically create variant from form data
   const handleUseVariantsToggle = (enabled: boolean) => {
+    console.log('🔄 [DEBUG] handleUseVariantsToggle called with enabled:', enabled);
+    console.log('🔄 [DEBUG] Current variants count:', variants.length);
+    
     setUseVariants(enabled);
     
     if (enabled && variants.length === 0) {
+      console.log('📦 [DEBUG] Creating variant from form data...');
       // Create a variant from current form data
       const autoVariant = createVariantFromFormData();
+      console.log('📦 [DEBUG] Auto-created variant:', autoVariant);
       setVariants([autoVariant]);
       setShowVariants(true);
     } else if (!enabled) {
+      console.log('📦 [DEBUG] Clearing variants...');
       // Clear variants when disabling
       setVariants([]);
       setShowVariants(false);
     }
+    
+    console.log('🔄 [DEBUG] useVariants toggled. New state:', enabled);
   };
 
   // Update the first variant when form data changes (if variants are enabled)
@@ -260,27 +248,29 @@ const EditProductPageContent: React.FC = () => {
     }
   }, [formData.costPrice, formData.price, formData.stockQuantity, formData.minStockLevel, formData.specification, useVariants]);
 
-  // Load data on component mount
+  // Load data on component mount - Load categories FIRST
   useEffect(() => {
+    console.log('🔄 [DEBUG] Component mounted, loading initial data...');
     const loadData = async () => {
       try {
+        console.log('📥 [DEBUG] Fetching categories...');
         const categoriesData = await getActiveCategories();
+        console.log('📥 [DEBUG] Categories loaded:', categoriesData?.length || 0);
         setCategories(categoriesData || []);
+        
+        // ✅ FIX: Load product AFTER categories are loaded
+        if (productId) {
+          console.log('🔄 [DEBUG] Categories loaded, now loading product...');
+          loadProductData();
+        }
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('❌ [DEBUG] Error loading data:', error);
         toast.error('Failed to load form data');
       }
     };
 
     loadData();
-  }, []);
-
-  // Load product data when productId changes
-  useEffect(() => {
-    if (productId) {
-      loadProductData();
-    }
-  }, [productId]); // Only depend on productId to prevent unnecessary re-renders
+  }, [productId]); // ✅ FIX: Depend on productId to reload when it changes
 
   // Check if product name exists
   const checkProductName = async (name: string) => {
@@ -336,69 +326,78 @@ const EditProductPageContent: React.FC = () => {
 
 
   const loadProductData = async () => {
+    console.log('🔍 [DEBUG] loadProductData called');
     if (!productId) {
-      console.error('❌ No product ID provided');
+      console.error('❌ [DEBUG] No product ID provided');
       toast.error('No product ID provided');
       return;
     }
     
     if (!supabase) {
-      console.error('❌ Supabase client not available');
+      console.error('❌ [DEBUG] Supabase client not available');
       toast.error('Database connection not available');
       return;
     }
     
-    if (import.meta.env.MODE === 'development') {
-      console.log('🔄 Loading product data for ID:', productId);
-    }
+    console.log('🔄 [DEBUG] Loading product data for ID:', productId);
+    console.log('🔍 [DEBUG] Current productId type:', typeof productId);
     setIsLoadingProduct(true);
     try {
       // Try loading product and variants separately to avoid relationship errors
       let product: any = null;
       
       // Load product without variants first
+      console.log('📥 [DEBUG] Fetching product from database...');
       const { data: productOnly, error: productError } = await supabase!
         .from('lats_products')
         .select('*')
         .eq('id', productId!)
         .single();
       
+      console.log('📊 [DEBUG] Product query result:', { productOnly, productError });
+      
       if (productError) {
-        console.error('❌ Product query failed:', productError);
+        console.error('❌ [DEBUG] Product query failed:', productError);
+        console.error('❌ [DEBUG] Error code:', (productError as any).code);
+        console.error('❌ [DEBUG] Error message:', (productError as any).message);
         throw productError;
       }
       
       if (!productOnly) {
-        console.error('❌ No product found with ID:', productId);
+        console.error('❌ [DEBUG] No product found with ID:', productId);
         toast.error(`Product with ID ${productId} not found`);
         return;
       }
       
+      console.log('✅ [DEBUG] Product loaded successfully:', productOnly.name);
+      
       // Load variants separately
+      console.log('📥 [DEBUG] Fetching variants from database...');
       const { data: variants, error: variantsError } = await supabase!
         .from('lats_product_variants')
         .select('*')
         .eq('product_id', productId!);
       
+      console.log('📊 [DEBUG] Variants query result:', { variants, variantsError });
+      
       if (variantsError) {
-        if (import.meta.env.MODE === 'development') {
-          console.warn('⚠️ Could not load variants:', variantsError);
-        }
+        console.warn('⚠️ [DEBUG] Could not load variants:', variantsError);
+        console.warn('⚠️ [DEBUG] Variants error code:', variantsError.code);
         // Continue without variants
         product = productOnly ? { ...productOnly, variants: [] } : null;
       } else {
-        if (import.meta.env.MODE === 'development') {
-          console.log('✅ Loaded product and variants separately');
-        }
+        console.log('✅ [DEBUG] Loaded variants successfully. Count:', variants?.length || 0);
         product = productOnly ? { ...productOnly, variants: variants || [] } : null;
       }
       
       if (product) {
+        console.log('📝 [DEBUG] Processing product data...');
+        console.log('📝 [DEBUG] Product raw data:', product);
+        
         // Store the original product name for comparison
         setOriginalProductName(product.name || '');
 
-        
-        setFormData({
+        const processedFormData = {
           name: product.name || '',
           description: product.description || '',
           specification: (() => {
@@ -431,25 +430,30 @@ const EditProductPageContent: React.FC = () => {
           minStockLevel: product.min_stock_level || 0,
           storageRoomId: product.storage_room_id || '',
           shelfId: product.store_shelf_id || '',
-          images: (() => {
-            // Handle images from product_images table (array of objects)
-            if (Array.isArray(product.images) && product.images.length > 0 && typeof product.images[0] === 'object') {
-              return product.images;
-            }
-            // Handle images from lats_products.images column (array of strings)
-            if (Array.isArray(product.images) && product.images.length > 0 && typeof product.images[0] === 'string') {
-              return product.images.map((url: string, index: number) => ({
-                id: `fallback-${index}`,
-                url: url,
-                fileName: `image-${index + 1}`,
-                isPrimary: index === 0
-              }));
-            }
-            return [];
-          })(),
           metadata: product.attributes || {},
           variants: []
-        });
+        };
+        
+        console.log('📝 [DEBUG] Processed form data:', processedFormData);
+        console.log('📝 [DEBUG] Category ID from product:', product.category_id);
+        console.log('📝 [DEBUG] Category ID in form data:', processedFormData.categoryId);
+        console.log('📝 [DEBUG] Available categories:', categories.map(c => ({ id: c.id, name: c.name })));
+        
+        // ⚠️ WARNING: Check if category exists in categories array
+        if (processedFormData.categoryId && categories.length > 0) {
+          const categoryExists = categories.find(cat => cat.id === processedFormData.categoryId);
+          if (!categoryExists) {
+            console.warn('⚠️ [DEBUG] Category ID does not match any available category!');
+            console.warn('⚠️ [DEBUG] Category ID:', processedFormData.categoryId);
+            console.warn('⚠️ [DEBUG] Available category IDs:', categories.map(c => c.id));
+          } else {
+            console.log('✅ [DEBUG] Category matched:', categoryExists.name);
+          }
+        } else if (!processedFormData.categoryId) {
+          console.warn('⚠️ [DEBUG] Product has NO category set in database!');
+        }
+        
+        setFormData(processedFormData);
         
         
         // Determine if product originally had variants
@@ -470,36 +474,40 @@ const EditProductPageContent: React.FC = () => {
         );
         
         setOriginallyHadVariants(hadVariantsOriginally);
-        // Only log in development mode to reduce console noise
-        if (import.meta.env.MODE === 'development' && hadVariantsOriginally) {
-          console.log('🔍 Product variant analysis:', {
-            productId: product.id,
-            variantCount: product.variants?.length || 0,
-            hadVariantsOriginally,
-            hasVariantsFlag: product.has_variants,
-            metadataUseVariants: product.metadata?.useVariants
-          });
-        }
+        console.log('🔍 [DEBUG] Product variant analysis:', {
+          productId: product.id,
+          variantCount: product.variants?.length || 0,
+          hadVariantsOriginally,
+          hasVariantsFlag: product.has_variants,
+          metadataUseVariants: product.metadata?.useVariants
+        });
         
         // Load variants if they exist
         if (product.variants && product.variants.length > 0) {
-          const processedVariants = product.variants.map((variant: any) => ({
-            name: variant.name || '',
-            sku: variant.sku || '',
-            costPrice: variant.cost_price || 0,
-            price: variant.unit_price || 0,
-            stockQuantity: variant.quantity || 0,
-            minStockLevel: variant.min_quantity || 0,
-            specification: variant.attributes?.specification || '',
-            attributes: variant.attributes || {}
-          }));
+          console.log('📦 [DEBUG] Processing variants...');
+          const processedVariants = product.variants.map((variant: any, index: number) => {
+            console.log(`📦 [DEBUG] Variant ${index + 1}:`, variant);
+            return {
+              name: variant.name || '',
+              sku: variant.sku || '',
+              costPrice: variant.cost_price || 0,
+              price: variant.unit_price || 0,
+              stockQuantity: variant.quantity || 0,
+              minStockLevel: variant.min_quantity || 0,
+              specification: variant.attributes?.specification || '',
+              attributes: variant.attributes || {}
+            };
+          });
           
+          console.log('📦 [DEBUG] Processed variants:', processedVariants);
           setVariants(processedVariants);
           
           // Respect the original intention - if product originally had variants, keep them enabled
+          console.log('📦 [DEBUG] Setting useVariants and showVariants to:', hadVariantsOriginally);
           setUseVariants(hadVariantsOriginally);
           setShowVariants(hadVariantsOriginally);
         } else {
+          console.log('📦 [DEBUG] No variants found in database');
           // No variants in database
           setOriginallyHadVariants(false);
           setUseVariants(false);
@@ -533,17 +541,11 @@ const EditProductPageContent: React.FC = () => {
     }
   };
 
-  // Validate form
-  const validateForm = (): boolean => {
+  // ✅ FIXED: Validate form - Using AddProductPage pattern
+  const validateForm = (): { isValid: boolean; errors: Record<string, string> } => {
     const errors: Record<string, string> = {};
 
     try {
-      // Filter out invalid image objects
-      const validImages = formData.images.filter(img => {
-        // Keep images that have either image_url or url, or are completely empty objects
-        return Object.keys(img).length === 0 || img.image_url || img.url;
-      });
-      
       // Create a dynamic schema based on whether variants are used
       const dynamicSchema = useVariants 
         ? productFormSchema.omit({ 
@@ -557,33 +559,11 @@ const EditProductPageContent: React.FC = () => {
       
       const dataToValidate = {
         ...formData,
-        images: validImages,
         variants: useVariants ? variants : []
       };
       
-      console.log('🔍 Validating form data:', dataToValidate);
-      console.log('🔍 Using variants:', useVariants);
-      console.log('🔍 Category ID:', formData.categoryId, '(empty?', !formData.categoryId, ')');
-      console.log('🔍 Condition:', formData.condition);
-      
-      // ✅ IMPROVED: Pre-validation checks for common issues
-      if (!formData.categoryId || formData.categoryId.trim() === '') {
-        errors.categoryId = 'Category must be selected';
-        console.warn('⚠️ Category ID is empty!');
-      }
-      
-      if (!formData.name || formData.name.trim() === '') {
-        errors.name = 'Product name must be provided';
-      }
-      
-      if (!formData.sku || formData.sku.trim() === '') {
-        errors.sku = 'SKU must be provided';
-      }
-      
-      // Only validate with Zod if pre-validation passes
-      if (Object.keys(errors).length === 0) {
-        dynamicSchema.parse(dataToValidate);
-      }
+      // Run Zod validation
+      dynamicSchema.parse(dataToValidate);
 
       // Additional validation for variants when using variants
       if (useVariants) {
@@ -611,48 +591,55 @@ const EditProductPageContent: React.FC = () => {
       }
       
       setCurrentErrors(errors);
-      return Object.keys(errors).length === 0;
+      return { isValid: Object.keys(errors).length === 0, errors };
     } catch (error) {
+      console.error('Validation exception:', error);
       if (error instanceof z.ZodError) {
-        console.log('Validation errors:', error.issues);
         error.issues.forEach((err) => {
           if (err.path.length > 0) {
-            errors[err.path[0] as string] = err.message;
+            const fieldName = err.path[0] as string;
+            errors[fieldName] = err.message;
+          } else {
+            errors['_general'] = err.message;
           }
         });
+      } else {
+        errors['_general'] = 'Validation failed: ' + (error instanceof Error ? error.message : 'Unknown error');
       }
       
-      console.log('Setting current errors:', errors);
+      console.error('Validation errors found:', errors);
       setCurrentErrors(errors);
-      return false;
+      return { isValid: false, errors };
     }
   };
 
-  // Submit form
+  // ✅ FIXED: Submit form - Using AddProductPage pattern
   const handleSubmit = async () => {
-    // setHasSubmitted(true); // Removed unused state
+    const validation = validateForm();
     
-    if (!validateForm()) {
-      console.log('Form validation failed. Current errors:', currentErrors);
+    if (!validation.isValid) {
+      console.error('Validation failed with errors:', validation.errors);
       
-      // ✅ IMPROVED: Show specific validation errors to user
-      const errorMessages = Object.entries(currentErrors)
-        .map(([field, message]) => `${field}: ${message}`)
-        .join('\n');
+      // Show specific errors in toast
+      const errorEntries = Object.entries(validation.errors).filter(([key]) => key !== '_general');
+      const generalError = validation.errors['_general'];
       
-      if (errorMessages) {
-        toast.error(`Validation failed:\n${errorMessages}`, { duration: 5000 });
+      if (errorEntries.length > 0 || generalError) {
+        toast.error(
+          <div className="text-left">
+            <div className="font-bold mb-1">Please fix these errors:</div>
+            <div className="text-sm space-y-1">
+              {generalError && <div className="text-red-600">• {generalError}</div>}
+              {errorEntries.map(([field, message]) => (
+                <div key={field}>• {message}</div>
+              ))}
+            </div>
+          </div>,
+          { duration: 6000 }
+        );
       } else {
         toast.error('Please fix the errors before submitting');
       }
-      
-      // Scroll to first error
-      const firstErrorField = Object.keys(currentErrors)[0];
-      if (firstErrorField) {
-        const element = document.querySelector(`[name="${firstErrorField}"]`);
-        element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-      
       return;
     }
 
@@ -662,6 +649,7 @@ const EditProductPageContent: React.FC = () => {
       return;
     }
 
+    console.log('🚀 [DEBUG] Validation passed, proceeding with submission...');
     setIsSubmitting(true);
 
     try {
@@ -674,21 +662,22 @@ const EditProductPageContent: React.FC = () => {
         ? variants.reduce((sum, variant) => sum + ((variant.stockQuantity || 0) * (variant.price || 0)), 0)
         : ((formData.stockQuantity || 0) * (formData.price || 0));
 
+      console.log('💰 [DEBUG] Calculated totals:', { totalQuantity, totalValue });
+
       // Prepare comprehensive product data with only fields that exist in the database
       const productData: any = {
         name: formData.name,
         description: formData.description || null,
         category_id: formData.categoryId || null,
-
         condition: formData.condition || 'new',
         total_quantity: totalQuantity,
         total_value: totalValue,
         storage_room_id: formData.storageRoomId || null,
         store_shelf_id: formData.shelfId || null,
-        images: formData.images || [],
-        tags: [],
-        attributes: formData.metadata || {}
+        // Don't include tags or attributes if they're empty to avoid PostgreSQL type errors
       };
+      
+      console.log('📦 [DEBUG] Initial product data:', productData);
 
       // Only add fields that exist in the database schema
       if (formData.specification) {
@@ -715,23 +704,26 @@ const EditProductPageContent: React.FC = () => {
         name: formData.name,
         description: formData.description || null,
         category_id: formData.categoryId || null,
-        images: formData.images || [],
-        tags: [],
-        attributes: formData.metadata || {}
       };
 
-      console.log('Product data being updated:', productData);
-      console.log('Product data keys:', Object.keys(productData));
+      console.log('📦 [DEBUG] Final product data being updated:', productData);
+      console.log('📦 [DEBUG] Product data keys:', Object.keys(productData));
+      console.log('📦 [DEBUG] Basic fallback data ready:', basicProductData);
 
       // Validate the product data against the database schema
+      console.log('🔍 [DEBUG] Validating product data against database schema...');
       const validation = validateProductData(productData);
+      console.log('🔍 [DEBUG] Validation result:', validation);
+      
       if (!validation.isValid) {
-        console.error('❌ Product data validation failed:', validation.errors);
+        console.error('❌ [DEBUG] Product data validation failed:', validation.errors);
         toast.error(`Validation failed: ${validation.errors.join(', ')}`);
         return;
       }
 
+      console.log('💾 [DEBUG] Attempting database update for product ID:', productId);
       let { data: updatedProduct, error } = await retryWithBackoff(async () => {
+        console.log('💾 [DEBUG] Executing update query...');
         return await supabase!
           .from('lats_products')
           .update(productData)
@@ -739,6 +731,8 @@ const EditProductPageContent: React.FC = () => {
           .select()
           .single();
       });
+      
+      console.log('💾 [DEBUG] Update result:', { updatedProduct, error });
 
       // If the full update fails, try with basic fields only
       if (error) {
@@ -762,122 +756,96 @@ const EditProductPageContent: React.FC = () => {
         console.log('✅ Basic update succeeded');
       }
 
-      // Save images to product_images table if we have images
-      if (formData.images && formData.images.length > 0 && updatedProduct) {
-        console.log('Saving images to product_images table:', formData.images);
-        
-        // First delete existing images for this product
-        const { error: deleteImagesError } = await supabase!
-          .from('product_images')
-          .delete()
-          .eq('product_id', productId!);
-
-        if (deleteImagesError) {
-          console.error('Error deleting existing images:', deleteImagesError);
-        }
-        
-        const imageData = formData.images.map((image, index) => ({
-          product_id: updatedProduct?.id || productId!,
-          image_url: image.url || image.image_url || '',
-          thumbnail_url: image.thumbnail_url || image.url || image.image_url || '',
-          file_name: image.fileName || image.file_name || `image_${index + 1}`,
-          file_size: image.fileSize || image.file_size || 0,
-          is_primary: image.isPrimary || image.is_primary || index === 0, // First image is primary
-          uploaded_by: null // TODO: Get current user ID
-        }));
-
-        const { error: imageError } = await retryWithBackoff(async () => {
-          return await supabase!
-            .from('product_images')
-            .insert(imageData);
-        });
-
-        if (imageError) {
-          console.error('Error saving images:', imageError);
-          toast.error('Product updated but failed to save images');
-        } else {
-          console.log('Images saved successfully to product_images table');
-        }
-
-        // If any images were uploaded with temporary product IDs, update them
-        const tempImages = formData.images.filter(img => 
-          img.id && img.id.startsWith('temp-') && 
-          (img.url || img.image_url) && 
-          !(img.url || img.image_url).startsWith('blob:')
-        );
-
-        if (tempImages.length > 0) {
-          console.log('Updating temporary image records for product:', updatedProduct.id);
-          
-          // For temporary images that were uploaded to storage, we need to update their database records
-          // This is handled by the image upload services when they detect a real product ID
-          try {
-            // The RobustImageService should handle updating temporary image records
-            // when it detects that the product ID has changed from temp to real
-            console.log('Temporary images will be updated by the image service');
-          } catch (updateError) {
-            console.error('Error updating temporary image records:', updateError);
-          }
-        }
-      }
-
       // If using variants, update them
       if (useVariants && variants.length > 0 && updatedProduct) {
+        console.log('📦 [DEBUG] ========== VARIANTS UPDATE START ==========');
+        console.log('📦 [DEBUG] Updating variants for product...');
+        console.log('📦 [DEBUG] Number of variants to update:', variants.length);
+        console.log('📦 [DEBUG] Variants data:', variants);
+        
         try {
-          // First delete existing variants
-          const { error: deleteError } = await supabase!
+          // ✅ IMPROVED: Use UPSERT logic instead of DELETE/INSERT to avoid foreign key violations
+          // First, get existing variants to check what exists
+          console.log('🔍 [DEBUG] Fetching existing variants...');
+          const { data: existingVariants } = await supabase!
             .from('lats_product_variants')
-            .delete()
+            .select('id, sku')
             .eq('product_id', productId!);
 
-          if (deleteError) {
-            console.error('Error deleting existing variants:', deleteError);
-            // Continue with insert even if delete fails
-          }
-
-          // Then insert new variants
-          const variantData = variants.map(variant => ({
-            product_id: productId!,
-            sku: variant.sku,
-            name: variant.name,
-            cost_price: variant.costPrice,
-            unit_price: variant.price,
-            quantity: variant.stockQuantity,
-            min_quantity: variant.minStockLevel,
-            attributes: {
-              ...variant.attributes,
-              specification: variant.specification || null
+          console.log(`✅ [DEBUG] Found ${existingVariants?.length || 0} existing variants`);
+          
+          // Prepare variant data for upsert
+          const variantData = variants.map((variant, index) => {
+            // Try to find existing variant by SKU to preserve its ID
+            const existingVariant = existingVariants?.find((v: any) => v.sku === variant.sku);
+            
+            const data: any = {
+              product_id: productId!,
+              sku: variant.sku,
+              name: variant.name,
+              cost_price: variant.costPrice,
+              unit_price: variant.price,
+              quantity: variant.stockQuantity,
+              min_quantity: variant.minStockLevel,
+              attributes: {
+                ...variant.attributes,
+                specification: variant.specification || null
+              }
+            };
+            
+            // If variant exists, include its ID for update
+            if (existingVariant) {
+              data.id = existingVariant.id;
+              console.log(`♻️  [DEBUG] Variant ${index + 1} will be updated (ID: ${existingVariant.id})`);
+            } else {
+              console.log(`➕ [DEBUG] Variant ${index + 1} will be inserted (new)`);
             }
-          }));
+            
+            return data;
+          });
 
+          console.log('💾 [DEBUG] Upserting variants...');
+          // Use upsert to update existing and insert new variants
           const { error: variantError } = await retryWithBackoff(async () => {
             return await supabase!
               .from('lats_product_variants')
-              .insert(variantData);
+              .upsert(variantData, { 
+                onConflict: 'id'
+              });
           });
 
           if (variantError) {
-            console.error('Error updating variants:', variantError);
+            console.error('❌ [DEBUG] Error upserting variants:', variantError);
+            console.error('❌ [DEBUG] Variant error code:', variantError.code);
+            console.error('❌ [DEBUG] Variant error message:', variantError.message);
             toast.error('Product updated but failed to update variants');
           } else {
-            if (import.meta.env.MODE === 'development') {
-              console.log('✅ Variants updated successfully');
-            }
+            console.log('✅ [DEBUG] Variants updated successfully');
           }
         } catch (variantError) {
-          console.error('Error in variant management:', variantError);
+          console.error('❌ [DEBUG] Error in variant management:', variantError);
           toast.error('Product updated but failed to update variants');
         }
+        console.log('📦 [DEBUG] ========== VARIANTS UPDATE END ==========');
+      } else {
+        console.log('📦 [DEBUG] Skipping variants update. useVariants:', useVariants, 'variants.length:', variants.length, 'updatedProduct:', !!updatedProduct);
       }
 
+      console.log('✅ [DEBUG] Product update completed successfully!');
+      console.log('🚀 [DEBUG] ========== SUBMIT END (SUCCESS) ==========');
       toast.success('Product updated successfully!');
       navigate('/lats/unified-inventory');
       
     } catch (error) {
-      console.error('Error updating product:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
+      console.error('❌ [DEBUG] ========== SUBMIT ERROR ==========');
+      console.error('❌ [DEBUG] Error updating product:', error);
+      console.error('❌ [DEBUG] Error type:', typeof error);
+      console.error('❌ [DEBUG] Error details:', JSON.stringify(error, null, 2));
+      console.error('❌ [DEBUG] Error stack:', (error as Error)?.stack);
+      console.error('🚀 [DEBUG] ========== SUBMIT END (ERROR) ==========');
       toast.error('Failed to update product. Please try again.');
     } finally {
+      console.log('🔚 [DEBUG] Resetting isSubmitting to false');
       setIsSubmitting(false);
     }
   };
@@ -914,9 +882,14 @@ const EditProductPageContent: React.FC = () => {
   };
 
   const updateVariant = (index: number, field: keyof ProductVariant, value: any) => {
-    setVariants(prev => prev.map((variant, i) => 
-      i === index ? { ...variant, [field]: value } : variant
-    ));
+    console.log(`📝 [DEBUG] updateVariant called - Index: ${index}, Field: ${field}, Value:`, value);
+    setVariants(prev => {
+      const updated = prev.map((variant, i) => 
+        i === index ? { ...variant, [field]: value } : variant
+      );
+      console.log('📝 [DEBUG] Updated variants:', updated);
+      return updated;
+    });
   };
 
   const handleVariantSpecificationsClick = (index: number) => {
@@ -983,6 +956,106 @@ const EditProductPageContent: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-6">
+              {/* ✅ ADDED: Category Missing Warning (if product has no category) */}
+              {!isLoadingProduct && !formData.categoryId && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-lg animate-pulse">
+                  <div className="flex items-start">
+                    <AlertTriangle className="w-5 h-5 text-yellow-500 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h3 className="text-sm font-medium text-yellow-800 mb-1">
+                        ⚠️ Action Required: Category Missing
+                      </h3>
+                      <p className="text-sm text-yellow-700 mb-2">
+                        This product doesn't have a category assigned in the database. 
+                      </p>
+                      <p className="text-sm text-yellow-800 font-medium">
+                        👉 Please scroll down to the "Category" field and select a category before saving.
+                      </p>
+                      {categories.length === 0 && (
+                        <p className="text-sm text-red-600 mt-2 font-medium">
+                          ❌ No categories found! Please refresh the page or contact support.
+                        </p>
+                      )}
+                      {categories.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-sm text-green-600">
+                            ✅ {categories.length} categories available to choose from
+                          </p>
+                          <button
+                            onClick={() => {
+                              const categoryField = document.querySelector('[name="categoryId"]') || 
+                                                    document.querySelector('select[id*="category"]') ||
+                                                    document.querySelector('.category-input');
+                              if (categoryField) {
+                                categoryField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                // Highlight the field
+                                (categoryField as HTMLElement).style.border = '2px solid #f59e0b';
+                                setTimeout(() => {
+                                  (categoryField as HTMLElement).style.border = '';
+                                }, 3000);
+                              }
+                            }}
+                            className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm font-medium"
+                          >
+                            📍 Jump to Category Field
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ ADDED: Debug Panel (shows current form state) */}
+              {!isLoadingProduct && import.meta.env.MODE === 'development' && (
+                <details open className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+                  <summary className="cursor-pointer font-medium text-blue-900 text-sm flex items-center gap-2">
+                    🔍 Debug Info - Category Status: 
+                    {formData.categoryId ? (
+                      <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">✅ SET</span>
+                    ) : (
+                      <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs animate-pulse">❌ EMPTY</span>
+                    )}
+                  </summary>
+                  <div className="mt-3 space-y-2 text-xs font-mono">
+                    <div className={`p-3 rounded border-2 ${!formData.categoryId ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
+                      <strong>Category ID:</strong> 
+                      <div className={`mt-1 font-bold ${!formData.categoryId ? 'text-red-600' : 'text-green-600'}`}>
+                        {formData.categoryId || '❌ EMPTY - PLEASE SELECT A CATEGORY!'}
+                      </div>
+                      {formData.categoryId && (
+                        <div className="mt-2 text-green-700">
+                          Length: {formData.categoryId.length} characters
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-white p-2 rounded border border-blue-200">
+                      <strong>Categories Loaded:</strong> {categories.length}
+                    </div>
+                    <div className="bg-white p-2 rounded border border-blue-200">
+                      <strong>Product Name:</strong> {formData.name || 'Not loaded'}
+                    </div>
+                    <div className="bg-white p-2 rounded border border-blue-200">
+                      <strong>Validation Errors:</strong> {Object.keys(currentErrors).length}
+                    </div>
+                    {categories.length > 0 && (
+                      <div className="bg-white p-2 rounded border border-blue-200">
+                        <strong>Available Categories:</strong>
+                        <ul className="ml-4 mt-1">
+                          {categories.slice(0, 5).map(cat => (
+                            <li key={cat.id} className="text-xs">
+                              {cat.id === formData.categoryId ? '✅ ' : '• '}
+                              {cat.name} ({cat.id})
+                            </li>
+                          ))}
+                          {categories.length > 5 && <li>... and {categories.length - 5} more</li>}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
+
               {/* ✅ ADDED: Validation Errors Display */}
               {Object.keys(currentErrors).length > 0 && (
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg">
@@ -996,6 +1069,21 @@ const EditProductPageContent: React.FC = () => {
                         {Object.entries(currentErrors).map(([field, message]) => (
                           <li key={field}>
                             <span className="font-medium capitalize">{field.replace(/_/g, ' ')}</span>: {message}
+                            {field === 'categoryId' && (
+                              <button
+                                onClick={() => {
+                                  const categoryField = document.querySelector('[name="categoryId"]') || 
+                                                        document.querySelector('select[id*="category"]') ||
+                                                        document.querySelector('.category-input');
+                                  if (categoryField) {
+                                    categoryField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  }
+                                }}
+                                className="ml-2 text-xs underline hover:text-red-900"
+                              >
+                                Go to field
+                              </button>
+                            )}
                           </li>
                         ))}
                       </ul>
@@ -1028,14 +1116,6 @@ const EditProductPageContent: React.FC = () => {
                 currentErrors={currentErrors}
               />
             )}
-
-            {/* Product Images Section */}
-            <ProductImagesSection
-              images={formData.images}
-              setImages={(images: any[]) => setFormData(prev => ({ ...prev, images }))}
-              productId={tempProductId}
-              currentUser={currentUser}
-            />
 
             {/* Product Variants Section */}
             <ProductVariantsSection

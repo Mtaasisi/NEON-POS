@@ -421,6 +421,12 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
   private async execute(): Promise<{ data: any; error: any; count?: number | null }> {
     let query: string;
     
+    // Debug logging for INSERT operations
+    const isInsertOp = (this as any).isInsert;
+    if (isInsertOp && process.env.NODE_ENV === 'development') {
+      console.log('🔍 [DEBUG] Executing INSERT operation');
+    }
+    
     // Check if this is an UPSERT operation
     if ((this as any).isUpsert) {
       const values = (this as any).upsertData;
@@ -539,6 +545,14 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         data = rawData; // Already an array
       } else {
         data = rawData; // Fallback
+      }
+      
+      // Debug logging for INSERT operations
+      if (isInsertOp && process.env.NODE_ENV === 'development') {
+        console.log('🔍 [DEBUG] INSERT rawData type:', typeof rawData);
+        console.log('🔍 [DEBUG] INSERT has rows property:', rawData && 'rows' in rawData);
+        console.log('🔍 [DEBUG] INSERT extracted data:', data);
+        console.log('🔍 [DEBUG] INSERT data length:', Array.isArray(data) ? data.length : 'not array');
       }
       
       // If this was a count query in head mode, extract the count
