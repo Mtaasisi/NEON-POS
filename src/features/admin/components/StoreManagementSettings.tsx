@@ -105,14 +105,14 @@ const StoreManagementSettings: React.FC = () => {
     opening_time: '09:00',
     closing_time: '18:00',
     
-    // Data Isolation Defaults
-    data_isolation_mode: 'shared',
-    share_products: true,
-    share_customers: true,
-    share_inventory: false, // Each branch has own inventory by default
-    share_suppliers: true,
-    share_categories: true,
-    share_employees: false, // Branch-specific employees
+    // Data Isolation Defaults - Users must manually configure
+    data_isolation_mode: 'hybrid',
+    share_products: false,
+    share_customers: false,
+    share_inventory: false,
+    share_suppliers: false,
+    share_categories: false,
+    share_employees: false
     
     // Transfer Options
     allow_stock_transfer: true,
@@ -603,24 +603,7 @@ const StoreManagementSettings: React.FC = () => {
                 key={mode.value}
                 onClick={() => setFormData({ 
                   ...formData, 
-                  data_isolation_mode: mode.value as any,
-                  // Auto-configure based on mode
-                  ...(mode.value === 'shared' && {
-                    share_products: true,
-                    share_customers: true,
-                    share_inventory: true,
-                    share_suppliers: true,
-                    share_categories: true,
-                    share_employees: true
-                  }),
-                  ...(mode.value === 'isolated' && {
-                    share_products: false,
-                    share_customers: false,
-                    share_inventory: false,
-                    share_suppliers: false,
-                    share_categories: false,
-                    share_employees: false
-                  })
+                  data_isolation_mode: mode.value as any
                 })}
                 className={`p-4 rounded-xl border-2 text-left transition-all ${
                   formData.data_isolation_mode === mode.value
@@ -643,13 +626,22 @@ const StoreManagementSettings: React.FC = () => {
             ))}
           </div>
 
-          {/* Hybrid Configuration */}
-          {formData.data_isolation_mode === 'hybrid' && (
+          {/* Configuration for All Modes */}
+          {formData.data_isolation_mode && (
             <div className="bg-white rounded-lg p-4 border-2 border-purple-200">
               <h5 className="font-medium text-gray-900 mb-2 text-sm">
                 Configure What This Branch Shares
               </h5>
               <p className="text-xs text-gray-500 mb-3">
+                {formData.data_isolation_mode === 'shared' && (
+                  <span className="text-blue-600 font-semibold">Shared Mode: </span>
+                )}
+                {formData.data_isolation_mode === 'isolated' && (
+                  <span className="text-red-600 font-semibold">Isolated Mode: </span>
+                )}
+                {formData.data_isolation_mode === 'hybrid' && (
+                  <span className="text-purple-600 font-semibold">Hybrid Mode: </span>
+                )}
                 Toggle ON to <span className="font-semibold">share</span> with other branches, toggle OFF to keep <span className="font-semibold">isolated</span> for this branch only.
               </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

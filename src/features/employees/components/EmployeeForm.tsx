@@ -236,8 +236,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="text"
                   value={formData.firstName}
                   onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.firstName ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.firstName ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                   placeholder="Enter first name"
                 />
@@ -254,8 +254,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="text"
                   value={formData.lastName}
                   onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.lastName ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.lastName ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                   placeholder="Enter last name"
                 />
