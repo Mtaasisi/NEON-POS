@@ -64,12 +64,30 @@ interface Store {
   can_transfer_to_branches: string[]; // Array of branch IDs
 }
 
+interface IsolationSettings {
+  allow_products_isolation: boolean;
+  allow_customers_isolation: boolean;
+  allow_inventory_isolation: boolean;
+  allow_suppliers_isolation: boolean;
+  allow_categories_isolation: boolean;
+  allow_employees_isolation: boolean;
+}
+
 const StoreManagementSettings: React.FC = () => {
   const [stores, setStores] = useState<Store[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showIsolationSettings, setShowIsolationSettings] = useState(false);
+  const [isolationSettings, setIsolationSettings] = useState<IsolationSettings>({
+    allow_products_isolation: true,
+    allow_customers_isolation: true,
+    allow_inventory_isolation: true,
+    allow_suppliers_isolation: true,
+    allow_categories_isolation: true,
+    allow_employees_isolation: true,
+  });
 
   const emptyStore: Store = useMemo(() => ({
     name: '',
@@ -112,7 +130,44 @@ const StoreManagementSettings: React.FC = () => {
 
   useEffect(() => {
     loadStores();
+    loadIsolationSettings();
   }, []);
+
+  const loadIsolationSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('*')
+        .eq('setting_key', 'isolation_settings')
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // Ignore "not found" error
+      
+      if (data?.setting_value) {
+        setIsolationSettings(data.setting_value as IsolationSettings);
+      }
+    } catch (error) {
+      console.error('Error loading isolation settings:', error);
+    }
+  };
+
+  const saveIsolationSettings = async () => {
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({
+          setting_key: 'isolation_settings',
+          setting_value: isolationSettings,
+          updated_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      toast.success('Isolation settings saved successfully');
+    } catch (error: any) {
+      console.error('Error saving isolation settings:', error);
+      toast.error(error.message || 'Failed to save isolation settings');
+    }
+  };
 
   const loadStores = async () => {
     setLoading(true);
@@ -210,10 +265,16 @@ const StoreManagementSettings: React.FC = () => {
     }
   };
 
-  const StoreForm: React.FC<{ store: Store; onSave: (store: Store) => void; onCancel: () => void }> = ({ 
+  const StoreForm: React.FC<{ 
+    store: Store; 
+    onSave: (store: Store) => void; 
+    onCancel: () => void;
+    isolationSettings: IsolationSettings;
+  }> = ({ 
     store, 
     onSave, 
-    onCancel 
+    onCancel,
+    isolationSettings
   }) => {
     const [formData, setFormData] = useState<Store>(store);
     const [isSaving, setIsSaving] = useState(false);
@@ -508,9 +569,12 @@ const StoreManagementSettings: React.FC = () => {
 
           {/* Data Isolation Mode */}
           <div className="border-t pt-4 mt-4">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Data Isolation Model
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Data Isolation Model for This Branch
             </label>
+            <p className="text-xs text-gray-500 mb-3">
+              Each branch can have its own isolation settings. Choose how this specific branch shares data with other branches.
+            </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             {[
               {
@@ -582,18 +646,21 @@ const StoreManagementSettings: React.FC = () => {
           {/* Hybrid Configuration */}
           {formData.data_isolation_mode === 'hybrid' && (
             <div className="bg-white rounded-lg p-4 border-2 border-purple-200">
-              <h5 className="font-medium text-gray-900 mb-3 text-sm">
-                Configure What to Share
+              <h5 className="font-medium text-gray-900 mb-2 text-sm">
+                Configure What This Branch Shares
               </h5>
+              <p className="text-xs text-gray-500 mb-3">
+                Toggle ON to <span className="font-semibold">share</span> with other branches, toggle OFF to keep <span className="font-semibold">isolated</span> for this branch only.
+              </p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {[
-                  { key: 'share_products', label: 'Products & Catalog', icon: '📦', description: 'Product catalog visible across branches' },
-                  { key: 'share_customers', label: 'Customers', icon: '👥', description: 'Customer database shared' },
-                  { key: 'share_inventory', label: 'Inventory', icon: '📊', description: 'Real-time inventory sync' },
-                  { key: 'share_suppliers', label: 'Suppliers', icon: '🏭', description: 'Supplier contacts shared' },
-                  { key: 'share_categories', label: 'Categories', icon: '📁', description: 'Product categories shared' },
-                  { key: 'share_employees', label: 'Employees', icon: '👤', description: 'Staff can work at any branch' }
-                ].map(({ key, label, icon, description }) => (
+                  { key: 'share_products', label: 'Products & Catalog', icon: '📦', description: 'Product catalog visible across branches', setting: 'allow_products_isolation' },
+                  { key: 'share_customers', label: 'Customers', icon: '👥', description: 'Customer database shared', setting: 'allow_customers_isolation' },
+                  { key: 'share_inventory', label: 'Inventory', icon: '📊', description: 'Real-time inventory sync', setting: 'allow_inventory_isolation' },
+                  { key: 'share_suppliers', label: 'Suppliers', icon: '🏭', description: 'Supplier contacts shared', setting: 'allow_suppliers_isolation' },
+                  { key: 'share_categories', label: 'Categories', icon: '📁', description: 'Product categories shared', setting: 'allow_categories_isolation' },
+                  { key: 'share_employees', label: 'Employees', icon: '👤', description: 'Staff can work at any branch', setting: 'allow_employees_isolation' }
+                ].filter(({ setting }) => isolationSettings[setting as keyof IsolationSettings]).map(({ key, label, icon, description }) => (
                   <div key={key} className="flex items-start p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
@@ -614,6 +681,20 @@ const StoreManagementSettings: React.FC = () => {
                   </div>
                 ))}
               </div>
+              {[
+                { key: 'share_products', setting: 'allow_products_isolation' },
+                { key: 'share_customers', setting: 'allow_customers_isolation' },
+                { key: 'share_inventory', setting: 'allow_inventory_isolation' },
+                { key: 'share_suppliers', setting: 'allow_suppliers_isolation' },
+                { key: 'share_categories', setting: 'allow_categories_isolation' },
+                { key: 'share_employees', setting: 'allow_employees_isolation' }
+              ].filter(({ setting }) => !isolationSettings[setting as keyof IsolationSettings]).length > 0 && (
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-xs text-yellow-800">
+                    <span className="font-semibold">Note:</span> Some features are disabled in global settings and cannot be isolated.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           </div>
@@ -818,7 +899,7 @@ const StoreManagementSettings: React.FC = () => {
 
   return (
     <div>
-      {!showAddForm && !editingStore && (
+      {!showAddForm && !editingStore && !showIsolationSettings && (
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -830,13 +911,22 @@ const StoreManagementSettings: React.FC = () => {
                 <p className="text-sm text-gray-500">Manage your store locations and branches</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowAddForm(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Store
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowIsolationSettings(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                Isolation Settings
+              </button>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Store
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -847,6 +937,7 @@ const StoreManagementSettings: React.FC = () => {
           key={editingStore?.id || 'new-store'}
           store={editingStore || emptyStore}
           onSave={handleSaveStore}
+          isolationSettings={isolationSettings}
           onCancel={() => {
             setShowAddForm(false);
             setEditingStore(null);
@@ -854,8 +945,89 @@ const StoreManagementSettings: React.FC = () => {
         />
       )}
 
+      {/* Isolation Settings Panel */}
+      {showIsolationSettings && (
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                <Settings className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Data Isolation Settings</h3>
+                <p className="text-xs text-gray-500">Configure which features can be isolated per store</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4">
+              <p className="text-sm text-blue-900 font-semibold mb-2">
+                🔧 Global Isolation Controls
+              </p>
+              <p className="text-xs text-blue-800">
+                These settings control which features <span className="font-semibold">can be isolated per branch</span>. When enabled, each branch can choose to share or isolate that feature. When disabled, the feature is <span className="font-semibold">always shared</span> across all branches.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { key: 'allow_products_isolation', label: 'Products & Catalog', icon: '📦', description: 'Allow stores to have separate product catalogs' },
+                { key: 'allow_customers_isolation', label: 'Customers', icon: '👥', description: 'Allow stores to have separate customer databases' },
+                { key: 'allow_inventory_isolation', label: 'Inventory', icon: '📊', description: 'Allow stores to have separate inventory tracking' },
+                { key: 'allow_suppliers_isolation', label: 'Suppliers', icon: '🏭', description: 'Allow stores to have separate supplier lists' },
+                { key: 'allow_categories_isolation', label: 'Categories', icon: '📁', description: 'Allow stores to have separate product categories' },
+                { key: 'allow_employees_isolation', label: 'Employees', icon: '👤', description: 'Allow stores to have separate employee lists' }
+              ].map(({ key, label, icon, description }) => (
+                <div key={key} className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">{icon}</span>
+                      <span className="text-sm font-semibold text-gray-900">{label}</span>
+                    </div>
+                    <p className="text-xs text-gray-600">{description}</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer ml-4">
+                    <input
+                      type="checkbox"
+                      checked={isolationSettings[key as keyof IsolationSettings]}
+                      onChange={(e) => setIsolationSettings({ 
+                        ...isolationSettings, 
+                        [key]: e.target.checked 
+                      })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                  </label>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 pt-6 mt-6 border-t">
+              <button
+                onClick={saveIsolationSettings}
+                className="flex items-center gap-2 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                Save Settings
+              </button>
+              <button
+                onClick={() => {
+                  setShowIsolationSettings(false);
+                  loadIsolationSettings(); // Reload to reset any unsaved changes
+                }}
+                className="flex items-center gap-2 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stores List */}
-      {!showAddForm && !editingStore && (
+      {!showAddForm && !editingStore && !showIsolationSettings && (
         <div className="space-y-4">
           {loading ? (
             <div className="text-center py-8">

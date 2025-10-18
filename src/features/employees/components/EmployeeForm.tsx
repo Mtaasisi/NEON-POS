@@ -3,8 +3,9 @@ import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import GlassSelect from '../../../features/shared/components/ui/GlassSelect';
 import BranchSelector from '../../../components/BranchSelector';
-import { X, Save, UserPlus, Edit } from 'lucide-react';
+import { X, Save, UserPlus, Edit, User, Shield, Key } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface Employee {
   id?: string;
@@ -22,7 +23,9 @@ interface Employee {
   skills: string[];
   manager?: string;
   location?: string;
-  branchId?: string; // ✨ NEW - Branch assignment
+  branchId?: string;
+  userId?: string; // 🔗 Link to user account
+  userRole?: string; // User role if linked
 }
 
 interface EmployeeFormProps {
@@ -56,11 +59,15 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
     skills: [],
     manager: '',
     location: '',
-    branchId: '' // ✨ NEW
+    branchId: '',
+    userId: '',
+    userRole: ''
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [newSkill, setNewSkill] = useState('');
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   useEffect(() => {
     if (employee) {
@@ -84,11 +91,38 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
         skills: [],
         manager: '',
         location: '',
-        branchId: '' // ✨ NEW
+        branchId: '',
+        userId: '',
+        userRole: ''
       });
     }
     setErrors({});
   }, [employee, isOpen]);
+
+  // Load users when form opens
+  useEffect(() => {
+    if (isOpen) {
+      loadUsers();
+    }
+  }, [isOpen]);
+
+  const loadUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, email, full_name, role')
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      toast.error('Failed to load users');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -435,6 +469,66 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                 required
                 error={errors.branchId}
               />
+            </div>
+
+            {/* User Account Linking */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center gap-2 mb-4">
+                <User className="w-5 h-5 text-purple-600" />
+                <h3 className="text-lg font-semibold text-gray-900">User Account Access</h3>
+              </div>
+              <p className="text-sm text-gray-600 mb-4">
+                Link this employee to a user account to give them system access. This allows them to log in and use the POS system.
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-gray-500" />
+                      Link to User Account (Optional)
+                    </div>
+                  </label>
+                  <GlassSelect
+                    options={[
+                      { value: '', label: 'No user account linked' },
+                      ...users.map(user => ({
+                        value: user.id,
+                        label: `${user.full_name || user.email} (${user.role})`
+                      }))
+                    ]}
+                    value={formData.userId || ''}
+                    onChange={(value) => {
+                      const selectedUser = users.find(u => u.id === value);
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        userId: value,
+                        userRole: selectedUser?.role || ''
+                      }));
+                    }}
+                    placeholder={loadingUsers ? "Loading users..." : "Select user account"}
+                  />
+                  {formData.userId && formData.userRole && (
+                    <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-purple-50 rounded-lg">
+                      <Key className="w-4 h-4 text-purple-600" />
+                      <span className="text-sm text-purple-700">
+                        Role: <span className="font-semibold capitalize">{formData.userRole}</span>
+                      </span>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h4 className="text-sm font-semibold text-blue-900 mb-2">💡 User Account Benefits</h4>
+                  <ul className="text-xs text-blue-800 space-y-1">
+                    <li>• System access with username/password</li>
+                    <li>• Role-based permissions</li>
+                    <li>• Track activities and actions</li>
+                    <li>• Attendance self-service</li>
+                    <li>• Personal dashboard access</li>
+                  </ul>
+                </div>
+              </div>
             </div>
 
             {/* Skills */}

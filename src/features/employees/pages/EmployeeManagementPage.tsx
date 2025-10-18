@@ -6,7 +6,7 @@ import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import { EmployeeForm, AttendanceModal } from '../components';
 import { 
-  Users, UserPlus, Calendar, Clock, TrendingUp, Award, 
+  Users, User, UserPlus, Calendar, Clock, TrendingUp, Award, 
   Plus, Edit, Trash2, CheckCircle, AlertTriangle, Filter,
   Mail, Phone, MapPin, Briefcase, Star, Activity, Download,
   BarChart3, UserCheck, Search, X, Building2, DollarSign,
@@ -28,12 +28,14 @@ interface Employee {
   hireDate: string;
   salary: number;
   status: 'active' | 'inactive' | 'on-leave' | 'terminated';
-  performance: number;
-  attendance: number;
+  performance?: number;
+  attendance?: number;
   skills: string[];
   manager?: string;
   location?: string;
   branchId?: string;
+  userId?: string;
+  userRole?: string;
   branch?: {
     id: string;
     name: string;
@@ -139,6 +141,7 @@ const EmployeeManagementPage: React.FC = () => {
     
     const totalSalary = employees.reduce((sum, e) => sum + (e.salary || 0), 0);
     const departments = [...new Set(employees.map(e => e.department))].length;
+    const withUserAccounts = employees.filter(e => e.userId).length;
 
     return {
       total,
@@ -149,7 +152,8 @@ const EmployeeManagementPage: React.FC = () => {
       avgAttendance,
       avgPerformance,
       totalSalary,
-      departments
+      departments,
+      withUserAccounts
     };
   }, [employees, attendanceRecords]);
 
@@ -404,11 +408,11 @@ const EmployeeManagementPage: React.FC = () => {
         
         <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
           <div className="flex items-center gap-3">
-            <Briefcase className="w-7 h-7 text-orange-600 flex-shrink-0" />
+            <User className="w-7 h-7 text-orange-600 flex-shrink-0" />
             <div>
-              <p className="text-xs text-gray-600 mb-1">Departments</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.departments}</p>
-              <p className="text-xs text-gray-500 mt-1">{branches.length} branches</p>
+              <p className="text-xs text-gray-600 mb-1">System Access</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.withUserAccounts}</p>
+              <p className="text-xs text-gray-500 mt-1">{stats.departments} depts, {branches.length} branches</p>
             </div>
           </div>
         </div>
@@ -601,9 +605,20 @@ const EmployeeManagementPage: React.FC = () => {
                           </span>
                         </div>
                         <div>
-                          <p className="font-medium text-gray-900">
-                            {employee.firstName} {employee.lastName}
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900">
+                              {employee.firstName} {employee.lastName}
+                            </p>
+                            {employee.userId && (
+                              <span 
+                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium"
+                                title={`Has user account${employee.userRole ? ` (${employee.userRole})` : ''}`}
+                              >
+                                <User className="w-3 h-3" />
+                                {employee.userRole || 'User'}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5">
                             <Mail className="w-3 h-3 text-gray-400" />
                             <p className="text-xs text-gray-500">{employee.email}</p>
@@ -644,9 +659,9 @@ const EmployeeManagementPage: React.FC = () => {
                     </td>
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2">
-                        <Star className={`w-4 h-4 ${getPerformanceColor(employee.performance)}`} fill="currentColor" />
-                        <span className={`text-sm font-semibold ${getPerformanceColor(employee.performance)}`}>
-                          {employee.performance.toFixed(1)}
+                        <Star className={`w-4 h-4 ${getPerformanceColor(employee.performance || 0)}`} fill="currentColor" />
+                        <span className={`text-sm font-semibold ${getPerformanceColor(employee.performance || 0)}`}>
+                          {(employee.performance || 0).toFixed(1)}
                         </span>
                         <span className="text-xs text-gray-400">/5.0</span>
                       </div>
@@ -655,16 +670,16 @@ const EmployeeManagementPage: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <div className="flex-1 min-w-[60px]">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-gray-900">{employee.attendance}%</span>
+                            <span className="text-xs font-medium text-gray-900">{employee.attendance || 0}%</span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-1.5">
                             <div 
                               className={`h-1.5 rounded-full ${
-                                employee.attendance >= 90 ? 'bg-green-500' :
-                                employee.attendance >= 75 ? 'bg-blue-500' :
-                                employee.attendance >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                                (employee.attendance || 0) >= 90 ? 'bg-green-500' :
+                                (employee.attendance || 0) >= 75 ? 'bg-blue-500' :
+                                (employee.attendance || 0) >= 60 ? 'bg-yellow-500' : 'bg-red-500'
                               }`}
-                              style={{ width: `${employee.attendance}%` }}
+                              style={{ width: `${employee.attendance || 0}%` }}
                             ></div>
                           </div>
                         </div>
@@ -733,8 +748,8 @@ const EmployeeManagementPage: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {departments.map(dept => {
               const deptEmployees = filteredEmployees.filter(e => e.department === dept);
-              const avgPerf = deptEmployees.reduce((sum, e) => sum + e.performance, 0) / deptEmployees.length;
-              const avgAtt = deptEmployees.reduce((sum, e) => sum + e.attendance, 0) / deptEmployees.length;
+              const avgPerf = deptEmployees.reduce((sum, e) => sum + (e.performance || 0), 0) / deptEmployees.length;
+              const avgAtt = deptEmployees.reduce((sum, e) => sum + (e.attendance || 0), 0) / deptEmployees.length;
               
               return (
                 <div key={dept} className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
@@ -746,12 +761,12 @@ const EmployeeManagementPage: React.FC = () => {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Performance:</span>
                       <span className={`font-semibold ${getPerformanceColor(avgPerf)}`}>
-                        {avgPerf.toFixed(1)}/5.0
+                        {(avgPerf || 0).toFixed(1)}/5.0
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-600">Attendance:</span>
-                      <span className="font-semibold text-gray-900">{avgAtt.toFixed(1)}%</span>
+                      <span className="font-semibold text-gray-900">{(avgAtt || 0).toFixed(1)}%</span>
                     </div>
                   </div>
                 </div>
