@@ -272,8 +272,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.email ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.email ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                   placeholder="Enter email address"
                 />
@@ -290,8 +290,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.phone ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.phone ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                   placeholder="Enter phone number"
                 />

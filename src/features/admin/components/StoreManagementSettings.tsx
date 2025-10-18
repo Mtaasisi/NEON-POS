@@ -112,7 +112,7 @@ const StoreManagementSettings: React.FC = () => {
     share_inventory: false,
     share_suppliers: false,
     share_categories: false,
-    share_employees: false
+    share_employees: false,
     
     // Transfer Options
     allow_stock_transfer: true,
@@ -570,10 +570,10 @@ const StoreManagementSettings: React.FC = () => {
           {/* Data Isolation Mode */}
           <div className="border-t pt-4 mt-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Data Isolation Model for This Branch
+              Data Isolation Model for This Branch *
             </label>
             <p className="text-xs text-gray-500 mb-3">
-              Each branch can have its own isolation settings. Choose how this specific branch shares data with other branches.
+              <span className="font-semibold text-orange-600">Required:</span> Each branch can have its own isolation settings. Choose a mode below, then manually configure each feature.
             </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
             {[
