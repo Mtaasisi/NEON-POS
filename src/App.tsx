@@ -73,6 +73,7 @@ const EnhancedPaymentManagementPage = lazy(() => import('./features/payments/pag
 const EmployeeManagementPage = lazy(() => import('./features/employees/pages/EmployeeManagementPage'));
 const EmployeeAttendancePage = lazy(() => import('./features/employees/pages/EmployeeAttendancePage'));
 const AttendanceManagementPage = lazy(() => import('./features/employees/pages/AttendanceManagementPage'));
+const MyAttendancePage = lazy(() => import('./features/employees/pages/MyAttendancePage'));
 
 const ServiceManagementPage = lazy(() => import('./features/services/pages/ServiceManagementPage'));
 
@@ -710,6 +711,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* Employee Management Routes */}
           <Route path="/employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><EmployeeManagementPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/my-attendance" element={<Suspense fallback={<DynamicPageLoader />}><MyAttendancePage /></Suspense>} />
           
           {/* Redirect old attendance routes to employees page with appropriate tab */}
           <Route path="/employees/attendance" element={<Navigate to="/employees?tab=attendance" replace />} />

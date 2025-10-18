@@ -691,10 +691,16 @@ const StoreManagementSettings: React.FC = () => {
               ].filter(({ setting }) => !isolationSettings[setting as keyof IsolationSettings]).length > 0 && (
                 <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-xs text-yellow-800">
-                    <span className="font-semibold">Note:</span> Some features are disabled in global settings and cannot be isolated.
+                    <span className="font-semibold">Note:</span> Some features are disabled in global settings and cannot be isolated for this branch.
                   </p>
                 </div>
               )}
+              
+              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-xs text-green-800">
+                  <span className="font-semibold">💡 Example:</span> If you enable "Share Customers" (toggle ON), this branch will see customers from all other branches. If disabled (toggle OFF), this branch will have its own separate customer database.
+                </p>
+              </div>
             </div>
           )}
           </div>

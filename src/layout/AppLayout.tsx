@@ -269,6 +269,13 @@ const AppLayout: React.FC = () => {
         count: 0
       },
       {
+        path: '/my-attendance',
+        label: 'My Attendance',
+        icon: <Clock size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'manager', 'cashier', 'customer-care', 'technician', 'inventory-manager'],
+        count: 0
+      },
+      {
         path: '/services',
         label: 'Services',
         icon: <Wrench size={20} strokeWidth={1.5} />,
