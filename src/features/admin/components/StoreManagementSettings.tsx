@@ -222,7 +222,7 @@ const StoreManagementSettings: React.FC = () => {
 
     const DRAFT_KEY = `store-draft-${store.id || 'new'}`;
 
-    // Load draft on mount (silent restoration)
+    // Initialize form data when store prop changes
     useEffect(() => {
       const savedDraft = localStorage.getItem(DRAFT_KEY);
       if (savedDraft) {
@@ -237,11 +237,13 @@ const StoreManagementSettings: React.FC = () => {
           localStorage.removeItem(DRAFT_KEY);
         }
       } else {
-        // Set initial data only if no draft
+        // No draft found, use the store prop data
         setFormData(store);
+        setHasDraft(false);
+        setLastSavedDraft(null);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [DRAFT_KEY]);
+    }, [store.id, DRAFT_KEY]); // Re-run when switching between stores
 
     // Auto-save draft when form data changes (faster, silent)
     useEffect(() => {
