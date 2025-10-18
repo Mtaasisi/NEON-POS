@@ -269,14 +269,6 @@ const AppLayout: React.FC = () => {
         count: 0
       },
       {
-        path: '/reminders/enhanced',
-        label: 'Smart Reminders',
-        icon: <Bell size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'customer-care', 'technician'],
-        count: 0,
-        badge: '⚡' // Shows this is the enhanced version
-      },
-      {
         path: '/services',
         label: 'Services',
         icon: <Wrench size={20} strokeWidth={1.5} />,
