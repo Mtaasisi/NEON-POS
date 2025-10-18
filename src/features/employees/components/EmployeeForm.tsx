@@ -311,8 +311,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="text"
                   value={formData.position}
                   onChange={(e) => setFormData(prev => ({ ...prev, position: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.position ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.position ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                   placeholder="Enter job position"
                 />
@@ -352,8 +352,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="date"
                   value={formData.hireDate}
                   onChange={(e) => setFormData(prev => ({ ...prev, hireDate: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.hireDate ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.hireDate ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                 />
                 {errors.hireDate && (
@@ -369,8 +369,8 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="number"
                   value={formData.salary}
                   onChange={(e) => setFormData(prev => ({ ...prev, salary: Number(e.target.value) }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.salary ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.salary ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                   placeholder="Enter salary"
                   min="0"
@@ -408,7 +408,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="number"
                   value={formData.performance}
                   onChange={(e) => setFormData(prev => ({ ...prev, performance: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                   min="1"
                   max="5"
                   step="0.1"
@@ -423,7 +423,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="number"
                   value={formData.attendance}
                   onChange={(e) => setFormData(prev => ({ ...prev, attendance: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                   min="0"
                   max="100"
                 />
@@ -440,7 +440,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="text"
                   value={formData.manager}
                   onChange={(e) => setFormData(prev => ({ ...prev, manager: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="Enter manager name"
                 />
               </div>
@@ -453,7 +453,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="text"
                   value={formData.location}
                   onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="City or specific location"
                 />
               </div>
@@ -541,7 +541,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                   type="text"
                   value={newSkill}
                   onChange={(e) => setNewSkill(e.target.value)}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="Add a skill"
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addSkill())}
                 />

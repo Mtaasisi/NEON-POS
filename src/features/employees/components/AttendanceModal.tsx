@@ -180,9 +180,9 @@ const AttendanceModal: React.FC<AttendanceModalProps> = ({
                 type="date"
                 value={formData.date}
                 onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  errors.date ? 'border-red-500' : 'border-gray-300'
-                }`}
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.date ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
+                  }`}
               />
               {errors.date && (
                 <p className="text-red-500 text-sm mt-1">{errors.date}</p>
@@ -217,8 +217,8 @@ const AttendanceModal: React.FC<AttendanceModalProps> = ({
                   type="time"
                   value={formData.checkIn}
                   onChange={(e) => setFormData(prev => ({ ...prev, checkIn: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.checkIn ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.checkIn ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                 />
                 {errors.checkIn && (
@@ -234,8 +234,8 @@ const AttendanceModal: React.FC<AttendanceModalProps> = ({
                   type="time"
                   value={formData.checkOut}
                   onChange={(e) => setFormData(prev => ({ ...prev, checkOut: e.target.value }))}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    errors.checkOut ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.checkOut ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
                   }`}
                 />
                 {errors.checkOut && (
@@ -254,7 +254,7 @@ const AttendanceModal: React.FC<AttendanceModalProps> = ({
                   type="number"
                   value={formData.hours}
                   onChange={(e) => setFormData(prev => ({ ...prev, hours: Number(e.target.value) }))}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="0"
                   min="0"
                   step="0.5"
@@ -277,7 +277,7 @@ const AttendanceModal: React.FC<AttendanceModalProps> = ({
               <textarea
                 value={formData.notes}
                 onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors"
                 rows={3}
                 placeholder="Add any additional notes..."
               />

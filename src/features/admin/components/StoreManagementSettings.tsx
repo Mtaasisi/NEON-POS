@@ -579,24 +579,24 @@ const StoreManagementSettings: React.FC = () => {
             {[
               {
                 value: 'shared',
-                title: 'Shared Data',
-                description: 'All branches share the same database',
+                title: 'Shared Model',
+                description: 'Recommended: Share most features',
                 icon: '🌐',
-                benefits: ['Unified inventory', 'Shared customers', 'Centralized reporting']
+                benefits: ['Best for unified operations', 'Centralized data', 'Configure below']
               },
               {
                 value: 'isolated',
-                title: 'Isolated Data',
-                description: 'Each branch has completely separate data',
+                title: 'Isolated Model',
+                description: 'Recommended: Isolate most features',
                 icon: '🔒',
-                benefits: ['Independent operations', 'No data mixing', 'Branch autonomy']
+                benefits: ['Best for independence', 'Separate data', 'Configure below']
               },
               {
                 value: 'hybrid',
                 title: 'Hybrid Model',
-                description: 'Choose what to share and what to isolate',
+                description: 'Mix of shared and isolated features',
                 icon: '⚖️',
-                benefits: ['Flexible control', 'Best of both worlds', 'Custom per branch']
+                benefits: ['Complete flexibility', 'Custom configuration', 'Configure below']
               }
             ].map((mode) => (
               <button
@@ -689,9 +689,14 @@ const StoreManagementSettings: React.FC = () => {
               )}
               
               <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-xs text-green-800">
-                  <span className="font-semibold">💡 Example:</span> If you enable "Share Customers" (toggle ON), this branch will see customers from all other branches. If disabled (toggle OFF), this branch will have its own separate customer database.
+                <p className="text-xs text-green-800 mb-2">
+                  <span className="font-semibold">💡 How It Works:</span>
                 </p>
+                <ul className="text-xs text-green-800 space-y-1 ml-4 list-disc">
+                  <li><span className="font-semibold">Toggle ON (Share):</span> This branch sees data from all other branches</li>
+                  <li><span className="font-semibold">Toggle OFF (Isolate):</span> This branch has its own separate database</li>
+                  <li><span className="font-semibold">Each branch is independent:</span> Different branches can have different settings</li>
+                </ul>
               </div>
             </div>
           )}
