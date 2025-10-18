@@ -154,10 +154,11 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   };
 
   const addSkill = () => {
-    if (newSkill.trim() && !formData.skills.includes(newSkill.trim())) {
+    const skills = formData.skills || [];
+    if (newSkill.trim() && !skills.includes(newSkill.trim())) {
       setFormData(prev => ({
         ...prev,
-        skills: [...prev.skills, newSkill.trim()]
+        skills: [...(prev.skills || []), newSkill.trim()]
       }));
       setNewSkill('');
     }
@@ -166,7 +167,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
   const removeSkill = (skillToRemove: string) => {
     setFormData(prev => ({
       ...prev,
-      skills: prev.skills.filter(skill => skill !== skillToRemove)
+      skills: (prev.skills || []).filter(skill => skill !== skillToRemove)
     }));
   };
 
@@ -459,7 +460,7 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
                 </GlassButton>
               </div>
               <div className="flex flex-wrap gap-2">
-                {formData.skills.map((skill, index) => (
+                {(formData.skills || []).map((skill, index) => (
                   <span
                     key={index}
                     className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"

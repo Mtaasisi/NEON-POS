@@ -219,8 +219,32 @@ const StoreManagementSettings: React.FC = () => {
     const [isSaving, setIsSaving] = useState(false);
     const [hasDraft, setHasDraft] = useState(false);
     const [lastSavedDraft, setLastSavedDraft] = useState<Date | null>(null);
+    const [employees, setEmployees] = useState<Array<{ id: string; full_name: string }>>([]);
+    const [loadingEmployees, setLoadingEmployees] = useState(true);
 
     const DRAFT_KEY = `store-draft-${store.id || 'new'}`;
+
+    // Fetch employees for manager dropdown
+    useEffect(() => {
+      const fetchEmployees = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('employees')
+            .select('id, full_name')
+            .eq('is_active', true)
+            .order('full_name', { ascending: true });
+
+          if (error) throw error;
+          setEmployees(data || []);
+        } catch (error) {
+          console.error('Error loading employees:', error);
+        } finally {
+          setLoadingEmployees(false);
+        }
+      };
+
+      fetchEmployees();
+    }, []);
 
     // Initialize form data when store prop changes
     useEffect(() => {
@@ -437,13 +461,22 @@ const StoreManagementSettings: React.FC = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Store Manager
               </label>
-              <input
-                type="text"
+              <select
                 value={formData.manager_name || ''}
                 onChange={(e) => setFormData({ ...formData, manager_name: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
-                placeholder="Manager name"
-              />
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-colors"
+                disabled={loadingEmployees}
+              >
+                <option value="">Select a manager</option>
+                {employees.map((employee) => (
+                  <option key={employee.id} value={employee.full_name}>
+                    {employee.full_name}
+                  </option>
+                ))}
+              </select>
+              {loadingEmployees && (
+                <p className="text-xs text-gray-500 mt-1">Loading employees...</p>
+              )}
             </div>
           </div>
 
