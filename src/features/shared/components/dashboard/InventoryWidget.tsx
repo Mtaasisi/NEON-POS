@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Package, AlertTriangle, TrendingDown, ExternalLink, ShoppingCart } from 'lucide-react';
-import GlassCard from '../ui/GlassCard';
-import GlassButton from '../ui/GlassButton';
+import { Package, AlertTriangle, TrendingDown, ExternalLink } from 'lucide-react';
 import { dashboardService, InventoryAlert } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
 
@@ -33,6 +31,12 @@ export const InventoryWidget: React.FC<InventoryWidgetProps> = ({ className }) =
         dashboardService.getInventoryAlerts(4),
         dashboardService.getDashboardStats(currentUser?.id || '')
       ]);
+      
+      console.log('📦 Inventory Value:', {
+        raw: dashboardStats.inventoryValue,
+        type: typeof dashboardStats.inventoryValue,
+        asString: String(dashboardStats.inventoryValue)
+      });
       
       setAlerts(inventoryAlerts);
       setStats({
@@ -75,77 +79,102 @@ export const InventoryWidget: React.FC<InventoryWidgetProps> = ({ className }) =
   };
 
   const formatLargeNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
+    // Handle invalid values
+    if (!num || isNaN(num) || num < 0) {
+      return 'TSh 0';
+    }
+    
+    // Convert to proper number if it's a string
+    const value = typeof num === 'string' ? parseFloat(num) : num;
+    
+    if (value >= 1000000000) {
+      return `TSh ${(value / 1000000000).toFixed(1)}B`;
+    }
+    if (value >= 1000000) {
+      return `TSh ${(value / 1000000).toFixed(1)}M`;
+    }
+    if (value >= 1000) {
+      return `TSh ${(value / 1000).toFixed(1)}K`;
+    }
+    return `TSh ${value.toLocaleString()}`;
   };
 
   if (isLoading) {
     return (
-      <GlassCard className={`p-6 ${className}`}>
+      <div className={`bg-white rounded-2xl p-7 ${className}`}>
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-75"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+          </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-orange-100 to-red-100 rounded-lg">
-            <Package className="w-5 h-5 text-orange-600" />
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <Package className="w-5 h-5 text-gray-700" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Inventory Status</h3>
-            <p className="text-sm text-gray-600">
-              {stats.total} products • {formatCurrency(stats.value)} value
+            <h3 className="text-base font-semibold text-gray-900">Inventory Status</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {stats.total} products tracked
             </p>
           </div>
         </div>
         
         {(stats.lowStock > 0 || stats.critical > 0) && (
-          <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-            <AlertTriangle size={12} />
-            {stats.lowStock + stats.critical}
+          <div className="px-3 py-1.5 rounded-full bg-rose-50">
+            <span className="text-xs font-medium text-rose-500">{stats.lowStock + stats.critical}</span>
           </div>
         )}
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="text-center p-2 bg-red-50 rounded-lg">
-          <p className="text-lg font-bold text-red-700">{stats.critical}</p>
-          <p className="text-xs text-red-600">Critical</p>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Critical</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.critical}</p>
         </div>
-        <div className="text-center p-2 bg-orange-50 rounded-lg">
-          <p className="text-lg font-bold text-orange-700">{stats.lowStock}</p>
-          <p className="text-xs text-orange-600">Low Stock</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Low Stock</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.lowStock}</p>
         </div>
-        <div className="text-center p-2 bg-green-50 rounded-lg">
-          <p className="text-lg font-bold text-green-700">{formatLargeNumber(stats.value)}</p>
-          <p className="text-xs text-green-600">Value</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Value</p>
+          <p className="text-2xl font-semibold text-gray-900">{formatLargeNumber(stats.value)}</p>
         </div>
       </div>
 
       {/* Inventory Alerts */}
-      <div className="space-y-2 h-48 overflow-y-auto">
+      <div className="space-y-3 max-h-64 overflow-y-auto mb-6">
         {alerts.length > 0 ? (
           alerts.map((alert) => (
-            <div key={alert.id} className={`p-3 bg-white rounded-lg border ${getAlertColor(alert.alertLevel)}`}>
+            <div key={alert.id} className={`p-3 rounded-lg ${
+              alert.alertLevel === 'out-of-stock' ? 'bg-rose-50' :
+              alert.alertLevel === 'critical' ? 'bg-amber-50' :
+              'bg-gray-50'
+            } hover:opacity-80 transition-opacity`}>
               <div className="flex items-center gap-2">
-                {getAlertIcon(alert.alertLevel)}
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 text-sm truncate">
                     {alert.productName}
                   </p>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-gray-600">
+                    <span className="text-xs text-gray-500">
                       {alert.category}
                     </span>
-                    <span className="text-xs font-medium text-gray-700">
+                    <span className={`text-xs font-medium ${
+                      alert.alertLevel === 'out-of-stock' ? 'text-rose-600' :
+                      alert.alertLevel === 'critical' ? 'text-amber-600' :
+                      'text-gray-600'
+                    }`}>
                       {alert.currentStock}/{alert.minimumStock} units
                     </span>
                   </div>
@@ -154,33 +183,25 @@ export const InventoryWidget: React.FC<InventoryWidgetProps> = ({ className }) =
             </div>
           ))
         ) : (
-          <div className="text-center py-4">
-            <Package className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600">All stock levels normal</p>
+          <div className="text-center py-12">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+              <Package className="w-6 h-6 text-gray-400" />
+            </div>
+            <p className="text-sm text-gray-500">All stock levels normal</p>
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-        <GlassButton
+      <div className="flex gap-2">
+        <button
           onClick={() => navigate('/lats/unified-inventory')}
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          icon={<ExternalLink size={14} />}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
-          Manage Stock
-        </GlassButton>
-        <GlassButton
-          onClick={() => navigate('/lats/purchase-orders')}
-          variant="ghost"
-          size="sm"
-          icon={<ShoppingCart size={14} />}
-        >
-          Reorder
-        </GlassButton>
+          <ExternalLink size={14} />
+          <span>Manage Inventory</span>
+        </button>
       </div>
-    </GlassCard>
+    </div>
   );
 };

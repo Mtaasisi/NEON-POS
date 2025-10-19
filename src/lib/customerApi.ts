@@ -85,17 +85,21 @@ function normalizeColorTag(colorTag: string): 'new' | 'vip' | 'complainer' | 'pu
 // Pagination function
 export async function fetchCustomersPaginated(page: number = 1, pageSize: number = 50) {
   try {
-    console.log(`📄 Fetching customers page ${page} with size ${pageSize} (SHARED ACROSS ALL BRANCHES)`);
+    console.log(`📄 Fetching customers page ${page} with size ${pageSize}`);
     
     const offset = (page - 1) * pageSize;
     
-    const query = supabase
+    let query = supabase
       .from('customers')
       .select(`
         id, name, email, phone, created_at, branch_id, is_shared, created_by_branch_name
       `, { count: 'exact' })
       .range(offset, offset + pageSize - 1)
       .order('created_at', { ascending: false });
+    
+    // Apply branch filtering using branchAwareApi helper
+    const { addBranchFilter } = await import('./branchAwareApi');
+    query = await addBranchFilter(query, 'customers');
     
     const { data, error, count } = await query;
     

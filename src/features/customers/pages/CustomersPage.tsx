@@ -81,7 +81,9 @@ const CustomersPage = () => {
   const [showExcelImport, setShowExcelImport] = useState(false);
   const [showCustomerUpdateImport, setShowCustomerUpdateImport] = useState(false);
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
+  const [showImportMenu, setShowImportMenu] = useState(false);
   const [showCustomerDetailModal, setShowCustomerDetailModal] = useState(false);
+  const importButtonRef = useRef<HTMLDivElement>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1250,40 +1252,50 @@ const CustomersPage = () => {
                 New Customer
               </GlassButton>
               {['admin', 'customer-care'].includes(currentUser?.role || '') && (
-                <>
-                  <GlassButton
-                    onClick={() => navigate('/customers/import')}
-                    icon={<FileSpreadsheet size={18} />}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
+                <div className="relative">
+                  <div ref={importButtonRef}>
+                    <GlassButton
+                      onClick={() => setShowImportMenu(!showImportMenu)}
+                      icon={<FileSpreadsheet size={18} />}
+                      className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
+                    >
+                      Import / Update
+                      <ChevronRight 
+                        size={16} 
+                        className={`ml-1 transition-transform ${showImportMenu ? 'rotate-90' : ''}`} 
+                      />
+                    </GlassButton>
+                  </div>
+                  
+                  <DropdownPortal
+                    open={showImportMenu}
+                    onClose={() => setShowImportMenu(false)}
+                    anchorRef={importButtonRef}
                   >
-                    Import Excel
-                  </GlassButton>
-                  <GlassButton
-                    onClick={() => setShowExcelImport(true)}
-                    icon={<FileSpreadsheet size={18} />}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 text-white"
-                  >
-                    Import New
-                  </GlassButton>
-                  <GlassButton
-                    onClick={() => {
-
-                      setShowCustomerUpdateImport(true);
-
-                    }}
-                    icon={<RefreshCw size={18} />}
-                    className="bg-gradient-to-r from-orange-500 to-red-600 text-white"
-                  >
-                    Update Existing
-                  </GlassButton>
-                  <GlassButton
-                    onClick={() => navigate('/customers/update-data')}
-                    icon={<RotateCcw size={18} />}
-                    className="bg-gradient-to-r from-orange-500 to-red-600 text-white"
-                  >
-                    Update Data
-                  </GlassButton>
-                </>
+                    <div className="py-1 min-w-[200px]">
+                      <button
+                        onClick={() => {
+                          setShowExcelImport(true);
+                          setShowImportMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <FileSpreadsheet size={16} />
+                        Import New Customers
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCustomerUpdateImport(true);
+                          setShowImportMenu(false);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <RefreshCw size={16} />
+                        Update Existing Customers
+                      </button>
+                    </div>
+                  </DropdownPortal>
+                </div>
               )}
             </>
           ) : (

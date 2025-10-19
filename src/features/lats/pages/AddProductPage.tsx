@@ -22,7 +22,6 @@ import { validateAndCreateDefaultVariant } from '../lib/variantUtils';
 
 // Extracted components
 import ProductInformationForm from '../components/product/ProductInformationForm';
-import PricingAndStockForm from '../components/product/PricingAndStockForm';
 import ProductVariantsSection from '../components/product/ProductVariantsSection';
 import StorageLocationForm from '../components/product/StorageLocationForm';
 import ProductSuccessModal from '../components/product/ProductSuccessModal';
@@ -110,10 +109,20 @@ const AddProductPageOptimized: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  // Variants state
-  const [variants, setVariants] = useState<ProductVariant[]>([]);
-  const [showVariants, setShowVariants] = useState(false);
-  const [useVariants, setUseVariants] = useState(false);
+  // Variants state - Always enabled by default with one initial variant
+  const [variants, setVariants] = useState<ProductVariant[]>([
+    {
+      name: 'Variant 1',
+      sku: '',
+      costPrice: 0,
+      price: 0,
+      stockQuantity: 0,
+      minStockLevel: 2,
+      attributes: {}
+    }
+  ]);
+  const [showVariants, setShowVariants] = useState(true);
+  const [useVariants, setUseVariants] = useState(true);
   const [isReorderingVariants, setIsReorderingVariants] = useState(false);
   const [draggedVariantIndex, setDraggedVariantIndex] = useState<number | null>(null);
 
@@ -144,6 +153,18 @@ const AddProductPageOptimized: React.FC = () => {
     };
   }, [showProductSpecificationsModal, showVariantSpecificationsModal]);
 
+  // Auto-update variant SKUs when base SKU changes
+  useEffect(() => {
+    if (variants.length > 0 && formData.sku) {
+      setVariants(prevVariants => 
+        prevVariants.map((variant, index) => ({
+          ...variant,
+          sku: `${formData.sku}-V${(index + 1).toString().padStart(2, '0')}`
+        }))
+      );
+    }
+  }, [formData.sku]);
+
   // Name checking
   const [isCheckingName, setIsCheckingName] = useState(false);
   const [nameExists, setNameExists] = useState(false);
@@ -160,47 +181,12 @@ const AddProductPageOptimized: React.FC = () => {
 
   const { currentUser } = useAuth();
 
-  // Function to create a variant from current form data
-  const createVariantFromFormData = (): ProductVariant => {
-    return {
-      name: 'Variant 1',
-      sku: `${formData.sku}-V01`,
-      costPrice: formData.costPrice,
-      price: formData.price,
-      stockQuantity: formData.stockQuantity,
-      minStockLevel: formData.minStockLevel,
-      specification: formData.specification,
-      attributes: {
-        specification: formData.specification || null
-      }
-    };
-  };
-
-  // Handle variants toggle - automatically create variant from form data
+  // Handle variants toggle - kept for compatibility but variants are always enabled
   const handleUseVariantsToggle = (enabled: boolean) => {
-    setUseVariants(enabled);
-    
-    if (enabled && variants.length === 0) {
-      // Create a variant from current form data
-      const autoVariant = createVariantFromFormData();
-      setVariants([autoVariant]);
-      setShowVariants(true);
-    } else if (!enabled) {
-      // Clear variants when disabling
-      setVariants([]);
-      setShowVariants(false);
-    }
+    // Variants are always enabled in the new design
+    // This function is kept for compatibility with child components
+    return;
   };
-
-  // Update the first variant when form data changes (if variants are enabled)
-  useEffect(() => {
-    if (useVariants && variants.length > 0) {
-      const updatedVariant = createVariantFromFormData();
-      setVariants(prev => prev.map((variant, index) => 
-        index === 0 ? { ...variant, ...updatedVariant } : variant
-      ));
-    }
-  }, [formData.costPrice, formData.price, formData.stockQuantity, formData.minStockLevel, formData.specification, useVariants]);
 
   // Draft storage key
   const DRAFT_KEY = `product_draft_${currentUser?.id || 'anonymous'}`;
@@ -231,9 +217,10 @@ const AddProductPageOptimized: React.FC = () => {
   const handleCreateAnother = () => {
     setShowSuccessModal(false);
     // Reset form completely
+    const newSku = generateAutoSKU();
     setFormData({
       name: '',
-      sku: generateAutoSKU(),
+      sku: newSku,
       categoryId: '',
   
       condition: 'new' as 'new' | 'used' | 'refurbished',
@@ -248,9 +235,18 @@ const AddProductPageOptimized: React.FC = () => {
       metadata: {},
       variants: []
     });
-    setVariants([]);
-    setUseVariants(false);
-    setShowVariants(false);
+    // Reset to one default variant
+    setVariants([{
+      name: 'Variant 1',
+      sku: `${newSku}-V01`,
+      costPrice: 0,
+      price: 0,
+      stockQuantity: 0,
+      minStockLevel: 2,
+      attributes: {}
+    }]);
+    setUseVariants(true);
+    setShowVariants(true);
     navigate('/lats/add-product');
   };
 
@@ -333,8 +329,18 @@ const AddProductPageOptimized: React.FC = () => {
       if (draftData) {
         const parsed = JSON.parse(draftData);
         setFormData(parsed.formData);
-        setVariants(parsed.variants || []);
-        setUseVariants(parsed.useVariants || false);
+        setVariants(parsed.variants || [{
+          name: 'Variant 1',
+          sku: `${parsed.formData?.sku || ''}-V01`,
+          costPrice: 0,
+          price: 0,
+          stockQuantity: 0,
+          minStockLevel: 2,
+          attributes: {}
+        }]);
+        // Always keep variants enabled in the new design
+        setUseVariants(true);
+        setShowVariants(true);
         setLastDraftSave(new Date(parsed.savedAt));
         // toast.success('Draft restored successfully!'); // Disabled popup notification
         return true;
@@ -614,10 +620,10 @@ const AddProductPageOptimized: React.FC = () => {
         : ((formData.stockQuantity || 0) * (formData.price || 0));
 
       // Prepare product data WITHOUT images (images will be saved separately)
-      // When using variants, don't put variant data in main product fields
+      // When using variants, the product still needs a base SKU (for variant SKU generation)
       
-      // Generate SKU if empty
-      const finalSku = useVariants ? null : (formData.sku || generateAutoSKU());
+      // Always generate/use SKU - it's the base for variant SKUs
+      const finalSku = formData.sku || generateAutoSKU();
       
       // Prepare attributes with specification and condition if available
       const productAttributes = {
@@ -642,7 +648,7 @@ const AddProductPageOptimized: React.FC = () => {
         total_quantity: totalQuantity,
         total_value: totalValue,
         storage_room_id: formData.storageRoomId || null,
-        store_shelf_id: formData.shelfId || null,
+        shelf_id: formData.shelfId || null,
         // Don't send empty array - it causes "cannot determine type" error in PostgreSQL
         // tags: [],
         attributes: productAttributes,
@@ -971,18 +977,7 @@ const AddProductPageOptimized: React.FC = () => {
               onGenerateSKU={generateAutoSKU}
             />
 
-
-
-            {/* Pricing and Stock Form - Only show when not using variants */}
-            {!useVariants && (
-              <PricingAndStockForm
-                formData={formData}
-                setFormData={setFormData}
-                currentErrors={currentErrors}
-              />
-            )}
-
-            {/* Product Variants Section */}
+            {/* Product Variants Section - Always visible */}
             <ProductVariantsSection
               variants={variants}
               setVariants={setVariants}

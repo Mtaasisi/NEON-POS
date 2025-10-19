@@ -14,6 +14,8 @@ import { PaymentMethodsProvider } from './context/PaymentMethodsContext';
 import { ErrorProvider } from './context/ErrorContext';
 import ErrorManager from './components/ErrorManager';
 import { Toaster } from 'react-hot-toast';
+// Load branch debugging tools (makes them available in console)
+import './lib/branchDataCleanup';
 
 // import BackgroundSelector from './features/settings/components/BackgroundSelector';
 import GlobalLoadingProgress from './features/shared/components/ui/GlobalLoadingProgress';

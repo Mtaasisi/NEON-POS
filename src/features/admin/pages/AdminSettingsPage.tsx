@@ -28,12 +28,16 @@ import APIWebhooksSettings from '../components/APIWebhooksSettings';
 import LoyaltyProgramSettings from '../components/LoyaltyProgramSettings';
 import DocumentTemplatesSettings from '../components/DocumentTemplatesSettings';
 import InventorySettings from '../components/InventorySettings';
+import BranchIsolationDebugPanel from '../components/BranchIsolationDebugPanel';
+import { BranchDataCleanupPanel } from '../components/BranchDataCleanupPanel';
+import { BranchProductManagement } from '../components/BranchProductManagement';
 import { 
   Settings,
   Database,
   Server,
   Shield,
   Bell,
+  Bug,
   Mail,
   Smartphone,
   Globe,
@@ -556,6 +560,7 @@ const AdminSettingsPage: React.FC = () => {
                 {[
                   { id: 'branding', label: 'Business Information', icon: Building2 },
                   { id: 'stores', label: 'Store Management', icon: MapPin },
+                  { id: 'branch-debug', label: 'Branch Isolation Debug', icon: Bug },
                   { id: 'inventory', label: 'Inventory', icon: Package },
                   { id: 'payments', label: 'Payments', icon: CreditCard },
                   { id: 'attendance', label: 'Attendance', icon: Users },
@@ -593,6 +598,16 @@ const AdminSettingsPage: React.FC = () => {
 
             {activeSection === 'stores' && (
               <StoreManagementSettings />
+            )}
+
+            {activeSection === 'branch-debug' && (
+              <>
+                <BranchIsolationDebugPanel />
+                <BranchDataCleanupPanel />
+                <div className="mt-6">
+                  <BranchProductManagement />
+                </div>
+              </>
             )}
 
             {activeSection === 'inventory' && (

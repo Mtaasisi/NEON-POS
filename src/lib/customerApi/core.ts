@@ -168,23 +168,51 @@ async function performFetchAllCustomers() {
       console.log('👥 FETCHING CUSTOMERS - START');
       console.log('═══════════════════════════════════════════════════════');
       
-      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+      // 🔒 CHECK BRANCH ISOLATION MODE
       const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      // Get branch settings to determine isolation mode
+      let isolationMode: 'shared' | 'isolated' | 'hybrid' = 'shared';
+      let shareCustomers = true;
+      
+      if (currentBranchId) {
+        try {
+          const { data: branchSettings } = await checkSupabase()
+            .from('store_locations')
+            .select('data_isolation_mode, share_customers')
+            .eq('id', currentBranchId)
+            .single();
+          
+          if (branchSettings) {
+            isolationMode = branchSettings.data_isolation_mode;
+            shareCustomers = isolationMode === 'shared' || 
+                           (isolationMode === 'hybrid' && branchSettings.share_customers);
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not fetch branch settings, defaulting to shared mode');
+        }
+      }
       
       console.log('🏪 Branch Configuration:');
       console.log('   - Current Branch ID:', currentBranchId || '❌ NOT SET');
-      console.log('   - 🌐 CUSTOMERS: SHARED ACROSS ALL BRANCHES');
-      console.log('   - 📊 Will fetch ALL customers from ALL branches');
+      console.log('   - Isolation Mode:', isolationMode);
+      console.log('   - Share Customers:', shareCustomers);
+      console.log('   - 📊 Will fetch:', shareCustomers ? 'ALL customers' : 'ONLY branch customers');
       
       console.log('');
       console.log('🔍 Step 1: Counting total customers...');
 
-      // First, let's get a simple count to see how many customers exist (ALL CUSTOMERS)
+      // Count customers based on isolation mode
       const { count, error: countError } = await withTimeout(
         retryRequest(async () => {
-          const countQuery = checkSupabase()
+          let countQuery = checkSupabase()
             .from('customers')
             .select('id', { count: 'exact', head: true });
+          
+          // Apply branch filter in isolated mode
+          if (currentBranchId && !shareCustomers) {
+            countQuery = countQuery.eq('branch_id', currentBranchId);
+          }
           
           const result = await countQuery;
           
@@ -242,7 +270,7 @@ async function performFetchAllCustomers() {
         try {
           const { data: pageData, error: pageError } = await withTimeout(
             retryRequest(async () => {
-              const query = checkSupabase()
+              let query = checkSupabase()
                 .from('customers')
                 .select(`
                   id,name,phone,email,whatsapp,gender,city,country,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,birthday,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared,created_by_branch_id,created_by_branch_name,profile_image,whatsapp_opt_out,referred_by,created_by,last_purchase_date,total_purchases,total_calls,total_call_duration_minutes,incoming_calls,outgoing_calls,missed_calls,avg_call_duration_minutes,first_call_date,last_call_date,call_loyalty_level,total_returns
@@ -250,7 +278,14 @@ async function performFetchAllCustomers() {
                 .range(from, to)
                 .order('created_at', { ascending: false});
               
-              console.log(`   🌐 Fetching ALL customers for page ${page} (shared across branches)`);
+              // Apply branch filter in isolated mode
+              if (currentBranchId && !shareCustomers) {
+                // Show customers from this branch OR customers marked as shared
+                query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+                console.log(`   🔒 Fetching ISOLATED customers for page ${page} (branch: ${currentBranchId} OR is_shared=true)`);
+              } else {
+                console.log(`   🌐 Fetching ALL customers for page ${page} (shared across branches)`);
+              }
               
               const result = await query;
               
@@ -390,7 +425,6 @@ async function performFetchAllCustomers() {
                 promoHistory: [],
                 // Branch information
                 branchId: customer.branch_id,
-                branchName: customer.store_locations?.name || customer.created_by_branch_name,
                 createdByBranchId: customer.created_by_branch_id,
                 createdByBranchName: customer.created_by_branch_name
               };
@@ -514,16 +548,47 @@ async function performFetchAllCustomersSimple() {
 
   if (navigator.onLine) {
     try {
-      // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
+      // 🔒 CHECK BRANCH ISOLATION MODE
       const currentBranchId = localStorage.getItem('current_branch_id');
-      console.log('🔍 Fetching ALL customers from database (no limits)... Customers: SHARED ACROSS ALL BRANCHES');
       
-      // First, get the total count (ALL CUSTOMERS)
+      // Get branch settings to determine isolation mode
+      let isolationMode: 'shared' | 'isolated' | 'hybrid' = 'shared';
+      let shareCustomers = true;
+      
+      if (currentBranchId) {
+        try {
+          const { data: branchSettings } = await checkSupabase()
+            .from('store_locations')
+            .select('data_isolation_mode, share_customers')
+            .eq('id', currentBranchId)
+            .single();
+          
+          if (branchSettings) {
+            isolationMode = branchSettings.data_isolation_mode;
+            shareCustomers = isolationMode === 'shared' || 
+                           (isolationMode === 'hybrid' && branchSettings.share_customers);
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not fetch branch settings, defaulting to shared mode');
+        }
+      }
+      
+      console.log('🔍 Fetching customers from database (no limits)...');
+      console.log('   - Isolation Mode:', isolationMode);
+      console.log('   - Share Customers:', shareCustomers);
+      console.log('   - Will fetch:', shareCustomers ? 'ALL customers' : 'ONLY branch customers');
+      
+      // First, get the total count
       const countResult = await withTimeout(
         retryRequest(async () => {
-          const countQuery = checkSupabase()
+          let countQuery = checkSupabase()
             .from('customers')
             .select('id', { count: 'exact', head: true });
+          
+          // Apply branch filter in isolated mode
+          if (currentBranchId && !shareCustomers) {
+            countQuery = countQuery.eq('branch_id', currentBranchId);
+          }
           
           const result = await countQuery;
           return result;
@@ -548,7 +613,7 @@ async function performFetchAllCustomersSimple() {
       if ((customerCount > 0 || customerCount === -1) && (customerCount <= 100000 || customerCount === -1)) { // 100k limit for safety, but allow -1 (undefined)
         const { data, error } = await withTimeout(
           retryRequest(async () => {
-            const query = checkSupabase()
+            let query = checkSupabase()
               .from('customers')
               .select(`
                 id,name,phone,email,whatsapp,gender,city,country,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,birthday,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared,created_by_branch_id,created_by_branch_name,profile_image,whatsapp_opt_out,referred_by,created_by,last_purchase_date,total_purchases,total_calls,total_call_duration_minutes,incoming_calls,outgoing_calls,missed_calls,avg_call_duration_minutes,first_call_date,last_call_date,call_loyalty_level,total_returns
@@ -556,7 +621,14 @@ async function performFetchAllCustomersSimple() {
               .order('created_at', { ascending: false })
               .limit(100000); // High limit to get all customers
             
-            console.log('   🌐 Fetching ALL customers (shared across branches)');
+            // Apply branch filter in isolated mode
+            if (currentBranchId && !shareCustomers) {
+              // Show customers from this branch OR customers marked as shared
+              query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+              console.log('   🔒 Fetching ISOLATED customers (branch:', currentBranchId, 'OR is_shared=true)');
+            } else {
+              console.log('   🌐 Fetching ALL customers (shared across branches)');
+            }
             
             const result = await query;
             
@@ -677,7 +749,6 @@ async function performFetchAllCustomersSimple() {
               promoHistory: [],
               // Branch information
               branchId: customer.branch_id,
-              branchName: customer.store_locations?.name || customer.created_by_branch_name,
               createdByBranchId: customer.created_by_branch_id,
               createdByBranchName: customer.created_by_branch_name
             };
@@ -734,9 +805,13 @@ async function performFetchAllCustomersSimple() {
               .order('created_at', { ascending: false })
               .limit(100000); // Increased limit for large datasets
             
-            // 🔒 COMPLETE ISOLATION: Only show customers from current branch
-            if (currentBranchId) {
-              query = query.eq('branch_id', currentBranchId);
+            // Apply branch filter in isolated mode
+            if (currentBranchId && !shareCustomers) {
+              // Show customers from this branch OR customers marked as shared
+              query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+              console.log('   🔒 Fetching ISOLATED customers (fallback) (branch:', currentBranchId, 'OR is_shared=true)');
+            } else {
+              console.log('   🌐 Fetching ALL customers (fallback) (shared across branches)');
             }
             
             const result = await query;

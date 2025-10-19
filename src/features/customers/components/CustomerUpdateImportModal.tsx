@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { X, Upload, Download, AlertCircle, CheckCircle, UserPlus, FileText, Info, Shield, SkipForward, Eye, EyeOff, RefreshCw } from 'lucide-react';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import { Customer } from '../../../types';
 import { toast } from 'react-hot-toast';
 import { updateCustomerInDb, fetchAllCustomersSimple } from '../../../lib/customerApi';
@@ -708,34 +706,41 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <GlassCard className="w-full max-w-4xl h-[80vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
+      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/20">
-          <div className="flex items-center space-x-3">
-            <RefreshCw className="w-5 h-5 text-blue-400" />
-            <h2 className="text-xl font-bold text-white">Update Customers from CSV</h2>
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <RefreshCw className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Update Customers from CSV</h3>
+                <p className="text-xs text-gray-500">Update existing customer records with new data</p>
+              </div>
+            </div>
+            <button
+              onClick={handleClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-white" />
-          </button>
         </div>
 
         {/* Content */}
         <div className="flex-1 flex overflow-hidden">
           {/* Sidebar */}
           {sidebarOpen && (
-            <div className="w-64 bg-white/5 border-r border-white/20 p-4 overflow-y-auto">
+            <div className="w-72 bg-gray-50 border-r border-gray-200 p-6 overflow-y-auto">
               <div className="space-y-4">
                 {/* Upload Section */}
                 {currentStep === 'upload' && (
                   <div className="space-y-4">
-                    <div className="text-center p-6 border-2 border-dashed border-white/30 rounded-lg">
-                      <Upload className="w-10 h-10 text-blue-300 mx-auto mb-3" />
-                      <p className="text-white font-medium mb-3">Upload CSV file to update existing customers</p>
+                    <div className="text-center p-6 border-2 border-dashed border-gray-300 rounded-lg bg-white hover:border-blue-400 transition-colors">
+                      <Upload className="w-10 h-10 text-blue-500 mx-auto mb-3" />
+                      <p className="text-gray-700 font-medium mb-3 text-sm">Upload CSV file to update existing customers</p>
                       <input
                         ref={fileInputRef}
                         type="file"
@@ -743,106 +748,108 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
                         onChange={handleFileSelect}
                         className="hidden"
                       />
-                      <GlassButton
+                      <button
                         onClick={() => fileInputRef.current?.click()}
-                        className="w-full"
                         disabled={isProcessing}
+                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {isProcessing ? 'Processing...' : 'Choose CSV File'}
-                      </GlassButton>
+                      </button>
                     </div>
                     
-                    <div className="space-y-2">
-                      <GlassButton
-                        onClick={downloadTemplate}
-                        variant="outline"
-                        className="w-full"
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Download Template
-                      </GlassButton>
-                    </div>
+                    <button
+                      onClick={downloadTemplate}
+                      className="w-full px-4 py-2 border-2 border-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download Template
+                    </button>
                   </div>
                 )}
 
                 {/* Preview Section */}
                 {currentStep === 'preview' && (
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-white">Preview</h3>
-                      <GlassButton
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900">Preview</h3>
+                      <button
                         onClick={toggleShowMatchedOnly}
-                        variant="outline"
-                        size="sm"
+                        className="px-3 py-1 text-xs border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
                       >
-                        {showMatchedOnly ? 'Show All' : 'Show Matched Only'}
-                      </GlassButton>
+                        {showMatchedOnly ? 'Show All' : 'Matched Only'}
+                      </button>
                     </div>
                     
-                    <div className="space-y-2">
-                      <div className="text-sm text-white font-medium">
-                        Total: {importedData.length}
+                    <div className="space-y-2 bg-white p-4 rounded-lg border border-gray-200">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Total:</span>
+                        <span className="font-semibold text-gray-900">{importedData.length}</span>
                       </div>
-                      <div className="text-sm text-green-300 font-medium">
-                        Matched: {matchedCustomers.size}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Matched:</span>
+                        <span className="font-semibold text-green-600">{matchedCustomers.size}</span>
                       </div>
-                      <div className="text-sm text-yellow-300 font-medium">
-                        Unmatched: {importedData.length - matchedCustomers.size}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Unmatched:</span>
+                        <span className="font-semibold text-yellow-600">{importedData.length - matchedCustomers.size}</span>
                       </div>
                     </div>
                     
                     {validationErrors.length > 0 && (
-                      <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-3">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <AlertCircle className="w-4 h-4 text-yellow-400" />
-                          <span className="text-sm font-medium text-yellow-400">
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertCircle className="w-4 h-4 text-yellow-600" />
+                          <span className="text-sm font-medium text-yellow-800">
                             {validationErrors.length} Validation Errors
                           </span>
                         </div>
-                        <div className="text-xs text-yellow-300 max-h-32 overflow-y-auto">
+                        <div className="text-xs text-yellow-700 max-h-32 overflow-y-auto space-y-1">
                           {validationErrors.slice(0, 5).map((error, index) => (
-                            <div key={index} className="mb-1">• {error}</div>
+                            <div key={index}>• {error}</div>
                           ))}
                           {validationErrors.length > 5 && (
-                            <div className="text-yellow-400">... and {validationErrors.length - 5} more</div>
+                            <div className="font-medium">... and {validationErrors.length - 5} more</div>
                           )}
                         </div>
                       </div>
                     )}
                     
-                    <GlassButton
+                    <button
                       onClick={handleImport}
-                      className="w-full"
                       disabled={matchedCustomers.size === 0 || isImporting}
+                      className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isImporting ? 'Updating...' : `Update ${matchedCustomers.size} Customers`}
-                    </GlassButton>
+                    </button>
                   </div>
                 )}
 
                 {/* Import Results Section */}
                 {currentStep === 'import' && (
                   <div className="space-y-4">
-                    <h3 className="text-lg font-semibold text-white">Import Results</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Import Results</h3>
                     
-                    <div className="space-y-2">
-                      <div className="text-sm text-green-400">
-                        Updated: {importResults.filter(r => r.success).length}
+                    <div className="space-y-2 bg-white p-4 rounded-lg border border-gray-200">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Updated:</span>
+                        <span className="font-semibold text-green-600">{importResults.filter(r => r.success).length}</span>
                       </div>
-                      <div className="text-sm text-yellow-400">
-                        Skipped: {importResults.filter(r => r.skipped).length}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Skipped:</span>
+                        <span className="font-semibold text-yellow-600">{importResults.filter(r => r.skipped).length}</span>
                       </div>
-                      <div className="text-sm text-red-400">
-                        Errors: {importResults.filter(r => !r.success && !r.skipped).length}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Errors:</span>
+                        <span className="font-semibold text-red-600">{importResults.filter(r => !r.success && !r.skipped).length}</span>
                       </div>
                     </div>
                     
-                    <GlassButton
+                    <button
                       onClick={handleClose}
-                      className="w-full"
+                      className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                     >
                       Close
-                    </GlassButton>
+                    </button>
                   </div>
                 )}
               </div>
@@ -850,98 +857,113 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
           )}
 
           {/* Main Content */}
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden flex flex-col">
             {/* Progress Bar */}
             {isImporting && (
-              <div className="p-4 border-b border-white/20">
-                <div className="flex items-center space-x-3">
-                  <div className="flex-1 bg-white/10 rounded-full h-2">
+              <div className="p-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 bg-gray-200 rounded-full h-2">
                     <div
                       className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${importProgress}%` }}
                     />
                   </div>
-                                          <span className="text-sm text-white font-bold">{Math.round(importProgress)}%</span>
+                  <span className="text-sm text-gray-700 font-semibold min-w-[40px]">{Math.round(importProgress)}%</span>
                 </div>
               </div>
             )}
 
             {/* Content Area */}
-            <div className="h-full overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-6">
               {currentStep === 'upload' && (
-                <div className="text-center py-12">
-                  <FileText className="w-16 h-16 text-blue-300 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-white mb-2">
+                <div className="text-center py-12 max-w-xl mx-auto">
+                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-10 h-10 text-blue-600" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
                     Update Existing Customers
                   </h3>
-                  <p className="text-white font-medium max-w-md mx-auto">
+                  <p className="text-gray-600 max-w-md mx-auto mb-6">
                     Upload a CSV file to update existing customer records. 
-                    Only null fields in existing customers will be updated.
+                    Only empty fields in existing customers will be filled with new data.
                   </p>
+                  
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+                      <Info className="w-4 h-4" />
+                      How it works
+                    </h4>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• Customers are matched by phone number</li>
+                      <li>• Only empty/null fields will be updated</li>
+                      <li>• Existing data is never overwritten</li>
+                      <li>• You'll see a preview before confirming</li>
+                    </ul>
+                  </div>
                 </div>
               )}
 
               {currentStep === 'preview' && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-semibold text-white">
+                    <h3 className="text-xl font-semibold text-gray-900">
                       Preview ({visibleCustomers.length} customers)
                     </h3>
                     <button
                       onClick={() => setSidebarOpen(!sidebarOpen)}
-                      className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-600"
                     >
                       {sidebarOpen ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                     </button>
                   </div>
                   
                   {/* Customer Preview Table */}
-                  <div className="bg-white/10 rounded-lg overflow-hidden">
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead className="bg-white/20">
+                        <thead className="bg-gray-50 border-b border-gray-200">
                           <tr>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Name</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Phone</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Email</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">City</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Status</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Name</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Phone</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Email</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">City</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/10">
+                        <tbody className="divide-y divide-gray-200 bg-white">
                           {visibleCustomers.map((customer, index) => {
                             const existingCustomer = matchedCustomers.get(customer.phone);
                             const canUpdate = existingCustomer ? canUpdateCustomer(customer, existingCustomer) : false;
                             
                             return (
-                              <tr key={index} className="hover:bg-white/5">
-                                <td className="px-4 py-3 text-sm text-white">
+                              <tr key={index} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-4 py-3 text-sm text-gray-900">
                                   {customer.name}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-white font-medium">
+                                <td className="px-4 py-3 text-sm text-gray-700 font-medium">
                                   {customer.phone}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-white font-medium">
+                                <td className="px-4 py-3 text-sm text-gray-700">
                                   {customer.email || '-'}
                                 </td>
-                                <td className="px-4 py-3 text-sm text-white font-medium">
+                                <td className="px-4 py-3 text-sm text-gray-700">
                                   {customer.city || '-'}
                                 </td>
                                 <td className="px-4 py-3">
                                   {existingCustomer ? (
                                     canUpdate ? (
-                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
                                         <CheckCircle className="w-3 h-3 mr-1" />
                                         Will Update
                                       </span>
                                     ) : (
-                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
                                         <SkipForward className="w-3 h-3 mr-1" />
                                         No Updates
                                       </span>
                                     )
                                   ) : (
-                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
                                       <AlertCircle className="w-3 h-3 mr-1" />
                                       No Match
                                     </span>
@@ -959,48 +981,48 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
 
               {currentStep === 'import' && (
                 <div className="space-y-4">
-                  <h3 className="text-xl font-semibold text-white">Import Results</h3>
+                  <h3 className="text-xl font-semibold text-gray-900">Import Results</h3>
                   
                   {/* Results Table */}
-                  <div className="bg-white/10 rounded-lg overflow-hidden">
+                  <div className="border border-gray-200 rounded-lg overflow-hidden">
                     <div className="overflow-x-auto">
                       <table className="w-full">
-                        <thead className="bg-white/20">
+                        <thead className="bg-gray-50 border-b border-gray-200">
                           <tr>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Row</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Customer</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Status</th>
-                            <th className="px-4 py-3 text-left text-sm font-bold text-white">Details</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Row</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Customer</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>
+                            <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">Details</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-white/10">
+                        <tbody className="divide-y divide-gray-200 bg-white">
                           {importResults.map((result, index) => (
-                            <tr key={index} className="hover:bg-white/5">
-                              <td className="px-4 py-3 text-sm text-white font-medium">
+                            <tr key={index} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-sm text-gray-900 font-medium">
                                 {result.rowNumber}
                               </td>
-                              <td className="px-4 py-3 text-sm text-white">
+                              <td className="px-4 py-3 text-sm text-gray-900">
                                 {result.existingCustomer?.name || 'Unknown'}
                               </td>
                               <td className="px-4 py-3">
                                 {result.success ? (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
                                     <CheckCircle className="w-3 h-3 mr-1" />
                                     Updated
                                   </span>
                                 ) : result.skipped ? (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
                                     <SkipForward className="w-3 h-3 mr-1" />
                                     Skipped
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
                                     <AlertCircle className="w-3 h-3 mr-1" />
                                     Error
                                   </span>
                                 )}
                               </td>
-                              <td className="px-4 py-3 text-sm text-white font-medium">
+                              <td className="px-4 py-3 text-sm text-gray-700">
                                 {result.error || result.reason || 'Success'}
                               </td>
                             </tr>
@@ -1014,7 +1036,7 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
             </div>
           </div>
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 });

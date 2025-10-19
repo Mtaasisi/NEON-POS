@@ -35,23 +35,23 @@ const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
 
   return (
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-      <div className="grid grid-cols-3 gap-3 max-w-xs mx-auto">
+      <div className="grid grid-cols-3 gap-4 max-w-md mx-auto">
         {keys.map((row, rowIndex) => 
           row.map((key, keyIndex) => (
             <button
               key={`${rowIndex}-${keyIndex}`}
               onClick={() => handleKeyClick(key)}
               disabled={disabled}
-              className={`aspect-square flex items-center justify-center rounded-lg font-semibold text-lg transition-all duration-200 min-h-[44px] min-w-[44px] ${
+              className={`aspect-square flex items-center justify-center rounded-lg font-semibold text-2xl transition-all duration-200 min-h-[64px] min-w-[64px] ${
                 key === 'Backspace' || key === 'Clear'
                   ? 'bg-gray-200 text-gray-700 hover:bg-gray-300 active:bg-gray-400'
                   : 'bg-white text-gray-900 hover:bg-gray-100 active:bg-gray-200 border border-gray-300'
               } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} shadow-sm hover:shadow-md active:shadow-inner`}
             >
               {key === 'Backspace' ? (
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-6 h-6" />
               ) : key === 'Clear' ? (
-                <Trash2 className="w-5 h-5" />
+                <Trash2 className="w-6 h-6" />
               ) : (
                 key
               )}

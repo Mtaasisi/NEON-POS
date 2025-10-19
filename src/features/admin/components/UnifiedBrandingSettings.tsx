@@ -317,13 +317,6 @@ const UnifiedBrandingSettings: React.FC = () => {
             )}
           </GlassButton>
         </div>
-
-        {/* Info Banner */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm text-blue-800">
-            <strong>💡 Note:</strong> Changes here sync with POS Settings. This is the same data used across your entire system.
-          </p>
-        </div>
       </div>
     </GlassCard>
   );

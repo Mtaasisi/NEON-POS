@@ -36,7 +36,8 @@ import {
   Star,
   Phone,
   ArrowRightLeft,
-  Bell
+  Bell,
+  Warehouse
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
@@ -309,6 +310,13 @@ const AppLayout: React.FC = () => {
         path: '/lats/stock-transfers',
         label: 'Stock Transfers',
         icon: <ArrowRightLeft size={20} strokeWidth={1.5} />,
+        roles: ['admin'],
+        count: 0
+      },
+      {
+        path: '/lats/storage-rooms',
+        label: 'Storage Rooms',
+        icon: <Warehouse size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },

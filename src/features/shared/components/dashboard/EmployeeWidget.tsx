@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Users, Clock, CheckCircle, AlertTriangle, ExternalLink, UserCheck } from 'lucide-react';
-import GlassCard from '../ui/GlassCard';
-import GlassButton from '../ui/GlassButton';
 import { dashboardService, EmployeeStatus } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
 
@@ -70,54 +68,58 @@ export const EmployeeWidget: React.FC<EmployeeWidgetProps> = ({ className }) => 
 
   if (isLoading) {
     return (
-      <GlassCard className={`p-6 ${className}`}>
+      <div className={`bg-white rounded-2xl p-7 ${className}`}>
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-75"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+          </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg">
-            <Users className="w-5 h-5 text-green-600" />
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <Users className="w-5 h-5 text-gray-700" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Staff Today</h3>
-            <p className="text-sm text-gray-600">
-              {stats.present}/{stats.total} present ({stats.attendanceRate}%)
+            <h3 className="text-base font-semibold text-gray-900">Staff Today</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {stats.present}/{stats.total} present • {stats.attendanceRate}%
             </p>
           </div>
         </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="text-center p-2 bg-green-50 rounded-lg">
-          <p className="text-lg font-bold text-green-700">{stats.present}</p>
-          <p className="text-xs text-green-600">Present</p>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Present</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.present}</p>
         </div>
-        <div className="text-center p-2 bg-blue-50 rounded-lg">
-          <p className="text-lg font-bold text-blue-700">{stats.onLeave}</p>
-          <p className="text-xs text-blue-600">On Leave</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">On Leave</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.onLeave}</p>
         </div>
-        <div className="text-center p-2 bg-gray-50 rounded-lg">
-          <p className="text-lg font-bold text-gray-700">{stats.attendanceRate}%</p>
-          <p className="text-xs text-gray-600">Rate</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Rate</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.attendanceRate}%</p>
         </div>
       </div>
 
       {/* Employee Status List */}
-      <div className="space-y-2 h-40 overflow-y-auto">
+      <div className="space-y-3 max-h-64 overflow-y-auto mb-6">
         {employees.length > 0 ? (
-          employees.slice(0, 4).map((employee) => (
-            <div key={employee.id} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-gray-100">
-              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                <span className="text-xs font-medium text-gray-700">
+          employees.slice(0, 5).map((employee) => (
+            <div key={employee.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+              <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-semibold text-gray-700">
                   {employee.full_name?.split(' ').map(n => n[0]).join('') || 'U'}
                 </span>
               </div>
@@ -125,45 +127,40 @@ export const EmployeeWidget: React.FC<EmployeeWidgetProps> = ({ className }) => 
                 <p className="font-medium text-gray-900 text-sm truncate">
                   {employee.full_name || employee.email}
                 </p>
-                <p className="text-xs text-gray-600">
-                  {employee.department}
-                  {employee.checkInTime && ` • ${employee.checkInTime}`}
+                <p className="text-xs text-gray-400">
+                  {employee.checkInTime ? `Checked in at ${employee.checkInTime}` : 'No check-in'}
                 </p>
               </div>
-              <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(employee.status)}`}>
-                {getStatusIcon(employee.status)}
-                <span className="capitalize">{employee.status.replace('-', ' ')}</span>
-              </div>
+              <span className={`text-xs font-medium capitalize ${
+                employee.status === 'present' ? 'text-emerald-600' :
+                employee.status === 'late' ? 'text-amber-600' :
+                employee.status === 'absent' ? 'text-rose-600' :
+                'text-gray-600'
+              }`}>
+                {employee.status}
+              </span>
             </div>
           ))
         ) : (
-          <div className="text-center py-4">
-            <Users className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600">No employee data</p>
+          <div className="text-center py-12">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+              <Users className="w-6 h-6 text-gray-400" />
+            </div>
+            <p className="text-sm text-gray-500">No employee data</p>
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-        <GlassButton
+      <div className="flex gap-2">
+        <button
           onClick={() => navigate('/employees')}
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          icon={<ExternalLink size={14} />}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
-          Manage Staff
-        </GlassButton>
-        <GlassButton
-          onClick={() => navigate('/employees/attendance')}
-          variant="ghost"
-          size="sm"
-          icon={<Clock size={14} />}
-        >
-          Attendance
-        </GlassButton>
+          <ExternalLink size={14} />
+          <span>Manage Staff</span>
+        </button>
       </div>
-    </GlassCard>
+    </div>
   );
 };

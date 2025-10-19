@@ -68,16 +68,16 @@ export class RealTimeStockService {
       
       console.log('🏪 [RealTimeStockService] Current branch ID:', currentBranchId);
       
-      // Fetch variants for the uncached products, filtered by current branch
+      // Fetch variants for the uncached products, filtered by current branch + shared
       let query = supabase
         .from('lats_product_variants')
-        .select('id, product_id, sku, variant_name, quantity')
+        .select('id, product_id, sku, variant_name, quantity, branch_id, is_shared')
         .in('product_id', uncachedIds);
 
-      // Apply branch filter if branch ID exists
+      // Apply branch filter if branch ID exists (include shared variants)
       if (currentBranchId) {
-        console.log('✅ [RealTimeStockService] Applying branch filter:', currentBranchId);
-        query = query.eq('branch_id', currentBranchId);
+        console.log('✅ [RealTimeStockService] Applying branch filter + shared:', currentBranchId);
+        query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
       } else {
         console.log('⚠️ [RealTimeStockService] No branch filter - showing all stock');
       }
@@ -166,13 +166,13 @@ export class RealTimeStockService {
 
       let query = supabase
         .from('lats_product_variants')
-        .select('id, product_id, sku, variant_name, quantity')
+        .select('id, product_id, sku, variant_name, quantity, branch_id, is_shared')
         .eq('sku', sku);
 
-      // Apply branch filter if branch ID exists
+      // Apply branch filter if branch ID exists (include shared variants)
       if (currentBranchId) {
-        console.log('✅ [RealTimeStockService] SKU lookup - Applying branch filter:', currentBranchId);
-        query = query.eq('branch_id', currentBranchId);
+        console.log('✅ [RealTimeStockService] SKU lookup - Applying branch filter + shared:', currentBranchId);
+        query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
       } else {
         console.log('⚠️ [RealTimeStockService] SKU lookup - No branch filter');
       }

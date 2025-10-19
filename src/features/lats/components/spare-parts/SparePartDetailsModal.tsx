@@ -102,9 +102,9 @@ const SparePartDetailsModal: React.FC<SparePartDetailsModalProps> = ({
       }
       
       // Add store shelf promise if available
-      if (sparePart.store_shelf_id) {
-        console.log('🔍 [SparePartsDetailModal] Adding store shelf promise:', sparePart.store_shelf_id);
-        promiseMap.storeShelf = storeShelfApi.getById(sparePart.store_shelf_id);
+      if (sparePart.shelf_id) {
+        console.log('🔍 [SparePartsDetailModal] Adding store shelf promise:', sparePart.shelf_id);
+        promiseMap.storeShelf = storeShelfApi.getById(sparePart.shelf_id);
         promises.push(promiseMap.storeShelf);
       }
       

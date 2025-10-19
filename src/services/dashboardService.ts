@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { getCurrentBranchId } from '../lib/branchAwareApi';
 import { 
   fetchDeviceStats as fetchDeviceStatsDedup,
   fetchCustomerStats as fetchCustomerStatsDedup,
@@ -303,22 +304,37 @@ class DashboardService {
   private async getEmployeeStats() {
     try {
       const today = new Date().toISOString().split('T')[0];
+      const currentBranchId = getCurrentBranchId();
       
-      // Get all employees
-      const { data: employees, error: empError } = await supabase
+      // Get employees for current branch
+      let empQuery = supabase
         .from('employees')
         .select('id, status');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        empQuery = empQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: employees, error: empError } = await empQuery;
 
       if (empError) throw empError;
 
       const total = employees?.length || 0;
       const onLeaveCount = employees?.filter(e => e.status === 'on-leave').length || 0;
 
-      // Get today's attendance
-      const { data: attendance, error: attError } = await supabase
+      // Get today's attendance for current branch
+      let attQuery = supabase
         .from('attendance_records')
         .select('status')
         .eq('attendance_date', today);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        attQuery = attQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: attendance, error: attError } = await attQuery;
 
       if (attError) throw attError;
 
@@ -401,22 +417,49 @@ class DashboardService {
 
   /**
    * Get inventory statistics
+   * ✅ FIXED: Now uses correct logic for low/critical stock and value calculation
    */
   private async getInventoryStats() {
     try {
       // Use deduplicated query to prevent duplicate calls
-      const items = await fetchInventoryStatsDedup();
+      const variants = await fetchInventoryStatsDedup();
 
-      // Count items by status
-      const lowStock = items.filter((item: any) => item.status === 'available').length;
-      const critical = items.filter((item: any) => item.status === 'damaged').length;
+      // ✅ FIXED: Count low stock items correctly (quantity <= min_quantity but > 0)
+      const lowStock = variants.filter((variant: any) => {
+        const quantity = Number(variant.quantity) || 0;
+        const minQuantity = Number(variant.min_quantity) || 0;
+        return quantity > 0 && quantity <= minQuantity;
+      }).length;
 
-      const value = items.reduce((sum: number, item: any) => {
-        return sum + (item.cost_price || 0);
+      // ✅ FIXED: Count critical items correctly (quantity = 0 or very low)
+      const critical = variants.filter((variant: any) => {
+        const quantity = Number(variant.quantity) || 0;
+        return quantity === 0;
+      }).length;
+
+      // ✅ FIXED: Calculate value correctly (cost_price * quantity)
+      const value = variants.reduce((sum: number, variant: any) => {
+        const costPrice = Number(variant.cost_price) || 0;
+        const quantity = Number(variant.quantity) || 0;
+        return sum + (costPrice * quantity);
       }, 0);
 
+      console.log('📦 Inventory Stats Calculated:', {
+        totalVariants: variants.length,
+        lowStock,
+        critical,
+        sampleVariants: variants.slice(0, 3).map((v: any) => ({
+          cost_price: v.cost_price,
+          quantity: v.quantity,
+          min_quantity: v.min_quantity,
+          value: (Number(v.cost_price) || 0) * (Number(v.quantity) || 0)
+        })),
+        calculatedValue: value,
+        valueType: typeof value
+      });
+
       return {
-        total: items.length,
+        total: variants.length,
         lowStock,
         critical,
         value
@@ -447,13 +490,21 @@ class DashboardService {
   async getTodayEmployeeStatus(): Promise<EmployeeStatus[]> {
     try {
       const today = new Date().toISOString().split('T')[0];
+      const currentBranchId = getCurrentBranchId();
       
-      // Get all active employees
-      const { data: employees, error: empError } = await supabase
+      // Get active employees for current branch
+      let empQuery = supabase
         .from('employees')
         .select('id, first_name, last_name, email, department, status')
         .eq('status', 'active')
         .limit(10);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        empQuery = empQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: employees, error: empError } = await empQuery;
 
       if (empError) throw empError;
 
@@ -461,13 +512,20 @@ class DashboardService {
         return [];
       }
 
-      // Get today's attendance for these employees
+      // Get today's attendance for these employees in current branch
       const employeeIds = employees.map(emp => emp.id);
-      const { data: attendance, error: attError } = await supabase
+      let attQuery = supabase
         .from('attendance_records')
         .select('employee_id, status, check_in_time')
         .eq('attendance_date', today)
         .in('employee_id', employeeIds);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        attQuery = attQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: attendance, error: attError } = await attQuery;
 
       if (attError) throw attError;
 
@@ -498,13 +556,21 @@ class DashboardService {
   async getRecentActivity(limit: number = 20): Promise<RecentActivity[]> {
     try {
       const activities: RecentActivity[] = [];
+      const currentBranchId = getCurrentBranchId();
 
-      // Get recent devices
-      const { data: devicesData, error: devicesError } = await supabase
+      // Get recent devices for current branch
+      let devicesQuery = supabase
         .from('devices')
         .select('id, device_name, status, problem_description, created_at, updated_at')
         .order('updated_at', { ascending: false })
         .limit(5);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        devicesQuery = devicesQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: devicesData, error: devicesError } = await devicesQuery;
 
       if (devicesError) {
         console.error('Recent activity devices error:', devicesError);
@@ -524,12 +590,19 @@ class DashboardService {
         });
       }
 
-      // Get recent payments
-      const { data: paymentsData } = await supabase
+      // Get recent payments for current branch
+      let paymentsQuery = supabase
         .from('customer_payments')
         .select('id, amount, payment_date, status')
         .order('payment_date', { ascending: false })
         .limit(5);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        paymentsQuery = paymentsQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: paymentsData } = await paymentsQuery;
 
       if (paymentsData) {
         paymentsData.forEach((payment: any) => {
@@ -545,12 +618,19 @@ class DashboardService {
         });
       }
 
-      // Get recent customers
-      const { data: customersData } = await supabase
+      // Get recent customers for current branch
+      let customersQuery = supabase
         .from('customers')
         .select('id, name, joined_date')
         .order('joined_date', { ascending: false })
         .limit(3);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        customersQuery = customersQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: customersData } = await customersQuery;
 
       if (customersData) {
         customersData.forEach((customer: any) => {
@@ -606,9 +686,18 @@ class DashboardService {
    */
   async getCustomerInsights(): Promise<CustomerInsight> {
     try {
-      const { data, error } = await supabase
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
         .from('customers')
         .select('id, name, total_spent, joined_date, is_active');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -656,9 +745,18 @@ class DashboardService {
    */
   async getServiceMetrics(): Promise<ServiceMetrics> {
     try {
-      const { data, error } = await supabase
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
         .from('devices')
         .select('status, created_at, estimated_completion_date');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) throw error;
 
@@ -703,10 +801,21 @@ class DashboardService {
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
-      // Get all payments
-      const { data: paymentsData, error: paymentsError } = await supabase
+      // Get current branch for filtering
+      const currentBranchId = getCurrentBranchId();
+      console.log('🏢 Current Branch ID:', currentBranchId);
+
+      // Get all payments for current branch
+      let query = supabase
         .from('customer_payments')
         .select('amount, payment_date, status, method');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: paymentsData, error: paymentsError } = await query;
 
       if (paymentsError) {
         console.error('Financial summary payments error:', paymentsError);
@@ -714,6 +823,16 @@ class DashboardService {
       }
 
       const payments = paymentsData || [];
+      
+      console.log('📊 Raw Payments Data:', {
+        totalCount: payments.length,
+        sample: payments.slice(0, 5).map((p: any) => ({
+          method: p.method,
+          amount: p.amount,
+          type: typeof p.amount,
+          status: p.status
+        }))
+      });
 
       // Calculate revenue metrics
       const todayRevenue = payments
@@ -760,10 +879,24 @@ class DashboardService {
           if (!acc[method]) {
             acc[method] = { amount: 0, count: 0 };
           }
-          acc[method].amount += payment.amount || 0;
+          const paymentAmount = Number(payment.amount) || 0;
+          
+          // Debug each payment being added
+          if (method === 'Tigo Pesa' || method === 'M-Pesa') {
+            console.log(`Adding ${method} payment:`, {
+              rawAmount: payment.amount,
+              convertedAmount: paymentAmount,
+              currentTotal: acc[method].amount,
+              newTotal: acc[method].amount + paymentAmount
+            });
+          }
+          
+          acc[method].amount += paymentAmount;
           acc[method].count += 1;
           return acc;
         }, {});
+
+      console.log('💳 Payment Method Groups Final:', methodGroups);
 
       const paymentMethods = Object.entries(methodGroups)
         .map(([method, data]: any) => ({
@@ -805,12 +938,98 @@ class DashboardService {
 
   /**
    * Get inventory alerts for low stock items
+   * ✅ FIXED: Now properly fetches and returns low stock alerts
    */
   async getInventoryAlerts(limit: number = 10): Promise<InventoryAlert[]> {
     try {
-      // Inventory items don't have product_name directly, we'll return empty for now
-      // TODO: Join with products table to get actual product names
-      return [];
+      const currentBranchId = getCurrentBranchId();
+      
+      // Get products with their variants
+      let productsQuery = supabase
+        .from('lats_products')
+        .select('id, name, category_id, is_active, branch_id, is_shared')
+        .eq('is_active', true);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        productsQuery = productsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+      }
+      
+      const { data: products, error: productsError } = await productsQuery;
+      
+      if (productsError) throw productsError;
+      
+      if (!products || products.length === 0) {
+        return [];
+      }
+      
+      // Get product IDs
+      const productIds = products.map(p => p.id);
+      
+      // Get variants that are low on stock
+      let variantsQuery = supabase
+        .from('lats_product_variants')
+        .select('id, product_id, quantity, min_quantity, branch_id, is_shared')
+        .in('product_id', productIds);
+      
+      // Apply branch filter to variants if branch is selected
+      if (currentBranchId) {
+        variantsQuery = variantsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+      }
+      
+      const { data: variants, error: variantsError } = await variantsQuery;
+      
+      if (variantsError) throw variantsError;
+      
+      // Get categories
+      const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
+      const { data: categories } = await supabase
+        .from('lats_categories')
+        .select('id, name')
+        .in('id', categoryIds);
+      
+      const categoryMap = new Map((categories || []).map(c => [c.id, c.name]));
+      
+      // Create a map of products for quick lookup
+      const productMap = new Map(products.map(p => [p.id, p]));
+      
+      // Filter and map variants to alerts
+      const alerts: InventoryAlert[] = [];
+      
+      (variants || []).forEach((variant: any) => {
+        const quantity = Number(variant.quantity) || 0;
+        const minQuantity = Number(variant.min_quantity) || 0;
+        const product = productMap.get(variant.product_id);
+        
+        if (!product) return;
+        
+        let alertLevel: 'out-of-stock' | 'critical' | 'low' | undefined;
+        
+        if (quantity === 0) {
+          alertLevel = 'out-of-stock';
+        } else if (quantity <= minQuantity * 0.25) {
+          alertLevel = 'critical';
+        } else if (quantity <= minQuantity) {
+          alertLevel = 'low';
+        }
+        
+        if (alertLevel) {
+          alerts.push({
+            id: variant.id,
+            productName: product.name,
+            category: categoryMap.get(product.category_id) || 'Uncategorized',
+            currentStock: quantity,
+            minimumStock: minQuantity,
+            alertLevel
+          });
+        }
+      });
+      
+      // Sort by severity (out-of-stock first, then critical, then low)
+      const severityOrder = { 'out-of-stock': 0, 'critical': 1, 'low': 2 };
+      alerts.sort((a, b) => severityOrder[a.alertLevel] - severityOrder[b.alertLevel]);
+      
+      return alerts.slice(0, limit);
     } catch (error: any) {
       console.error('Error fetching inventory alerts:', {
         message: error?.message,
@@ -832,11 +1051,19 @@ class DashboardService {
       const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const currentBranchId = getCurrentBranchId();
 
-      // Get payment data
-      const { data: paymentsData, error: paymentsError } = await supabase
+      // Get payment data for current branch
+      let paymentsQuery = supabase
         .from('customer_payments')
         .select('amount, payment_date, status');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        paymentsQuery = paymentsQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: paymentsData, error: paymentsError } = await paymentsQuery;
 
       if (paymentsError) {
         console.error('Analytics payments error:', paymentsError);
@@ -865,10 +1092,17 @@ class DashboardService {
         ? Math.round(((thisMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
         : 0;
 
-      // Get customer data
-      const { data: customersData } = await supabase
+      // Get customer data for current branch
+      let customersQuery = supabase
         .from('customers')
         .select('id, joined_date');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        customersQuery = customersQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: customersData } = await customersQuery;
 
       const customers = customersData || [];
 
@@ -896,9 +1130,16 @@ class DashboardService {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const { data: devicesData } = await supabase
+      let devicesQuery = supabase
         .from('devices')
         .select('status, updated_at, problem_description');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        devicesQuery = devicesQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: devicesData } = await devicesQuery;
 
       const devices = devicesData || [];
 

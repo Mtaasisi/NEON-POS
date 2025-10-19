@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PackageCheck, Plus, X, AlertCircle } from 'lucide-react';
+import { PackageCheck, Plus, X, AlertCircle, ChevronDown, ChevronUp, Calendar, DollarSign, Shield, Smartphone } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface PurchaseOrderItem {
@@ -18,6 +18,11 @@ interface SerialNumberData {
   mac_address?: string;
   barcode?: string;
   location?: string;
+  warranty_start?: string;
+  warranty_end?: string;
+  warranty_months?: number;
+  cost_price?: number;
+  selling_price?: number;
   notes?: string;
 }
 
@@ -47,6 +52,8 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     quantity: number;
     serialNumbers: SerialNumberData[];
   }>>(new Map());
+  
+  const [expandedSerials, setExpandedSerials] = useState<Set<string>>(new Set());
 
   // Initialize received items when modal opens
   useEffect(() => {
@@ -81,6 +88,14 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     setReceivedItems(prev => {
       const newMap = new Map(prev);
       const current = newMap.get(itemId) || { quantity: 0, serialNumbers: [] };
+      const item = purchaseOrder.items.find(i => i.id === itemId);
+      
+      // Calculate warranty end date (12 months from today by default)
+      const warrantyStart = new Date().toISOString().split('T')[0];
+      const warrantyEndDate = new Date();
+      warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
+      const warrantyEnd = warrantyEndDate.toISOString().split('T')[0];
+      
       newMap.set(itemId, {
         ...current,
         serialNumbers: [...current.serialNumbers, {
@@ -89,6 +104,11 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           mac_address: '',
           barcode: '',
           location: '',
+          warranty_start: warrantyStart,
+          warranty_end: warrantyEnd,
+          warranty_months: 12,
+          cost_price: item?.cost_price || 0,
+          selling_price: undefined,
           notes: ''
         }]
       });
@@ -108,15 +128,43 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     });
   };
 
-  const updateSerialNumber = (itemId: string, index: number, field: keyof SerialNumberData, value: string) => {
+  const updateSerialNumber = (itemId: string, index: number, field: keyof SerialNumberData, value: string | number) => {
     setReceivedItems(prev => {
       const newMap = new Map(prev);
       const current = newMap.get(itemId) || { quantity: 0, serialNumbers: [] };
       const updatedSerialNumbers = [...current.serialNumbers];
-      updatedSerialNumbers[index] = {
-        ...updatedSerialNumbers[index],
-        [field]: value
-      };
+      const currentSerial = updatedSerialNumbers[index];
+      
+      // If warranty_months changed, auto-calculate warranty_end
+      if (field === 'warranty_months' && typeof value === 'number' && currentSerial.warranty_start) {
+        const startDate = new Date(currentSerial.warranty_start);
+        const endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + value);
+        updatedSerialNumbers[index] = {
+          ...currentSerial,
+          warranty_months: value,
+          warranty_end: endDate.toISOString().split('T')[0]
+        };
+      } 
+      // If warranty_start changed, recalculate warranty_end based on months
+      else if (field === 'warranty_start' && typeof value === 'string') {
+        const months = currentSerial.warranty_months || 12;
+        const startDate = new Date(value);
+        const endDate = new Date(startDate);
+        endDate.setMonth(endDate.getMonth() + months);
+        updatedSerialNumbers[index] = {
+          ...currentSerial,
+          warranty_start: value,
+          warranty_end: endDate.toISOString().split('T')[0]
+        };
+      }
+      else {
+        updatedSerialNumbers[index] = {
+          ...currentSerial,
+          [field]: value
+        };
+      }
+      
       newMap.set(itemId, {
         ...current,
         serialNumbers: updatedSerialNumbers
@@ -158,6 +206,18 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
       total += data.quantity;
     });
     return total;
+  };
+  
+  const toggleSerialExpanded = (key: string) => {
+    setExpandedSerials(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
   };
 
   if (!isOpen) return null;
@@ -215,34 +275,191 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                   
                   {itemData.quantity > 0 && (
                     <div className="mt-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium text-gray-700">Serial Numbers</span>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-gray-700">
+                          Serial Numbers ({itemData.serialNumbers.length})
+                        </span>
                         <button
                           onClick={() => addSerialNumber(item.id)}
-                          className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                         >
                           <Plus className="w-3 h-3" />
-                          Add
+                          Add Serial
                         </button>
                       </div>
                       
-                      {itemData.serialNumbers.map((serial, index) => (
-                        <div key={index} className="flex items-center gap-2 mb-2">
-                          <input
-                            type="text"
-                            placeholder="Serial Number"
-                            value={serial.serial_number}
-                            onChange={(e) => updateSerialNumber(item.id, index, 'serial_number', e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                          />
-                          <button
-                            onClick={() => removeSerialNumber(item.id, index)}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                      <div className="space-y-3">
+                        {itemData.serialNumbers.map((serial, index) => {
+                          const serialKey = `${item.id}-${index}`;
+                          const isExpanded = expandedSerials.has(serialKey);
+                          
+                          return (
+                            <div key={index} className="border border-gray-200 rounded-lg bg-gray-50">
+                              {/* Header - Always Visible */}
+                              <div className="p-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Smartphone className="w-4 h-4 text-gray-500" />
+                                  <input
+                                    type="text"
+                                    placeholder="Serial Number *"
+                                    value={serial.serial_number}
+                                    onChange={(e) => updateSerialNumber(item.id, index, 'serial_number', e.target.value)}
+                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium"
+                                  />
+                                  <button
+                                    onClick={() => toggleSerialExpanded(serialKey)}
+                                    className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                                    title={isExpanded ? "Show less" : "Show more"}
+                                  >
+                                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                  </button>
+                                  <button
+                                    onClick={() => removeSerialNumber(item.id, index)}
+                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
+                                    title="Remove serial"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                                
+                                {/* Expanded Details */}
+                                {isExpanded && (
+                                  <div className="mt-3 space-y-4 pt-3 border-t border-gray-200">
+                                    {/* Device Identifiers Section */}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Smartphone className="w-4 h-4 text-blue-600" />
+                                        <span className="text-xs font-semibold text-gray-700 uppercase">Device Identifiers</span>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <input
+                                          type="text"
+                                          placeholder="IMEI (optional)"
+                                          value={serial.imei || ''}
+                                          onChange={(e) => updateSerialNumber(item.id, index, 'imei', e.target.value)}
+                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                        <input
+                                          type="text"
+                                          placeholder="MAC Address (optional)"
+                                          value={serial.mac_address || ''}
+                                          onChange={(e) => updateSerialNumber(item.id, index, 'mac_address', e.target.value)}
+                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                        <input
+                                          type="text"
+                                          placeholder="Barcode (optional)"
+                                          value={serial.barcode || ''}
+                                          onChange={(e) => updateSerialNumber(item.id, index, 'barcode', e.target.value)}
+                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                        <input
+                                          type="text"
+                                          placeholder="Location (optional)"
+                                          value={serial.location || ''}
+                                          onChange={(e) => updateSerialNumber(item.id, index, 'location', e.target.value)}
+                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                        />
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Warranty Section */}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Shield className="w-4 h-4 text-green-600" />
+                                        <span className="text-xs font-semibold text-gray-700 uppercase">Warranty Information</span>
+                                      </div>
+                                      <div className="grid grid-cols-3 gap-2">
+                                        <div>
+                                          <label className="text-xs text-gray-600 mb-1 block">Start Date</label>
+                                          <input
+                                            type="date"
+                                            value={serial.warranty_start || ''}
+                                            onChange={(e) => updateSerialNumber(item.id, index, 'warranty_start', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-xs text-gray-600 mb-1 block">Months</label>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            max="120"
+                                            value={serial.warranty_months || 12}
+                                            onChange={(e) => updateSerialNumber(item.id, index, 'warranty_months', parseInt(e.target.value) || 0)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-xs text-gray-600 mb-1 block">End Date</label>
+                                          <input
+                                            type="date"
+                                            value={serial.warranty_end || ''}
+                                            readOnly
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-100 cursor-not-allowed"
+                                            title="Auto-calculated from start date and months"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Pricing Section */}
+                                    <div>
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <DollarSign className="w-4 h-4 text-yellow-600" />
+                                        <span className="text-xs font-semibold text-gray-700 uppercase">Pricing</span>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <label className="text-xs text-gray-600 mb-1 block">Cost Price</label>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={serial.cost_price || item.cost_price}
+                                            onChange={(e) => updateSerialNumber(item.id, index, 'cost_price', parseFloat(e.target.value) || 0)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="text-xs text-gray-600 mb-1 block">Selling Price (optional)</label>
+                                          <input
+                                            type="number"
+                                            step="0.01"
+                                            min="0"
+                                            value={serial.selling_price || ''}
+                                            onChange={(e) => updateSerialNumber(item.id, index, 'selling_price', parseFloat(e.target.value) || 0)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                                            placeholder="Leave empty to use variant price"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Notes Section */}
+                                    <div>
+                                      <label className="text-xs text-gray-600 mb-1 block">Notes (optional)</label>
+                                      <textarea
+                                        value={serial.notes || ''}
+                                        onChange={(e) => updateSerialNumber(item.id, index, 'notes', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
+                                        rows={2}
+                                        placeholder="Any additional notes about this item..."
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {itemData.serialNumbers.length === 0 && (
+                        <div className="text-center py-4 text-sm text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                          No serial numbers added yet. Click "Add Serial" to begin.
                         </div>
-                      ))}
+                      )}
                     </div>
                   )}
                 </div>

@@ -26,6 +26,8 @@ import {
   getStockStatus 
 } from '../../lib/productCalculations';
 import EnhancedStockAdjustModal from '../inventory/EnhancedStockAdjustModal';
+import StorageLocationForm from './StorageLocationForm';
+import { supabase } from '../../../../lib/supabaseClient';
 
 interface GeneralProductDetailModalProps {
   isOpen: boolean;
@@ -62,6 +64,14 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
     quantity: 0,
     minQuantity: 2
   });
+
+  // Storage location state
+  const [showStorageLocationModal, setShowStorageLocationModal] = useState(false);
+  const [storageLocationData, setStorageLocationData] = useState({
+    storageRoomId: (product as any).storageRoomId || '',
+    shelfId: (product as any).shelfId || ''
+  });
+  const [isSavingStorageLocation, setIsSavingStorageLocation] = useState(false);
 
   // Update current product when prop changes
   useEffect(() => {
@@ -236,6 +246,49 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
       }, 1000);
     } catch (error) {
       toast.error('Failed to add to cart');
+    }
+  };
+
+  // Save storage location
+  const handleSaveStorageLocation = async () => {
+    if (!storageLocationData.storageRoomId || !storageLocationData.shelfId) {
+      toast.error('Please select both storage room and shelf');
+      return;
+    }
+
+    setIsSavingStorageLocation(true);
+    try {
+      // Update product in database
+      const { error } = await supabase
+        .from('lats_products')
+        .update({
+          storage_room_id: storageLocationData.storageRoomId,
+          shelf_id: storageLocationData.shelfId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', product.id);
+
+      if (error) throw error;
+
+      // Update local product state
+      setCurrentProduct({
+        ...currentProduct,
+        storageRoomId: storageLocationData.storageRoomId,
+        shelfId: storageLocationData.shelfId
+      } as any);
+
+      toast.success('Storage location updated successfully!');
+      setShowStorageLocationModal(false);
+      
+      // Trigger product data update event
+      window.dispatchEvent(new CustomEvent('productDataUpdated', {
+        detail: { updatedProducts: [product.id] }
+      }));
+    } catch (error) {
+      console.error('Error updating storage location:', error);
+      toast.error('Failed to update storage location');
+    } finally {
+      setIsSavingStorageLocation(false);
     }
   };
 
@@ -1377,46 +1430,63 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
 
                {/* Storage & Location Information */}
                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                 <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                   <MapPin className="w-5 h-5 text-blue-600" />
-                   <h3 className="text-sm font-semibold text-gray-800">Storage & Location</h3>
+                 <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                   <div className="flex items-center gap-2">
+                     <MapPin className="w-5 h-5 text-blue-600" />
+                     <h3 className="text-sm font-semibold text-gray-800">Storage & Location</h3>
+                   </div>
+                   <button
+                     onClick={() => setShowStorageLocationModal(true)}
+                     className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+                   >
+                     <Edit className="w-3.5 h-3.5" />
+                     Edit Location
+                   </button>
+                 </div>
+                 {((product as any).storageRoomName || (product as any).shelfName || (product as any).storeLocationName) ? (
+                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                     {(product as any).storageRoomName && (
+                       <div className="space-y-1">
+                         <span className="text-xs text-gray-500 uppercase tracking-wide">Storage Room</span>
+                         <p className="text-sm font-medium text-gray-900">{(product as any).storageRoomName}</p>
+                       </div>
+                     )}
+                     {(product as any).shelfName && (
+                       <div className="space-y-1">
+                         <span className="text-xs text-gray-500 uppercase tracking-wide">Shelf Name</span>
+                         <p className="text-sm font-medium text-gray-900">{(product as any).shelfName}</p>
+                              </div>
+                     )}
+                     {(product as any).storeLocationName && (
+                       <div className="space-y-1">
+                         <span className="text-xs text-gray-500 uppercase tracking-wide">Store Location</span>
+                         <p className="text-sm font-medium text-gray-900">{(product as any).storeLocationName}</p>
+                              </div>
+                     )}
+                     {(product as any).isRefrigerated !== undefined && (
+                       <div className="space-y-1">
+                         <span className="text-xs text-gray-500 uppercase tracking-wide">Storage Type</span>
+                         <p className="text-sm font-medium text-gray-900">
+                           {(product as any).isRefrigerated ? 'Refrigerated' : 'Room Temperature'}
+                         </p>
+                        </div>
+                     )}
+                     {(product as any).requiresLadder !== undefined && (
+                       <div className="space-y-1">
+                         <span className="text-xs text-gray-500 uppercase tracking-wide">Access Requirements</span>
+                         <p className="text-sm font-medium text-gray-900">
+                           {(product as any).requiresLadder ? 'Requires Ladder' : 'Ground Level'}
+                         </p>
                       </div>
-                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                   {(product as any).storageRoomName && (
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Storage Room</span>
-                       <p className="text-sm font-medium text-gray-900">{(product as any).storageRoomName}</p>
-                     </div>
-                   )}
-                   {(product as any).shelfName && (
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Shelf Name</span>
-                       <p className="text-sm font-medium text-gray-900">{(product as any).shelfName}</p>
-                            </div>
-                   )}
-                   {(product as any).storeLocationName && (
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Store Location</span>
-                       <p className="text-sm font-medium text-gray-900">{(product as any).storeLocationName}</p>
-                            </div>
-                   )}
-                   {(product as any).isRefrigerated !== undefined && (
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Storage Type</span>
-                       <p className="text-sm font-medium text-gray-900">
-                         {(product as any).isRefrigerated ? 'Refrigerated' : 'Room Temperature'}
-                       </p>
-                      </div>
-                   )}
-                   {(product as any).requiresLadder !== undefined && (
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Access Requirements</span>
-                       <p className="text-sm font-medium text-gray-900">
-                         {(product as any).requiresLadder ? 'Requires Ladder' : 'Ground Level'}
-                       </p>
-                    </div>
-                  )}
-                </div>
+                    )}
+                   </div>
+                 ) : (
+                   <div className="text-center py-6">
+                     <MapPin className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                     <p className="text-sm text-gray-500">No storage location assigned</p>
+                     <p className="text-xs text-gray-400 mt-1">Click "Edit Location" to assign a storage location</p>
+                   </div>
+                 )}
                </div>
 
                {/* Additional Information Sections - Minimal Design */}
@@ -2275,6 +2345,64 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
             }}
             loading={isAdjustingStock}
           />
+        )}
+
+        {/* Storage Location Modal */}
+        {showStorageLocationModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[85vh] overflow-hidden">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <MapPin size={20} className="text-gray-700" />
+                  <h2 className="text-lg font-semibold text-gray-900">Assign Storage Location</h2>
+                </div>
+                <button
+                  onClick={() => setShowStorageLocationModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded"
+                >
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 overflow-y-auto max-h-[calc(85vh-140px)]">
+                <StorageLocationForm
+                  formData={storageLocationData}
+                  setFormData={setStorageLocationData}
+                  currentErrors={{}}
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex justify-end gap-3 p-4 border-t border-gray-200 bg-gray-50">
+                <button
+                  onClick={() => setShowStorageLocationModal(false)}
+                  className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded"
+                  disabled={isSavingStorageLocation}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveStorageLocation}
+                  disabled={isSavingStorageLocation || !storageLocationData.storageRoomId || !storageLocationData.shelfId}
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSavingStorageLocation ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={16} />
+                      Save Location
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>,

@@ -429,7 +429,7 @@ const EditProductPageContent: React.FC = () => {
           stockQuantity: product.stock_quantity || 0,
           minStockLevel: product.min_stock_level || 0,
           storageRoomId: product.storage_room_id || '',
-          shelfId: product.store_shelf_id || '',
+          shelfId: product.shelf_id || '',
           metadata: product.attributes || {},
           variants: []
         };
@@ -673,7 +673,7 @@ const EditProductPageContent: React.FC = () => {
         total_quantity: totalQuantity,
         total_value: totalValue,
         storage_room_id: formData.storageRoomId || null,
-        store_shelf_id: formData.shelfId || null,
+        shelf_id: formData.shelfId || null,
         // Don't include tags or attributes if they're empty to avoid PostgreSQL type errors
       };
       

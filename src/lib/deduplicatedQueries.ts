@@ -5,17 +5,26 @@
 
 import { supabase } from './supabaseClient';
 import { deduplicatedQuery } from './queryDeduplication';
+import { getCurrentBranchId } from './branchAwareApi';
 
 /**
  * Fetch device statistics with deduplication
  */
 export async function fetchDeviceStats(cacheDuration: number = 5000) {
+  const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
-    'device-stats',
+    `device-stats-${currentBranchId || 'all'}`,
     async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('devices')
         .select('status, estimated_completion_date, created_at');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data || [];
@@ -28,12 +37,20 @@ export async function fetchDeviceStats(cacheDuration: number = 5000) {
  * Fetch customer statistics with deduplication
  */
 export async function fetchCustomerStats(cacheDuration: number = 5000) {
+  const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
-    'customer-stats',
+    `customer-stats-${currentBranchId || 'all'}`,
     async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('customers')
         .select('id, joined_date, is_active');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data || [];
@@ -65,12 +82,20 @@ export async function fetchUserStats(cacheDuration: number = 5000) {
  * Fetch payment statistics with deduplication
  */
 export async function fetchPaymentStats(cacheDuration: number = 5000) {
+  const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
-    'payment-stats',
+    `payment-stats-${currentBranchId || 'all'}`,
     async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('customer_payments')
         .select('amount, payment_date, status');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data || [];
@@ -81,17 +106,51 @@ export async function fetchPaymentStats(cacheDuration: number = 5000) {
 
 /**
  * Fetch inventory statistics with deduplication
+ * ✅ FIXED: Now fetches from correct tables (lats_products & lats_product_variants)
  */
 export async function fetchInventoryStats(cacheDuration: number = 5000) {
+  const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
-    'inventory-stats',
+    `inventory-stats-${currentBranchId || 'all'}`,
     async () => {
-      const { data, error } = await supabase
-        .from('inventory_items')
-        .select('status, cost_price');
+      // Get products with branch filter
+      let productsQuery = supabase
+        .from('lats_products')
+        .select('id, name, is_active, branch_id')
+        .eq('is_active', true);
       
-      if (error) throw error;
-      return data || [];
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        productsQuery = productsQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: products, error: productsError } = await productsQuery;
+      
+      if (productsError) throw productsError;
+      
+      // Get all product IDs
+      const productIds = (products || []).map(p => p.id);
+      
+      if (productIds.length === 0) {
+        return [];
+      }
+      
+      // Get variants for these products
+      let variantsQuery = supabase
+        .from('lats_product_variants')
+        .select('id, product_id, quantity, cost_price, unit_price, min_quantity, branch_id')
+        .in('product_id', productIds);
+      
+      // Apply branch filter to variants if branch is selected
+      if (currentBranchId) {
+        variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: variants, error: variantsError } = await variantsQuery;
+      
+      if (variantsError) throw variantsError;
+      
+      return variants || [];
     },
     cacheDuration
   );
@@ -180,14 +239,22 @@ export async function fetchNotifications(userId: string, cacheDuration: number =
  * Fetch recent customers with deduplication
  */
 export async function fetchRecentCustomers(limit: number = 3, cacheDuration: number = 10000) {
+  const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
-    `recent-customers-${limit}`,
+    `recent-customers-${limit}-${currentBranchId || 'all'}`,
     async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('customers')
         .select('id, name, joined_date')
         .order('joined_date', { ascending: false })
         .limit(limit);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data || [];
@@ -200,14 +267,22 @@ export async function fetchRecentCustomers(limit: number = 3, cacheDuration: num
  * Fetch recent payments with deduplication
  */
 export async function fetchRecentPayments(limit: number = 5, cacheDuration: number = 10000) {
+  const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
-    `recent-payments-${limit}`,
+    `recent-payments-${limit}-${currentBranchId || 'all'}`,
     async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('customer_payments')
         .select('id, amount, payment_date, status')
         .order('payment_date', { ascending: false })
         .limit(limit);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data || [];
@@ -236,13 +311,21 @@ export function clearQueryCache(key: string) {
  * Fetch customer payments with deduplication
  */
 export async function fetchCustomerPayments(cacheDuration: number = 5000) {
+  const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
-    'customer-payments',
+    `customer-payments-${currentBranchId || 'all'}`,
     async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('customer_payments')
         .select('*')
         .order('payment_date', { ascending: false });
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data || [];

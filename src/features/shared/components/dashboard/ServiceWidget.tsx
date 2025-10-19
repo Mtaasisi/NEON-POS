@@ -44,13 +44,23 @@ export const ServiceWidget: React.FC<ServiceWidgetProps> = ({ className }) => {
     try {
       setIsLoading(true);
       
-      // Import supabase client
+      // Import supabase client and branch helper
       const { supabase } = await import('../../../../lib/supabaseClient');
+      const { getCurrentBranchId } = await import('../../../../lib/branchAwareApi');
       
-      // Fetch devices data for service metrics
-      const { data: devicesData, error: devicesError } = await supabase
+      const currentBranchId = getCurrentBranchId();
+      
+      // Fetch devices data for service metrics in current branch
+      let query = supabase
         .from('devices')
         .select('id, status, problem_description, created_at, updated_at, actual_cost');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: devicesData, error: devicesError } = await query;
 
       if (devicesError) {
         console.error('❌ Devices query Supabase error:', JSON.stringify(devicesError, null, 2));
@@ -128,9 +138,16 @@ export const ServiceWidget: React.FC<ServiceWidgetProps> = ({ className }) => {
   };
 
   const formatCurrency = (amount: number) => {
-    if (amount >= 1000000) return `${(amount / 1000000).toFixed(1)}M`;
-    if (amount >= 1000) return `${(amount / 1000).toFixed(1)}K`;
-    return amount.toString();
+    if (amount >= 1000000000) {
+      return `TSh ${(amount / 1000000000).toFixed(1)}B`;
+    }
+    if (amount >= 1000000) {
+      return `TSh ${(amount / 1000000).toFixed(1)}M`;
+    }
+    if (amount >= 1000) {
+      return `TSh ${(amount / 1000).toFixed(1)}K`;
+    }
+    return `TSh ${amount.toLocaleString()}`;
   };
 
   const formatDuration = (minutes: number) => {
@@ -163,25 +180,29 @@ export const ServiceWidget: React.FC<ServiceWidgetProps> = ({ className }) => {
 
   if (isLoading) {
     return (
-      <GlassCard className={`p-6 ${className}`}>
+      <div className={`bg-white rounded-2xl p-7 ${className}`}>
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-75"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+          </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-indigo-100 to-blue-100 rounded-lg">
-            <Wrench className="w-5 h-5 text-indigo-600" />
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <Wrench className="w-5 h-5 text-gray-700" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Service Performance</h3>
-            <p className="text-sm text-gray-600">
+            <h3 className="text-base font-semibold text-gray-900">Service Performance</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
               {metrics.activeServices} services • {metrics.completionRate}% completion
             </p>
           </div>
@@ -189,43 +210,43 @@ export const ServiceWidget: React.FC<ServiceWidgetProps> = ({ className }) => {
       </div>
 
       {/* Service Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="text-center p-2 bg-green-50 rounded-lg">
-          <p className="text-lg font-bold text-green-700">{metrics.todayCompleted}</p>
-          <p className="text-xs text-green-600">Completed</p>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Completed</p>
+          <p className="text-2xl font-semibold text-gray-900">{metrics.todayCompleted}</p>
         </div>
-        <div className="text-center p-2 bg-blue-50 rounded-lg">
-          <p className="text-lg font-bold text-blue-700">{metrics.inProgress}</p>
-          <p className="text-xs text-blue-600">In Progress</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">In Progress</p>
+          <p className="text-2xl font-semibold text-gray-900">{metrics.inProgress}</p>
         </div>
-        <div className="text-center p-2 bg-yellow-50 rounded-lg">
-          <p className="text-lg font-bold text-yellow-700">{formatDuration(metrics.averageDuration)}</p>
-          <p className="text-xs text-yellow-600">Avg Time</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Avg Time</p>
+          <p className="text-2xl font-semibold text-gray-900">{formatDuration(metrics.averageDuration)}</p>
         </div>
       </div>
 
       {/* Average Rating */}
-      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+      <div className="p-4 bg-gray-50 rounded-lg mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-yellow-800">Service Quality</p>
+            <p className="text-xs text-gray-400 mb-1.5">Service Quality</p>
             {renderStarRating(metrics.avgRating)}
           </div>
-          <div className="flex items-center gap-1 text-green-600">
-            <TrendingUp size={12} />
-            <span className="text-xs font-medium">{metrics.completionRate}%</span>
+          <div className="flex items-center gap-1 text-emerald-600">
+            <TrendingUp size={14} />
+            <span className="text-sm font-medium">{metrics.completionRate}%</span>
           </div>
         </div>
       </div>
 
       {/* Popular Services */}
-      <div className="space-y-2 h-32 overflow-y-auto">
-        <h4 className="text-sm font-medium text-gray-700 mb-2">Popular Services</h4>
+      <div className="space-y-3 mb-6">
+        <h4 className="text-xs text-gray-400 mb-3">Popular Services</h4>
         {metrics.popularServices.slice(0, 3).map((service, index) => (
-          <div key={index} className="p-2 bg-white rounded-lg border border-gray-100">
+          <div key={index} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 bg-gradient-to-br from-indigo-400 to-blue-500 rounded-full flex items-center justify-center">
+              <div className="flex items-center gap-3">
+                <div className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold text-white">{index + 1}</span>
                 </div>
                 <div>
@@ -241,7 +262,7 @@ export const ServiceWidget: React.FC<ServiceWidgetProps> = ({ className }) => {
                 <p className="text-sm font-semibold text-gray-900">
                   {service.count} jobs
                 </p>
-                <p className="text-xs text-green-600">
+                <p className="text-xs text-gray-500">
                   {formatCurrency(service.revenue)}
                 </p>
               </div>
@@ -251,25 +272,22 @@ export const ServiceWidget: React.FC<ServiceWidgetProps> = ({ className }) => {
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-        <GlassButton
+      <div className="flex gap-2">
+        <button
           onClick={() => navigate('/services')}
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          icon={<ExternalLink size={14} />}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all"
         >
-          Manage Services
-        </GlassButton>
-        <GlassButton
+          <ExternalLink size={14} />
+          <span>Services</span>
+        </button>
+        <button
           onClick={() => navigate('/services/reports')}
-          variant="ghost"
-          size="sm"
-          icon={<Target size={14} />}
+          className="px-5 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors flex items-center gap-2"
         >
-          Reports
-        </GlassButton>
+          <Target size={14} />
+          <span>Reports</span>
+        </button>
       </div>
-    </GlassCard>
+    </div>
   );
 };

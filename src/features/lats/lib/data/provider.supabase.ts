@@ -372,6 +372,11 @@ const supabaseProvider = {
     try {
       console.log('🔍 [Provider] Fetching products with filters:', filters);
       const products = await getProductsApi();
+      
+      // 🐛 DEBUG: Detailed logging
+      console.log('🐛 [Provider] DEBUG - products type:', typeof products);
+      console.log('🐛 [Provider] DEBUG - products is array:', Array.isArray(products));
+      console.log('🐛 [Provider] DEBUG - products value:', products);
       console.log('✅ [Provider] Products fetched:', products?.length || 0);
       
       // Return in paginated format
@@ -463,11 +468,112 @@ const supabaseProvider = {
   },
 
   createProduct: async (data: any) => {
-    // This would use the latsProductApi createProduct function
-    return {
-      ok: false,
-      message: 'Not implemented yet'
-    };
+    try {
+      console.log('🔧 [Provider] Starting product creation...');
+      console.log('🔧 [Provider] Raw data received:', data);
+      
+      // Get current user for userId
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('❌ [Provider] No authenticated user');
+        return {
+          ok: false,
+          message: 'User not authenticated'
+        };
+      }
+      
+      // Map the product data to the format expected by latsProductApi
+      const productData = {
+        name: data.name,
+        description: data.description,
+        shortDescription: data.shortDescription,
+        sku: data.sku,
+        categoryId: data.categoryId || null,
+        supplierId: data.supplierId || null,
+        // Price and stock fields (will be used if no variants provided)
+        costPrice: data.costPrice,
+        sellingPrice: data.sellingPrice ?? data.price,
+        price: data.price ?? data.sellingPrice,
+        quantity: data.quantity ?? data.stockQuantity,
+        stockQuantity: data.stockQuantity ?? data.quantity,
+        minQuantity: data.minQuantity ?? data.minStockLevel,
+        minStockLevel: data.minStockLevel ?? data.minQuantity,
+        // Optional fields
+        barcode: data.barcode,
+        storageRoomId: data.storageRoomId,
+        shelfId: data.shelfId,
+        attributes: data.attributes,
+        isActive: data.isActive !== undefined ? data.isActive : true,
+        metadata: data.metadata,
+        // Handle variants if provided
+        variants: data.variants && data.variants.length > 0 ? data.variants.map((v: any) => ({
+          sku: v.sku,
+          name: v.name || 'Default',
+          sellingPrice: v.sellingPrice ?? v.price ?? 0,
+          costPrice: v.costPrice ?? 0,
+          quantity: v.quantity ?? v.stockQuantity ?? 0,
+          minQuantity: v.minQuantity ?? v.minStockLevel ?? 0,
+          attributes: v.attributes || {}
+        })) : undefined,
+        // Handle images if provided
+        images: data.images || []
+      };
+
+      console.log('🔧 [Provider] Mapped product data:', JSON.stringify(productData, null, 2));
+
+      // Call the latsProductApi createProduct function
+      console.log('🔧 [Provider] Calling API createProduct...');
+      const { createProduct: apiCreateProduct } = await import('../../../../lib/latsProductApi');
+      const createdProduct = await apiCreateProduct(productData, user.id);
+      
+      console.log('✅ [Provider] Product created successfully:', createdProduct);
+      
+      // Check if product was created successfully
+      if (!createdProduct || !createdProduct.id) {
+        console.error('❌ [Provider] Product creation returned null or no ID - likely RLS policy issue');
+        return {
+          ok: false,
+          message: 'Product creation failed - database returned no data. This may be an RLS policy issue.'
+        };
+      }
+      
+      // Load variants for the created product
+      const variantsResponse = await supabaseProvider.getProductVariants(createdProduct.id);
+      
+      return {
+        ok: true,
+        data: {
+          ...createdProduct,
+          variants: variantsResponse.ok ? variantsResponse.data : []
+        },
+        message: 'Product created successfully'
+      };
+    } catch (error: any) {
+      console.error('❌ [Provider] Error creating product:', error);
+      console.error('❌ [Provider] Error stack:', error?.stack);
+      console.error('❌ [Provider] Error details:', JSON.stringify(error, null, 2));
+      
+      // Provide more specific error messages
+      let errorMessage = 'Failed to create product';
+      if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      // Check for common database errors
+      if (error?.code === '23505') {
+        errorMessage = 'Duplicate SKU detected. Please use a unique SKU.';
+      } else if (error?.code === '23503') {
+        errorMessage = 'Invalid reference: Category or Supplier does not exist.';
+      } else if (error?.code === '42703') {
+        errorMessage = 'Database column mismatch. Please contact support.';
+      }
+      
+      return {
+        ok: false,
+        message: errorMessage,
+        error: error
+      };
+    }
   },
 
   updateProduct: async (id: string, data: any) => {

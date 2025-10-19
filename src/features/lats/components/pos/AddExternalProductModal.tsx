@@ -1,7 +1,5 @@
 // AddExternalProductModal component for LATS module
 import React, { useState, useEffect } from 'react';
-import GlassCard from '../../../shared/components/ui/GlassCard';
-import GlassButton from '../../../shared/components/ui/GlassButton';
 import PriceInput from '../../../../shared/components/ui/PriceInput';
 import { X, Package, DollarSign, Hash, Tag, Plus, Search, UserPlus, Layers } from 'lucide-react';
 import { getCategories } from '../../../../lib/categoryApi';
@@ -255,14 +253,14 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <GlassCard className="max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-200">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Package className="w-5 h-5 text-orange-600" />
+              <div className="p-2 bg-orange-500 rounded-lg">
+                <Package className="w-5 h-5 text-white" />
               </div>
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">Add External Product</h2>
@@ -271,7 +269,7 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
             </div>
             <button
               onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -284,7 +282,7 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Product Name <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -292,16 +290,16 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
                       type="text"
                       value={formData.name}
                       onChange={(e) => handleInputChange('name', e.target.value)}
-                      className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      className="w-full py-3 pl-10 pr-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-colors"
                       placeholder="Enter product name"
                       required
                     />
-                    <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                    <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   </div>
                 </div>
                 
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     SKU/QrCode/Serial <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -309,18 +307,18 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
                       type="text"
                       value={formData.sku}
                       onChange={(e) => handleInputChange('sku', e.target.value)}
-                      className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      className="w-full py-3 pl-10 pr-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-colors"
                       placeholder="Auto-generated SKU"
                       required
                     />
-                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Category
                   </label>
                   <CategoryInput
@@ -340,23 +338,23 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-gray-700 mb-2 font-medium">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Product Condition <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-3">
                   {[
-                    { value: 'new', label: 'New', color: 'bg-green-500 hover:bg-green-600' },
-                    { value: 'used', label: 'Used', color: 'bg-blue-500 hover:bg-blue-600' },
-                    { value: 'refurbished', label: 'Refurbished', color: 'bg-purple-500 hover:bg-purple-600' }
+                    { value: 'new', label: 'New', color: 'bg-green-500 hover:bg-green-600 border-green-500' },
+                    { value: 'used', label: 'Used', color: 'bg-blue-500 hover:bg-blue-600 border-blue-500' },
+                    { value: 'refurbished', label: 'Refurbished', color: 'bg-purple-500 hover:bg-purple-600 border-purple-500' }
                   ].map((condition) => (
                     <button
                       key={condition.value}
                       type="button"
                       onClick={() => handleInputChange('productCondition', condition.value as 'new' | 'used' | 'refurbished')}
-                      className={`px-3 py-3 text-sm rounded-lg border transition-colors ${
+                      className={`px-4 py-3 text-sm font-medium rounded-lg border-2 transition-all ${
                         formData.productCondition === condition.value
-                          ? `${condition.color} text-white border-transparent`
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          ? `${condition.color} text-white`
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                       }`}
                     >
                       {condition.label}
@@ -370,7 +368,7 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
             <div className="space-y-4">
               
               <div className="relative">
-                <label className="block text-gray-700 mb-2 font-medium">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Supplier Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -383,30 +381,30 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
                     }}
                     onFocus={() => setShowSupplierSuggestions(formData.supplierName.length > 0)}
                     onBlur={() => setTimeout(() => setShowSupplierSuggestions(false), 200)}
-                    className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                    className="w-full py-3 pl-10 pr-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-colors"
                     placeholder="Enter supplier name"
                     required
                   />
-                  <UserPlus className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                  <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 </div>
                 
                 {/* Supplier Suggestions Dropdown */}
                 {showSupplierSuggestions && filteredSuppliers.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-2 bg-white border border-gray-300 rounded-lg shadow-xl max-h-60 overflow-y-auto">
                     {filteredSuppliers.map((supplier) => (
                       <div
                         key={supplier.id}
                         onClick={() => handleSupplierSelect(supplier)}
-                        className="p-3 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors last:border-b-0"
+                        className="p-3 border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors last:border-b-0"
                       >
-                        <div className="font-medium">{supplier.name}</div>
+                        <div className="font-medium text-gray-900">{supplier.name}</div>
                         <div className="text-sm text-gray-600">{supplier.phone}</div>
                       </div>
                     ))}
                     
                     <button
                       onClick={handleCreateNewSupplier}
-                      className="w-full p-3 border-t border-gray-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors flex items-center gap-2"
+                      className="w-full p-3 border-t border-gray-200 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors flex items-center justify-center gap-2 font-medium"
                     >
                       <UserPlus className="w-4 h-4" />
                       Create New Supplier
@@ -423,7 +421,7 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Purchase Price (TZS) <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -431,15 +429,15 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
                       value={formData.purchasePrice}
                       onChange={(value) => handleInputChange('purchasePrice', value)}
                       placeholder="0"
-                      className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      className="w-full py-3 pl-10 pr-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-colors"
                       required
                     />
-                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   </div>
                 </div>
                 
                 <div>
-                  <label className="block text-gray-700 mb-2 font-medium">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
                     Purchase Quantity <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -448,16 +446,16 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
                       min="1"
                       value={formData.purchaseQuantity}
                       onChange={(e) => handleInputChange('purchaseQuantity', parseInt(e.target.value) || 1)}
-                      className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                      className="w-full py-3 pl-10 pr-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-colors"
                       required
                     />
-                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                    <Hash className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   </div>
                 </div>
               </div>
 
               <div>
-                <label className="block text-gray-700 mb-2 font-medium">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Selling Price (TZS) <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
@@ -465,10 +463,10 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
                     value={formData.price}
                     onChange={(value) => handleInputChange('price', value)}
                     placeholder="0"
-                    className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                    className="w-full py-3 pl-10 pr-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-colors"
                     required
                   />
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                 </div>
               </div>
 
@@ -479,19 +477,19 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
         <div className="space-y-4">
               
               <div>
-                <label className="block text-gray-700 mb-2 font-medium">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   Warranty (Months)
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-3">
                   {[0, 3, 6, 12].map((months) => (
                     <button
                       key={months}
                       type="button"
                       onClick={() => handleInputChange('warrantyInfo', months === 0 ? 'No warranty' : `${months} months`)}
-                      className={`px-3 py-2 text-sm rounded-lg border transition-colors ${
+                      className={`px-4 py-3 text-sm font-medium rounded-lg border-2 transition-all ${
                         formData.warrantyInfo === (months === 0 ? 'No warranty' : `${months} months`)
                           ? 'bg-orange-500 text-white border-orange-500'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
                       }`}
                     >
                       {months === 0 ? 'None' : `${months}m`}
@@ -503,13 +501,13 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
               {/* Additional Notes - Optional with Plus Button */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-gray-700 font-medium">
+                  <label className="block text-sm font-medium text-gray-700">
                     Additional Notes
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowNotes(!showNotes)}
-                    className="p-1 text-blue-600 hover:text-blue-800 transition-colors"
+                    className="p-1.5 text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded transition-colors"
                   >
                     <Plus className={`w-4 h-4 transition-transform ${showNotes ? 'rotate-45' : ''}`} />
                   </button>
@@ -518,7 +516,7 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
                   <textarea
                     value={formData.notes}
                     onChange={(e) => handleInputChange('notes', e.target.value)}
-                    className="w-full py-3 px-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                    className="w-full py-3 px-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-none transition-colors resize-none"
                     placeholder="Any additional notes about the product or supplier"
                     rows={3}
                   />
@@ -527,49 +525,56 @@ const AddExternalProductModal: React.FC<AddExternalProductModalProps> = ({
             </div>
 
             {/* Summary */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-medium text-gray-700">Summary</h4>
+            <div className="bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200 rounded-lg p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-gray-800">Order Summary</h4>
                 <div className="text-right">
-                  <div className="text-lg font-semibold text-green-600">
+                  <div className="text-2xl font-bold text-orange-600">
                     TZS {formData.price.toLocaleString()}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-600 font-medium mt-1">
                     Profit: TZS {((formData.price - formData.purchasePrice) * formData.quantity).toLocaleString()}
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                <div>{formData.name || 'Product name'}</div>
-                <div className="text-right">{formData.supplierName || 'Supplier'}</div>
-                <div>{formData.category || 'Category'}</div>
-                <div className="text-right capitalize">{formData.productCondition}</div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="text-gray-600">
+                  <span className="font-medium text-gray-800">{formData.name || 'Product name'}</span>
+                </div>
+                <div className="text-right text-gray-600">
+                  <span className="font-medium text-gray-800">{formData.supplierName || 'Supplier'}</span>
+                </div>
+                <div className="text-gray-600">{formData.category || 'No category'}</div>
+                <div className="text-right">
+                  <span className="px-2 py-1 bg-white rounded text-xs font-medium capitalize text-gray-700">
+                    {formData.productCondition}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 pt-4">
-              <GlassButton
+            <div className="flex gap-3 pt-4 border-t border-gray-200 mt-6 pt-6">
+              <button
                 type="button"
                 onClick={onClose}
-                variant="secondary"
-                className="flex-1"
+                className="flex-1 px-6 py-3 bg-white text-gray-700 border-2 border-gray-300 rounded-lg font-medium hover:bg-gray-50 hover:border-gray-400 transition-all"
               >
                 Cancel
-              </GlassButton>
-              <GlassButton
+              </button>
+              <button
                 type="submit"
                 disabled={isSubmitting || !formData.name || !formData.sku || formData.price <= 0}
-                className="flex-1 bg-gradient-to-r from-orange-500 to-red-600 text-white"
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg"
               >
                 {isSubmitting ? 'Adding Product...' : 'Add to Cart'}
-              </GlassButton>
+              </button>
             </div>
             
 
           </form>
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 };

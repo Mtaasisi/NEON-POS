@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, TrendingUp, TrendingDown, Users, Target, ExternalLink } from 'lucide-react';
-import GlassCard from '../ui/GlassCard';
-import GlassButton from '../ui/GlassButton';
+import { BarChart3, TrendingUp, TrendingDown, ExternalLink, Target, Users } from 'lucide-react';
 import { dashboardService } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
 
@@ -56,11 +54,18 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
   const formatCurrency = (amount: number | null | undefined) => {
     // Handle null, undefined, or invalid values
     if (amount === null || amount === undefined || isNaN(amount)) {
-      return '0';
+      return 'TSh 0';
     }
-    if (amount >= 1000000) return `${(amount / 1000000).toFixed(1)}M`;
-    if (amount >= 1000) return `${(amount / 1000).toFixed(1)}K`;
-    return amount.toString();
+    if (amount >= 1000000000) {
+      return `TSh ${(amount / 1000000000).toFixed(1)}B`;
+    }
+    if (amount >= 1000000) {
+      return `TSh ${(amount / 1000000).toFixed(1)}M`;
+    }
+    if (amount >= 1000) {
+      return `TSh ${(amount / 1000).toFixed(1)}K`;
+    }
+    return `TSh ${amount.toLocaleString()}`;
   };
 
   const getGrowthColor = (growth: number | null | undefined) => {
@@ -79,50 +84,74 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
 
   if (isLoading) {
     return (
-      <GlassCard className={`p-6 ${className}`}>
+      <div className={`bg-white rounded-2xl p-7 ${className}`}>
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-75"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+          </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-violet-100 to-purple-100 rounded-lg">
-            <BarChart3 className="w-5 h-5 text-violet-600" />
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <BarChart3 className="w-5 h-5 text-gray-700" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Business Analytics</h3>
-            <p className="text-sm text-gray-600">Key performance indicators</p>
+            <h3 className="text-base font-semibold text-gray-900">Business Analytics</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Key performance indicators</p>
           </div>
         </div>
       </div>
 
       {/* Growth Metrics */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className={`p-3 rounded-lg border ${getGrowthColor(metrics.revenueGrowth).replace('text-', 'border-').replace('bg-', 'bg-opacity-20 bg-')}`}>
-          <div className="flex items-center gap-2 mb-1">
-            {getGrowthIcon(metrics.revenueGrowth)}
-            <span className="text-sm font-medium text-gray-700">Revenue Growth</span>
+      <div className="grid grid-cols-2 gap-4 mb-8">
+        <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            {metrics.revenueGrowth > 0 ? (
+              <TrendingUp size={14} className="text-emerald-500" />
+            ) : metrics.revenueGrowth < 0 ? (
+              <TrendingDown size={14} className="text-rose-500" />
+            ) : (
+              <Target size={14} className="text-gray-500" />
+            )}
+            <span className="text-xs text-gray-500">Revenue Growth</span>
           </div>
-          <div className={`flex items-center gap-1 ${getGrowthColor(metrics.revenueGrowth)}`}>
-            <span className="text-lg font-bold">
+          <div className="flex items-center gap-1">
+            <span className={`text-2xl font-semibold ${
+              metrics.revenueGrowth > 0 ? 'text-emerald-600' : 
+              metrics.revenueGrowth < 0 ? 'text-rose-600' : 
+              'text-gray-900'
+            }`}>
               {metrics.revenueGrowth > 0 ? '+' : ''}{metrics.revenueGrowth}%
             </span>
           </div>
         </div>
 
-        <div className={`p-3 rounded-lg border ${getGrowthColor(metrics.customerGrowth).replace('text-', 'border-').replace('bg-', 'bg-opacity-20 bg-')}`}>
-          <div className="flex items-center gap-2 mb-1">
-            <Users size={12} />
-            <span className="text-sm font-medium text-gray-700">Customer Growth</span>
+        <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+          <div className="flex items-center gap-2 mb-2">
+            {metrics.customerGrowth > 0 ? (
+              <TrendingUp size={14} className="text-emerald-500" />
+            ) : metrics.customerGrowth < 0 ? (
+              <TrendingDown size={14} className="text-rose-500" />
+            ) : (
+              <Users size={14} className="text-gray-500" />
+            )}
+            <span className="text-xs text-gray-500">Customer Growth</span>
           </div>
-          <div className={`flex items-center gap-1 ${getGrowthColor(metrics.customerGrowth)}`}>
-            <span className="text-lg font-bold">
+          <div className="flex items-center gap-1">
+            <span className={`text-2xl font-semibold ${
+              metrics.customerGrowth > 0 ? 'text-emerald-600' : 
+              metrics.customerGrowth < 0 ? 'text-rose-600' : 
+              'text-gray-900'
+            }`}>
               {metrics.customerGrowth > 0 ? '+' : ''}{metrics.customerGrowth}%
             </span>
           </div>
@@ -130,33 +159,33 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
       </div>
 
       {/* Key Metrics */}
-      <div className="space-y-3 h-24 overflow-y-auto">
-        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-          <span className="text-sm font-medium text-gray-700">Avg Order Value</span>
-          <span className="text-sm font-bold text-gray-900">
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Avg Order Value</p>
+          <p className="text-xl font-semibold text-gray-900">
             {formatCurrency(metrics.avgOrderValue)}
-          </span>
+          </p>
         </div>
         
-        <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-          <span className="text-sm font-medium text-gray-700">Orders Today</span>
-          <span className="text-sm font-bold text-gray-900">
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Orders Today</p>
+          <p className="text-xl font-semibold text-gray-900">
             {metrics.totalOrders ?? 0}
-          </span>
+          </p>
         </div>
       </div>
 
       {/* Top Services */}
       {metrics.topPerformingServices.length > 0 && (
-        <div className="mt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">Popular Services</h4>
-          <div className="space-y-1 h-20 overflow-y-auto">
+        <div className="mb-6">
+          <h4 className="text-xs text-gray-400 mb-3">Popular Services</h4>
+          <div className="space-y-2">
             {metrics.topPerformingServices.slice(0, 3).map((service, index) => (
-              <div key={index} className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
-                <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+              <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-xs font-bold text-white">{index + 1}</span>
                 </div>
-                <span className="text-sm text-gray-700 truncate">{service}</span>
+                <span className="text-sm text-gray-900 truncate">{service}</span>
               </div>
             ))}
           </div>
@@ -164,25 +193,15 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
       )}
 
       {/* Actions */}
-      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-        <GlassButton
+      <div className="flex gap-2">
+        <button
           onClick={() => navigate('/lats/analytics')}
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          icon={<ExternalLink size={14} />}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
-          View Analytics
-        </GlassButton>
-        <GlassButton
-          onClick={() => navigate('/lats/sales-reports')}
-          variant="ghost"
-          size="sm"
-          icon={<BarChart3 size={14} />}
-        >
-          Reports
-        </GlassButton>
+          <ExternalLink size={14} />
+          <span>View Analytics</span>
+        </button>
       </div>
-    </GlassCard>
+    </div>
   );
 };

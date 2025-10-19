@@ -474,7 +474,7 @@ const SparePartAddEditForm: React.FC<SparePartAddEditFormProps> = ({
         quantity: sparePart.quantity,
         minQuantity: sparePart.min_quantity,
         storageRoomId: sparePart.storage_room_id || '',
-        shelfId: sparePart.store_shelf_id || '',
+        shelfId: sparePart.shelf_id || '',
         storeLocationId: sparePart.storage_room_id || '',
         location: sparePart.location || '',
         compatibleDevices: sparePart.compatible_devices || '',

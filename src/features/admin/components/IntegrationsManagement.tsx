@@ -122,6 +122,29 @@ const IntegrationsManagement: React.FC = () => {
     }
   };
 
+  const handleDeleteAllTestIntegrations = async () => {
+    const testIntegrations = integrations.filter(i => i.is_test_mode);
+    
+    if (testIntegrations.length === 0) {
+      toast.error('No test integrations found');
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to delete all ${testIntegrations.length} test integration(s)?`)) return;
+
+    try {
+      // Delete each test integration
+      for (const integration of testIntegrations) {
+        await deleteIntegration(integration.integration_name);
+      }
+      toast.success(`Successfully deleted ${testIntegrations.length} test integration(s)!`);
+      await loadIntegrations();
+    } catch (error: any) {
+      console.error('Error deleting test integrations:', error);
+      toast.error('Failed to delete test integrations');
+    }
+  };
+
   const handleToggle = async (integrationName: string, enabled: boolean) => {
     try {
       await toggleIntegration(integrationName, enabled);
@@ -396,14 +419,26 @@ const IntegrationsManagement: React.FC = () => {
             Configure and manage all your third-party integrations
           </p>
         </div>
-        <GlassButton
-          onClick={loadIntegrations}
-          variant="outline"
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </GlassButton>
+        <div className="flex items-center gap-2">
+          {integrations.some(i => i.is_test_mode) && (
+            <GlassButton
+              onClick={handleDeleteAllTestIntegrations}
+              variant="outline"
+              className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Test Integrations
+            </GlassButton>
+          )}
+          <GlassButton
+            onClick={loadIntegrations}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </GlassButton>
+        </div>
       </div>
 
       {/* Existing Integrations */}

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, User, ExternalLink, AlertCircle, CheckCircle } from 'lucide-react';
-import GlassCard from '../ui/GlassCard';
-import GlassButton from '../ui/GlassButton';
+import { Calendar, Clock, User, ExternalLink } from 'lucide-react';
 import { dashboardService, AppointmentSummary } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
 
@@ -81,60 +79,69 @@ export const AppointmentWidget: React.FC<AppointmentWidgetProps> = ({ className 
 
   if (isLoading) {
     return (
-      <GlassCard className={`p-6 ${className}`}>
+      <div className={`bg-white rounded-2xl p-7 ${className}`}>
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-75"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+          </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-purple-100 to-indigo-100 rounded-lg">
-            <Calendar className="w-5 h-5 text-purple-600" />
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <Calendar className="w-5 h-5 text-gray-700" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Today's Schedule</h3>
-            <p className="text-sm text-gray-600">
-              {stats.today} appointments • {stats.completionRate}% completion
+            <h3 className="text-base font-semibold text-gray-900">Today's Schedule</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {stats.today} appointments • {stats.completionRate}% done
             </p>
           </div>
         </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="text-center p-2 bg-purple-50 rounded-lg">
-          <p className="text-lg font-bold text-purple-700">{stats.today}</p>
-          <p className="text-xs text-purple-600">Today</p>
+      <div className="grid grid-cols-3 gap-4 mb-8">
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Today</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.today}</p>
         </div>
-        <div className="text-center p-2 bg-blue-50 rounded-lg">
-          <p className="text-lg font-bold text-blue-700">{stats.upcoming}</p>
-          <p className="text-xs text-blue-600">Upcoming</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Upcoming</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.upcoming}</p>
         </div>
-        <div className="text-center p-2 bg-green-50 rounded-lg">
-          <p className="text-lg font-bold text-green-700">{stats.completionRate}%</p>
-          <p className="text-xs text-green-600">Complete</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-1.5">Done</p>
+          <p className="text-2xl font-semibold text-gray-900">{stats.completionRate}%</p>
         </div>
       </div>
 
       {/* Appointments List */}
-      <div className="space-y-2 h-40 overflow-y-auto">
+      <div className="space-y-3 max-h-64 overflow-y-auto mb-6">
         {appointments.length > 0 ? (
           appointments.map((appointment) => (
-            <div key={appointment.id} className={`p-3 bg-white rounded-lg border-l-4 ${getPriorityColor(appointment.priority)}`}>
+            <div key={appointment.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Clock size={12} className="text-gray-500" />
-                    <span className="text-sm font-medium text-gray-900">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Clock size={14} className="text-gray-500" />
+                    <span className="text-sm font-semibold text-gray-900">
                       {formatTime(appointment.time)}
                     </span>
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                      appointment.status === 'confirmed' || appointment.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                      appointment.status === 'in-progress' ? 'bg-blue-50 text-blue-600' :
+                      appointment.status === 'cancelled' ? 'bg-rose-50 text-rose-600' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
                       {appointment.status}
                     </span>
                   </div>
@@ -146,8 +153,8 @@ export const AppointmentWidget: React.FC<AppointmentWidgetProps> = ({ className 
                   </p>
                   {appointment.technicianName && (
                     <div className="flex items-center gap-1 mt-1">
-                      <User size={10} className="text-gray-400" />
-                      <span className="text-xs text-gray-500">{appointment.technicianName}</span>
+                      <User size={12} className="text-gray-400" />
+                      <span className="text-xs text-gray-400">{appointment.technicianName}</span>
                     </div>
                   )}
                 </div>
@@ -155,33 +162,25 @@ export const AppointmentWidget: React.FC<AppointmentWidgetProps> = ({ className 
             </div>
           ))
         ) : (
-          <div className="text-center py-4">
-            <Calendar className="w-6 h-6 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600">No appointments today</p>
+          <div className="text-center py-12">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+              <Calendar className="w-6 h-6 text-gray-400" />
+            </div>
+            <p className="text-sm text-gray-500">No appointments today</p>
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-        <GlassButton
+      <div className="flex gap-2">
+        <button
           onClick={() => navigate('/appointments')}
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          icon={<ExternalLink size={14} />}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
-          View All
-        </GlassButton>
-        <GlassButton
-          onClick={() => navigate('/appointments/new')}
-          variant="ghost"
-          size="sm"
-          icon={<Calendar size={14} />}
-        >
-          Book
-        </GlassButton>
+          <ExternalLink size={14} />
+          <span>View All</span>
+        </button>
       </div>
-    </GlassCard>
+    </div>
   );
 };

@@ -1512,12 +1512,17 @@ export class PurchaseOrderService {
           barcode: serial.barcode || null,
           status: 'available' as const,
           location: serial.location || null,
+          warranty_start: serial.warranty_start || null,
+          warranty_end: serial.warranty_end || null,
+          cost_price: serial.cost_price || orderItem.unit_cost || 0,
+          selling_price: serial.selling_price || null,
           notes: serial.notes || `Received from purchase order ${purchaseOrderId}`,
           metadata: {
             purchase_order_id: purchaseOrderId,
             purchase_order_item_id: receivedItem.id,
             received_by: userId,
-            received_at: new Date().toISOString()
+            received_at: new Date().toISOString(),
+            warranty_months: serial.warranty_months || 12
           }
         }));
 

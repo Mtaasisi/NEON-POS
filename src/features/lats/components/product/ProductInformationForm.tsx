@@ -97,7 +97,7 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
               htmlFor="sku"
               className={`block mb-2 font-medium ${currentErrors.sku ? 'text-red-600' : 'text-gray-700'}`}
             >
-              SKU (Stock Keeping Unit) *
+              Base SKU (Stock Keeping Unit) *
             </label>
             <div className="relative">
               <input
@@ -125,6 +125,9 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
                 </button>
               )}
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Variant SKUs will be auto-generated: {formData.sku ? `${formData.sku}-V01, ${formData.sku}-V02...` : 'BASE-V01, BASE-V02...'}
+            </p>
             {currentErrors.sku && (
               <p className="mt-1 text-sm text-red-600">{currentErrors.sku}</p>
             )}

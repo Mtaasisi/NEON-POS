@@ -124,6 +124,8 @@ export interface Product {
   
   
   // New storage fields
+  storageRoomId?: string;
+  shelfId?: string;
   storageRoomName?: string;
   shelfName?: string;
   storeLocationName?: string;

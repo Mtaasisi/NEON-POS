@@ -132,8 +132,6 @@ export class ErrorLogger {
           return 'Database connection error: Please check your internet connection and try again';
         case 'PGRST116':
           return 'Resource not found: The requested purchase order does not exist';
-        case 'PGRST301':
-          return 'Permission denied: You do not have access to this resource';
         case '23505': // Unique constraint violation
           return 'Duplicate entry: This purchase order already exists';
         case '23503': // Foreign key constraint violation

@@ -268,49 +268,25 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
         </h3>
         
         <div className="flex items-center gap-3">
-          {useVariants && variants.length > 0 && (
-            <>
-              <button
-                type="button"
-                onClick={() => setIsReorderingVariants(!isReorderingVariants)}
-                className={`text-xs px-3 py-1 rounded ${
-                  isReorderingVariants 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-                }`}
-                title="Toggle reorder mode"
-              >
-                <Move size={14} className="inline mr-1" />
-                {isReorderingVariants ? 'Done' : 'Reorder'}
-              </button>
-              
-
-            </>
-          )}
-          
-          <button
-            type="button"
-            role="switch"
-            aria-checked={useVariants}
-            onClick={() => {
-              const next = !useVariants;
-              setUseVariants(next);
-            }}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full ${
-              useVariants ? 'bg-blue-600' : 'bg-gray-300'
-            }`}
-            aria-label="Toggle variants"
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
-                useVariants ? 'translate-x-5' : 'translate-x-1'
+          {variants.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsReorderingVariants(!isReorderingVariants)}
+              className={`text-xs px-3 py-1 rounded ${
+                isReorderingVariants 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
               }`}
-            />
-          </button>
+              title="Toggle reorder mode"
+            >
+              <Move size={14} className="inline mr-1" />
+              {isReorderingVariants ? 'Done' : 'Reorder'}
+            </button>
+          )}
         </div>
       </div>
       
-      {useVariants && showVariants && (
+      {showVariants && (
         <div className="space-y-4">
           {/* Variants List */}
           <div className="space-y-3">

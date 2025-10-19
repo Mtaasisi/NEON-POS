@@ -44,7 +44,24 @@ export interface CreateProductData {
 
   categoryId: string;
   supplierId?: string;
-  variants: Array<{
+  
+  // Price and stock fields for non-variant products
+  costPrice?: number;
+  sellingPrice?: number;
+  price?: number; // Alternative to sellingPrice
+  quantity?: number;
+  stockQuantity?: number; // Alternative to quantity
+  minQuantity?: number;
+  minStockLevel?: number; // Alternative to minQuantity
+  
+  // Optional fields
+  barcode?: string;
+  storageRoomId?: string;
+  shelfId?: string;
+  attributes?: Record<string, any>;
+  isActive?: boolean;
+  
+  variants?: Array<{
     sku: string;
     name: string;
   
@@ -81,15 +98,44 @@ export async function createProduct(
     const productInsertData: any = {
       name: productWithoutImages.name,
       description: productWithoutImages.description,
+      sku: productWithoutImages.sku,
       category_id: productWithoutImages.categoryId,
       is_active: productWithoutImages.isActive ?? true,
       total_quantity: 0,
       total_value: 0,
-      branch_id: currentBranchId,  // 🔒 Auto-assign to current branch
-      is_shared: false,  // 🔒 Not shared by default
-      sharing_mode: 'isolated',  // 🔒 Isolated by default
-      visible_to_branches: currentBranchId ? [currentBranchId] : null  // 🔒 Only visible to current branch
+      branch_id: currentBranchId  // 🔒 Auto-assign to current branch
     };
+    
+    // Add price and stock fields if provided (for non-variant products)
+    if (productWithoutImages.costPrice !== undefined) {
+      productInsertData.cost_price = productWithoutImages.costPrice;
+    }
+    if (productWithoutImages.sellingPrice !== undefined || productWithoutImages.price !== undefined) {
+      productInsertData.unit_price = productWithoutImages.sellingPrice ?? productWithoutImages.price;
+    }
+    if (productWithoutImages.quantity !== undefined || productWithoutImages.stockQuantity !== undefined) {
+      productInsertData.stock_quantity = productWithoutImages.quantity ?? productWithoutImages.stockQuantity;
+    }
+    if (productWithoutImages.minQuantity !== undefined || productWithoutImages.minStockLevel !== undefined) {
+      productInsertData.min_stock_level = productWithoutImages.minQuantity ?? productWithoutImages.minStockLevel;
+    }
+    
+    // Add optional fields if provided
+    if (productWithoutImages.storageRoomId) {
+      productInsertData.storage_room_id = productWithoutImages.storageRoomId;
+    }
+    if (productWithoutImages.shelfId) {
+      productInsertData.shelf_id = productWithoutImages.shelfId;
+    }
+    if (productWithoutImages.barcode) {
+      productInsertData.barcode = productWithoutImages.barcode;
+    }
+    if (productWithoutImages.attributes) {
+      productInsertData.attributes = productWithoutImages.attributes;
+    }
+    if (productWithoutImages.metadata) {
+      productInsertData.metadata = productWithoutImages.metadata;
+    }
     
     // Only add supplier_id if it has valid values
     if (productWithoutImages.supplierId) {
@@ -273,22 +319,27 @@ export async function getProducts(): Promise<LatsProduct[]> {
     
     let query = supabase
       .from('lats_products')
-      .select('id, name, description, sku, barcode, category_id, supplier_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, store_shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
+      .select('id, name, description, sku, barcode, category_id, supplier_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id')
       .order('created_at', { ascending: false });
     
     // 🔒 IMPROVED BRANCH FILTERING - Respects store isolation settings
+    // Define branchSettings outside the if block so it's accessible throughout the function
+    let branchSettings: any = null;
+    
     if (currentBranchId) {
       // Get store settings to determine isolation mode
-      const { data: branchSettings, error: branchError } = await supabase
+      const { data: settings, error: branchError } = await supabase
         .from('store_locations')
         .select('id, name, data_isolation_mode, share_products')
         .eq('id', currentBranchId)
         .single();
       
+      branchSettings = settings; // Assign to the outer variable
+      
       if (branchError) {
         console.warn('⚠️ Could not load branch settings:', branchError.message);
         console.log('%c⚠️ NO BRANCH SETTINGS - SHOWING ALL PRODUCTS!', 'background: #ff9900; color: black; font-size: 14px; font-weight: bold; padding: 5px;');
-      } else {
+      } else if (branchSettings) {
         console.log('%c🔒 STORE ISOLATION CHECK', 'background: #9C27B0; color: white; font-size: 14px; font-weight: bold; padding: 5px;');
         console.log('%c   Store Name:', 'color: #9C27B0; font-weight: bold;', branchSettings.name);
         console.log('%c   Store ID:', 'color: #9C27B0; font-weight: bold;', branchSettings.id);
@@ -297,13 +348,11 @@ export async function getProducts(): Promise<LatsProduct[]> {
         
         // Apply filter based on isolation mode
         if (branchSettings.data_isolation_mode === 'isolated') {
-          // ISOLATED MODE: Show products from this branch + shared products + products with no branch
+          // ISOLATED MODE: Show products from this branch + shared products from other branches
           console.log('%c   🔒 ISOLATED MODE ACTIVE!', 'background: #f44336; color: white; font-weight: bold; padding: 3px;');
-          console.log('%c   Filter: (branch_id = ' + currentBranchId + ' OR is_shared = true) AND branch_id IS NULL allowed', 'color: #f44336;');
-          console.log('%c   Result: Products from this store + shared products + unassigned products will be shown', 'color: #666;');
-          // Use a different approach: fetch all and filter in code, or use two separate queries
-          // For now, we'll just show branch products and shared products
-          // Products with null branch_id will be handled by removing the branch filter altogether
+          console.log('%c   Filter: branch_id = ' + currentBranchId + ' OR is_shared = true', 'color: #f44336;');
+          console.log('%c   Result: Products from this store + shared products from other stores', 'color: #666;');
+          // Show products from this branch OR products marked as shared
           query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
         } else if (branchSettings.data_isolation_mode === 'shared') {
           // SHARED MODE: Show all products
@@ -312,17 +361,20 @@ export async function getProducts(): Promise<LatsProduct[]> {
           console.log('%c   Result: ALL products from ALL stores will be shown', 'color: #666;');
           // No filter needed
         } else if (branchSettings.data_isolation_mode === 'hybrid') {
-          // HYBRID MODE: Check share_products flag
+          // HYBRID MODE: Always show this branch's products + shared products from other branches
+          console.log('%c   ⚖️ HYBRID MODE ACTIVE', 'background: #FF9800; color: white; font-weight: bold; padding: 3px;');
+          console.log('%c   Filter: branch_id = ' + currentBranchId + ' OR is_shared = true', 'color: #FF9800;');
+          console.log('%c   Result: Products from this store + shared products from other stores', 'color: #666;');
+          // Show products from this branch OR products marked as shared
+          query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+          
+          // Legacy code below for reference (can be removed later)
           if (branchSettings.share_products) {
-            console.log('%c   ⚖️ HYBRID MODE - Products SHARED', 'background: #FF9800; color: white; font-weight: bold; padding: 3px;');
-            console.log('%c   Filter: None', 'color: #FF9800;');
-            console.log('%c   Result: ALL products from ALL stores will be shown', 'color: #666;');
-            // No filter needed
+            console.log('%c   Note: This branch is also sharing its products with others', 'color: #666;');
+            // No additional filter needed - is_shared handles this
           } else {
-            console.log('%c   ⚖️ HYBRID MODE - Products ISOLATED', 'background: #FF9800; color: white; font-weight: bold; padding: 3px;');
-            console.log('%c   Filter: branch_id = ' + currentBranchId + ' OR is_shared = true', 'color: #FF9800;');
-            console.log('%c   Result: Products from this store + shared products + unassigned products will be shown', 'color: #666;');
-            query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+            console.log('%c   Note: This branch is NOT sharing its products (but can still see shared products from others)', 'color: #666;');
+            // Filter already applied above
           }
         }
       }
@@ -349,14 +401,14 @@ export async function getProducts(): Promise<LatsProduct[]> {
       throw new Error(`Failed to fetch products: ${error.message}`);
     }
     
-    // 🔧 ADDITIONAL: Fetch products with null branch_id (unassigned products)
-    // These should be visible to all branches
+    // 🔧 CONDITIONAL: Fetch products with null branch_id (unassigned products)
+    // Only fetch unassigned products if NOT in isolated mode
     let unassignedProducts: any[] = [];
-    if (currentBranchId) {
+    if (currentBranchId && branchSettings && branchSettings.data_isolation_mode !== 'isolated') {
       console.log('%c📡 Fetching unassigned products (branch_id = null)...', 'color: #FF9800;');
       const { data: nullBranchProducts, error: nullError } = await supabase
         .from('lats_products')
-        .select('id, name, description, sku, barcode, category_id, supplier_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, store_shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
+        .select('id, name, description, sku, barcode, category_id, supplier_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
         .is('branch_id', null)
         .order('created_at', { ascending: false });
       
@@ -364,6 +416,8 @@ export async function getProducts(): Promise<LatsProduct[]> {
         unassignedProducts = nullBranchProducts;
         console.log('%c✅ Found ' + unassignedProducts.length + ' unassigned products', 'color: #FF9800;');
       }
+    } else if (branchSettings?.data_isolation_mode === 'isolated') {
+      console.log('%c🔒 ISOLATED MODE: Skipping unassigned products (strict isolation)', 'color: #f44336; font-weight: bold;');
     }
 
     // Merge unassigned products with the main products list
@@ -465,12 +519,18 @@ export async function getProducts(): Promise<LatsProduct[]> {
         .in('product_id', productIds)
         .order('variant_name');
       
-      // 🔒 BRANCH FILTER: Filter by branch OR shared variants
+      // 🔒 BRANCH FILTER: Filter variants based on isolation mode
       const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
-      if (currentBranchIdForVariants) {
-        console.log('📦 [latsProductApi] Filtering variants by branch or shared:', currentBranchIdForVariants);
-        // First query: variants from current branch or shared
-        variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants}`);
+      if (currentBranchIdForVariants && branchSettings) {
+        if (branchSettings.data_isolation_mode === 'isolated' || branchSettings.data_isolation_mode === 'hybrid') {
+          // ISOLATED/HYBRID MODE: Variants from this branch OR shared variants
+          console.log('📦 [latsProductApi] Filtering variants: branch=' + currentBranchIdForVariants + ' OR is_shared=true');
+          variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants}`);
+        } else {
+          // SHARED MODE: All variants
+          console.log('📦 [latsProductApi] SHARED MODE: Loading all variants');
+          // No filter needed
+        }
       } else {
         console.log('📦 [latsProductApi] Loading all variants (no branch selected)');
       }
@@ -480,8 +540,9 @@ export async function getProducts(): Promise<LatsProduct[]> {
       // Extract data from supabase response
       allVariants = variantsResult.data || [];
       
-      // 🔧 ADDITIONAL: Fetch variants with null branch_id (unassigned variants)
-      if (currentBranchIdForVariants && productIds.length > 0) {
+      // 🔧 CONDITIONAL: Fetch variants with null branch_id (unassigned variants)
+      // Only in non-isolated modes
+      if (currentBranchIdForVariants && productIds.length > 0 && branchSettings?.data_isolation_mode !== 'isolated') {
         console.log('📦 [latsProductApi] Fetching unassigned variants (branch_id = null)...');
         const { data: nullBranchVariants } = await supabase
           .from('lats_product_variants')
@@ -498,6 +559,8 @@ export async function getProducts(): Promise<LatsProduct[]> {
             new Map(mergedVariants.map(v => [v.id, v])).values()
           );
         }
+      } else if (branchSettings?.data_isolation_mode === 'isolated') {
+        console.log('🔒 ISOLATED MODE: Skipping unassigned variants (strict isolation)');
       }
       
       const duration = Date.now() - variantsStartTime;
@@ -575,8 +638,8 @@ export async function getProducts(): Promise<LatsProduct[]> {
     const shelfData: Map<string, any> = new Map();
     try {
       const productIdsWithShelves = products
-        .filter(p => p.store_shelf_id)
-        .map(p => p.store_shelf_id);
+        .filter(p => p.shelf_id)
+        .map(p => p.shelf_id);
       
       if (productIdsWithShelves.length > 0) {
         const { data: shelves } = await supabase
@@ -635,8 +698,10 @@ export async function getProducts(): Promise<LatsProduct[]> {
         supplier: product.supplier_id ? suppliersMap.get(product.supplier_id) : undefined,
         category: product.category_id ? categoriesMap.get(product.category_id) : undefined,
         // Shelf data (fetched separately)
-        shelfName: product.store_shelf_id ? shelfData.get(product.store_shelf_id)?.name : undefined,
-        shelfCode: product.store_shelf_id ? shelfData.get(product.store_shelf_id)?.code : undefined,
+        shelfId: product.shelf_id,
+        storageRoomId: product.storage_room_id,
+        shelfName: product.shelf_id ? shelfData.get(product.shelf_id)?.name : undefined,
+        shelfCode: product.shelf_id ? shelfData.get(product.shelf_id)?.code : undefined,
         storageRoomName: undefined, // Can be added later if needed
         createdAt: product.created_at,
         updatedAt: product.updated_at,

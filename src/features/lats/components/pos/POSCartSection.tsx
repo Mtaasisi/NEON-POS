@@ -89,49 +89,49 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
         {/* Customer Search Section */}
         <div className="mb-6">
           {selectedCustomer ? (
-            <div className="p-4 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl border-2 border-blue-200 shadow-lg hover:shadow-xl transition-all duration-300">
+            <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200 hover:border-blue-300 hover:shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-purple-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="relative group">
+                    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-base shadow-sm group-hover:scale-110 transition-transform duration-300">
                       {selectedCustomer.name.charAt(0)}
                     </div>
-                    <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center ${
+                    <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-sm animate-bounce ${
                       selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold'
-                        ? 'bg-gradient-to-r from-yellow-400 to-orange-500' 
-                        : 'bg-gradient-to-r from-green-400 to-emerald-500'
+                        ? 'bg-amber-500' 
+                        : 'bg-emerald-500'
                     }`}>
                       <Crown className="w-3 h-3 text-white" />
                     </div>
                   </div>
                   <div>
-                    <div className="font-bold text-gray-900 text-lg">{selectedCustomer.name}</div>
-                    <div className="text-sm text-gray-600 flex items-center gap-2">
-                      <Phone className="w-3 h-3" />
+                    <div className="font-bold text-gray-900">{selectedCustomer.name}</div>
+                    <div className="text-sm text-gray-700 flex items-center gap-2 mt-0.5">
+                      <Phone className="w-3.5 h-3.5" />
                       {selectedCustomer.phone}
                     </div>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-300 hover:scale-105 ${
                         selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold'
-                          ? 'bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-700 border border-purple-200' 
-                          : 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border border-green-200'
+                          ? 'bg-amber-100 text-amber-800 border-2 border-amber-300 hover:bg-amber-200' 
+                          : 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300 hover:bg-emerald-200'
                       }`}>
-                        {selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold' ? 'VIP Member' : 'Active Member'}
+                        {selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold' ? 'VIP' : 'Active'}
                       </span>
-                      <span className="flex items-center gap-1 text-xs text-gray-600 bg-white px-2 py-1 rounded-full border border-gray-200">
-                        <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-800 bg-white px-3 py-1 rounded-full border-2 border-gray-200 shadow-sm hover:scale-105 hover:border-blue-300 transition-all duration-300">
+                        <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
                         {selectedCustomer.points} points
                       </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   <button
                     onClick={() => {
                       playClickSound();
                       onShowCustomerDetails(selectedCustomer);
                     }}
-                    className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
+                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
                     title="View customer details"
                   >
                     <User className="w-5 h-5" />
@@ -142,7 +142,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                         playClickSound();
                         onEditCustomer(selectedCustomer);
                       }}
-                      className="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-lg transition-all duration-200"
+                      className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
                       title="Edit customer information"
                     >
                       <Edit3 className="w-5 h-5" />
@@ -153,7 +153,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                       playDeleteSound();
                       onRemoveCustomer();
                     }}
-                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
+                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 hover:rotate-6"
                   >
                     <XCircle className="w-5 h-5" />
                   </button>

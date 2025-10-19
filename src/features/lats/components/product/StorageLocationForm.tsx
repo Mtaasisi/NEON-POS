@@ -256,30 +256,29 @@ const StorageLocationForm: React.FC<StorageLocationFormProps> = ({
       
       {/* Storage Location Button */}
       <div>
-        <label className="block mb-2 font-medium text-gray-700">
+        <label className="block mb-2 text-sm font-medium text-gray-700">
           Storage Location (optional)
         </label>
         <button
           type="button"
           onClick={() => setShowModal(true)}
           disabled={loading || storageRooms.length === 0}
-          className={`w-full py-4 pl-12 pr-4 bg-gradient-to-r from-white/50 to-white/30 backdrop-blur-md border-2 rounded-xl focus:outline-none transition-all duration-300 text-left shadow-sm hover:shadow-md ${
+          className={`relative w-full py-3 pl-10 pr-4 bg-white border-2 rounded text-left ${
             currentErrors.storageRoomId || currentErrors.shelfId
               ? 'border-red-500 focus:border-red-600' 
               : 'border-gray-300 focus:border-blue-500 hover:border-blue-400'
-          } ${loading || storageRooms.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
+          } ${loading || storageRooms.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
-          <span className={`text-base ${formData.storageRoomId && formData.shelfId ? 'text-gray-900 font-semibold' : 'text-gray-500'}`}>
+          <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+          <span className={formData.storageRoomId && formData.shelfId ? 'text-gray-900 font-medium' : 'text-gray-500'}>
             {getSelectedDisplay()}
           </span>
           {formData.storageRoomId && formData.shelfId && (
-            <Check className="absolute right-4 top-1/2 -translate-y-1/2 text-green-500" size={20} />
+            <Check className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" size={18} />
           )}
         </button>
         {(currentErrors.storageRoomId || currentErrors.shelfId) && (
-          <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-            <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+          <p className="mt-1 text-sm text-red-600">
             {currentErrors.storageRoomId || currentErrors.shelfId}
           </p>
         )}
@@ -287,249 +286,159 @@ const StorageLocationForm: React.FC<StorageLocationFormProps> = ({
 
       {/* Storage Location Modal */}
               {showModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[95vh] overflow-hidden">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full max-h-[85vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-xl">
-                  <MapPin size={28} className="text-blue-600" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">Select Storage Location</h2>
-                  <p className="text-gray-600 mt-1">Choose a storage room and shelf for your product</p>
-                </div>
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-white">
+              <div className="flex items-center gap-3">
+                <MapPin size={20} className="text-gray-700" />
+                <h2 className="text-lg font-semibold text-gray-900">Select Storage Location</h2>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-3 hover:bg-gray-100 rounded-xl transition-colors"
+                className="p-2 hover:bg-gray-100 rounded"
               >
-                <X size={24} className="text-gray-500" />
+                <X size={20} className="text-gray-500" />
               </button>
             </div>
 
             {/* Storage Room Tabs */}
-            <div className="border-b border-gray-100 bg-white">
-              <div className="flex overflow-x-auto px-6 py-4 gap-2">
-                {storageRooms.map((room) => {
-                  const roomColor = getRoomColor(room.code);
-                  return (
-                    <button
-                      key={room.id}
-                      onClick={() => setSelectedRoomId(room.id)}
-                      className={`flex-shrink-0 px-6 py-3 rounded-xl font-medium transition-all duration-300 ${
-                        selectedRoomId === room.id
-                          ? `${roomColor.text} ${roomColor.bgLight} border-2 ${roomColor.border} shadow-md`
-                          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border-2 border-transparent'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${selectedRoomId === room.id ? roomColor.bg : 'bg-gray-100'}`}>
-                          <Building size={16} className={selectedRoomId === room.id ? 'text-white' : 'text-gray-500'} />
-                        </div>
-                        <div className="text-left">
-                          <div className="font-semibold">{room.name}</div>
-                          <div className={`text-xs ${selectedRoomId === room.id ? roomColor.text : 'text-gray-500'}`}>
-                            {room.code}
-                          </div>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
+            <div className="border-b border-gray-200 bg-gray-50">
+              <div className="flex overflow-x-auto px-4 py-2 gap-2">
+                {storageRooms.map((room) => (
+                  <button
+                    key={room.id}
+                    onClick={() => setSelectedRoomId(room.id)}
+                    className={`flex-shrink-0 px-4 py-2 rounded font-medium text-sm ${
+                      selectedRoomId === room.id
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Building size={14} />
+                      <span>{room.name}</span>
+                      <span className="text-xs opacity-75">({room.code})</span>
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* Search and Filter Bar */}
-            <div className="p-6 border-b border-gray-100 bg-gray-50">
-              <div className="flex gap-4">
+            <div className="p-4 border-b border-gray-200 bg-white">
+              <div className="flex gap-3">
                 {/* Search */}
                 <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                   <input
                     type="text"
                     placeholder="Search shelves..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full pl-10 pr-3 py-2 bg-white border border-gray-300 rounded focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 
                 {/* Letter Filter */}
-                <div className="flex gap-2">
-                  <Filter className="text-gray-400 mt-3" size={20} />
-                  <div className="flex gap-1">
-                    {getAvailableLetters().map(letter => (
-                      <button
-                        key={letter}
-                        onClick={() => setSelectedLetter(selectedLetter === letter ? '' : letter)}
-                        className={`px-3 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${
-                          selectedLetter === letter
-                            ? 'bg-blue-500 text-white shadow-md'
-                            : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                        }`}
-                      >
-                        {letter}
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex gap-1">
+                  {getAvailableLetters().map(letter => (
+                    <button
+                      key={letter}
+                      onClick={() => setSelectedLetter(selectedLetter === letter ? '' : letter)}
+                      className={`px-3 py-2 rounded font-medium text-sm ${
+                        selectedLetter === letter
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                      }`}
+                    >
+                      {letter}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
             {/* Shelves Grid */}
-            <div className="p-6 overflow-y-auto max-h-[60vh]">
+            <div className="p-4 overflow-y-auto max-h-[50vh]">
               {getFilteredShelves().length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
                   {getFilteredShelves().map((shelf, index) => {
                     // Safety check: ensure shelf.code exists
                     if (!shelf || !shelf.code) {
                       return null;
                     }
                     
+                    // Get current room to build complete cell number
+                    const currentRoom = storageRooms.find(r => r.id === selectedRoomId);
+                    const roomCode = currentRoom?.code || '';
+                    
+                    // Build complete cell number (e.g., "01A1")
+                    const completeCellNumber = shelf.code.startsWith(roomCode) 
+                      ? shelf.code 
+                      : `${roomCode}${shelf.code}`;
+                    
                     const isSelected = formData.storageRoomId === selectedRoomId && formData.shelfId === shelf.id;
-                    const shelfColor = getShelfColor(shelf.code.charAt(0).toUpperCase());
                     const foundLetter = shelf.code.toUpperCase().match(/[A-Z]/)?.[0];
                     
-                    // Letter-based background colors - Strong vibrant colors
-                    const getLetterBackgroundColor = (letter: string) => {
-                      const letterColors: { [key: string]: string } = {
-                        // Each letter gets a completely unique strong color - no repeats anywhere
-                        'A': 'bg-gradient-to-br from-blue-400 to-blue-500',
-                        'B': 'bg-gradient-to-br from-green-400 to-green-500',
-                        'C': 'bg-gradient-to-br from-purple-400 to-purple-500',
-                        'D': 'bg-gradient-to-br from-orange-400 to-orange-500',
-                        'E': 'bg-gradient-to-br from-red-400 to-red-500',
-                        'F': 'bg-gradient-to-br from-teal-400 to-teal-500',
-                        'G': 'bg-gradient-to-br from-pink-400 to-pink-500',
-                        'H': 'bg-gradient-to-br from-indigo-400 to-indigo-500',
-                        'I': 'bg-gradient-to-br from-emerald-400 to-emerald-500',
-                        'J': 'bg-gradient-to-br from-cyan-400 to-cyan-500',
-                        'K': 'bg-gradient-to-br from-lime-400 to-lime-500',
-                        'L': 'bg-gradient-to-br from-amber-400 to-amber-500',
-                        'M': 'bg-gradient-to-br from-rose-400 to-rose-500',
-                        'N': 'bg-gradient-to-br from-violet-400 to-violet-500',
-                        'O': 'bg-gradient-to-br from-sky-400 to-sky-500',
-                        'P': 'bg-gradient-to-br from-fuchsia-400 to-fuchsia-500',
-                        'Q': 'bg-gradient-to-br from-slate-400 to-slate-500',
-                        'R': 'bg-gradient-to-br from-zinc-400 to-zinc-500',
-                        'S': 'bg-gradient-to-br from-stone-400 to-stone-500',
-                        'T': 'bg-gradient-to-br from-neutral-400 to-neutral-500',
-                        'U': 'bg-gradient-to-br from-yellow-400 to-yellow-500',
-                        'V': 'bg-gradient-to-br from-orange-500 to-orange-600',
-                        'W': 'bg-gradient-to-br from-red-500 to-red-600',
-                        'X': 'bg-gradient-to-br from-pink-500 to-pink-600',
-                        'Y': 'bg-gradient-to-br from-purple-500 to-purple-600',
-                        'Z': 'bg-gradient-to-br from-indigo-500 to-indigo-600',
-                        // Numbers - Each gets a unique strong color from different families
-                        '0': 'bg-gradient-to-br from-gray-300 to-gray-400',
-                        '1': 'bg-gradient-to-br from-blue-600 to-blue-700',
-                        '2': 'bg-gradient-to-br from-green-600 to-green-700',
-                        '3': 'bg-gradient-to-br from-teal-600 to-teal-700',
-                        '4': 'bg-gradient-to-br from-cyan-600 to-cyan-700',
-                        '5': 'bg-gradient-to-br from-lime-600 to-lime-700',
-                        '6': 'bg-gradient-to-br from-amber-600 to-amber-700',
-                        '7': 'bg-gradient-to-br from-emerald-600 to-emerald-700',
-                        '8': 'bg-gradient-to-br from-rose-600 to-rose-700',
-                        '9': 'bg-gradient-to-br from-violet-600 to-violet-700'
+                    // Simple color mapping for letters
+                    const getLetterColor = (letter: string) => {
+                      const colors: { [key: string]: string } = {
+                        'A': 'bg-blue-500',
+                        'B': 'bg-green-500',
+                        'C': 'bg-purple-500',
+                        'D': 'bg-orange-500',
+                        'E': 'bg-red-500',
+                        'F': 'bg-teal-500',
+                        'G': 'bg-pink-500',
+                        'H': 'bg-indigo-500',
+                        'I': 'bg-emerald-500',
+                        'J': 'bg-cyan-500',
+                        'K': 'bg-lime-500',
+                        'L': 'bg-amber-500',
+                        'M': 'bg-rose-500',
+                        'N': 'bg-violet-500',
+                        'O': 'bg-sky-500',
+                        'P': 'bg-fuchsia-500',
+                        'Q': 'bg-slate-500',
+                        'R': 'bg-zinc-500',
+                        'S': 'bg-stone-500',
+                        'T': 'bg-neutral-500',
+                        'U': 'bg-yellow-500',
+                        'V': 'bg-orange-600',
+                        'W': 'bg-red-600',
+                        'X': 'bg-pink-600',
+                        'Y': 'bg-purple-600',
+                        'Z': 'bg-indigo-600'
                       };
-                      return letterColors[letter] || 'bg-gradient-to-br from-gray-200 to-gray-300';
+                      return colors[letter] || 'bg-gray-500';
                     };
                     
-                    const columnColor = foundLetter ? getLetterBackgroundColor(foundLetter) : 'bg-gradient-to-br from-gray-200 to-gray-300';
+                    const bgColor = foundLetter ? getLetterColor(foundLetter) : 'bg-gray-500';
                     
                     return (
                       <button
                         key={shelf.id}
                         onClick={() => handleShelfSelect(selectedRoomId, shelf.id)}
-                        className={`group relative overflow-hidden transition-all duration-500 text-left ${
+                        className={`py-3 px-2 rounded border-2 font-bold text-center text-white text-sm ${
                           isSelected
-                            ? 'transform scale-105 shadow-2xl'
-                            : 'hover:transform hover:scale-102 hover:shadow-xl'
+                            ? `${bgColor} border-white ring-2 ring-blue-600`
+                            : `${bgColor} border-transparent hover:border-white`
                         }`}
                       >
-                        {/* Main card container */}
-                        <div className={`relative h-20 rounded-lg border-2 transition-all duration-500 ${
-                          isSelected
-                            ? `${shelfColor.border} ${shelfColor.bgLight}`
-                            : `border-gray-200 ${columnColor} hover:border-gray-300`
-                        }`}>
-                          
-                          {/* Animated background pattern */}
-                          <div className={`absolute inset-0 opacity-10 transition-opacity duration-500 ${
-                            isSelected ? 'opacity-20' : 'group-hover:opacity-15'
-                          }`}>
-                            <div className={`absolute inset-0 bg-gradient-to-br ${shelfColor.bg} rounded-3xl`} />
-                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.3),transparent_50%)]" />
-                          </div>
-                          
-                          {/* Content overlay */}
-                          <div className="relative h-full flex items-center justify-between p-4">
-                            
-                            {/* Left side - Shelf name only */}
-                            <div className="flex items-center">
-                              {/* Shelf name */}
-                              <div className="flex flex-col">
-                                <div className={`text-lg font-black tracking-tight transition-all duration-500 ${
-                                  isSelected ? shelfColor.text : 'text-white'
-                                }`}>
-                                  {shelf.code}
-                                </div>
-                                <div className={`text-xs font-medium transition-all duration-500 ${
-                                  isSelected ? `${shelfColor.text} opacity-80` : 'text-white opacity-80'
-                                }`}>
-                                  Storage Shelf
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Right side - Letter badge */}
-                            {foundLetter && (
-                              <div className="relative">
-                                <div className={`w-8 h-8 rounded-md flex items-center justify-center text-sm font-black transition-all duration-500 border-2 ${
-                                  isSelected 
-                                    ? `${columnColor} text-white shadow-xl border-white/90` 
-                                    : `${columnColor} text-white shadow-md border-white/80`
-                                }`}>
-                                  {foundLetter}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                          
-                          {/* Selection indicator */}
-                          {isSelected && (
-                            <div className={`absolute -top-2 -right-2 w-8 h-8 rounded-full ${shelfColor.bg} flex items-center justify-center shadow-lg animate-pulse`}>
-                              <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                          )}
-                          
-                          {/* Hover border effect */}
-                          <div className={`absolute inset-0 rounded-lg border-2 border-transparent transition-all duration-500 ${
-                            isSelected 
-                              ? `${shelfColor.border} opacity-100` 
-                              : 'group-hover:border-gray-300 opacity-0 group-hover:opacity-100'
-                          }`} />
-                        </div>
+                        {completeCellNumber}
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                <div className="text-center py-16">
-                  <div className="relative w-24 h-24 mx-auto mb-8">
-                    <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full animate-pulse" />
-                    <div className="absolute inset-2 bg-white rounded-full flex items-center justify-center">
-                      <LayoutGrid size={36} className="text-gray-400" />
-                    </div>
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">No Shelves Found</h3>
-                  <p className="text-gray-600 max-w-lg mx-auto leading-relaxed">
+                <div className="text-center py-12">
+                  <LayoutGrid size={48} className="text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Shelves Found</h3>
+                  <p className="text-sm text-gray-600">
                     {searchTerm || selectedLetter 
-                      ? 'Try adjusting your search or filter criteria to discover available shelves.'
-                      : 'No shelves are currently available in this storage room.'
+                      ? 'Try adjusting your search or filter.'
+                      : 'No shelves available in this room.'
                     }
                   </p>
                 </div>
@@ -537,13 +446,13 @@ const StorageLocationForm: React.FC<StorageLocationFormProps> = ({
             </div>
 
             {/* Modal Footer */}
-            <div className="flex justify-between items-center p-6 border-t border-gray-100 bg-gray-50">
-              <div className="text-sm text-gray-500">
-                {getFilteredShelves().length} shelf{getFilteredShelves().length !== 1 ? 'es' : ''} found
+            <div className="flex justify-between items-center p-4 border-t border-gray-200 bg-gray-50">
+              <div className="text-sm text-gray-600">
+                {getFilteredShelves().length} shelf{getFilteredShelves().length !== 1 ? 'ves' : ''} found
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors font-medium"
+                className="px-4 py-2 text-gray-700 hover:bg-gray-200 rounded"
               >
                 Cancel
               </button>

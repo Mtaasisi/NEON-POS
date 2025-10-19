@@ -47,7 +47,7 @@ const convertFormDataToDatabaseFormat = (formData: any): SparePartCreateData => 
   }
   
   if (formData.shelfId) {
-    convertedData.store_shelf_id = formData.shelfId;
+    convertedData.shelf_id = formData.shelfId;
   }
 
   if (formData.images) {

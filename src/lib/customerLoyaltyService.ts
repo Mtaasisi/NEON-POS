@@ -74,10 +74,16 @@ class CustomerLoyaltyService {
     try {
       console.log(`🔍 Fetching loyalty customers page ${page} with ${pageSize} per page...`);
       
+      // Get branch filtering helper
+      const { addBranchFilter } = await import('./branchAwareApi');
+      
       // First, get the total count for pagination
       let countQuery = supabase
         .from('customers')
         .select('id', { count: 'exact', head: true });
+
+      // Apply branch filter to count query
+      countQuery = await addBranchFilter(countQuery, 'customers');
 
       // Apply filters to count query
       if (tierFilter && tierFilter !== 'all') {
@@ -114,6 +120,9 @@ class CustomerLoyaltyService {
         .select('*')
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
+
+      // Apply branch filter
+      query = await addBranchFilter(query, 'customers');
 
       // Apply filters
       if (tierFilter && tierFilter !== 'all') {
@@ -230,10 +239,18 @@ class CustomerLoyaltyService {
     try {
       console.log('🔍 Fetching all loyalty customers...');
       
+      // Get branch filtering helper
+      const { addBranchFilter } = await import('./branchAwareApi');
+      
       // First, get the total count to know how many customers we need to fetch
-      const { count: totalCustomerCount, error: countError } = await supabase
+      let countQuery = supabase
         .from('customers')
         .select('id', { count: 'exact', head: true });
+      
+      // Apply branch filter to count
+      countQuery = await addBranchFilter(countQuery, 'customers');
+      
+      const { count: totalCustomerCount, error: countError } = await countQuery;
 
       if (countError) {
         console.error('Error getting customer count:', countError);
@@ -262,6 +279,9 @@ class CustomerLoyaltyService {
           `)
           .order('created_at', { ascending: false })
           .range(from, to);
+
+        // Apply branch filter
+        query = await addBranchFilter(query, 'customers');
 
         // Apply filters
         if (tierFilter && tierFilter !== 'all') {

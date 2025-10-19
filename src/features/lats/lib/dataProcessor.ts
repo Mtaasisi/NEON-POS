@@ -98,6 +98,43 @@ export function processProductData(products: Product[]): Product[] {
       delete processedProduct.brand_id;
     }
 
+    // Transform branch and sharing fields
+    if (processedProduct.branch_id !== undefined) {
+      processedProduct.branchId = processedProduct.branch_id;
+      delete processedProduct.branch_id;
+    }
+
+    // is_shared column removed - no longer needed
+    if (processedProduct.is_shared !== undefined) {
+      delete processedProduct.is_shared;
+    }
+
+    if (processedProduct.is_active !== undefined) {
+      processedProduct.isActive = processedProduct.is_active;
+      delete processedProduct.is_active;
+    }
+
+    // Transform storage location fields
+    if (processedProduct.storage_room_id !== undefined) {
+      processedProduct.storageRoomId = processedProduct.storage_room_id;
+      delete processedProduct.storage_room_id;
+    }
+
+    if (processedProduct.shelf_id !== undefined) {
+      processedProduct.shelfId = processedProduct.shelf_id;
+      delete processedProduct.shelf_id;
+    }
+
+    if (processedProduct.shelf_name !== undefined) {
+      processedProduct.shelfName = processedProduct.shelf_name;
+      delete processedProduct.shelf_name;
+    }
+
+    if (processedProduct.shelf_code !== undefined) {
+      processedProduct.shelfCode = processedProduct.shelf_code;
+      delete processedProduct.shelf_code;
+    }
+
     // Transform price fields
     if (processedProduct.unit_price !== undefined) {
       processedProduct.price = processedProduct.unit_price;

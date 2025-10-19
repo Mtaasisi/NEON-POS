@@ -75,34 +75,59 @@ const DailyClosingModal: React.FC<DailyClosingModalProps> = ({
         return;
       }
 
-      // Calculate payment summaries
+      // Calculate payment summaries - aggregate by payment method account
       const paymentMap = new Map<string, { total: number; count: number }>();
       let total = 0;
       let transactionCount = 0;
 
       sales?.forEach(sale => {
         if (sale.payment_method) {
-          const method = sale.payment_method.name || sale.payment_method.type || 'Unknown';
-          // ⚠️ FIX: Ensure amount is always a valid number
-          const amount = parseFloat(sale.total_amount) || 0;
+          const saleAmount = parseFloat(sale.total_amount) || 0;
           
           // Skip invalid amounts
-          if (isNaN(amount) || !isFinite(amount)) {
+          if (isNaN(saleAmount) || !isFinite(saleAmount)) {
             console.warn('Invalid sale amount in DailyClosingModal:', sale.total_amount);
             return;
           }
-          
-          if (paymentMap.has(method)) {
-            const existing = paymentMap.get(method)!;
-            paymentMap.set(method, {
-              total: existing.total + amount,
-              count: existing.count + 1
+
+          // Check if this is a multiple payment type
+          if (sale.payment_method.type === 'multiple' && sale.payment_method.details?.payments) {
+            // Process each payment method in the multiple payment
+            sale.payment_method.details.payments.forEach((payment: any) => {
+              const method = payment.method || 'Unknown';
+              const amount = parseFloat(payment.amount) || 0;
+              
+              if (isNaN(amount) || !isFinite(amount)) {
+                console.warn('Invalid payment amount in multiple payment:', payment.amount);
+                return;
+              }
+
+              if (paymentMap.has(method)) {
+                const existing = paymentMap.get(method)!;
+                paymentMap.set(method, {
+                  total: existing.total + amount,
+                  count: existing.count + 1
+                });
+              } else {
+                paymentMap.set(method, { total: amount, count: 1 });
+              }
             });
           } else {
-            paymentMap.set(method, { total: amount, count: 1 });
+            // Single payment method
+            const method = sale.payment_method.name || sale.payment_method.type || 'Unknown';
+            
+            if (paymentMap.has(method)) {
+              const existing = paymentMap.get(method)!;
+              paymentMap.set(method, {
+                total: existing.total + saleAmount,
+                count: existing.count + 1
+              });
+            } else {
+              paymentMap.set(method, { total: saleAmount, count: 1 });
+            }
           }
           
-          total += amount;
+          total += saleAmount;
           transactionCount++;
         }
       });

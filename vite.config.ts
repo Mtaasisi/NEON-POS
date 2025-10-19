@@ -9,20 +9,20 @@ export default defineConfig(({ command, mode }) => {
   // Log the loaded environment variable for debugging
   console.log('🔍 VITE_DATABASE_URL from env:', env.VITE_DATABASE_URL?.substring(0, 50) + '...');
   const server = {
-    port: 3000,
+    port: 5173,
     host: 'localhost',
-    strictPort: true, // Don't try other ports if 3000 is busy
+    strictPort: true, // Don't try other ports if 5173 is busy
     hmr: {
-      port: 3001, // Use different port for HMR WebSocket
+      port: 5173, // Use same port for HMR WebSocket
       host: 'localhost',
       protocol: 'ws',
       timeout: 30000, // 30 second timeout for HMR
-      clientPort: 3001, // Match the HMR port
+      clientPort: 5173, // Match the HMR port
       overlay: false, // Disable error overlay to prevent WebSocket issues
       // Add WebSocket configuration for better reliability
       ws: {
         host: 'localhost',
-        port: 3001,
+        port: 5173,
       },
     },
     watch: {
@@ -156,8 +156,8 @@ export default defineConfig(({ command, mode }) => {
         hmr: {
           ...server.hmr,
           overlay: false,
-          // Use different port for HMR WebSocket
-          clientPort: 3001,
+          // Use same port for HMR WebSocket
+          clientPort: 5173,
         },
       },
       css: {

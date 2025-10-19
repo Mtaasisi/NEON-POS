@@ -4,15 +4,33 @@
  */
 
 import { supabase } from './supabaseClient';
+import { logQueryDebug, isDebugMode } from './branchIsolationDebugger';
+
+// Cache for branch settings
+const branchSettingsCache = new Map<string, any>();
+let cacheTimestamp = 0;
+const CACHE_DURATION = 60000; // 1 minute
 
 // Get current branch from localStorage
 export const getCurrentBranchId = (): string | null => {
   return localStorage.getItem('current_branch_id');
 };
 
+// Clear branch cache (useful after updating settings)
+export const clearBranchCache = () => {
+  branchSettingsCache.clear();
+  cacheTimestamp = 0;
+};
+
 // Get branch settings
 export const getBranchSettings = async (branchId: string) => {
   try {
+    // Check cache
+    const now = Date.now();
+    if (now - cacheTimestamp < CACHE_DURATION && branchSettingsCache.has(branchId)) {
+      return branchSettingsCache.get(branchId);
+    }
+
     const { data, error } = await supabase
       .from('store_locations')
       .select('*')
@@ -20,6 +38,11 @@ export const getBranchSettings = async (branchId: string) => {
       .single();
 
     if (error) throw error;
+    
+    // Update cache
+    branchSettingsCache.set(branchId, data);
+    cacheTimestamp = now;
+    
     return data;
   } catch (error) {
     console.error('Error fetching branch settings:', error);
@@ -75,24 +98,27 @@ export const addBranchFilter = async (
   // No branch selected or admin viewing all - no filter
   if (!branchId) {
     console.log(`📊 No branch filter applied (no branch selected)`);
+    logQueryDebug(entityType, query, 'shared', false);
     return query;
   }
 
+  const branch = await getBranchSettings(branchId);
   const shared = await isDataShared(entityType);
 
   if (shared) {
     // Data is shared - no filter needed
     console.log(`📊 No branch filter applied (${entityType} are shared)`);
+    logQueryDebug(entityType, query, branch?.data_isolation_mode || 'shared', false);
     return query;
   }
 
-  // Data is isolated - filter by branch
-  console.log(`🔒 Filtering ${entityType} by branch: ${branchId}`);
+  // Data is isolated - show items from this branch OR items marked as shared
+  console.log(`🔒 Filtering ${entityType} by branch: ${branchId} OR is_shared=true`);
+  logQueryDebug(entityType, query, branch?.data_isolation_mode || 'isolated', true);
   
-  // Use OR condition to show:
-  // 1. Items belonging to this branch
-  // 2. Items marked as shared (is_shared = true)
-  return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
+  // In isolated/hybrid mode: show items from this branch OR shared items from other branches
+  // This allows branches to see shared data even when in isolated mode
+  return query.or(`branch_id.eq.${branchId},is_shared.eq.true`);
 };
 
 // Create entity with branch assignment

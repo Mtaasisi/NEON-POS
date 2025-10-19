@@ -462,7 +462,7 @@ class DraftProductsService {
         hasSellingPrice: 'selling_price' in productData,
         hasMinStockLevel: 'min_stock_level' in productData,
         hasStorageRoom: 'storage_room_id' in productData,
-        hasStoreShelf: 'store_shelf_id' in productData,
+        hasStoreShelf: 'shelf_id' in productData,
         hasImages: 'images' in productData
       });
       
@@ -471,7 +471,7 @@ class DraftProductsService {
         ...productData,
         // Convert empty strings to null for foreign key fields
         storage_room_id: productData.storage_room_id === '' ? null : productData.storage_room_id,
-        store_shelf_id: productData.store_shelf_id === '' ? null : productData.store_shelf_id,
+        shelf_id: productData.shelf_id === '' ? null : productData.shelf_id,
         // Validate selling price to prevent database overflow (max 99,999,999.99)
         selling_price: (() => {
           if (productData.selling_price && productData.selling_price > 99999999.99) {
@@ -514,7 +514,7 @@ class DraftProductsService {
         selling_price: data.selling_price,
         min_stock_level: data.min_stock_level,
         storage_room_id: data.storage_room_id,
-        store_shelf_id: data.store_shelf_id,
+        shelf_id: data.shelf_id,
         images: data.images,
         status: data.status,
         updated_at: data.updated_at

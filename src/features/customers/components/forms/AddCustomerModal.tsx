@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, UserPlus, Check } from 'lucide-react';
+import { X, UserPlus } from 'lucide-react';
 import { useCustomers } from '../../../../context/CustomersContext';
 import { toast } from 'react-hot-toast';
 import CustomerForm from './CustomerForm';
@@ -164,71 +164,74 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
-        <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="p-6">
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <UserPlus className="w-5 h-5 text-blue-600" />
+      {isOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <UserPlus className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">Add New Customer</h3>
+                    <p className="text-xs text-gray-500">Enter customer details below</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Add New Customer</h3>
-                  <p className="text-xs text-gray-500">Enter customer details below</p>
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="space-y-4">
-              <CustomerForm
-                onSubmit={handleCustomerCreated}
-                onCancel={onClose}
-                isLoading={isLoading}
-                renderActionsInModal={false}
-              />
-              
-              {/* Action Buttons */}
-              <div className="flex gap-3 mt-6">
                 <button
-                  type="button"
                   onClick={onClose}
-                  disabled={isLoading}
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  Cancel
+                  <X className="w-6 h-6" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const form = document.getElementById('customer-form') as HTMLFormElement;
-                    if (form) {
-                      form.requestSubmit();
-                    }
-                  }}
-                  disabled={isLoading}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isLoading ? 'Adding...' : 'Add Customer'}
-                </button>
+              </div>
+
+              {/* Content */}
+              <div className="space-y-4">
+                <CustomerForm
+                  onSubmit={handleCustomerCreated}
+                  onCancel={onClose}
+                  isLoading={isLoading}
+                  renderActionsInModal={false}
+                />
+                
+                {/* Action Buttons */}
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    disabled={isLoading}
+                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const form = document.getElementById('customer-form') as HTMLFormElement;
+                      if (form) {
+                        form.requestSubmit();
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? 'Adding...' : 'Add Customer'}
+                  </button>
+                </div>
+                <p className="text-xs text-center text-gray-500 mt-2">
+                  All changes are saved automatically
+                </p>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
       
-      {/* Success Modal */}
+      {/* Success Modal - Always rendered so it persists after form closes */}
       <SuccessModal {...successModal.props} />
     </>
   );

@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Activity, Users, Smartphone, CreditCard, Calendar, Package, 
-  ExternalLink, Clock, DollarSign, CheckCircle, AlertTriangle 
+  ExternalLink, Clock, CheckCircle, AlertTriangle, DollarSign 
 } from 'lucide-react';
-import GlassCard from '../ui/GlassCard';
-import GlassButton from '../ui/GlassButton';
 import { dashboardService, RecentActivity } from '../../../../services/dashboardService';
 
 interface ActivityFeedWidgetProps {
@@ -101,64 +99,72 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({ classNam
 
   if (isLoading && activities.length === 0) {
     return (
-      <GlassCard className={`p-6 ${className}`}>
+      <div className={`bg-white rounded-2xl p-7 ${className}`}>
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          <div className="flex gap-1">
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-75"></div>
+            <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+          </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <GlassCard className={`p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-gradient-to-br from-gray-100 to-slate-100 rounded-lg">
-            <Activity className="w-5 h-5 text-gray-600" />
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <Activity className="w-5 h-5 text-gray-700" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Recent Activity</h3>
-            <p className="text-sm text-gray-600">Live system activities</p>
+            <h3 className="text-base font-semibold text-gray-900">Recent Activity</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Live system activities</p>
           </div>
         </div>
         
-        <div className="flex items-center gap-1">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-green-600 font-medium">Live</span>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50">
+          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+          <span className="text-xs text-emerald-600 font-medium">Live</span>
         </div>
       </div>
 
       {/* Activities List */}
-      <div className="space-y-3 h-64 overflow-y-auto">
+      <div className="space-y-3 h-64 overflow-y-auto mb-6">
         {activities.length > 0 ? (
           activities.map((activity) => (
-            <div key={activity.id} className={`p-3 bg-white rounded-lg border-l-4 ${getPriorityColor(activity.priority)}`}>
+            <div key={activity.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
               <div className="flex items-start gap-3">
-                <div className={`p-2 rounded-full ${getActivityBgColor(activity.type)}`}>
-                  {getActivityIcon(activity.type)}
+                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                  {activity.type === 'device' ? <Smartphone size={14} className="text-gray-700" /> :
+                   activity.type === 'customer' ? <Users size={14} className="text-gray-700" /> :
+                   activity.type === 'payment' ? <CreditCard size={14} className="text-gray-700" /> :
+                   activity.type === 'appointment' ? <Calendar size={14} className="text-gray-700" /> :
+                   activity.type === 'inventory' ? <Package size={14} className="text-gray-700" /> :
+                   <Activity size={14} className="text-gray-700" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <p className="font-medium text-gray-900 text-sm truncate">
                       {activity.title}
                     </p>
-                    {activity.status && getStatusIcon(activity.status)}
+                    {activity.status === 'completed' && <CheckCircle size={12} className="text-emerald-600" />}
+                    {activity.status === 'pending' && <Clock size={12} className="text-amber-600" />}
+                    {activity.status === 'failed' && <AlertTriangle size={12} className="text-rose-600" />}
                   </div>
-                  <p className="text-xs text-gray-600 line-clamp-2">
+                  <p className="text-xs text-gray-500 line-clamp-2">
                     {activity.description}
                   </p>
                   <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-gray-400">
                       {getTimeAgo(activity.time)}
                     </span>
                     {activity.amount && (
-                      <div className="flex items-center gap-1">
-                        <DollarSign size={10} className="text-green-600" />
-                        <span className="text-xs font-medium text-green-700">
-                          {formatCurrency(activity.amount)}
-                        </span>
-                      </div>
+                      <span className="text-xs font-medium text-gray-900">
+                        {formatCurrency(activity.amount)}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -166,33 +172,25 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({ classNam
             </div>
           ))
         ) : (
-          <div className="text-center py-6">
-            <Activity className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-600">No recent activities</p>
+          <div className="text-center py-12">
+            <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+              <Activity className="w-6 h-6 text-gray-400" />
+            </div>
+            <p className="text-sm text-gray-500">No recent activities</p>
           </div>
         )}
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200">
-        <GlassButton
+      <div className="flex gap-2">
+        <button
           onClick={() => navigate('/reports')}
-          variant="ghost"
-          size="sm"
-          className="flex-1"
-          icon={<ExternalLink size={14} />}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
-          View Reports
-        </GlassButton>
-        <GlassButton
-          onClick={loadActivities}
-          variant="ghost"
-          size="sm"
-          icon={<Activity size={14} />}
-        >
-          Refresh
-        </GlassButton>
+          <ExternalLink size={14} />
+          <span>View All Activity</span>
+        </button>
       </div>
-    </GlassCard>
+    </div>
   );
 };

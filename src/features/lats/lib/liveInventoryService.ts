@@ -61,7 +61,7 @@ export class LiveInventoryService {
       const currentBranchId = localStorage.getItem('current_branch_id');
       console.log('🏪 [LiveInventoryService] Current branch:', currentBranchId);
       
-      // Build queries with COMPLETE ISOLATION
+      // Build queries with COMPLETE ISOLATION + SHARED PRODUCTS
       let productsQuery = supabase
         .from('lats_products')
         .select('id, name, is_active, branch_id, is_shared');
@@ -70,13 +70,13 @@ export class LiveInventoryService {
         .from('lats_product_variants')
         .select('id, product_id, quantity, cost_price, unit_price, min_quantity, branch_id, is_shared');
       
-      // 🔒 COMPLETE ISOLATION: Only show data from current branch OR shared items
+      // 🔒 ISOLATION + SHARED: Show branch data + shared products from other branches
       if (currentBranchId) {
-        console.log('🔒 [LiveInventoryService] ISOLATED MODE - Filtering by branch:', currentBranchId);
-        // Include shared products and products from current branch
-        productsQuery = productsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
-        // Include shared variants and variants from current branch  
-        variantsQuery = variantsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+        console.log('🔒 [LiveInventoryService] ISOLATED MODE - Filtering by branch + shared products:', currentBranchId);
+        // Show products from current branch OR shared products
+        productsQuery = productsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+        // Show variants from current branch OR shared variants
+        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
       } else {
         console.log('⚠️ [LiveInventoryService] No branch selected - showing all data');
       }
@@ -95,34 +95,11 @@ export class LiveInventoryService {
       let products = productsResult.value.data || [];
       let variants = variantsResult.status === 'fulfilled' ? (variantsResult.value.data || []) : [];
       
-      // 🔧 ADDITIONAL: Fetch products and variants with null branch_id (unassigned)
-      if (currentBranchId) {
-        console.log('🔧 [LiveInventoryService] Fetching unassigned products and variants...');
-        const [nullProductsResult, nullVariantsResult] = await Promise.allSettled([
-          supabase.from('lats_products')
-            .select('id, name, is_active, branch_id, is_shared')
-            .is('branch_id', null),
-          supabase.from('lats_product_variants')
-            .select('id, product_id, quantity, reserved_quantity, cost_price, unit_price, min_quantity, branch_id, is_shared')
-            .is('branch_id', null)
-        ]);
-        
-        if (nullProductsResult.status === 'fulfilled' && nullProductsResult.value.data) {
-          const nullProducts = nullProductsResult.value.data;
-          console.log(`✅ Found ${nullProducts.length} unassigned products`);
-          // Merge and deduplicate
-          const mergedProducts = [...products, ...nullProducts];
-          products = Array.from(new Map(mergedProducts.map(p => [p.id, p])).values());
-        }
-        
-        if (nullVariantsResult.status === 'fulfilled' && nullVariantsResult.value.data) {
-          const nullVariants = nullVariantsResult.value.data;
-          console.log(`✅ Found ${nullVariants.length} unassigned variants`);
-          // Merge and deduplicate
-          const mergedVariants = [...variants, ...nullVariants];
-          variants = Array.from(new Map(mergedVariants.map(v => [v.id, v])).values());
-        }
-      }
+      // 🔧 NOTE: We no longer fetch unassigned products separately
+      // The main query already includes:
+      // 1. Products from current branch (branch_id = currentBranchId)
+      // 2. Shared products from other branches (is_shared = true)
+      // Unassigned products (branch_id = null) are handled separately by the admin
 
       // Map variants to their products
       const variantsByProduct = variants.reduce((acc: any, variant: any) => {
