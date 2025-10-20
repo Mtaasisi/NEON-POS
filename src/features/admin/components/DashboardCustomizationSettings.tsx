@@ -29,7 +29,120 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  MousePointerClick
+  MousePointerClick,
+  Settings,
+  Edit,
+  Trash2,
+  ExternalLink,
+  Home,
+  ShoppingCart,
+  CreditCard,
+  BarChart,
+  Target,
+  Globe,
+  Mail,
+  Phone,
+  MapPin,
+  Clock,
+  Star,
+  Heart,
+  Shield,
+  Wifi,
+  Database,
+  Server,
+  Cloud,
+  HardDrive,
+  Cpu,
+  Monitor,
+  Printer,
+  Camera,
+  Mic,
+  Headphones,
+  Gamepad2,
+  Music,
+  Video,
+  Image,
+  File,
+  Folder,
+  Archive,
+  Download,
+  Upload,
+  Share,
+  Lock,
+  Unlock,
+  Key,
+  Search,
+  Filter,
+  Sort,
+  Grid,
+  List,
+  Menu,
+  MoreHorizontal,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Maximize,
+  Minimize,
+  X,
+  Check,
+  AlertTriangle,
+  Info,
+  HelpCircle,
+  MessageCircle,
+  Send,
+  Reply,
+  Forward,
+  Copy,
+  Cut,
+  Paste,
+  Undo,
+  Redo,
+  RefreshCw,
+  ZoomIn,
+  ZoomOut,
+  Focus,
+  Layers,
+  Palette,
+  Brush,
+  Eraser,
+  Scissors,
+  Crop,
+  Move,
+  RotateCw,
+  FlipHorizontal,
+  FlipVertical,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  Code,
+  Link,
+  Unlink,
+  Bookmark,
+  BookmarkCheck,
+  Tag,
+  Tags,
+  Hash,
+  AtSign,
+  Percent,
+  Euro,
+  Pound,
+  Yen,
+  Bitcoin,
+  TrendingDown,
+  Minus,
+  Divide,
+  Equal,
+  Calculator
 } from 'lucide-react';
 
 interface DashboardSettings {
@@ -43,6 +156,15 @@ interface DashboardSettings {
     payments: boolean;
     adGenerator: boolean;
   };
+  customQuickActions: Array<{
+    id: string;
+    title: string;
+    description: string;
+    path: string;
+    icon: string;
+    color: string;
+    enabled: boolean;
+  }>;
   widgets: {
     revenueTrendChart: boolean;
     deviceStatusChart: boolean;
@@ -62,12 +184,22 @@ interface DashboardSettings {
     inventoryWidget: boolean;
     activityFeedWidget: boolean;
   };
+  customWidgets: Array<{
+    id: string;
+    title: string;
+    description: string;
+    type: 'chart' | 'widget';
+    component: string;
+    enabled: boolean;
+  }>;
 }
 
 const DashboardCustomizationSettings: React.FC = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showAddQuickAction, setShowAddQuickAction] = useState(false);
+  const [showAddWidget, setShowAddWidget] = useState(false);
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({
     quickActions: {
       devices: true,
@@ -79,6 +211,7 @@ const DashboardCustomizationSettings: React.FC = () => {
       payments: true,
       adGenerator: true
     },
+    customQuickActions: [],
     widgets: {
       revenueTrendChart: true,
       deviceStatusChart: true,
@@ -97,7 +230,8 @@ const DashboardCustomizationSettings: React.FC = () => {
       systemHealthWidget: true,
       inventoryWidget: true,
       activityFeedWidget: true
-    }
+    },
+    customWidgets: []
   });
 
   // Load settings on mount
@@ -229,6 +363,74 @@ const DashboardCustomizationSettings: React.FC = () => {
         ...acc,
         [key]: value
       }), {} as DashboardSettings['widgets'])
+    }));
+  };
+
+  // Custom Quick Action Functions
+  const addCustomQuickAction = (action: Omit<DashboardSettings['customQuickActions'][0], 'id'>) => {
+    const newAction = {
+      ...action,
+      id: `custom_${Date.now()}`,
+      enabled: true
+    };
+    
+    setDashboardSettings(prev => ({
+      ...prev,
+      customQuickActions: [...prev.customQuickActions, newAction]
+    }));
+    
+    setShowAddQuickAction(false);
+    toast.success('Custom quick action added!');
+  };
+
+  const removeCustomQuickAction = (id: string) => {
+    setDashboardSettings(prev => ({
+      ...prev,
+      customQuickActions: prev.customQuickActions.filter(action => action.id !== id)
+    }));
+    toast.success('Custom quick action removed!');
+  };
+
+  const toggleCustomQuickAction = (id: string) => {
+    setDashboardSettings(prev => ({
+      ...prev,
+      customQuickActions: prev.customQuickActions.map(action =>
+        action.id === id ? { ...action, enabled: !action.enabled } : action
+      )
+    }));
+  };
+
+  // Custom Widget Functions
+  const addCustomWidget = (widget: Omit<DashboardSettings['customWidgets'][0], 'id'>) => {
+    const newWidget = {
+      ...widget,
+      id: `custom_widget_${Date.now()}`,
+      enabled: true
+    };
+    
+    setDashboardSettings(prev => ({
+      ...prev,
+      customWidgets: [...prev.customWidgets, newWidget]
+    }));
+    
+    setShowAddWidget(false);
+    toast.success('Custom widget added!');
+  };
+
+  const removeCustomWidget = (id: string) => {
+    setDashboardSettings(prev => ({
+      ...prev,
+      customWidgets: prev.customWidgets.filter(widget => widget.id !== id)
+    }));
+    toast.success('Custom widget removed!');
+  };
+
+  const toggleCustomWidget = (id: string) => {
+    setDashboardSettings(prev => ({
+      ...prev,
+      customWidgets: prev.customWidgets.map(widget =>
+        widget.id === id ? { ...widget, enabled: !widget.enabled } : widget
+      )
     }));
   };
 

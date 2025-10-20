@@ -88,6 +88,15 @@ export interface UserSettings {
       payments: boolean;
       adGenerator: boolean;
     };
+    customQuickActions: Array<{
+      id: string;
+      title: string;
+      description: string;
+      path: string;
+      icon: string;
+      color: string;
+      enabled: boolean;
+    }>;
     widgets: {
       revenueTrendChart: boolean;
       deviceStatusChart: boolean;
@@ -107,6 +116,14 @@ export interface UserSettings {
       inventoryWidget: boolean;
       activityFeedWidget: boolean;
     };
+    customWidgets: Array<{
+      id: string;
+      title: string;
+      description: string;
+      type: 'chart' | 'widget';
+      component: string;
+      enabled: boolean;
+    }>;
   };
 }
 
@@ -337,6 +354,7 @@ export const createDefaultUserSettings = async (userId: string): Promise<boolean
           payments: true,
           adGenerator: true
         },
+        customQuickActions: [],
         widgets: {
           revenueTrendChart: true,
           deviceStatusChart: true,
@@ -355,7 +373,8 @@ export const createDefaultUserSettings = async (userId: string): Promise<boolean
           systemHealthWidget: true,
           inventoryWidget: true,
           activityFeedWidget: true
-        }
+        },
+        customWidgets: []
       }
     };
 
