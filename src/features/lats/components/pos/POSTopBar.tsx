@@ -20,6 +20,8 @@ import {
   Lock,
   Home,
   Settings,
+  Monitor,
+  Smartphone,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -92,6 +94,11 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>(() => {
+    // Get saved preference from localStorage
+    const saved = localStorage.getItem('pos_view_mode');
+    return (saved === 'mobile' || saved === 'desktop') ? saved : 'desktop';
+  });
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Permission checks for current user
@@ -113,6 +120,31 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
     };
   }, []);
 
+  // Handle fullscreen change events
+  React.useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  // Apply view mode to document body for CSS targeting
+  React.useEffect(() => {
+    document.body.setAttribute('data-view-mode', viewMode);
+    console.log(`📱 View mode set to: ${viewMode}`);
+  }, [viewMode]);
+
   // Format money
   const formatMoney = (amount: number) => {
     return new Intl.NumberFormat('en-TZ', {
@@ -133,20 +165,57 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
     setShowUserMenu(false);
   };
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-      }).catch(err => {
-        console.log('Error attempting to enable fullscreen:', err);
-      });
-    } else {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-      }).catch(err => {
-        console.log('Error attempting to exit fullscreen:', err);
-      });
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen();
+        } else if ((elem as any).mozRequestFullScreen) {
+          await (elem as any).mozRequestFullScreen();
+        } else if ((elem as any).msRequestFullscreen) {
+          await (elem as any).msRequestFullscreen();
+        }
+        playClickSound();
+        toast.success('Entered fullscreen mode');
+      } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          await (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+        playClickSound();
+        toast.success('Exited fullscreen mode');
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error);
+      toast.error('Failed to toggle fullscreen');
     }
+  };
+
+  const toggleViewMode = () => {
+    const newMode = viewMode === 'desktop' ? 'mobile' : 'desktop';
+    setViewMode(newMode);
+    localStorage.setItem('pos_view_mode', newMode);
+    playClickSound();
+    toast.success(`Switched to ${newMode} view`, {
+      icon: newMode === 'mobile' ? '📱' : '🖥️',
+      duration: 2000,
+    });
+    
+    // Trigger custom event to notify other components
+    window.dispatchEvent(new Event('viewModeChanged'));
+    
+    // Trigger a window resize event to help responsive components update
+    window.dispatchEvent(new Event('resize'));
   };
 
   return (
@@ -392,16 +461,40 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                 </button>
               )}
 
-              {/* Fullscreen Toggle - Hide on mobile */}
+              {/* View Mode Toggle */}
               <button
-                onClick={() => {
-                  playClickSound();
-                  toggleFullscreen();
-                }}
+                onClick={toggleViewMode}
+                className={`p-2 sm:p-3 rounded-lg transition-all duration-200 active:scale-95 shadow-sm touch-target flex items-center justify-center ${
+                  viewMode === 'mobile' 
+                    ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title={viewMode === 'mobile' ? "Switch to Desktop View" : "Switch to Mobile View"}
+              >
+                {viewMode === 'mobile' ? (
+                  <>
+                    <Smartphone size={16} className="sm:hidden" />
+                    <Smartphone size={18} className="hidden sm:block" />
+                  </>
+                ) : (
+                  <>
+                    <Monitor size={16} className="sm:hidden" />
+                    <Monitor size={18} className="hidden sm:block" />
+                  </>
+                )}
+              </button>
+
+              {/* Fullscreen Toggle */}
+              <button
+                onClick={toggleFullscreen}
                 className="hidden sm:flex p-3 text-neutral-600 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg transition-all duration-200 shadow-soft min-h-[44px] min-w-[44px] items-center justify-center"
                 title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
               >
-                {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                {isFullscreen ? (
+                  <Minimize2 size={18} />
+                ) : (
+                  <Maximize2 size={18} />
+                )}
               </button>
             </div>
 

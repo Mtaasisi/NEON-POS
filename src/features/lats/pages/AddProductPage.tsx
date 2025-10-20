@@ -19,6 +19,8 @@ import { storeLocationApi } from '../../settings/utils/storeLocationApi';
 import { generateSKU } from '../lib/skuUtils';
 import { duplicateProduct, generateProductReport, exportProductData } from '../lib/productUtils';
 import { validateAndCreateDefaultVariant } from '../lib/variantUtils';
+import { useInventoryStore } from '../stores/useInventoryStore';
+import { productCacheService } from '../../../lib/productCacheService';
 
 // Extracted components
 import ProductInformationForm from '../components/product/ProductInformationForm';
@@ -77,6 +79,7 @@ const productFormSchema = z.object({
 const AddProductPageOptimized: React.FC = () => {
   const navigate = useNavigate();
   const { currentBranch } = useBranch();
+  const { loadProducts } = useInventoryStore();
   const [categories, setCategories] = useState<Category[]>([]);
 
   const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
@@ -297,8 +300,11 @@ const AddProductPageOptimized: React.FC = () => {
     }
   };
 
-  const handleGoToInventory = () => {
+  const handleGoToInventory = async () => {
     setShowSuccessModal(false);
+    // Ensure products are fresh before navigating
+    productCacheService.clearProducts();
+    await loadProducts(null, true);
     navigate('/lats/unified-inventory');
   };
 
@@ -804,6 +810,12 @@ const AddProductPageOptimized: React.FC = () => {
       
       // Clear draft after successful submission
       clearDraft();
+      
+      // 🔄 Clear cache and reload products to show the newly created product
+      console.log('🔄 Clearing product cache and reloading...');
+      productCacheService.clearProducts();
+      await loadProducts(null, true); // Force reload, bypass cache
+      console.log('✅ Products reloaded successfully');
       
       // Show success modal instead of navigating away
       setShowSuccessModal(true);

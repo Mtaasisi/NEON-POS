@@ -413,15 +413,15 @@ class FinancialService {
 
       const devicePaymentsRevenue = devicePayments
         .filter(p => p.status === 'completed')
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       const posSalesRevenue = posSales
         .filter(p => p.status === 'completed')
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       const repairPaymentsRevenue = repairPayments
         .filter(p => p.status === 'completed')
-        .reduce((sum, p) => sum + (p.amount || 0), 0);
+        .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
       const totalRevenue = devicePaymentsRevenue + posSalesRevenue + repairPaymentsRevenue;
 
@@ -761,15 +761,15 @@ class FinancialService {
     // Calculate totals
     const totalRevenue = payments
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     const totalOutstanding = payments
       .filter(p => p.status === 'pending')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     const monthlyRevenue = payments
       .filter(p => p.status === 'completed' && isInCurrentMonth(p.payment_date))
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     const totalExpenses = expenses
       .filter(e => e.status === 'approved')

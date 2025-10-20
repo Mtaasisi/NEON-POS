@@ -108,9 +108,7 @@ const supabaseProvider = {
   // Categories
   getCategories: async () => {
     try {
-      console.log('🔍 [Provider] Fetching categories...');
       const categories = await getCategoriesApi();
-      console.log('✅ [Provider] Categories fetched:', categories?.length || 0);
       return {
         ok: true,
         data: categories || []
@@ -231,9 +229,7 @@ const supabaseProvider = {
   // Suppliers
   getSuppliers: async () => {
     try {
-      console.log('🔍 [Provider] Fetching suppliers...');
       const suppliers = await getAllSuppliers();
-      console.log('✅ [Provider] Suppliers fetched:', suppliers?.length || 0);
       return {
         ok: true,
         data: suppliers || []
@@ -370,14 +366,9 @@ const supabaseProvider = {
   // Products
   getProducts: async (filters?: any) => {
     try {
-      console.log('🔍 [Provider] Fetching products with filters:', filters);
       const products = await getProductsApi();
       
-      // 🐛 DEBUG: Detailed logging
-      console.log('🐛 [Provider] DEBUG - products type:', typeof products);
-      console.log('🐛 [Provider] DEBUG - products is array:', Array.isArray(products));
-      console.log('🐛 [Provider] DEBUG - products value:', products);
-      console.log('✅ [Provider] Products fetched:', products?.length || 0);
+      // 🐛 DEBUG: Detailed logging);
       
       // Return in paginated format
       return {
@@ -412,9 +403,7 @@ const supabaseProvider = {
 
   getProduct: async (id: string) => {
     try {
-      console.log('🔍 [Provider] Fetching product:', id);
       const product = await getProductApi(id);
-      console.log('✅ [Provider] Product fetched:', product?.name);
       return {
         ok: true,
         data: product
@@ -469,8 +458,6 @@ const supabaseProvider = {
 
   createProduct: async (data: any) => {
     try {
-      console.log('🔧 [Provider] Starting product creation...');
-      console.log('🔧 [Provider] Raw data received:', data);
       
       // Get current user for userId
       const { data: { user } } = await supabase.auth.getUser();
@@ -519,14 +506,9 @@ const supabaseProvider = {
         images: data.images || []
       };
 
-      console.log('🔧 [Provider] Mapped product data:', JSON.stringify(productData, null, 2));
-
       // Call the latsProductApi createProduct function
-      console.log('🔧 [Provider] Calling API createProduct...');
       const { createProduct: apiCreateProduct } = await import('../../../../lib/latsProductApi');
       const createdProduct = await apiCreateProduct(productData, user.id);
-      
-      console.log('✅ [Provider] Product created successfully:', createdProduct);
       
       // Check if product was created successfully
       if (!createdProduct || !createdProduct.id) {
@@ -578,9 +560,6 @@ const supabaseProvider = {
 
   updateProduct: async (id: string, data: any) => {
     try {
-      console.log('🔧 [Provider] Starting product update...');
-      console.log('🔧 [Provider] Product ID:', id);
-      console.log('🔧 [Provider] Raw data received:', data);
       
       // Map the product data to the format expected by latsProductApi
       const updateData = {
@@ -594,7 +573,6 @@ const supabaseProvider = {
         isActive: data.isActive !== undefined ? data.isActive : true,
         // Handle variants if provided
         variants: data.variants ? data.variants.map((v: any, index: number) => {
-          console.log(`🔧 [Provider] Mapping variant ${index + 1}:`, v);
           return {
             id: v?.id, // ✅ Include ID for existing variants
             sku: v?.sku,
@@ -608,14 +586,9 @@ const supabaseProvider = {
         }) : undefined
       };
 
-      console.log('🔧 [Provider] Mapped update data:', JSON.stringify(updateData, null, 2));
-
       // Call the latsProductApi updateProduct function
-      console.log('🔧 [Provider] Calling API updateProduct...');
       const { updateProduct: apiUpdateProduct } = await import('../../../../lib/latsProductApi');
       const updatedProduct = await apiUpdateProduct(id, updateData, '');
-      
-      console.log('✅ [Provider] Product updated successfully:', updatedProduct);
       
       return {
         ok: true,
@@ -848,7 +821,6 @@ const supabaseProvider = {
   // Purchase Orders - fully implemented
   getPurchaseOrders: async () => {
     try {
-      console.log('📋 Fetching all purchase orders...');
       
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
@@ -861,7 +833,6 @@ const supabaseProvider = {
       
       // 🔒 COMPLETE ISOLATION: Only show purchase orders from current branch
       if (currentBranchId) {
-        console.log('🔒 [getPurchaseOrders] ISOLATED MODE - Filtering by branch:', currentBranchId);
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -871,8 +842,6 @@ const supabaseProvider = {
         console.error('❌ Error fetching purchase orders:', error);
         return { ok: false, message: error.message, data: [] };
       }
-
-      console.log(`✅ Fetched ${purchaseOrders?.length || 0} purchase orders`);
 
       // Fetch item counts for all purchase orders
       const poIds = purchaseOrders?.map((po: any) => po.id) || [];
@@ -898,7 +867,6 @@ const supabaseProvider = {
       const supplierIds = [...new Set(purchaseOrders?.map((po: any) => po.supplier_id).filter(Boolean) || [])];
       
       if (supplierIds.length > 0) {
-        console.log('🔍 [getPurchaseOrders] Fetching suppliers separately...');
         const { data: suppliers, error: suppliersError } = await supabase
           .from('lats_suppliers')
           .select('id, name, contact_person, email, phone')
@@ -908,7 +876,6 @@ const supabaseProvider = {
           suppliers.forEach((supplier: any) => {
             suppliersMap.set(supplier.id, supplier);
           });
-          console.log(`✅ [getPurchaseOrders] Fetched ${suppliers.length} suppliers separately`);
         } else {
           console.error('❌ [getPurchaseOrders] Error fetching suppliers:', suppliersError);
         }
@@ -953,13 +920,6 @@ const supabaseProvider = {
         };
         
         // Debug each mapped order
-        console.log('🔍 [getPurchaseOrders] Mapped order:', {
-          id: mappedOrder.id,
-          orderNumber: mappedOrder.orderNumber,
-          supplierId: mappedOrder.supplierId,
-          supplier: mappedOrder.supplier,
-          totalAmount: mappedOrder.totalAmount
-        });
         
         return mappedOrder;
       });
@@ -973,7 +933,6 @@ const supabaseProvider = {
 
   getPurchaseOrder: async (id: string) => {
     try {
-      console.log('🔍 Fetching purchase order:', id);
       
       // Get purchase order
       const { data: purchaseOrder, error: poError } = await supabase
@@ -981,12 +940,6 @@ const supabaseProvider = {
         .select('*')
         .eq('id', id)
         .single();
-
-      console.log('🔍 [Provider] Raw purchase order data:', {
-        id: purchaseOrder?.id,
-        supplier_id: purchaseOrder?.supplier_id,
-        supplier: purchaseOrder?.supplier
-      });
 
       if (poError) {
         console.error('❌ Error fetching purchase order:', poError);
@@ -1004,7 +957,6 @@ const supabaseProvider = {
 
         if (!supplierError && supplierData) {
           supplier = supplierData;
-          console.log('✅ [Provider] Supplier data loaded:', supplier);
         } else {
           console.error('❌ [Provider] Error fetching supplier:', supplierError);
         }
@@ -1045,16 +997,8 @@ const supabaseProvider = {
         
         variants?.forEach((v: any) => variantsMap.set(v.id, v));
       }
-
-      console.log('✅ Purchase order fetched:', purchaseOrder.po_number);
       
       // Debug supplier data in getPurchaseOrder
-      console.log('🔍 [getPurchaseOrder] Raw supplier data:', {
-        id: purchaseOrder.id,
-        po_number: purchaseOrder.po_number,
-        supplier_id: purchaseOrder.supplier_id,
-        supplier: purchaseOrder.supplier
-      });
 
       // Map snake_case to camelCase for frontend
       const mappedOrder = {
@@ -1115,13 +1059,6 @@ const supabaseProvider = {
       };
       
       // Debug mapped order in getPurchaseOrder
-      console.log('🔍 [getPurchaseOrder] Mapped order:', {
-        id: mappedOrder.id,
-        orderNumber: mappedOrder.orderNumber,
-        supplierId: mappedOrder.supplierId,
-        supplier: mappedOrder.supplier,
-        totalAmount: mappedOrder.totalAmount
-      });
 
       return { 
         ok: true, 
@@ -1135,7 +1072,6 @@ const supabaseProvider = {
 
   createPurchaseOrder: async (data: any) => {
     try {
-      console.log('🔄 Creating purchase order:', data);
       
       // Generate PO number if not provided
       const poNumber = data.po_number || `PO-${Date.now()}`;
@@ -1147,7 +1083,6 @@ const supabaseProvider = {
       
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
-      console.log('🏪 [createPurchaseOrder] Assigning purchase order to branch:', currentBranchId);
       
       // Create the purchase order - using only core columns that exist
       const { data: purchaseOrder, error: poError } = await supabase
@@ -1171,8 +1106,6 @@ const supabaseProvider = {
         return { ok: false, message: poError.message };
       }
 
-      console.log('✅ Purchase order created:', purchaseOrder);
-
       // Create purchase order items - using only core columns
       const items = data.items.map((item: any) => ({
         purchase_order_id: purchaseOrder.id,
@@ -1183,8 +1116,6 @@ const supabaseProvider = {
         unit_cost: item.costPrice,
         subtotal: item.quantity * item.costPrice // Calculate subtotal (required by database)
       }));
-
-      console.log('📦 Attempting to insert items:', items);
 
       const { data: insertedItems, error: itemsError } = await supabase
         .from('lats_purchase_order_items')
@@ -1205,8 +1136,6 @@ const supabaseProvider = {
         return { ok: false, message: `Failed to create items: ${itemsError.message}` };
       }
 
-      console.log('✅ Purchase order items created:', insertedItems?.length || items.length);
-
       // Log audit entry for purchase order creation
       try {
         await PurchaseOrderService.addAuditEntry({
@@ -1215,7 +1144,6 @@ const supabaseProvider = {
           user: data.createdBy || '',
           details: `Purchase order ${poNumber} created with ${items.length} items. Total: ${totalAmount}. Status: ${data.status || 'draft'}`
         });
-        console.log('✅ Audit entry logged for purchase order creation');
       } catch (auditError) {
         console.warn('⚠️ Failed to log audit entry:', auditError);
         // Don't fail the creation if audit logging fails
@@ -1236,7 +1164,6 @@ const supabaseProvider = {
 
   updatePurchaseOrder: async (id: string, data: any) => {
     try {
-      console.log('🔄 Updating purchase order:', id, data);
       
       const { data: updatedPO, error: updateError } = await supabase
         .from('lats_purchase_orders')
@@ -1255,8 +1182,6 @@ const supabaseProvider = {
         return { ok: false, message: updateError.message };
       }
 
-      console.log('✅ Purchase order updated:', updatedPO.po_number);
-
       // Log audit entry for purchase order update
       try {
         const changes = [];
@@ -1270,7 +1195,6 @@ const supabaseProvider = {
           user: data.updatedBy || '',
           details: `Purchase order updated. Changes: ${changes.join(', ')}`
         });
-        console.log('✅ Audit entry logged for purchase order update');
       } catch (auditError) {
         console.warn('⚠️ Failed to log audit entry:', auditError);
         // Don't fail the update if audit logging fails
@@ -1295,8 +1219,6 @@ const supabaseProvider = {
         return { ok: false, message: 'User not authenticated' };
       }
 
-      console.log(`📦 Receiving purchase order: ${id}`);
-
       // Call the RPC function to complete the receive
       const { data, error } = await supabase
         .rpc('complete_purchase_order_receive', {
@@ -1309,8 +1231,6 @@ const supabaseProvider = {
         console.error('❌ Error receiving purchase order:', error);
         return { ok: false, message: error.message || 'Failed to receive purchase order' };
       }
-
-      console.log('✅ Purchase order received successfully:', data);
       
       // 🔥 EMIT EVENT: Notify inventory page to refresh
       latsEventBus.emit('lats:purchase-order.received', {
@@ -1318,8 +1238,6 @@ const supabaseProvider = {
         userId: user.id,
         notes: 'Received via PO system'
       });
-      
-      console.log('✅ [Provider] Purchase order received event emitted');
       
       // Get updated purchase order (without nested select - Neon doesn't support this)
       const { data: updatedPO, error: fetchError } = await supabase
@@ -1363,7 +1281,6 @@ const supabaseProvider = {
   // Spare Parts - real implementations
   getSpareParts: async () => {
     try {
-      console.log('🔧 [DEBUG] getSpareParts: Fetching spare parts from database...');
       
       // Fetch spare parts without nested select (Neon doesn't support this)
       const { data: spareParts, error } = await supabase
@@ -1417,8 +1334,6 @@ const supabaseProvider = {
         supplier: suppliersMap[sp.supplier_id],
         variants: variantsBySparePartId[sp.id] || []
       }));
-
-      console.log(`✅ [DEBUG] getSpareParts: Successfully fetched ${enrichedSpareParts.length} spare parts`);
       return { ok: true, data: enrichedSpareParts };
     } catch (error) {
       console.error('❌ [DEBUG] getSpareParts: Unexpected error:', error);
@@ -1638,7 +1553,6 @@ const supabaseProvider = {
 
   getSales: async () => {
     try {
-      console.log('🔍 [Provider] Fetching sales...');
       
       // Get current branch for filtering
       const currentBranchId = localStorage.getItem('current_branch_id');
@@ -1670,10 +1584,8 @@ const supabaseProvider = {
       
       // Apply branch filter if branch ID exists
       if (currentBranchId) {
-        console.log('🏪 [Provider] Filtering sales by branch:', currentBranchId);
         query = query.eq('branch_id', currentBranchId);
       } else {
-        console.log('⚠️ [Provider] No branch filter - showing all sales');
       }
       
       const { data: sales, error } = await query;
@@ -1686,8 +1598,6 @@ const supabaseProvider = {
           data: []
         };
       }
-      
-      console.log('✅ [Provider] Sales fetched:', sales?.length || 0);
       
       return {
         ok: true,

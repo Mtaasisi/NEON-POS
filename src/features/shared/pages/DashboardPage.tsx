@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { PageErrorWrapper } from '../components/PageErrorWrapper';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
+import { useDashboardSettings } from '../../../hooks/useDashboardSettings';
 import {
   Smartphone, Users, Package, Plus,
   DollarSign, Calendar,
@@ -18,13 +19,27 @@ import {
   SystemHealthWidget,
   ActivityFeedWidget,
   CustomerInsightsWidget,
-  ServiceWidget
+  ServiceWidget,
+  RevenueTrendChart,
+  DeviceStatusChart,
+  AppointmentsTrendChart,
+  StockLevelChart,
+  CustomerActivityChart,
+  PerformanceMetricsChart,
+  SalesFunnelChart
 } from '../components/dashboard';
 import { dashboardService, DashboardStats } from '../../../services/dashboardService';
 
 const DashboardPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  
+  // Dashboard settings hook
+  const { 
+    isQuickActionEnabled, 
+    isWidgetEnabled, 
+    loading: settingsLoading 
+  } = useDashboardSettings();
   
   // Error handling
   const { handleError, withErrorHandling } = useErrorHandler({
@@ -92,22 +107,11 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // Format currency with error handling
-  const formatMoney = (amount: number) => {
-    try {
-      return new Intl.NumberFormat('en-TZ', {
-        style: 'currency',
-        currency: 'TZS'
-      }).format(amount);
-    } catch (error) {
-      handleError(error as Error, 'Currency formatting');
-      return `TZS ${amount}`;
-    }
-  };
 
   // Quick action cards - streamlined for comprehensive dashboard
-  const quickActions = [
+  const allQuickActions = [
     {
+      id: 'devices' as const,
       title: 'Devices',
       description: 'Manage devices',
       icon: Smartphone,
@@ -115,6 +119,7 @@ const DashboardPage: React.FC = () => {
       path: '/devices'
     },
     {
+      id: 'addDevice' as const,
       title: 'Add Device',
       description: 'New device',
       icon: Plus,
@@ -122,6 +127,7 @@ const DashboardPage: React.FC = () => {
       path: '/devices/new'
     },
     {
+      id: 'customers' as const,
       title: 'Customers',
       description: 'Customer data',
       icon: Users,
@@ -129,6 +135,7 @@ const DashboardPage: React.FC = () => {
       path: '/customers'
     },
     {
+      id: 'inventory' as const,
       title: 'Inventory',
       description: 'Stock & parts',
       icon: Package,
@@ -136,6 +143,7 @@ const DashboardPage: React.FC = () => {
       path: '/lats/unified-inventory'
     },
     {
+      id: 'appointments' as const,
       title: 'Appointments',
       description: 'Scheduling',
       icon: Calendar,
@@ -143,6 +151,7 @@ const DashboardPage: React.FC = () => {
       path: '/appointments'
     },
     {
+      id: 'purchaseOrders' as const,
       title: 'Purchase Orders',
       description: 'Manage orders',
       icon: Package,
@@ -150,6 +159,7 @@ const DashboardPage: React.FC = () => {
       path: '/lats/purchase-orders'
     },
     {
+      id: 'payments' as const,
       title: 'Payments',
       description: 'Payment management',
       icon: DollarSign,
@@ -157,6 +167,7 @@ const DashboardPage: React.FC = () => {
       path: '/finance/payments'
     },
     {
+      id: 'adGenerator' as const,
       title: 'Ad Generator',
       description: 'Create product ads',
       icon: FileText,
@@ -164,6 +175,9 @@ const DashboardPage: React.FC = () => {
       path: '/ad-generator'
     }
   ];
+
+  // Filter quick actions based on user settings
+  const quickActions = allQuickActions.filter(action => isQuickActionEnabled(action.id));
 
   return (
     <PageErrorWrapper pageName="Dashboard" showDetails={true}>
@@ -195,7 +209,7 @@ const DashboardPage: React.FC = () => {
         </div>
 
         {/* Quick Actions */}
-        {!isLoading && (
+        {!isLoading && !settingsLoading && quickActions.length > 0 && (
           <div className="bg-white rounded-2xl p-7">
             <div className="flex items-center gap-3 mb-8">
               <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
@@ -237,116 +251,77 @@ const DashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Statistics */}
-        {!isLoading && dashboardStats && (
+        {/* Statistics & Charts - Enhanced with Visualizations */}
+        {!isLoading && !settingsLoading && dashboardStats && (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-              <div className="bg-white rounded-xl p-5 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Smartphone className="w-5 h-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Total Devices</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.totalDevices}</p>
-                  </div>
-                </div>
+            {/* Top Row - Chart Cards */}
+            {(isWidgetEnabled('revenueTrendChart') || isWidgetEnabled('deviceStatusChart') || isWidgetEnabled('appointmentsTrendChart')) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {isWidgetEnabled('revenueTrendChart') && <RevenueTrendChart />}
+                {isWidgetEnabled('deviceStatusChart') && <DeviceStatusChart />}
+                {isWidgetEnabled('appointmentsTrendChart') && <AppointmentsTrendChart />}
               </div>
-              
-              <div className="bg-white rounded-xl p-5 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Users className="w-5 h-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Customers</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.activeCustomers}</p>
-                  </div>
-                </div>
+            )}
+
+            {/* Second Row - Stock Level Chart */}
+            {isWidgetEnabled('stockLevelChart') && (
+              <div className="grid grid-cols-1">
+                <StockLevelChart />
               </div>
-              
-              <div className="bg-white rounded-xl p-5 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Users className="w-5 h-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Staff Present</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.presentToday}</p>
-                  </div>
-                </div>
+            )}
+
+            {/* Third Row - Performance & Analytics */}
+            {(isWidgetEnabled('performanceMetricsChart') || isWidgetEnabled('customerActivityChart')) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {isWidgetEnabled('performanceMetricsChart') && <PerformanceMetricsChart />}
+                {isWidgetEnabled('customerActivityChart') && <CustomerActivityChart />}
               </div>
-              
-              <div className="bg-white rounded-xl p-5 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Calendar className="w-5 h-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Appointments</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.todayAppointments}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-xl p-5 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <Package className="w-5 h-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Stock Alerts</p>
-                    <p className="text-2xl font-bold text-gray-900">{dashboardStats.lowStockItems}</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="bg-white rounded-xl p-5 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-                    <DollarSign className="w-5 h-5 text-gray-700" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Revenue Today</p>
-                    <p className="text-2xl font-bold text-gray-900">{formatMoney(dashboardStats.revenueToday)}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            )}
 
           </>
         )}
 
         {/* Comprehensive Widgets Layout */}
-        {!isLoading && dashboardStats && (
+        {!isLoading && !settingsLoading && dashboardStats && (
           <div className="space-y-6">
             {/* Top Priority Row - Operations */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <AppointmentWidget />
-              <EmployeeWidget />
-              <NotificationWidget />
-            </div>
+            {(isWidgetEnabled('appointmentWidget') || isWidgetEnabled('employeeWidget') || isWidgetEnabled('notificationWidget')) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {isWidgetEnabled('appointmentWidget') && <AppointmentWidget />}
+                {isWidgetEnabled('employeeWidget') && <EmployeeWidget />}
+                {isWidgetEnabled('notificationWidget') && <NotificationWidget />}
+              </div>
+            )}
 
             {/* Financial & Analytics Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <FinancialWidget />
-              <AnalyticsWidget />
-            </div>
+            {(isWidgetEnabled('financialWidget') || isWidgetEnabled('analyticsWidget') || isWidgetEnabled('salesFunnelChart')) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {isWidgetEnabled('financialWidget') && <FinancialWidget />}
+                {isWidgetEnabled('analyticsWidget') && <AnalyticsWidget />}
+                {isWidgetEnabled('salesFunnelChart') && <SalesFunnelChart />}
+              </div>
+            )}
 
             {/* Service & Customer Insights Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <ServiceWidget />
+            {(isWidgetEnabled('serviceWidget') || isWidgetEnabled('customerInsightsWidget')) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {isWidgetEnabled('serviceWidget') && (
+                  <div className={isWidgetEnabled('customerInsightsWidget') ? 'lg:col-span-2' : 'lg:col-span-3'}>
+                    <ServiceWidget />
+                  </div>
+                )}
+                {isWidgetEnabled('customerInsightsWidget') && <CustomerInsightsWidget />}
               </div>
-              <CustomerInsightsWidget />
-            </div>
+            )}
 
             {/* System Monitoring Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <SystemHealthWidget />
-              <InventoryWidget />
-              <ActivityFeedWidget />
-            </div>
+            {(isWidgetEnabled('systemHealthWidget') || isWidgetEnabled('inventoryWidget') || isWidgetEnabled('activityFeedWidget')) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {isWidgetEnabled('systemHealthWidget') && <SystemHealthWidget />}
+                {isWidgetEnabled('inventoryWidget') && <InventoryWidget />}
+                {isWidgetEnabled('activityFeedWidget') && <ActivityFeedWidget />}
+              </div>
+            )}
           </div>
         )}
 

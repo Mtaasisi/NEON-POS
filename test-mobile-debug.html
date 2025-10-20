@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile POS - Debug Helper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .subtitle {
+            text-align: center;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        
+        .info-card {
+            background: white;
+            color: #333;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .info-card h2 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .info-item {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .info-label {
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .info-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            display: inline-block;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        
+        .status.mobile {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .status.desktop {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .status.tablet {
+            background: #ed8936;
+            color: white;
+        }
+        
+        .button {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin: 5px;
+            transition: transform 0.2s, background 0.2s;
+            border: none;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        
+        .button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+        }
+        
+        .button:active {
+            transform: translateY(0);
+        }
+        
+        .action-buttons {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .checklist {
+            background: white;
+            color: #333;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .checklist-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: #f7fafc;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .checklist-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .checklist-item label {
+            cursor: pointer;
+            flex: 1;
+        }
+        
+        .checklist-item.checked {
+            background: #c6f6d5;
+            border-left: 4px solid #48bb78;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e2e8f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #48bb78, #38a169);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .emoji {
+            font-size: 1.5em;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Mobile POS Debug Helper</h1>
+        <p class="subtitle">Test your mobile POS implementation</p>
+        
+        <div class="info-card">
+            <h2>🔍 Current Device Info</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Screen Width</div>
+                    <div class="info-value" id="screenWidth">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Screen Height</div>
+                    <div class="info-value" id="screenHeight">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Device Type</div>
+                    <div class="info-value" id="deviceType">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Orientation</div>
+                    <div class="info-value" id="orientation">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Touch Device</div>
+                    <div class="info-value" id="touchDevice">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">User Agent</div>
+                    <div class="info-value" id="userAgent" style="font-size: 0.8em;">-</div>
+                </div>
+            </div>
+            <div style="margin-top: 15px;">
+                <strong>Should Show Mobile UI:</strong>
+                <span class="status" id="mobileStatus">Checking...</span>
+            </div>
+        </div>
+        
+        <div class="action-buttons">
+            <a href="http://localhost:5173" class="button" target="_blank">
+                🚀 Open POS (New Tab)
+            </a>
+            <button class="button" onclick="location.reload()">
+                🔄 Refresh Info
+            </button>
+        </div>
+        
+        <div class="checklist">
+            <h2>✅ Quick Test Checklist</h2>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressBar" style="width: 0%">0%</div>
+            </div>
+            
+            <div class="checklist-item">
+                <input type="checkbox" id="check1" onchange="updateProgress()">
+                <label for="check1"><span class="emoji">🌐</span> POS page loads</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check2" onchange="updateProgress()">
+                <label for="check2"><span class="emoji">📱</span> Bottom navigation visible</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check3" onchange="updateProgress()">
+                <label for="check3"><span class="emoji">🎁</span> Products tab shows grid</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check4" onchange="updateProgress()">
+                <label for="check4"><span class="emoji">🛒</span> Can add product to cart</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check5" onchange="updateProgress()">
+                <label for="check5"><span class="emoji">🔍</span> Search button opens full screen</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check6" onchange="updateProgress()">
+                <label for="check6"><span class="emoji">📦</span> Cart badge shows count</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check7" onchange="updateProgress()">
+                <label for="check7"><span class="emoji">👥</span> Customer tab works</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check8" onchange="updateProgress()">
+                <label for="check8"><span class="emoji">⚙️</span> More tab accessible</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check9" onchange="updateProgress()">
+                <label for="check9"><span class="emoji">✨</span> Smooth animations</label>
+            </div>
+            <div class="checklist-item">
+                <input type="checkbox" id="check10" onchange="updateProgress()">
+                <label for="check10"><span class="emoji">🎉</span> No console errors</label>
+            </div>
+        </div>
+        
+        <div class="info-card">
+            <h2>🎯 Expected vs Actual</h2>
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr style="border-bottom: 2px solid #e2e8f0;">
+                    <th style="text-align: left; padding: 10px;">Element</th>
+                    <th style="text-align: center; padding: 10px;">Expected</th>
+                    <th style="text-align: center; padding: 10px;">Status</th>
+                </tr>
+                <tr>
+                    <td style="padding: 10px;">Bottom Navigation</td>
+                    <td style="text-align: center; padding: 10px;">✅ Visible</td>
+                    <td style="text-align: center; padding: 10px;" id="navStatus">❓</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px;">Desktop Sidebar</td>
+                    <td style="text-align: center; padding: 10px;">❌ Hidden</td>
+                    <td style="text-align: center; padding: 10px;" id="sidebarStatus">❓</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px;">Product Grid</td>
+                    <td style="text-align: center; padding: 10px;">✅ Full Width</td>
+                    <td style="text-align: center; padding: 10px;" id="gridStatus">❓</td>
+                </tr>
+                <tr>
+                    <td style="padding: 10px;">Touch Targets</td>
+                    <td style="text-align: center; padding: 10px;">✅ Large (44px+)</td>
+                    <td style="text-align: center; padding: 10px;" id="touchStatus">❓</td>
+                </tr>
+            </table>
+        </div>
+        
+        <div class="info-card">
+            <h2>🔧 Quick Fixes</h2>
+            <div style="margin-top: 15px;">
+                <details style="margin-bottom: 10px;">
+                    <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: #f7fafc; border-radius: 6px;">
+                        ❌ Mobile UI not loading
+                    </summary>
+                    <div style="padding: 15px;">
+                        <p><strong>Check:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li>Is screen width &lt; 768px?</li>
+                            <li>Is device mode enabled in DevTools?</li>
+                            <li>Did you refresh after changing device?</li>
+                        </ul>
+                        <p style="margin-top: 10px;"><strong>Solution:</strong> Press Ctrl+Shift+M in DevTools, select iPhone 12, then F5</p>
+                    </div>
+                </details>
+                
+                <details style="margin-bottom: 10px;">
+                    <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: #f7fafc; border-radius: 6px;">
+                        ⚠️ Layout looks wrong
+                    </summary>
+                    <div style="padding: 15px;">
+                        <p><strong>Try:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li>Hard refresh: Ctrl+Shift+R</li>
+                            <li>Clear browser cache</li>
+                            <li>Check console for CSS errors</li>
+                        </ul>
+                    </div>
+                </details>
+                
+                <details style="margin-bottom: 10px;">
+                    <summary style="cursor: pointer; font-weight: bold; padding: 10px; background: #f7fafc; border-radius: 6px;">
+                        🐛 JavaScript errors
+                    </summary>
+                    <div style="padding: 15px;">
+                        <p><strong>Check console (F12) for:</strong></p>
+                        <ul style="margin-left: 20px; margin-top: 10px;">
+                            <li>Import errors</li>
+                            <li>Component rendering errors</li>
+                            <li>Hook dependency warnings</li>
+                        </ul>
+                        <p style="margin-top: 10px;"><strong>Solution:</strong> Look for red error messages and check line numbers</p>
+                    </div>
+                </details>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function updateDeviceInfo() {
+            // Screen dimensions
+            document.getElementById('screenWidth').textContent = window.innerWidth + 'px';
+            document.getElementById('screenHeight').textContent = window.innerHeight + 'px';
+            
+            // Orientation
+            const orientation = window.innerHeight > window.innerWidth ? 'Portrait' : 'Landscape';
+            document.getElementById('orientation').textContent = orientation;
+            
+            // Touch device
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            document.getElementById('touchDevice').textContent = hasTouch ? 'Yes ✅' : 'No ❌';
+            
+            // Device type
+            const width = window.innerWidth;
+            let deviceType = 'Desktop';
+            let statusClass = 'desktop';
+            
+            if (width < 768) {
+                deviceType = 'Mobile';
+                statusClass = 'mobile';
+            } else if (width < 1024) {
+                deviceType = 'Tablet';
+                statusClass = 'tablet';
+            }
+            
+            document.getElementById('deviceType').textContent = deviceType;
+            
+            // User agent
+            const ua = navigator.userAgent;
+            const shortUA = ua.length > 50 ? ua.substring(0, 50) + '...' : ua;
+            document.getElementById('userAgent').textContent = shortUA;
+            document.getElementById('userAgent').title = ua; // Full UA on hover
+            
+            // Mobile status
+            const mobileStatus = document.getElementById('mobileStatus');
+            const shouldShowMobile = width < 768;
+            mobileStatus.textContent = shouldShowMobile ? '✅ Yes (Mobile UI)' : '❌ No (Desktop UI)';
+            mobileStatus.className = 'status ' + statusClass;
+        }
+        
+        function updateProgress() {
+            const checkboxes = document.querySelectorAll('.checklist-item input[type="checkbox"]');
+            const checked = document.querySelectorAll('.checklist-item input[type="checkbox"]:checked');
+            const percentage = Math.round((checked.length / checkboxes.length) * 100);
+            
+            const progressBar = document.getElementById('progressBar');
+            progressBar.style.width = percentage + '%';
+            progressBar.textContent = percentage + '%';
+            
+            // Update checklist item styles
+            checkboxes.forEach(checkbox => {
+                const item = checkbox.closest('.checklist-item');
+                if (checkbox.checked) {
+                    item.classList.add('checked');
+                } else {
+                    item.classList.remove('checked');
+                }
+            });
+            
+            // Celebrate completion
+            if (percentage === 100) {
+                setTimeout(() => {
+                    alert('🎉 Congratulations! All tests passed!\n\nYour mobile POS is working perfectly!');
+                }, 300);
+            }
+        }
+        
+        // Update on load and resize
+        updateDeviceInfo();
+        window.addEventListener('resize', updateDeviceInfo);
+        window.addEventListener('orientationchange', () => {
+            setTimeout(updateDeviceInfo, 100);
+        });
+        
+        // Auto-refresh every 2 seconds
+        setInterval(updateDeviceInfo, 2000);
+    </script>
+</body>
+</html>
+

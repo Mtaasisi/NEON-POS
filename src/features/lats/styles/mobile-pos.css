@@ -1,0 +1,400 @@
+/**
+ * Mobile POS Styles - Redesigned to match Desktop
+ * 
+ * Clean, professional mobile POS interface with:
+ * - Desktop-consistent colors (greens, blues, grays)
+ * - Smooth animations
+ * - Touch-friendly sizing
+ * - Safe areas support
+ */
+
+/* Mobile Container */
+.mobile-container {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  background: #f9fafb;
+}
+
+/* Touch Target Sizing */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.touch-button {
+  min-height: 48px;
+  padding: 12px 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Modern Card */
+.mobile-card {
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+/* Mobile Scroll */
+.mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mobile-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe Area Support */
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-area-pl {
+  padding-left: env(safe-area-inset-left);
+}
+
+.safe-area-pr {
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Mobile Product Grid */
+.mobile-product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  padding: 16px;
+}
+
+@media (max-width: 375px) {
+  .mobile-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+  }
+}
+
+/* Product Card */
+.mobile-product-card {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  border: 1px solid #e5e7eb;
+}
+
+.mobile-product-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Modern Cart Item with Slide Animation */
+.mobile-cart-item {
+  background: white;
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Mobile Input */
+.mobile-input {
+  font-size: 16px; /* Prevents zoom on iOS */
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  width: 100%;
+}
+
+.mobile-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Mobile Buttons */
+.mobile-btn {
+  font-size: 16px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: none;
+}
+
+.mobile-btn:active {
+  transform: scale(0.96);
+}
+
+.mobile-btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.mobile-btn-primary:active {
+  background: #2563eb;
+}
+
+.mobile-btn-success {
+  background: #10b981;
+  color: white;
+}
+
+.mobile-btn-success:active {
+  background: #059669;
+}
+
+.mobile-btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.mobile-btn-danger:active {
+  background: #dc2626;
+}
+
+/* Mobile Bottom Sheet */
+.mobile-bottom-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  padding-bottom: env(safe-area-inset-bottom);
+  max-height: 90vh;
+  overflow-y: auto;
+  z-index: 1000;
+  animation: slideUp 0.3s ease-out;
+}
+
+.mobile-bottom-sheet::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Mobile Modal */
+.mobile-modal {
+  position: fixed;
+  inset: 0;
+  background: white;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-modal-header {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: calc(16px + env(safe-area-inset-top));
+}
+
+.mobile-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mobile-modal-footer {
+  padding: 16px;
+  border-top: 1px solid #e5e7eb;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+/* Mobile Badge */
+.mobile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 20px;
+}
+
+/* Mobile Skeleton Loader */
+.mobile-skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 0%,
+    #e0e0e0 50%,
+    #f0f0f0 100%
+  );
+  background-size: 200% 100%;
+  animation: mobile-skeleton-loading 1.5s ease-in-out infinite;
+}
+
+@keyframes mobile-skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Prevent iOS Zoom */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Mobile Navigation */
+.mobile-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #e5e7eb;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 50;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+}
+
+/* Mobile Fab Button */
+.mobile-fab {
+  position: fixed;
+  bottom: calc(80px + env(safe-area-inset-bottom));
+  right: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #10b981;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  z-index: 40;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s;
+}
+
+.mobile-fab:active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.mobile-fab:hover {
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.5);
+}
+
+/* Landscape Mode Adjustments */
+@media (orientation: landscape) and (max-height: 500px) {
+  .mobile-modal-header {
+    padding: 8px 16px;
+  }
+  
+  .mobile-bottom-sheet {
+    max-height: 80vh;
+  }
+  
+  .mobile-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  }
+}
+
+/* Dark Mode Support (Optional) */
+@media (prefers-color-scheme: dark) {
+  .mobile-container {
+    background: #1f2937;
+  }
+  
+  .mobile-card,
+  .mobile-product-card,
+  .mobile-cart-item,
+  .mobile-bottom-sheet,
+  .mobile-modal {
+    background: #374151;
+    color: #f9fafb;
+  }
+  
+  .mobile-input {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+}
+
+/* Accessibility - High Contrast Mode */
+@media (prefers-contrast: high) {
+  .mobile-product-card,
+  .mobile-cart-item {
+    border: 2px solid currentColor;
+  }
+  
+  .mobile-btn {
+    border: 2px solid currentColor;
+  }
+}
+
+/* Reduce Motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

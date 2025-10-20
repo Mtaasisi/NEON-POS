@@ -71,24 +71,18 @@ const BackgroundDataLoader: React.FC = () => {
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-white/90 backdrop-blur-sm border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm">
+      <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-3 max-w-xs">
         <div className="flex items-center space-x-3">
           {isLoading ? (
             <>
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-gray-700"></div>
               <div className="flex-1">
-                <p className={`text-sm font-medium ${currentMessage.color || 'text-gray-700'}`}>
-                  {currentMessage.icon} {currentMessage.text}
+                <p className="text-sm text-gray-700">
+                  {currentMessage.text}
                 </p>
-                <div className="flex items-center space-x-2 mt-1">
-                  <Package className="h-3 w-3 text-blue-500" />
-                  <Users className="h-3 w-3 text-green-500" />
-                  <Smartphone className="h-3 w-3 text-purple-500" />
-                  <Settings className="h-3 w-3 text-orange-500" />
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                <div className="w-full bg-gray-100 rounded-full h-1 mt-2">
                   <div 
-                    className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                    className="bg-gray-700 h-1 rounded-full transition-all duration-300"
                     style={{ width: `${progress}%` }}
                   ></div>
                 </div>
@@ -96,11 +90,11 @@ const BackgroundDataLoader: React.FC = () => {
             </>
           ) : (
             <>
-              <CheckCircle className="h-5 w-5 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-gray-700" />
               <div>
-                <p className="text-sm font-medium text-gray-700">Data loaded!</p>
+                <p className="text-sm text-gray-700">Data loaded</p>
                 <p className="text-xs text-gray-500">
-                  {products?.length || 0} products • {categories?.length || 0} categories • {suppliers?.length || 0} suppliers • {customers?.length || 0} customers
+                  {products?.length || 0} products • {customers?.length || 0} customers
                 </p>
               </div>
             </>

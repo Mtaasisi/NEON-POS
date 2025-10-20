@@ -26,7 +26,6 @@ class CustomerCacheService {
         version: CACHE_VERSION
       };
       localStorage.setItem(CustomerCacheService.CUSTOMERS_KEY, JSON.stringify(cached));
-      console.log(`✅ [CustomerCache] Saved ${customers.length} customers to localStorage`);
     } catch (error) {
       console.warn('⚠️ [CustomerCache] Failed to save customers:', error);
     }
@@ -39,7 +38,6 @@ class CustomerCacheService {
     try {
       const cached = localStorage.getItem(CustomerCacheService.CUSTOMERS_KEY);
       if (!cached) {
-        console.log('📭 [CustomerCache] No cached customers found');
         return null;
       }
       
@@ -47,7 +45,6 @@ class CustomerCacheService {
       
       // Check version
       if (data.version !== CACHE_VERSION) {
-        console.log('🔄 [CustomerCache] Cache version mismatch, invalidating');
         this.clearCustomers();
         return null;
       }
@@ -55,12 +52,12 @@ class CustomerCacheService {
       // Check expiry
       const age = Date.now() - data.timestamp;
       if (age > CACHE_DURATION) {
-        console.log(`⏰ [CustomerCache] Cache expired (${Math.round(age / 1000)}s old)`);
+        console.log(`✅ [CustomerCache] Cache expired (${Math.round(age / 1000)}s old)`);
         this.clearCustomers();
         return null;
       }
       
-      console.log(`⚡ [CustomerCache] Using cached customers (${Math.round(age / 1000)}s old, ${data.data.length} customers)`);
+      console.log(`✅ [CustomerCache] Using cached customers (${Math.round(age / 1000)}s old, ${data.data.length} customers)`);
       return data.data;
     } catch (error) {
       console.warn('⚠️ [CustomerCache] Failed to read customers cache:', error);
@@ -73,7 +70,6 @@ class CustomerCacheService {
    */
   clearCustomers(): void {
     localStorage.removeItem(CustomerCacheService.CUSTOMERS_KEY);
-    console.log('🗑️ [CustomerCache] Cleared customers cache');
   }
   
   /**

@@ -369,25 +369,25 @@ class DashboardService {
       return {
         totalRevenue: payments
           .filter((p: any) => p.status === 'completed')
-          .reduce((sum: number, p: any) => sum + (p.amount || 0), 0),
+          .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
         today: payments
           .filter((p: any) => 
             new Date(p.payment_date) >= today && p.status === 'completed'
           )
-          .reduce((sum: number, p: any) => sum + (p.amount || 0), 0),
+          .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
         thisWeek: payments
           .filter((p: any) => 
             new Date(p.payment_date) >= weekStart && p.status === 'completed'
           )
-          .reduce((sum: number, p: any) => sum + (p.amount || 0), 0),
+          .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
         thisMonth: payments
           .filter((p: any) => 
             new Date(p.payment_date) >= monthStart && p.status === 'completed'
           )
-          .reduce((sum: number, p: any) => sum + (p.amount || 0), 0),
+          .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
         pending: payments
           .filter((p: any) => p.status === 'pending')
-          .reduce((sum: number, p: any) => sum + (p.amount || 0), 0)
+          .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
       };
     } catch (error: any) {
       console.error('❌ Error fetching payment stats - Full error:', error);
@@ -839,19 +839,19 @@ class DashboardService {
         .filter((p: any) => 
           new Date(p.payment_date) >= today && p.status === 'completed'
         )
-        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       const weeklyRevenue = payments
         .filter((p: any) => 
           new Date(p.payment_date) >= weekStart && p.status === 'completed'
         )
-        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       const monthlyRevenue = payments
         .filter((p: any) => 
           new Date(p.payment_date) >= monthStart && p.status === 'completed'
         )
-        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       const lastMonthRevenue = payments
         .filter((p: any) => 
@@ -859,7 +859,7 @@ class DashboardService {
           new Date(p.payment_date) <= lastMonthEnd && 
           p.status === 'completed'
         )
-        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       const revenueGrowth = lastMonthRevenue > 0 
         ? Math.round(((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
@@ -869,7 +869,7 @@ class DashboardService {
       const pendingPayments = payments.filter((p: any) => p.status === 'pending').length;
       const outstandingAmount = payments
         .filter((p: any) => p.status === 'pending')
-        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       // Group by payment method
       const methodGroups = payments
@@ -1077,7 +1077,7 @@ class DashboardService {
         .filter((p: any) => 
           new Date(p.payment_date) >= thisMonthStart && p.status === 'completed'
         )
-        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       const lastMonthRevenue = payments
         .filter((p: any) => 
@@ -1085,7 +1085,7 @@ class DashboardService {
           new Date(p.payment_date) <= lastMonthEnd && 
           p.status === 'completed'
         )
-        .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
       // Calculate revenue growth percentage
       const revenueGrowth = lastMonthRevenue > 0 
@@ -1123,7 +1123,7 @@ class DashboardService {
       // Calculate average order value
       const completedPayments = payments.filter((p: any) => p.status === 'completed');
       const averageOrderValue = completedPayments.length > 0
-        ? completedPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0) / completedPayments.length
+        ? completedPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) / completedPayments.length
         : 0;
 
       // Get completed services today

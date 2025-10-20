@@ -15,6 +15,7 @@ import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import SuccessModal from '../../../../components/ui/SuccessModal';
 import { useSuccessModal } from '../../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../../components/ui/SuccessModalIcons';
+import { productCacheService } from '../../../../lib/productCacheService';
 
 // Simplified validation schema for purchase order products
 const productFormSchema = z.object({
@@ -207,6 +208,12 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
         console.log('🔍 AddProductModal: Original form SKU:', formData.sku);
         console.log('🔍 AddProductModal: Result variants:', result.data.variants);
         console.log('🔍 AddProductModal: First variant SKU:', result.data.variants?.[0]?.sku);
+        
+        // 🔄 Clear cache and reload products to show the newly created product
+        console.log('🔄 [AddProductModal] Clearing product cache and reloading...');
+        productCacheService.clearProducts();
+        await loadProducts(null, true); // Force reload, bypass cache
+        console.log('✅ [AddProductModal] Products reloaded successfully');
         
         // Convert the created product to the format expected by ProductDetailModal
         const productForReview = {

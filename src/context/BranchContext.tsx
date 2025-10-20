@@ -74,7 +74,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // 🔥 FIX: Always save branch ID to localStorage on initialization
         if (selectedBranch) {
           localStorage.setItem('current_branch_id', selectedBranch.id);
-          console.log('✅ [BranchContext] Initialized branch:', selectedBranch.name, selectedBranch.id);
+
         }
         
         setCurrentBranch(selectedBranch);
@@ -106,7 +106,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           // 🔥 FIX: Save branch ID to localStorage on initialization
           if (branchData) {
             localStorage.setItem('current_branch_id', branchData.id);
-            console.log('✅ [BranchContext] Initialized assigned branch:', branchData.name, branchData.id);
+
           }
           
           setCurrentBranch(branchData);
@@ -122,7 +122,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
           // 🔥 FIX: Save branch ID to localStorage on initialization
           if (selectedBranch) {
             localStorage.setItem('current_branch_id', selectedBranch.id);
-            console.log('✅ [BranchContext] Initialized main branch:', selectedBranch.name, selectedBranch.id);
+
           }
           
           setCurrentBranch(selectedBranch);
@@ -136,7 +136,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         // 🔥 FIX: Save branch ID to localStorage even in error case
         if (fallbackBranch) {
           localStorage.setItem('current_branch_id', fallbackBranch.id);
-          console.log('✅ [BranchContext] Initialized fallback branch:', fallbackBranch.name, fallbackBranch.id);
+
         }
         
         setCurrentBranch(fallbackBranch);
@@ -175,7 +175,7 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         metadata: { previous_branch: currentBranch?.id }
       });
     } catch (err) {
-      console.log('Could not log branch switch:', err);
+
     }
   };
 

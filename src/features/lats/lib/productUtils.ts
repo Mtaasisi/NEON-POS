@@ -249,10 +249,15 @@ export const getProductDisplayPrice = (product: ProductSearchResult): string => 
  */
 export const getProductTotalStock = (product: ProductSearchResult): number => {
   if (!product.variants || product.variants.length === 0) {
-    return 0;
+    // Fallback to product-level stock
+    return product.stockQuantity ?? product.totalQuantity ?? 0;
   }
   
-  return product.variants.reduce((total, variant) => total + variant.quantity, 0);
+  // Sum up variant stock, checking multiple possible field names
+  return product.variants.reduce((total, variant) => {
+    const stock = variant.stockQuantity ?? variant.quantity ?? 0;
+    return total + stock;
+  }, 0);
 };
 
 /**
@@ -266,7 +271,10 @@ export const getProductStockStatus = (product: ProductSearchResult): 'out-of-sto
   }
   
   // Check if any variant is low stock (assuming minQuantity of 5 as default)
-  const hasLowStock = product.variants.some(v => v.quantity <= 5);
+  const hasLowStock = product.variants?.some(v => {
+    const stock = v.stockQuantity ?? v.quantity ?? 0;
+    return stock <= 5;
+  });
   
   if (hasLowStock) {
     return 'low';

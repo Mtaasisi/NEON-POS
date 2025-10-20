@@ -761,8 +761,8 @@ const CustomersPage = () => {
         case 'recent':
           return new Date(b.joinedDate || 0).getTime() - new Date(a.joinedDate || 0).getTime();
         case 'spent':
-          const spentA = a.totalSpent ?? (a.payments ? a.payments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0);
-          const spentB = b.totalSpent ?? (b.payments ? b.payments.reduce((sum, p) => sum + (p.amount || 0), 0) : 0);
+          const spentA = a.totalSpent ?? (a.payments ? a.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : 0);
+          const spentB = b.totalSpent ?? (b.payments ? b.payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) : 0);
           return spentB - spentA;
         case 'points':
           return (b.points || 0) - (a.points || 0);
@@ -1063,7 +1063,7 @@ const CustomersPage = () => {
   const getCustomerTotalSpent = (customerId: string) => {
     const customer = customers.find(c => c.id === customerId);
     if (!customer || !customer.payments) return 0;
-    return customer.payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
+    return customer.payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   };
 
   // Helper: get customer devices count and last activity
@@ -2039,7 +2039,7 @@ const CustomersPage = () => {
                         <p className="text-gray-900 font-semibold">{formatCurrency(getCustomerTotalSpent(customer.id))}</p>
                         {(() => {
                           const devicePayments = customer.payments?.filter(p => p.source === 'device_payment' && p.status === 'completed') || [];
-                          const deviceTotal = devicePayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                          const deviceTotal = devicePayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
                           
                           if (deviceTotal > 0) {
                             return (
@@ -2218,7 +2218,7 @@ const CustomersPage = () => {
                   if (!customer?.payments?.length) return null;
                   
                   const devicePayments = customer.payments.filter(p => p.source === 'device_payment' && p.status === 'completed');
-                  const deviceTotal = devicePayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                  const deviceTotal = devicePayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
                   
                   if (deviceTotal > 0) {
                     return (

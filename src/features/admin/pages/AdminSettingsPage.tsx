@@ -31,6 +31,7 @@ import InventorySettings from '../components/InventorySettings';
 import BranchIsolationDebugPanel from '../components/BranchIsolationDebugPanel';
 import { BranchDataCleanupPanel } from '../components/BranchDataCleanupPanel';
 import { BranchProductManagement } from '../components/BranchProductManagement';
+import DashboardCustomizationSettings from '../components/DashboardCustomizationSettings';
 import { 
   Settings,
   Database,
@@ -97,7 +98,8 @@ import {
   Lightbulb,
   Code,
   FileText,
-  Package
+  Package,
+  LayoutDashboard
 } from 'lucide-react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
@@ -559,6 +561,7 @@ const AdminSettingsPage: React.FC = () => {
               <nav className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] pr-2 sidebar-scrollbar">
                 {[
                   { id: 'branding', label: 'Business Information', icon: Building2 },
+                  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
                   { id: 'stores', label: 'Store Management', icon: MapPin },
                   { id: 'branch-debug', label: 'Branch Isolation Debug', icon: Bug },
                   { id: 'inventory', label: 'Inventory', icon: Package },
@@ -594,6 +597,10 @@ const AdminSettingsPage: React.FC = () => {
           <div className="lg:col-span-3">
             {activeSection === 'branding' && (
               <UnifiedBrandingSettings />
+            )}
+
+            {activeSection === 'dashboard' && (
+              <DashboardCustomizationSettings />
             )}
 
             {activeSection === 'stores' && (

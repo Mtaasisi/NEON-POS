@@ -70,7 +70,6 @@ export interface TrendsData {
 }
 
 
-
 export interface ComprehensiveAnalytics {
   device_stats: DeviceStats;
   revenue_stats: RevenueStats;
@@ -99,7 +98,7 @@ export const analyticsService = {
       // If customer stats failed, try the direct method
       let finalCustomerStats = customerStats;
       if (!customerStats) {
-        console.log('Customer analytics view failed, trying direct method...');
+
         finalCustomerStats = await this.getCustomerStatsDirect();
       }
 
@@ -262,16 +261,6 @@ export const analyticsService = {
         d.created_at && new Date(d.created_at) >= startOfDay
       ).length;
 
-      console.log('📊 Device statistics:', {
-        total,
-        in_repair,
-        completed,
-        pending,
-        overdue,
-        new_this_month,
-        new_this_week,
-        new_today
-      });
 
       return {
         total,
@@ -452,9 +441,7 @@ export const analyticsService = {
       // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
       const currentBranchId = localStorage.getItem('current_branch_id');
       
-      console.log('📈 [Analytics] Configuration:');
-      console.log('   - Current Branch ID:', currentBranchId || '❌ NOT SET');
-      console.log('   - 🌐 CUSTOMERS: SHARED ACROSS ALL BRANCHES');
+
 
       // Get current date info
       const now = new Date();
@@ -497,14 +484,14 @@ export const analyticsService = {
       let avgSpent = 0;
       
       if (currentBranchId) {
-        console.log('💰 Calculating analytics revenue for current branch:', currentBranchId);
+
         
         // Filter customers by current branch for revenue calculation
         const branchCustomers = customers.filter(c => c.branch_id === currentBranchId);
         totalSpent = branchCustomers.reduce((sum, c) => sum + (c.total_spent || 0), 0);
         avgSpent = branchCustomers.length > 0 ? totalSpent / branchCustomers.length : 0;
         
-        console.log('💰 Branch analytics revenue calculated:', totalSpent);
+
       } else {
         console.warn('⚠️  No branch selected for analytics revenue - will be 0');
         totalSpent = 0;

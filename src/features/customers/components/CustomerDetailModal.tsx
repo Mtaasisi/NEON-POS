@@ -1119,7 +1119,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     <tbody>
                       {devices.map(device => {
                         const totalPaid = payments.filter(p => p.deviceId === device.id && p.status === 'completed')
-                          .reduce((sum, p) => sum + (p.amount || 0), 0);
+                          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
                         return (
                           <tr key={device.id} className="border-b border-gray-100 hover:bg-gray-50">
                             <td className="p-3">
@@ -1171,7 +1171,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                     <h3 className="text-lg font-semibold text-gray-800">Payment History</h3>
                   </div>
                   <div className="text-sm text-gray-600">
-                    {payments.length} payments • {formatCurrency(payments.reduce((sum, p) => sum + (p.amount || 0), 0))} total
+                    {payments.length} payments • {formatCurrency(payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0))} total
                   </div>
                 </div>
                 <div className="overflow-x-auto">

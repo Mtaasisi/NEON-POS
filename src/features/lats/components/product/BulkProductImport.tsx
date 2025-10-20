@@ -21,6 +21,8 @@ import {
 import { useAuth } from '../../../../context/AuthContext';
 import { createProduct } from '../../../../lib/latsProductApi';
 import { supabase } from '../../../../lib/supabaseClient';
+import { useInventoryStore } from '../../stores/useInventoryStore';
+import { productCacheService } from '../../../../lib/productCacheService';
 
 interface ProductVariant {
   name: string;
@@ -639,6 +641,7 @@ const ProductEditForm: React.FC<{
 
 const BulkProductImport: React.FC = () => {
   const { currentUser } = useAuth();
+  const { loadProducts } = useInventoryStore();
   const [importData, setImportData] = useState<ProductImportData[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
@@ -853,6 +856,14 @@ const BulkProductImport: React.FC = () => {
       
       const successCount = results.filter(r => r.status === 'success').length;
       const errorCount = results.filter(r => r.status === 'error').length;
+      
+      // 🔄 Clear cache and reload products after successful import
+      if (successCount > 0) {
+        console.log('🔄 [BulkImport] Clearing product cache and reloading...');
+        productCacheService.clearProducts();
+        await loadProducts(null, true); // Force reload, bypass cache
+        console.log('✅ [BulkImport] Products reloaded successfully');
+      }
       
       toast.success(`Import completed: ${successCount} success, ${errorCount} errors`);
       

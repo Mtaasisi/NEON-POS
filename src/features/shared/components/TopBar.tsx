@@ -61,6 +61,8 @@ import {
   Clock,
   UserCheck,
   MobileIcon,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import ActivityCounter from './ui/ActivityCounter';
 import GlassButton from './ui/GlassButton';
@@ -109,6 +111,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const [isOnline, _setIsOnline] = useState(navigator.onLine);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [reminderCount, setReminderCount] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   const { handleBackClick, previousPage } = useNavigationHistory();
   
@@ -168,6 +171,25 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     };
   }, []);
 
+  // Handle fullscreen change events
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
   // Calculate activity counts
   const getActivityCounts = () => {
     const now = new Date();
@@ -211,6 +233,37 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        // Enter fullscreen
+        const elem = document.documentElement;
+        if (elem.requestFullscreen) {
+          await elem.requestFullscreen();
+        } else if ((elem as any).webkitRequestFullscreen) {
+          await (elem as any).webkitRequestFullscreen();
+        } else if ((elem as any).mozRequestFullScreen) {
+          await (elem as any).mozRequestFullScreen();
+        } else if ((elem as any).msRequestFullscreen) {
+          await (elem as any).msRequestFullscreen();
+        }
+      } else {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          await (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error);
+    }
   };
 
   const getQuickActions = () => {
@@ -617,6 +670,19 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             <div className="hidden sm:flex items-center justify-center w-6 h-6">
               <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
             </div>
+
+            {/* Fullscreen Toggle */}
+            <button
+              onClick={toggleFullscreen}
+              className={`p-2 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/30 hover:bg-white/50 border-white/30'} transition-all duration-300 backdrop-blur-sm border shadow-sm active:scale-95`}
+              title={isFullscreen ? "Exit Fullscreen (ESC)" : "Enter Fullscreen"}
+            >
+              {isFullscreen ? (
+                <Minimize2 size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
+              ) : (
+                <Maximize2 size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
+              )}
+            </button>
 
             {/* Notifications */}
             <div className="relative" ref={notificationsRef}>

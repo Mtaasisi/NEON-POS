@@ -24,7 +24,7 @@ const CustomerAnalytics: React.FC<CustomerAnalyticsProps> = ({ customer, devices
   // Calculate advanced metrics
   const calculateMetrics = (): AnalyticsMetric[] => {
     // Use payments for all money-related metrics
-    const totalSpent = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
+    const totalSpent = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const points = customer.points || 0;
     const deviceCount = devices.length;
     const activeDevices = devices.filter(d => ['assigned', 'diagnosis-started', 'awaiting-parts', 'in-repair', 'reassembled-testing'].includes(d.status)).length;
@@ -186,7 +186,7 @@ const CustomerAnalytics: React.FC<CustomerAnalyticsProps> = ({ customer, devices
     .filter(item => item.month !== 'Invalid Date');
 
   // Use payments for all money-related metrics
-  const totalSpent = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalSpent = payments.filter(p => p.status === 'completed').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
   return (
     <div className="space-y-6">

@@ -36,8 +36,6 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export async function searchCustomers(query: string, page: number = 1, pageSize: number = 50) {
   try {
-    console.log(`🔍 Searching customers: "${query}" (page ${page})`);
-    
     // Try the RPC function first, but have a fallback
     let searchResults: any[] | null = null;
     let searchError: any = null;
@@ -58,7 +56,6 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
     
     // If RPC failed, use direct table query as fallback
     if (searchError || !searchResults) {
-      console.log('📋 Using fallback search method');
       const offset = (page - 1) * pageSize;
       
       // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
@@ -257,8 +254,6 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
         };
         return mappedCustomer;
       });
-      
-      console.log(`✅ Search completed: ${processedCustomers.length} results`);
       return {
         customers: processedCustomers,
         total: count || 0,
@@ -284,13 +279,10 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
 
 export async function searchCustomersFast(query: string, page: number = 1, pageSize: number = 50) {
   try {
-    console.log(`🔍 Fast search customers: "${query}" (page ${page})`);
-    
     // Check cache first
     const cacheKey = `search_${query}_${page}_${pageSize}`;
     const cached = searchCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-      console.log('📦 Returning cached search results');
       return cached.data;
     }
     
@@ -314,7 +306,6 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
     
     // If RPC failed, use direct table query as fallback
     if (error || !data) {
-      console.log('📋 Using fallback fast search');
       const offset = (page - 1) * pageSize;
       const searchLower = query.toLowerCase();
       
@@ -382,8 +373,6 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
       
       // Cache the result
       searchCache.set(cacheKey, { data: result, timestamp: Date.now() });
-      
-      console.log(`✅ Fast search completed: ${processedCustomers.length} results`);
       return result;
     }
     
@@ -405,7 +394,6 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
 
 export function clearSearchCache() {
   searchCache.clear();
-  console.log('🧹 Search cache cleared');
 }
 
 export function getSearchCacheStats() {
@@ -470,7 +458,6 @@ class BackgroundSearchManager {
       // Resolve with a cancellation indicator instead of rejecting
       job.resolve({ cancelled: true, customers: [], totalCount: 0, totalPages: 0, hasNextPage: false, hasPreviousPage: false });
       this.activeJobs.delete(jobId);
-      console.log(`🚫 Cancelled search job: ${jobId}`);
       return true;
     }
     return false;
@@ -497,7 +484,6 @@ export async function searchCustomersBackground(
   onError?: (error: string) => void
 ): Promise<string> {
   try {
-    console.log(`🔄 Starting background search for: "${query}"`);
     
     // Create a job ID
     const jobId = `search_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -547,8 +533,6 @@ export async function searchCustomersBackground(
           onStatus?.('completed');
           onComplete?.(transformedResult);
         }
-        
-        console.log(`✅ Background search completed for: "${query}"`);
         
       } catch (error) {
         console.error('❌ Background search failed:', error);

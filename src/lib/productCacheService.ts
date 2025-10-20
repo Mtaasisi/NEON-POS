@@ -27,7 +27,6 @@ class ProductCacheService {
         version: CACHE_VERSION
       };
       localStorage.setItem(ProductCacheService.PRODUCTS_KEY, JSON.stringify(cached));
-      console.log(`✅ [Cache] Saved ${products.length} products to localStorage`);
     } catch (error) {
       console.warn('⚠️ [Cache] Failed to save products:', error);
     }
@@ -40,7 +39,6 @@ class ProductCacheService {
     try {
       const cached = localStorage.getItem(ProductCacheService.PRODUCTS_KEY);
       if (!cached) {
-        console.log('📭 [Cache] No cached products found');
         return null;
       }
       
@@ -48,7 +46,6 @@ class ProductCacheService {
       
       // Check version
       if (data.version !== CACHE_VERSION) {
-        console.log('🔄 [Cache] Cache version mismatch, invalidating');
         this.clearProducts();
         return null;
       }
@@ -56,12 +53,9 @@ class ProductCacheService {
       // Check expiry
       const age = Date.now() - data.timestamp;
       if (age > CACHE_DURATION) {
-        console.log(`⏰ [Cache] Cache expired (${Math.round(age / 1000)}s old)`);
         this.clearProducts();
         return null;
       }
-      
-      console.log(`⚡ [Cache] Using cached products (${Math.round(age / 1000)}s old)`);
       return data.data;
     } catch (error) {
       console.warn('⚠️ [Cache] Failed to read products cache:', error);
@@ -80,7 +74,6 @@ class ProductCacheService {
         version: CACHE_VERSION
       };
       localStorage.setItem(ProductCacheService.CATEGORIES_KEY, JSON.stringify(cached));
-      console.log(`✅ [Cache] Saved ${categories.length} categories to localStorage`);
     } catch (error) {
       console.warn('⚠️ [Cache] Failed to save categories:', error);
     }
@@ -106,8 +99,6 @@ class ProductCacheService {
         this.clearCategories();
         return null;
       }
-      
-      console.log(`⚡ [Cache] Using cached categories (${Math.round(age / 1000)}s old)`);
       return data.data;
     } catch (error) {
       console.warn('⚠️ [Cache] Failed to read categories cache:', error);
@@ -120,7 +111,6 @@ class ProductCacheService {
    */
   clearProducts(): void {
     localStorage.removeItem(ProductCacheService.PRODUCTS_KEY);
-    console.log('🗑️ [Cache] Cleared products cache');
   }
   
   /**
@@ -128,7 +118,6 @@ class ProductCacheService {
    */
   clearCategories(): void {
     localStorage.removeItem(ProductCacheService.CATEGORIES_KEY);
-    console.log('🗑️ [Cache] Cleared categories cache');
   }
   
   /**
@@ -137,7 +126,6 @@ class ProductCacheService {
   clearAll(): void {
     this.clearProducts();
     this.clearCategories();
-    console.log('🗑️ [Cache] Cleared all caches');
   }
 }
 

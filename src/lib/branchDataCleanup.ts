@@ -29,7 +29,7 @@ async function analyzeTable(
   currentBranchId: string
 ): Promise<CleanupReport> {
   try {
-    console.log(`🔍 Analyzing ${tableName}...`);
+
 
     // Count all records
     const { count: totalRecords } = await supabase
@@ -99,14 +99,9 @@ export async function runFullAnalysis(): Promise<CleanupReport[]> {
     throw new Error('Branch settings not found');
   }
 
-  console.log('');
-  console.log('🔍 ========================================');
-  console.log('🔍 BRANCH DATA CLEANUP ANALYSIS');
-  console.log('🔍 ========================================');
-  console.log(`🏪 Branch: ${branchSettings.name} (${currentBranchId})`);
-  console.log(`📋 Isolation Mode: ${branchSettings.data_isolation_mode}`);
-  console.log('🔍 ========================================');
-  console.log('');
+
+  // console.log removed`);
+
 
   const tables = [
     'lats_products',
@@ -121,33 +116,22 @@ export async function runFullAnalysis(): Promise<CleanupReport[]> {
     const report = await analyzeTable(table, currentBranchId);
     reports.push(report);
 
-    console.log(`📊 ${table}:`);
-    console.log(`   Total: ${report.totalRecords}`);
-    console.log(`   Current branch: ${report.currentBranchRecords}`);
-    console.log(`   Other branches: ${report.otherBranchRecords}`);
-    console.log(`   Unassigned: ${report.unassignedRecords}`);
-    console.log('');
+
   }
 
-  console.log('🔍 ========================================');
-  console.log('📊 SUMMARY');
-  console.log('🔍 ========================================');
+
   
   const totalOtherBranch = reports.reduce((sum, r) => sum + r.otherBranchRecords, 0);
   const totalUnassigned = reports.reduce((sum, r) => sum + r.unassignedRecords, 0);
   
-  console.log(`⚠️  Total records from other branches: ${totalOtherBranch}`);
-  console.log(`⚠️  Total unassigned records: ${totalUnassigned}`);
-  console.log('');
+
 
   if (totalOtherBranch > 0 && branchSettings.data_isolation_mode === 'isolated') {
-    console.log('⚠️  WARNING: Branch is in ISOLATED mode but has records from other branches!');
-    console.log('   This violates branch isolation.');
-    console.log('   Use cleanupBranchData() to fix this issue.');
+
+
+    // console.log removed to fix this issue.');
   }
 
-  console.log('🔍 ========================================');
-  console.log('');
 
   return reports;
 }
@@ -177,14 +161,13 @@ async function cleanupTable(
     }
 
     if (!recordsToCleanup || recordsToCleanup.length === 0) {
-      console.log(`✅ ${tableName}: No records to cleanup`);
+
       return { success: true, affected: 0, errors: [] };
     }
 
-    console.log(`🔧 ${tableName}: Found ${recordsToCleanup.length} records to cleanup`);
 
     if (options.dryRun) {
-      console.log(`   [DRY RUN] Would ${options.action} ${recordsToCleanup.length} records`);
+
       return { success: true, affected: recordsToCleanup.length, errors: [] };
     }
 
@@ -202,7 +185,7 @@ async function cleanupTable(
       }
 
       affected = ids.length;
-      console.log(`   ✅ Deleted ${affected} records`);
+
     } else if (options.action === 'reassign') {
       // Reassign records to current branch
       const ids = recordsToCleanup.map(r => r.id);
@@ -217,7 +200,7 @@ async function cleanupTable(
       }
 
       affected = ids.length;
-      console.log(`   ✅ Reassigned ${affected} records to current branch`);
+
     }
 
     return { success: true, affected, errors: [] };
@@ -244,22 +227,18 @@ export async function cleanupBranchData(options: CleanupOptions): Promise<void> 
 
   if (branchSettings.data_isolation_mode !== 'isolated') {
     console.warn('⚠️  Branch is not in ISOLATED mode. Cleanup may not be necessary.');
-    console.log(`   Current mode: ${branchSettings.data_isolation_mode}`);
+
   }
 
-  console.log('');
-  console.log('🔧 ========================================');
-  console.log('🔧 BRANCH DATA CLEANUP');
-  console.log('🔧 ========================================');
-  console.log(`🏪 Branch: ${branchSettings.name} (${currentBranchId})`);
-  console.log(`📋 Action: ${options.action}`);
-  console.log(`🔍 Mode: ${options.dryRun ? 'DRY RUN (no changes)' : 'LIVE (will make changes)'}`);
-  console.log('🔧 ========================================');
-  console.log('');
+
+  // console.log removed`);
+
+  // console.log removed' : 'LIVE (will make changes)'}`);
+
 
   if (options.confirmationRequired && !options.dryRun) {
-    console.log('⚠️  WARNING: This will modify database records!');
-    console.log('   Run with dryRun: true first to preview changes.');
+
+
     return;
   }
 
@@ -279,21 +258,17 @@ export async function cleanupBranchData(options: CleanupOptions): Promise<void> 
     allErrors.push(...result.errors);
   }
 
-  console.log('');
-  console.log('🔧 ========================================');
-  console.log('📊 CLEANUP SUMMARY');
-  console.log('🔧 ========================================');
-  console.log(`✅ Total records affected: ${totalAffected}`);
+
   
   if (allErrors.length > 0) {
-    console.log(`❌ Errors: ${allErrors.length}`);
+
     allErrors.forEach(error => console.error(`   - ${error}`));
   } else {
-    console.log(`✅ No errors`);
+
   }
   
-  console.log('🔧 ========================================');
-  console.log('');
+
+
 }
 
 /**
@@ -303,10 +278,10 @@ if (typeof window !== 'undefined') {
   (window as any).analyzeBranchData = runFullAnalysis;
   (window as any).cleanupBranchData = cleanupBranchData;
   
-  console.log('🔧 Branch Data Cleanup Tools loaded!');
-  console.log('   Available console commands:');
-  console.log('   - window.analyzeBranchData()  - Analyze data for current branch');
-  console.log('   - window.cleanupBranchData({ action: "delete", dryRun: true })  - Cleanup (dry run)');
-  console.log('   - window.cleanupBranchData({ action: "reassign", dryRun: false })  - Reassign data to current branch');
+
+
+  // console.log removed  - Analyze data for current branch');
+  // console.log removed  - Cleanup (dry run)');
+  // console.log removed  - Reassign data to current branch');
 }
 

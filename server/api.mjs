@@ -27,8 +27,13 @@ if (!DATABASE_URL && existsSync('database-config.json')) {
 }
 
 if (!DATABASE_URL) {
-  // Fallback to development branch
-  DATABASE_URL = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
+  // Fallback to development branch (for local dev)
+  // Use production database when NODE_ENV is production
+  if (process.env.NODE_ENV === 'production') {
+    DATABASE_URL = 'postgresql://neondb_owner:****************@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+  } else {
+    DATABASE_URL = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
+  }
 }
 
 const sql = neon(DATABASE_URL);

@@ -252,21 +252,21 @@ export const PaymentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const getTotalRevenue = () => {
     return payments
       .filter(payment => payment.status === 'completed')
-      .reduce((sum, payment) => sum + (payment.amount || 0), 0);
+      .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
   };
 
   const getRevenueBySource = () => {
     const devicePayments = getPaymentsBySource('device_payment')
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     const posSales = getPaymentsBySource('pos_sale')
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     const repairPayments = getPaymentsBySource('repair_payment')
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     return {
       devicePayments,

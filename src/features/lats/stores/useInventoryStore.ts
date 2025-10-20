@@ -607,9 +607,9 @@ export const useInventoryStore = create<InventoryState>()(
         console.log('🔄 Starting supplier load...');
         set({ isSuppliersLoading: true, error: null });
         
-        // Use Promise.race for timeout protection with shorter timeout
+        // Use Promise.race for timeout protection (increased to 15 seconds for cold starts)
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Supplier fetch timeout')), 5000)
+          setTimeout(() => reject(new Error('Supplier fetch timeout')), 15000)
         );
 
         try {
@@ -1071,9 +1071,10 @@ export const useInventoryStore = create<InventoryState>()(
           const response = await provider.createProduct(product);
           
           if (response.ok) {
-            // Clear products cache to force reload
+            // Clear products cache to force reload (both memory and localStorage)
             get().clearCache('products');
-            await get().loadProducts();
+            productCacheService.clearProducts(); // Also clear localStorage cache
+            await get().loadProducts(null, true); // Force reload, bypass all caches
             latsAnalytics.track('product_created', { productId: response.data?.id });
           } else {
             set({ error: response.message || 'Failed to create product' });
@@ -1101,7 +1102,10 @@ export const useInventoryStore = create<InventoryState>()(
           
           if (response.ok) {
             console.log('✅ [Store] Update successful, reloading products...');
-            await get().loadProducts();
+            // Clear cache before reloading
+            get().clearCache('products');
+            productCacheService.clearProducts();
+            await get().loadProducts(null, true); // Force reload
             latsAnalytics.track('product_updated', { productId: id });
           } else {
             console.error('❌ [Store] Update failed:', response.message);
@@ -1127,7 +1131,10 @@ export const useInventoryStore = create<InventoryState>()(
           const provider = getLatsProvider();
           const response = await provider.deleteProduct(id);
           if (response.ok) {
-            await get().loadProducts();
+            // Clear cache before reloading
+            get().clearCache('products');
+            productCacheService.clearProducts();
+            await get().loadProducts(null, true); // Force reload
             latsAnalytics.track('product_deleted', { productId: id });
           } else {
             throw new Error(response.message || 'Failed to delete product');

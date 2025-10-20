@@ -556,53 +556,39 @@ export async function runFullIsolationTest(branchId?: string): Promise<BranchDeb
     throw new Error('Branch not found');
   }
 
-  console.log('🔍 ========================================');
-  console.log('🔍 BRANCH ISOLATION DEBUG TEST');
-  console.log('🔍 ========================================');
-  console.log(`🏪 Branch: ${branch.name} (ID: ${currentBranchId})`);
-  console.log(`📋 Isolation Mode: ${branch.data_isolation_mode}`);
-  console.log('🔍 ========================================');
+
+  // console.log removed`);
+
 
   // Run tests for each feature
   const testResults: IsolationTestResult[] = [];
 
-  console.log('\n📦 Testing Products Isolation...');
+
   const productsTest = await testProductsIsolation(currentBranchId);
   testResults.push(productsTest);
-  console.log(productsTest.details);
 
-  console.log('\n👥 Testing Customers Isolation...');
+
   const customersTest = await testCustomersIsolation(currentBranchId);
   testResults.push(customersTest);
-  console.log(customersTest.details);
 
-  console.log('\n📊 Testing Inventory Isolation...');
+
   const inventoryTest = await testInventoryIsolation(currentBranchId);
   testResults.push(inventoryTest);
-  console.log(inventoryTest.details);
 
-  console.log('\n🏭 Testing Suppliers Isolation...');
+
   const suppliersTest = await testSuppliersIsolation(currentBranchId);
   testResults.push(suppliersTest);
-  console.log(suppliersTest.details);
 
-  console.log('\n📂 Testing Categories Isolation...');
+
   const categoriesTest = await testCategoriesIsolation(currentBranchId);
   testResults.push(categoriesTest);
-  console.log(categoriesTest.details);
+
 
   // Calculate summary
   const passed = testResults.filter(t => t.passed).length;
   const failed = testResults.filter(t => !t.passed).length;
   const warnings = testResults.filter(t => t.details.includes('⚠️')).length;
 
-  console.log('\n🔍 ========================================');
-  console.log('📊 TEST SUMMARY');
-  console.log('🔍 ========================================');
-  console.log(`✅ Passed: ${passed}`);
-  console.log(`❌ Failed: ${failed}`);
-  console.log(`⚠️  Warnings: ${warnings}`);
-  console.log('🔍 ========================================\n');
 
   return {
     branchId: currentBranchId,
@@ -659,8 +645,8 @@ function getExpectedIsolation(
  */
 export function enableDebugMode() {
   localStorage.setItem('branch_isolation_debug', 'true');
-  console.log('🔍 Branch Isolation Debug Mode: ENABLED');
-  console.log('   All queries will be logged with isolation information');
+
+
 }
 
 /**
@@ -668,7 +654,7 @@ export function enableDebugMode() {
  */
 export function disableDebugMode() {
   localStorage.removeItem('branch_isolation_debug');
-  console.log('🔍 Branch Isolation Debug Mode: DISABLED');
+
 }
 
 /**
@@ -689,14 +675,10 @@ export function logQueryDebug(
 ) {
   if (!isDebugMode()) return;
 
-  console.log('🔍 ========================================');
-  console.log(`🔍 QUERY DEBUG: ${feature}`);
-  console.log('🔍 ========================================');
-  console.log(`   Isolation Mode: ${isolationMode}`);
-  console.log(`   Filtered by Branch: ${filtered ? 'YES' : 'NO'}`);
-  console.log(`   Branch ID: ${getCurrentBranchId() || 'None'}`);
-  console.log(`   Timestamp: ${new Date().toISOString()}`);
-  console.log('🔍 ========================================\n');
+
+  // console.log removed || 'None'}`);
+  // console.log removed.toISOString()}`);
+
 }
 
 /**
@@ -706,7 +688,7 @@ export function logQueryDebug(
 export async function quickTest() {
   try {
     const result = await runFullIsolationTest();
-    console.log('\n✅ Test Complete! Check the admin settings page for detailed results.');
+
     return result;
   } catch (error: any) {
     console.error('❌ Test failed:', error.message);
@@ -720,10 +702,10 @@ if (typeof window !== 'undefined') {
   (window as any).enableBranchDebug = enableDebugMode;
   (window as any).disableBranchDebug = disableDebugMode;
   
-  console.log('🔍 Branch Isolation Debugger loaded!');
-  console.log('   Available console commands:');
-  console.log('   - window.testBranchIsolation()  - Run full isolation test');
-  console.log('   - window.enableBranchDebug()    - Enable debug logging');
-  console.log('   - window.disableBranchDebug()   - Disable debug logging');
+
+
+  // console.log removed  - Run full isolation test');
+  // console.log removed    - Enable debug logging');
+  // console.log removed   - Disable debug logging');
 }
 

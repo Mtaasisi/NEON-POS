@@ -48,7 +48,7 @@ function replacePlaceholderImages(images: string[]): string[] {
   return images.map(imageUrl => {
     // Check if it's a placeholder service URL
     if (isUnreliableUrl(imageUrl)) {
-      console.log('🔄 Replacing placeholder image:', imageUrl);
+
       return generateSimplePlaceholder('Product Image', 400, 400);
     }
     return imageUrl;
@@ -63,24 +63,12 @@ export function processProductData(products: Product[]): Product[] {
     return [];
   }
 
-  console.log('🔍 DEBUG: processProductData called with', products.length, 'products');
+
   
   return products.map((product, index) => {
     const processedProduct = { ...product };
     
-    console.log(`🔍 DEBUG: Processing product ${index}:`, {
-      name: processedProduct.name,
-      hasCategoryId: 'categoryId' in processedProduct,
-      hasCategory_id: 'category_id' in processedProduct,
-      categoryIdValue: (processedProduct as any).categoryId,
-      category_idValue: (processedProduct as any).category_id,
-      // Price debugging
-      hasPrice: 'price' in processedProduct,
-      hasUnitPrice: 'unit_price' in processedProduct,
-      priceValue: (processedProduct as any).price,
-      unitPriceValue: (processedProduct as any).unit_price,
-      allKeys: Object.keys(processedProduct)
-    });
+    // console.log removed
 
     // Transform database field names to interface field names
     if (processedProduct.category_id !== undefined) {
@@ -362,12 +350,7 @@ export function processLatsData(data: {
   brands: Brand[];
   suppliers: Supplier[];
 } {
-  console.log('🔍 DEBUG: processLatsData called with:', {
-    productsCount: data.products?.length || 0,
-    categoriesCount: data.categories?.length || 0,
-    brandsCount: data.brands?.length || 0,
-    suppliersCount: data.suppliers?.length || 0
-  });
+
 
   const result = {
     products: processProductData(data.products || []),
@@ -376,12 +359,6 @@ export function processLatsData(data: {
     suppliers: processSupplierData(data.suppliers || [])
   };
 
-  console.log('🔍 DEBUG: processLatsData result:', {
-    productsCount: result.products.length,
-    categoriesCount: result.categories.length,
-    brandsCount: result.brands.length,
-    suppliersCount: result.suppliers.length
-  });
 
   return result;
 }

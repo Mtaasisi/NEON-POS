@@ -107,7 +107,6 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
       
       // Check if there's already a request in progress
       if (cached?.promise) {
-        console.log('🔄 Waiting for existing customer fetch request');
         setLoading(true);
         try {
           const data = await cached.promise;
@@ -141,7 +140,6 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
         // Add timeout for the entire fetch operation
         fetchTimeout = setTimeout(() => {
           if (abortControllerRef.current) {
-            console.log('⏰ Customer fetch timeout - aborting request');
             abortControllerRef.current.abort();
           }
         }, 120000); // 120 second timeout for entire operation (allows core 90s + buffer)
@@ -187,8 +185,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
         
         // Check if it's a 503 error and we should retry
         if ((errorMessage.includes('503') || errorMessage.includes('Service Unavailable')) && retryCount < maxRetries) {
-          const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff
-          console.log(`🔄 503 error detected, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries + 1})`);
+          const delay = baseDelay * Math.pow(2, retryCount); // Exponential backoff`);
           
           if (isMountedRef.current) {
             setError(`Database temporarily unavailable. Retrying in ${Math.round(delay / 1000)} seconds...`);
@@ -268,7 +265,6 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
   const clearCache = () => {
     customerDataCache.clear();
     clearRequestCache();
-    console.log('🧹 Customer cache cleared');
   };
 
   // Auto-fetch on mount if enabled
@@ -292,7 +288,6 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
 export function clearCustomerCache() {
   customerDataCache.clear();
   clearRequestCache();
-  console.log('🧹 All customer caches cleared');
 }
 
 export function getCustomerCacheStats() {
@@ -312,15 +307,6 @@ export function debugCustomerFetch() {
   const networkStatus = checkNetworkStatus();
   const connectionQuality = getConnectionQuality();
   const cacheStats = getCustomerCacheStats();
-  
-  console.log('🔍 Customer Fetch Debug Info:', {
-    networkStatus,
-    connectionQuality,
-    cacheStats,
-    navigatorOnline: navigator.onLine,
-    userAgent: navigator.userAgent,
-    timestamp: new Date().toISOString()
-  });
   
   return {
     networkStatus,

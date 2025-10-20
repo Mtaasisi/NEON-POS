@@ -77,6 +77,37 @@ export interface UserSettings {
     require_advance_payment: boolean;
     advance_payment_percent: number;
   };
+  dashboard?: {
+    quickActions: {
+      devices: boolean;
+      addDevice: boolean;
+      customers: boolean;
+      inventory: boolean;
+      appointments: boolean;
+      purchaseOrders: boolean;
+      payments: boolean;
+      adGenerator: boolean;
+    };
+    widgets: {
+      revenueTrendChart: boolean;
+      deviceStatusChart: boolean;
+      appointmentsTrendChart: boolean;
+      stockLevelChart: boolean;
+      performanceMetricsChart: boolean;
+      customerActivityChart: boolean;
+      salesFunnelChart: boolean;
+      appointmentWidget: boolean;
+      employeeWidget: boolean;
+      notificationWidget: boolean;
+      financialWidget: boolean;
+      analyticsWidget: boolean;
+      serviceWidget: boolean;
+      customerInsightsWidget: boolean;
+      systemHealthWidget: boolean;
+      inventoryWidget: boolean;
+      activityFeedWidget: boolean;
+    };
+  };
 }
 
 /**
@@ -294,6 +325,37 @@ export const createDefaultUserSettings = async (userId: string): Promise<boolean
         returnPolicy: '7 days return policy',
         warrantyPeriod: 3,
         warrantyUnit: 'months'
+      },
+      dashboard: {
+        quickActions: {
+          devices: true,
+          addDevice: true,
+          customers: true,
+          inventory: true,
+          appointments: true,
+          purchaseOrders: true,
+          payments: true,
+          adGenerator: true
+        },
+        widgets: {
+          revenueTrendChart: true,
+          deviceStatusChart: true,
+          appointmentsTrendChart: true,
+          stockLevelChart: true,
+          performanceMetricsChart: true,
+          customerActivityChart: true,
+          salesFunnelChart: true,
+          appointmentWidget: true,
+          employeeWidget: true,
+          notificationWidget: true,
+          financialWidget: true,
+          analyticsWidget: true,
+          serviceWidget: true,
+          customerInsightsWidget: true,
+          systemHealthWidget: true,
+          inventoryWidget: true,
+          activityFeedWidget: true
+        }
       }
     };
 

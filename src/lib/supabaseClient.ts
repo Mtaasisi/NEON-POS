@@ -34,8 +34,8 @@ console.log('ℹ️ Note: Transient 400 errors from Neon are automatically retri
 
 // Helper function to execute SQL queries with the Neon serverless client
 const executeSql = async (query: string, params: any[] = [], suppressLogs: boolean = false, retryCount: number = 0): Promise<any> => {
-  const MAX_RETRIES = 2; // Retry up to 2 times for 400 errors
-  const RETRY_DELAY = 100; // Wait 100ms before retry
+  const MAX_RETRIES = 3; // Retry up to 3 times for 400 errors (increased from 2)
+  const RETRY_DELAY = 150; // Wait 150ms before retry (increased from 100ms)
   
   // Only log queries when suppressLogs is false (reduced noise)
   if (!suppressLogs && process.env.NODE_ENV === 'development' && retryCount === 0) {
@@ -77,17 +77,23 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
     const shouldRetry = is400Error && retryCount < MAX_RETRIES;
     
     if (shouldRetry) {
-      // Retry after a short delay
-      if (!suppressLogs && process.env.NODE_ENV === 'development') {
-        console.warn(`⚠️ 400 error on attempt ${retryCount + 1}, retrying...`);
+      // Silent retry - don't log transient errors that will be retried
+      // Only log if this is the last retry attempt
+      if (!suppressLogs && process.env.NODE_ENV === 'development' && retryCount >= MAX_RETRIES - 1) {
+        console.warn(`⚠️ Persistent 400 error after ${retryCount + 1} attempts, final retry...`);
       }
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1))); // Exponential backoff
       return executeSql(query, params, suppressLogs, retryCount + 1);
     }
     
     // Only log significant errors, not every failure
     if (!suppressLogs) {
-      console.error('❌ SQL Error:', error.message);
+      // For 400 errors that exceeded retry attempts, log differently
+      if (is400Error) {
+        console.error('❌ Persistent 400 error after', MAX_RETRIES, 'retries:', error.message);
+      } else {
+        console.error('❌ SQL Error:', error.message);
+      }
       // Only show details for unexpected errors
       if (error.code && error.code !== '42703' && error.code !== '42P01') {
         console.error('Code:', error.code, '| Query:', query.substring(0, 100));

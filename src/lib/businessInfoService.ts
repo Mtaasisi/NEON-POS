@@ -44,11 +44,7 @@ class BusinessInfoService {
         };
         this.cacheTimestamp = now;
         
-        console.log('📋 Business Info Loaded:', {
-          name: this.cachedInfo.name,
-          hasLogo: !!this.cachedInfo.logo,
-          logoLength: this.cachedInfo.logo?.length || 0
-        });
+
         
         return this.cachedInfo;
       }
@@ -66,7 +62,7 @@ class BusinessInfoService {
       logo: null
     };
 
-    console.log('⚠️ Using default business info (database not configured)');
+    // console.log removed');
     return defaultInfo;
   }
 
@@ -116,7 +112,7 @@ class BusinessInfoService {
       // Clear cache to force refresh
       this.clearCache();
       
-      console.log('✅ Business info updated successfully');
+
       return true;
     } catch (err) {
       console.error('Failed to update business info:', err);

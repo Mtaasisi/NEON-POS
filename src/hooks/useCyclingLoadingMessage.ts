@@ -7,16 +7,16 @@ interface LoadingMessage {
 }
 
 const defaultLoadingMessages: LoadingMessage[] = [
-  { text: "Loading data...", icon: "📊", color: "text-blue-600" },
-  { text: "Fetching inventory...", icon: "📦", color: "text-green-600" },
-  { text: "Syncing products...", icon: "🔄", color: "text-purple-600" },
-  { text: "Updating categories...", icon: "📁", color: "text-orange-600" },
-  { text: "Loading customers...", icon: "👥", color: "text-indigo-600" },
-  { text: "Preparing analytics...", icon: "📈", color: "text-teal-600" },
-  { text: "Checking stock levels...", icon: "📋", color: "text-red-600" },
-  { text: "Connecting to database...", icon: "🔗", color: "text-gray-600" },
-  { text: "Optimizing performance...", icon: "⚡", color: "text-yellow-600" },
-  { text: "Almost ready...", icon: "🎯", color: "text-pink-600" }
+  { text: "Loading data..." },
+  { text: "Fetching inventory..." },
+  { text: "Syncing products..." },
+  { text: "Updating categories..." },
+  { text: "Loading customers..." },
+  { text: "Preparing analytics..." },
+  { text: "Checking stock levels..." },
+  { text: "Connecting to database..." },
+  { text: "Optimizing performance..." },
+  { text: "Almost ready..." }
 ];
 
 interface UseCyclingLoadingMessageOptions {

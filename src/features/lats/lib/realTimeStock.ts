@@ -54,19 +54,19 @@ export class RealTimeStockService {
       // If all results are cached, return them
       if (uncachedIds.length === 0) {
         if (import.meta.env.MODE === 'development') {
-          console.log('📦 [RealTimeStockService] Using cached stock levels');
+
         }
         return cachedResults;
       }
 
       if (import.meta.env.MODE === 'development') {
-        console.log('🔍 [RealTimeStockService] Fetching stock levels for:', uncachedIds);
+
       }
 
       // Get current branch ID for filtering
       const currentBranchId = getCurrentBranchId();
       
-      console.log('🏪 [RealTimeStockService] Current branch ID:', currentBranchId);
+
       
       // Fetch variants for the uncached products, filtered by current branch + shared
       let query = supabase
@@ -76,10 +76,10 @@ export class RealTimeStockService {
 
       // Apply branch filter if branch ID exists (include shared variants)
       if (currentBranchId) {
-        console.log('✅ [RealTimeStockService] Applying branch filter + shared:', currentBranchId);
+
         query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
       } else {
-        console.log('⚠️ [RealTimeStockService] No branch filter - showing all stock');
+
       }
 
       const { data: variants, error } = await query;
@@ -119,10 +119,10 @@ export class RealTimeStockService {
       this.cacheTimestamp = now;
 
       // Log stock summary per product
-      console.log('📦 [RealTimeStockService] Stock levels fetched:');
+
       Object.entries(stockLevels).forEach(([productId, levels]) => {
         const totalStock = levels.reduce((sum, level) => sum + level.quantity, 0);
-        console.log(`   Product ${productId.substring(0, 8)}...: ${totalStock} units (${levels.length} variants)`);
+        // console.log removed}...: ${totalStock} units (${levels.length} variants)`);
       });
 
       // Merge cached and fresh results
@@ -156,13 +156,13 @@ export class RealTimeStockService {
   async getStockBySKU(sku: string): Promise<StockLevel | null> {
     try {
       if (import.meta.env.MODE === 'development') {
-        console.log('🔍 [RealTimeStockService] Fetching stock for SKU:', sku);
+
       }
 
       // Get current branch ID for filtering
       const currentBranchId = getCurrentBranchId();
       
-      console.log('🏪 [RealTimeStockService] SKU lookup - Current branch ID:', currentBranchId);
+
 
       let query = supabase
         .from('lats_product_variants')
@@ -171,10 +171,10 @@ export class RealTimeStockService {
 
       // Apply branch filter if branch ID exists (include shared variants)
       if (currentBranchId) {
-        console.log('✅ [RealTimeStockService] SKU lookup - Applying branch filter + shared:', currentBranchId);
+
         query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
       } else {
-        console.log('⚠️ [RealTimeStockService] SKU lookup - No branch filter');
+
       }
 
       const { data: variant, error } = await query.single();
@@ -203,7 +203,7 @@ export class RealTimeStockService {
     this.stockCache = {};
     this.cacheTimestamp = 0;
     if (import.meta.env.MODE === 'development') {
-      console.log('🗑️ [RealTimeStockService] Cache cleared');
+
     }
   }
 

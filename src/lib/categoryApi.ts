@@ -123,10 +123,7 @@ export const getActiveCategoriesExcludingSpare = async (): Promise<Category[]> =
       return !(hasSparePartKeyword || hasSparePartPattern || isExplicitSparePart);
     });
     
-    console.log('📂 Categories: Total categories:', allCategories.length);
-    console.log('📂 Categories: Filtered (excluding spare parts):', filteredCategories.length);
-    console.log('📂 Categories: All category names:', allCategories.map(c => c.name));
-    console.log('📂 Categories: Filtered category names:', filteredCategories.map(c => c.name));
+    console.log('Filtered categories (excluding spare parts):', filteredCategories.length);
     
     return filteredCategories;
   } catch (error) {

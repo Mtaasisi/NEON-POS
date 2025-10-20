@@ -77,6 +77,8 @@ import DayOpeningModal from '../components/modals/DayOpeningModal';
 import { SoundManager } from '../../../lib/soundUtils';
 import DailyClosingModal from '../components/modals/DailyClosingModal';
 import { usePOSClickSounds } from '../hooks/usePOSClickSounds';
+import { useDeviceDetection } from '../../../hooks/useDeviceDetection';
+import MobilePOSWrapper from '../components/pos/MobilePOSWrapper';
 
 
 // Import lazy-loaded modal wrappers
@@ -156,6 +158,53 @@ const useDebounce = (value: string, delay: number) => {
 const POSPageOptimized: React.FC = () => {
   const navigate = useNavigate();
   const { playClickSound, playPaymentSound, playDeleteSound } = usePOSClickSounds();
+  
+  // Device detection for automatic mobile UI switching
+  const { isMobile, isTablet, deviceType } = useDeviceDetection();
+  
+  // View mode preference (can be manually toggled by user)
+  const [viewModePreference, setViewModePreference] = useState<'mobile' | 'desktop' | 'auto'>(() => {
+    const saved = localStorage.getItem('pos_view_mode');
+    return (saved === 'mobile' || saved === 'desktop') ? saved : 'auto';
+  });
+  
+  // Listen for view mode changes from the toggle button
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('pos_view_mode');
+      if (saved === 'mobile' || saved === 'desktop') {
+        setViewModePreference(saved);
+      }
+    };
+    
+    // Listen for storage changes
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom event (for same-tab updates)
+    const handleViewModeChange = () => handleStorageChange();
+    window.addEventListener('viewModeChanged', handleViewModeChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('viewModeChanged', handleViewModeChange);
+    };
+  }, []);
+  
+  // Determine which UI to use based on preference or auto-detection
+  const useMobileUI = viewModePreference === 'auto' 
+    ? isMobile 
+    : viewModePreference === 'mobile';
+  
+  // Debug device detection and view mode (only log when device changes, not on every render)
+  useEffect(() => {
+    console.log('🔧 Device Detection:', { 
+      isMobile, 
+      isTablet, 
+      deviceType, 
+      viewModePreference, 
+      useMobileUI 
+    });
+  }, [isMobile, isTablet, deviceType, viewModePreference, useMobileUI]);
   
   // Session tracking - tracks when the current day was opened (moved up to avoid TDZ error)
   const [sessionStartTime, setSessionStartTime] = useState<string | null>(null);
@@ -262,13 +311,22 @@ const POSPageOptimized: React.FC = () => {
     loadSales
   } = useInventoryStore();
 
+  // Track if we've already logged the "no products" warning
+  const hasLoggedNoProducts = useRef(false);
+
   // Transform products with category information - OPTIMIZED
   const products = useMemo(() => {
     if (dbProducts.length === 0) {
-      console.log('⚠️ [POS] No products loaded from database yet');
+      // Only log once to avoid console spam
+      if (!hasLoggedNoProducts.current) {
+        console.log('⚠️ [POS] No products loaded from database yet');
+        hasLoggedNoProducts.current = true;
+      }
       return [];
     }
 
+    // Reset flag when we have products
+    hasLoggedNoProducts.current = false;
     console.log(`✅ [POS] Processing ${dbProducts.length} products from database`);
 
     // Filter out sample products first
@@ -364,6 +422,8 @@ const POSPageOptimized: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
   const [showShareReceipt, setShowShareReceipt] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [showShareReceiptModal, setShowShareReceiptModal] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -382,6 +442,7 @@ const POSPageOptimized: React.FC = () => {
   const [showAddCustomerModal, setShowAddCustomerModal] = useState(false);
   const [showCustomerSelectionModal, setShowCustomerSelectionModal] = useState(false);
   const [showCustomerEditModal, setShowCustomerEditModal] = useState(false);
+  const [showCustomerDetailModal, setShowCustomerDetailModal] = useState(false);
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [showDraftNotification, setShowDraftNotification] = useState(false);
   const [draftNotes, setDraftNotes] = useState('');
@@ -391,6 +452,7 @@ const POSPageOptimized: React.FC = () => {
     saveDraft, 
     loadDraft, 
     getAllDrafts, 
+    deleteCurrentDraft: deleteDraft,
     hasUnsavedChanges,
     currentDraftId 
   } = useDraftManager({
@@ -913,15 +975,51 @@ const POSPageOptimized: React.FC = () => {
       try {
         const today = new Date().toISOString().split('T')[0];
 
-        // Check if day is closed
-        const { data: closureData, error: closureError } = await supabase
-          .from('daily_sales_closures')
-          .select('id, date, closed_at, closed_by')
-          .eq('date', today)
-          .maybeSingle();
+        // Check if day is closed - with comprehensive error handling
+        let closureData = null;
+        let closureError = null;
+        
+        try {
+          const result = await supabase
+            .from('daily_sales_closures')
+            .select('id, date, closed_at, closed_by')
+            .eq('date', today)
+            .maybeSingle();
+          
+          closureData = result.data;
+          closureError = result.error;
+        } catch (err: any) {
+          // Catch network errors and table doesn't exist errors
+          if (err.message?.includes('400') || err.message?.includes('Bad Request') || 
+              err.message?.includes('relation') || err.message?.includes('does not exist')) {
+            console.warn('⚠️ Daily closure table not available - skipping closure check');
+            setIsDailyClosed(false);
+            setDailyClosureInfo(null);
+            setSessionStartTime(new Date().toISOString());
+            return;
+          } else {
+            console.error('❌ Unexpected error checking daily closure:', err);
+          }
+        }
 
-        if (closureError && closureError.code !== 'PGRST116') {
-          console.error('❌ Error checking daily closure status:', closureError);
+        // Handle closure check errors gracefully
+        if (closureError) {
+          // PGRST116 = no rows returned (expected)
+          // 42P01 = table doesn't exist
+          // 42703 = column doesn't exist
+          if (closureError.code === 'PGRST116') {
+            // No closure found - this is fine, continue
+          } else if (closureError.code === '42P01' || closureError.code === '42703' || 
+                     closureError.message?.includes('400') || closureError.message?.includes('Bad Request')) {
+            console.warn('⚠️ Daily closure table/columns not set up yet - skipping closure check');
+            // Continue without closure checking
+            setIsDailyClosed(false);
+            setDailyClosureInfo(null);
+            setSessionStartTime(new Date().toISOString());
+            return;
+          } else {
+            console.error('❌ Error checking daily closure status:', closureError);
+          }
         }
 
         if (closureData) {
@@ -936,15 +1034,48 @@ const POSPageOptimized: React.FC = () => {
           setSessionStartTime(null); // Clear session
         } else {
           // Day is not closed - check for active session
-          const { data: sessionData, error: sessionError } = await supabase
-            .from('daily_opening_sessions')
-            .select('id, date, opened_at, opened_by')
-            .eq('date', today)
-            .eq('is_active', true)
-            .maybeSingle();
+          let sessionData = null;
+          let sessionError = null;
+          
+          try {
+            const result = await supabase
+              .from('daily_opening_sessions')
+              .select('id, date, opened_at, opened_by')
+              .eq('date', today)
+              .eq('is_active', true)
+              .maybeSingle();
+            
+            sessionData = result.data;
+            sessionError = result.error;
+          } catch (err: any) {
+            // Catch network errors and table doesn't exist errors
+            if (err.message?.includes('400') || err.message?.includes('Bad Request') || 
+                err.message?.includes('relation') || err.message?.includes('does not exist')) {
+              console.warn('⚠️ Session table not available - using fallback mode');
+              setIsDailyClosed(false);
+              setDailyClosureInfo(null);
+              setSessionStartTime(new Date().toISOString());
+              return;
+            } else {
+              console.error('❌ Unexpected error checking session:', err);
+            }
+          }
 
-          if (sessionError && sessionError.code !== 'PGRST116') {
-            console.error('❌ Error checking session:', sessionError);
+          // Handle session check errors gracefully
+          if (sessionError) {
+            if (sessionError.code === 'PGRST116') {
+              // No session found - this is fine, we'll create one
+            } else if (sessionError.code === '42P01' || sessionError.code === '42703' || 
+                       sessionError.message?.includes('400') || sessionError.message?.includes('Bad Request')) {
+              console.warn('⚠️ Session table/columns not set up yet - using fallback');
+              // Use current time as session start
+              setIsDailyClosed(false);
+              setDailyClosureInfo(null);
+              setSessionStartTime(new Date().toISOString());
+              return;
+            } else {
+              console.error('❌ Error checking session:', sessionError);
+            }
           }
 
           if (sessionData) {
@@ -958,25 +1089,53 @@ const POSPageOptimized: React.FC = () => {
           } else {
             // No session and not closed - create a new session automatically
             console.log('🆕 No active session, creating one...');
-            const { data: newSession, error: createError } = await supabase
-              .from('daily_opening_sessions')
-              .insert([{
-                date: today,
-                opened_at: new Date().toISOString(),
-                opened_by: currentUser?.role || 'system',
-                opened_by_user_id: currentUser?.id,
-                is_active: true
-              }])
-              .select()
-              .single();
+            
+            let newSession = null;
+            let createError = null;
+            
+            try {
+              const result = await supabase
+                .from('daily_opening_sessions')
+                .insert([{
+                  date: today,
+                  opened_at: new Date().toISOString(),
+                  opened_by: currentUser?.role || 'system',
+                  opened_by_user_id: currentUser?.id,
+                  is_active: true
+                }])
+                .select()
+                .single();
+              
+              newSession = result.data;
+              createError = result.error;
+            } catch (err: any) {
+              // Catch network errors and table doesn't exist errors
+              if (err.message?.includes('400') || err.message?.includes('Bad Request') || 
+                  err.message?.includes('relation') || err.message?.includes('does not exist')) {
+                console.warn('⚠️ Cannot create session (table not available) - using fallback mode');
+                setSessionStartTime(new Date().toISOString());
+                setIsDailyClosed(false);
+                setDailyClosureInfo(null);
+                return;
+              }
+            }
 
             if (createError) {
-              console.error('❌ Error creating session:', createError);
+              // If table doesn't exist or has issues, just use current time
+              if (createError.code === '42P01' || createError.code === '42703' || 
+                  createError.message?.includes('400') || createError.message?.includes('Bad Request')) {
+                console.warn('⚠️ Cannot create session (table not ready) - using fallback');
+              } else {
+                console.error('❌ Error creating session:', createError);
+              }
               // Fallback to current time
               setSessionStartTime(new Date().toISOString());
-            } else {
+            } else if (newSession) {
               console.log('✅ New session created:', newSession);
               setSessionStartTime(newSession.opened_at);
+            } else {
+              // No session created, use fallback
+              setSessionStartTime(new Date().toISOString());
             }
             
             setIsDailyClosed(false);
@@ -987,7 +1146,7 @@ const POSPageOptimized: React.FC = () => {
         console.error('❌ Error in checkDailyClosureStatus:', err);
         setIsDailyClosed(false);
         setDailyClosureInfo(null);
-        // Fallback to current time as session start
+        // Fallback to current time on any error
         setSessionStartTime(new Date().toISOString());
       }
     };
@@ -1074,7 +1233,7 @@ const POSPageOptimized: React.FC = () => {
   }, [showReceiptHistory, dbSales]);
 
   // Cart functionality with error handling (optimized with useCallback)
-  const addToCart = useCallback((product: any, variant?: any) => {
+  const addToCart = useCallback((product: any, variant?: any, quantity: number = 1) => {
     try {
       // Check permissions
       if (!canAddToCart) {
@@ -1089,8 +1248,8 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
-      // Validate price and ensure it's a number
-      const rawPrice = variant?.price ?? product.price;
+      // Validate price and ensure it's a number - check multiple field names
+      const rawPrice = variant?.sellingPrice ?? variant?.price ?? product.price;
       const price = typeof rawPrice === 'string' ? parseFloat(rawPrice) : Number(rawPrice);
       
       if (price === undefined || price === null || isNaN(price) || price < 0) {
@@ -1098,6 +1257,7 @@ const POSPageOptimized: React.FC = () => {
         console.error('Price validation failed:', { 
           productId: product.id, 
           productName: product.name,
+          variantSellingPrice: variant?.sellingPrice,
           variantPrice: variant?.price,
           productPrice: product.price,
           rawPrice: rawPrice,
@@ -1106,8 +1266,19 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
-      // Check stock availability
-      const availableStock = variant?.quantity || product.quantity || 0;
+      // Check stock availability - check multiple field names
+      const availableStock = variant?.stockQuantity ?? variant?.quantity ?? product.stockQuantity ?? product.quantity ?? 0;
+      
+      console.log('🔍 Stock check:', {
+        productName: product.name,
+        variantName: variant?.name,
+        availableStock,
+        variantStockQuantity: variant?.stockQuantity,
+        variantQuantity: variant?.quantity,
+        productStockQuantity: product.stockQuantity,
+        productQuantity: product.quantity
+      });
+      
       if (availableStock <= 0) {
         toast.error(`${product.name} is out of stock`);
         return;
@@ -1119,13 +1290,13 @@ const POSPageOptimized: React.FC = () => {
       );
 
       if (existingItem) {
-        // Check if adding one more would exceed available stock
-        if (existingItem.quantity + 1 > availableStock) {
+        // Check if adding more would exceed available stock
+        if (existingItem.quantity + quantity > availableStock) {
           toast.error(`Only ${availableStock} units available for ${product.name}`);
           return;
         }
         
-        const newQuantity = existingItem.quantity + 1;
+        const newQuantity = existingItem.quantity + quantity;
         // Ensure numeric calculation
         const unitPrice = typeof existingItem.unitPrice === 'string' 
           ? parseFloat(existingItem.unitPrice) 
@@ -1137,7 +1308,7 @@ const POSPageOptimized: React.FC = () => {
             ? { ...item, quantity: newQuantity, totalPrice: newTotalPrice }
             : item
         ));
-        toast.success(`${product.name} quantity updated`);
+        toast.success(`${product.name} quantity updated to ${newQuantity}`);
       } else {
         const newItem = {
           id: `${product.id}-${variant?.id || 'default'}-${Date.now()}`,
@@ -1146,18 +1317,20 @@ const POSPageOptimized: React.FC = () => {
           productName: product.name,
           variantName: variant?.name || 'Default',
           sku: variant?.sku || product.sku || 'N/A',
-          quantity: 1,
+          quantity: quantity,
           unitPrice: price,
-          totalPrice: price,
+          totalPrice: price * quantity,
           availableQuantity: availableStock,
-          image: product.image
+          image: product.thumbnail_url || product.image
         };
         
+        console.log('✅ Adding to cart:', newItem);
+        
         setCartItems(prev => [...prev, newItem]);
-        toast.success(`${product.name} added to cart`);
+        toast.success(`${quantity}x ${product.name} added to cart`);
       }
     } catch (error) {
-      console.error('Error adding to cart:', error);
+      console.error('❌ Error adding to cart:', error);
       toast.error('Failed to add item to cart. Please try again.');
     }
   }, [canAddToCart, cartItems]);
@@ -1367,9 +1540,433 @@ const POSPageOptimized: React.FC = () => {
   const taxAmount = isTaxEnabled ? (subtotalAfterDiscount * TAX_RATE) / 100 : 0;
   const finalAmount = subtotalAfterDiscount + taxAmount;
 
+  // Apply discount function (declared after totalAmount is calculated)
+  const applyDiscount = useCallback((_type: string, _value: string) => {
+    try {
+      setDiscountType(_type as "fixed" | "percentage");
+      setDiscountValue(_value);
+      const discountAmount = _type === 'percentage' 
+        ? (totalAmount * parseFloat(_value)) / 100
+        : parseFloat(_value);
+      setManualDiscount(discountAmount);
+      setShowDiscountModal(false);
+      toast.success('Discount applied successfully');
+    } catch (error) {
+      console.error('Error applying discount:', error);
+      toast.error('Failed to apply discount. Please try again.');
+    }
+  }, [totalAmount]);
+
   // Check if barcode scanner is enabled
   const isQrCodeScannerEnabled = barcodeScannerSettings?.enable_barcode_scanner;
 
+  // Render Mobile UI if on mobile device or user preference is set to mobile
+  if (useMobileUI) {
+    return (
+      <>
+        <MobilePOSWrapper
+          cartItems={cartItems}
+          selectedCustomer={selectedCustomer}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          products={products}
+          onAddToCart={addToCart}
+          onUpdateCartItemQuantity={updateCartItemQuantity}
+          onRemoveCartItem={removeCartItem}
+          onProcessPayment={handleProcessPayment}
+          onClearCart={clearCart}
+          onShowCustomerSearch={() => setShowCustomerSelectionModal(true)}
+          onAddCustomer={() => setShowAddCustomerModal(true)}
+          onRemoveCustomer={handleRemoveCustomer}
+          onScanBarcode={startQrCodeScanner}
+          onViewReceipts={() => alert('Receipts view coming soon!')}
+          onToggleSettings={() => setShowSettings(true)}
+          onViewSales={async () => {
+            await loadSales();
+            navigate('/lats/sales-reports');
+          }}
+          onShowDiscountModal={() => setShowDiscountModal(true)}
+          totalAmount={totalAmount}
+          discountAmount={discountAmount}
+          taxAmount={taxAmount}
+          finalAmount={finalAmount}
+          isProcessingPayment={isProcessingPayment}
+          todaysSales={todaysSales}
+          isTaxEnabled={isTaxEnabled}
+          taxRate={TAX_RATE}
+          isQrCodeScannerEnabled={isQrCodeScannerEnabled}
+        />
+
+        {/* All Modals (shared between mobile and desktop) */}
+        <AddExternalProductModal
+          isOpen={showAddExternalProductModal}
+          onClose={() => setShowAddExternalProductModal(false)}
+          onProductAdded={(product) => {
+            addToCart(product);
+            setShowAddExternalProductModal(false);
+          }}
+        />
+
+        <CustomerSelectionModal
+          isOpen={showCustomerSelectionModal}
+          onClose={() => setShowCustomerSelectionModal(false)}
+          onCustomerSelect={(customer) => {
+            setSelectedCustomer(customer);
+            setShowCustomerSelectionModal(false);
+            toast.success(`Customer "${customer.name}" selected!`);
+          }}
+          selectedCustomer={selectedCustomer}
+        />
+
+        <AddCustomerModal
+          isOpen={showAddCustomerModal}
+          onClose={() => setShowAddCustomerModal(false)}
+          onCustomerCreated={(customer) => {
+            setSelectedCustomer(customer);
+            setShowAddCustomerModal(false);
+            toast.success(`New customer "${customer.name}" created and selected!`);
+          }}
+        />
+
+        <CustomerEditModal
+          isOpen={showCustomerEditModal}
+          onClose={() => setShowCustomerEditModal(false)}
+          customer={selectedCustomer}
+          onCustomerUpdated={(updatedCustomer) => {
+            setSelectedCustomer(updatedCustomer);
+            setShowCustomerEditModal(false);
+            toast.success('Customer updated successfully!');
+          }}
+        />
+
+        <CustomerDetailModal
+          isOpen={showCustomerDetailModal}
+          onClose={() => setShowCustomerDetailModal(false)}
+          customer={selectedCustomer}
+          onEdit={(customer) => {
+            setShowCustomerDetailModal(false);
+            setShowCustomerEditModal(true);
+          }}
+        />
+
+        <POSDiscountModalWrapper
+          isOpen={showDiscountModal}
+          onClose={() => setShowDiscountModal(false)}
+          onApplyDiscount={applyDiscount}
+          cartSubtotal={totalAmount}
+          discountValue={discountValue}
+          setDiscountValue={setDiscountValue}
+          discountType={discountType}
+          setDiscountType={setDiscountType}
+          appliedDiscount={manualDiscount}
+        />
+
+        <POSSettingsModalWrapper
+          ref={settingsModalRef}
+          isOpen={showSettings}
+          onClose={() => setShowSettings(false)}
+        />
+
+        <SalesAnalyticsModal
+          isOpen={showSalesAnalytics}
+          onClose={() => setShowSalesAnalytics(false)}
+        />
+
+        <PaymentTrackingModal
+          isOpen={showPaymentTracking}
+          onClose={() => setShowPaymentTracking(false)}
+        />
+
+        <POSReceiptModalWrapper
+          isOpen={showReceiptModal}
+          onClose={() => setShowReceiptModal(false)}
+          receiptData={currentReceipt}
+          onShare={() => setShowShareReceiptModal(true)}
+        />
+
+        <ShareReceiptModal
+          isOpen={showShareReceiptModal}
+          onClose={() => setShowShareReceiptModal(false)}
+          receiptData={currentReceipt}
+        />
+
+        <DraftManagementModal
+          isOpen={showDraftModal}
+          onClose={() => setShowDraftModal(false)}
+          drafts={getAllDrafts()}
+          onLoadDraft={loadDraft}
+          onDeleteDraft={deleteDraft}
+        />
+
+        <DraftNotification
+          drafts={getAllDrafts()}
+          onLoadDraft={(draftId) => {
+            loadDraft(draftId);
+            toast.success('Draft loaded successfully!');
+          }}
+        />
+
+        <DailyClosingModal
+          isOpen={showDailyClosingModal}
+          onClose={() => setShowDailyClosingModal(false)}
+          onDayClosed={() => {
+            console.log('Day closed successfully');
+            setIsDailyClosed(true);
+            setShowDailyClosingModal(false);
+            toast.success('Day closed successfully!');
+          }}
+          sessionStartTime={sessionStartTime}
+        />
+
+        {/* Payment Modal - Required for payment processing */}
+        <PaymentsPopupModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          amount={finalAmount}
+          customerId={selectedCustomer?.id}
+          customerName={selectedCustomer?.name || 'Walk-in Customer'}
+          description={`POS Sale - ${cartItems.length} items`}
+          onPaymentComplete={async (payments, totalPaid) => {
+            try {
+              // Validate payment data before processing
+              if (!payments || payments.length === 0) {
+                throw new Error('No payment data received');
+              }
+
+              console.log('Processing payments:', {
+                paymentCount: payments.length,
+                totalPaid: totalPaid,
+                payments: payments.map((p: any) => ({
+                  method: p.paymentMethod,
+                  amount: p.amount,
+                  reference: p.reference
+                }))
+              });
+
+              // Validate totalPaid to ensure it matches the final amount
+              const validatedTotalPaid = totalPaid || finalAmount;
+              
+              // Validate that totalPaid matches finalAmount (with tolerance for rounding)
+              if (Math.abs(validatedTotalPaid - finalAmount) > 1) {
+                console.warn('⚠️ Payment amount mismatch:', {
+                  totalPaid: validatedTotalPaid,
+                  finalAmount: finalAmount,
+                  difference: Math.abs(validatedTotalPaid - finalAmount)
+                });
+              }
+
+              // Prepare sale data for database with multiple payments
+              const saleData = {
+                customerId: selectedCustomer?.id || null,
+                customerName: selectedCustomer?.name || 'Walk-in Customer',
+                customerPhone: selectedCustomer?.phone || null,
+                customerEmail: selectedCustomer?.email || null,
+                items: cartItems.map(item => ({
+                  id: item.id,
+                  productId: item.productId,
+                  variantId: item.variantId,
+                  productName: item.productName,
+                  variantName: item.variantName,
+                  sku: item.sku,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  totalPrice: item.totalPrice,
+                  costPrice: 0,
+                  profit: 0
+                })),
+                subtotal: totalAmount,
+                tax: taxAmount,
+                discount: manualDiscount,
+                discountType: discountType,
+                discountValue: parseFloat(discountValue) || 0,
+                total: finalAmount,
+                paymentMethod: {
+                  type: payments.length === 1 ? payments[0].paymentMethod : 'multiple',
+                  details: {
+                    payments: payments.map((payment: any) => ({
+                      method: payment.paymentMethod,
+                      amount: payment.amount,
+                      accountId: payment.paymentAccountId,
+                      reference: payment.reference,
+                      notes: payment.notes,
+                      timestamp: payment.timestamp
+                    })),
+                    totalPaid: validatedTotalPaid
+                  },
+                  amount: validatedTotalPaid
+                },
+                paymentStatus: 'completed' as const,
+                soldBy: cashierName || 'POS User',
+                soldAt: new Date().toISOString(),
+                notes: payments.map((p: any) => p.notes).filter(Boolean).join('; ') || undefined
+              };
+
+              // Process the sale using the service
+              const result = await saleProcessingService.processSale(saleData);
+              
+              if (result.success) {
+                const displayAmount = totalPaid || finalAmount;
+                const saleNumber = result.sale?.saleNumber;
+                
+                // Prepare receipt data BEFORE clearing anything
+                const receiptData = {
+                  id: result.sale?.id || '',
+                  date: new Date().toLocaleDateString(),
+                  time: new Date().toLocaleTimeString(),
+                  items: cartItems.map(item => ({
+                    productName: item.productName,
+                    variantName: item.variantName,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    totalPrice: item.totalPrice
+                  })),
+                  customer: selectedCustomer ? {
+                    name: selectedCustomer.name,
+                    phone: selectedCustomer.phone,
+                    email: selectedCustomer.email
+                  } : null,
+                  subtotal: totalAmount,
+                  tax: taxAmount,
+                  discount: manualDiscount,
+                  total: finalAmount,
+                  paymentMethod: {
+                    name: payments.length === 1 ? payments[0].paymentMethod : 'Multiple Payments',
+                    description: payments.length === 1 
+                      ? `${payments[0].paymentMethod} - ${format.money(payments[0].amount)}`
+                      : `${payments.length} payment methods - ${format.money(displayAmount)}`,
+                    icon: '💳'
+                  },
+                  cashier: cashierName || 'POS User',
+                  receiptNumber: saleNumber || 'N/A'
+                };
+                
+                // Store receipt data for printing
+                setCurrentReceipt(receiptData);
+                
+                // Close payment modal FIRST
+                setShowPaymentModal(false);
+                
+                // Show success modal BEFORE clearing cart (to preserve data for modal display)
+                console.log('🎉 POS: About to show success modal');
+                
+                // Use setTimeout to ensure modal renders before state changes
+                setTimeout(() => {
+                  successModal.show(
+                    `Payment of ${format.money(displayAmount)} processed successfully!${saleNumber ? ` Sale #${saleNumber}` : ''}`,
+                    {
+                      title: 'Sale Complete! 🎉',
+                      icon: SuccessIcons.paymentReceived,
+                      autoCloseDelay: 0,
+                      actionButtons: [
+                        {
+                          label: 'Share Receipt',
+                          onClick: () => {
+                            setShowShareReceipt(true);
+                          },
+                          variant: 'primary',
+                        },
+                        {
+                          label: 'View Receipt',
+                          onClick: () => {
+                            setShowReceiptModal(true);
+                          },
+                          variant: 'secondary',
+                        },
+                        {
+                          label: 'Continue',
+                          onClick: () => {
+                            successModal.hide();
+                          },
+                          variant: 'secondary',
+                        }
+                      ],
+                    }
+                  );
+                }, 50);
+                
+                // Clear everything after a tiny delay to ensure modals have time to set up
+                setTimeout(() => {
+                  clearCart();
+                  setManualDiscount(0);
+                  setDiscountValue('');
+                  setDiscountType('percentage');
+                  setDiscountPercentage(0);
+                  setSelectedCustomer(null);
+                  
+                  // Reload today's sales
+                  loadTodaysSales();
+                  
+                  // Play success sound
+                  playPaymentSound();
+                  
+                  console.log('🧹 POS: Cart cleared after successful payment');
+                }, 100);
+              } else {
+                console.error('❌ Failed to process sale:', result.error);
+                toast.error(result.error || 'Failed to process sale');
+                setShowPaymentModal(false);
+              }
+            } catch (error: any) {
+              console.error('❌ Payment processing error:', error);
+              
+              if (error?.name === 'ValidationError' || error?.name === 'PaymentValidationError') {
+                toast.error(error.message || 'Payment validation failed');
+                // Keep modal open so user can retry
+              } else if (error?.name === 'UserCancelledError') {
+                toast(
+                  'Payment cancelled', 
+                  {
+                    icon: '❌',
+                    duration: 2000,
+                  }
+                );
+                successModal.show(
+                  'Payment was cancelled. Cart has been preserved.',
+                  {
+                    title: 'Payment Received! 💰',
+                    icon: SuccessIcons.paymentReceived,
+                    autoCloseDelay: 3000,
+                  }
+                );
+                setShowPaymentModal(false);
+              } else {
+                throw error;
+              }
+            }
+          }}
+        />
+
+        {/* Post Closure Warning Modal */}
+        <PostClosureWarningModal
+          isOpen={showPostClosureWarning}
+          onClose={() => setShowPostClosureWarning(false)}
+          onContinue={() => {
+            setShowPostClosureWarning(false);
+            setShowPaymentModal(true);
+          }}
+          closureTime={dailyClosureInfo?.closedAt}
+          closedBy={dailyClosureInfo?.closedBy}
+          userRole={currentUser?.role}
+        />
+
+        {/* Day Opening Modal */}
+        <DayOpeningModal
+          isOpen={showDayOpeningModal}
+          onClose={() => setShowDayOpeningModal(false)}
+          onDayOpened={(sessionId) => {
+            setSessionStartTime(new Date().toISOString());
+            setIsDailyClosed(false);
+            setShowDayOpeningModal(false);
+            toast.success('Day opened successfully!');
+          }}
+        />
+
+        <SuccessModal {...successModal} />
+      </>
+    );
+  }
+
+  // Render Desktop UI
   return (
     <div className="min-h-screen pos-auto-scale" data-pos-page="true">
       {/* Breadcrumb */}
@@ -1968,15 +2565,7 @@ const POSPageOptimized: React.FC = () => {
       <POSDiscountModalWrapper
         isOpen={showDiscountModal}
         onClose={() => setShowDiscountModal(false)}
-        onApplyDiscount={(_type: string, _value: string) => {
-          setDiscountType(_type as "fixed" | "percentage");
-          setDiscountValue(_value);
-          const discountAmount = _type === 'percentage' 
-            ? (totalAmount * parseFloat(_value)) / 100
-            : parseFloat(_value);
-          setManualDiscount(discountAmount);
-          setShowDiscountModal(false);
-        }}
+        onApplyDiscount={applyDiscount}
         onClearDiscount={() => {
           setManualDiscount(0);
           setDiscountValue('');

@@ -134,7 +134,6 @@ export interface LatsDataProvider {
   deleteCategory(id: string): Promise<ApiResponse<void>>;
 
 
-
   // Suppliers
   getSuppliers(): Promise<ApiResponse<Supplier[]>>;
   createSupplier(data: SupplierFormData): Promise<ApiResponse<Supplier>>;
@@ -224,8 +223,8 @@ export interface LatsDataProvider {
 export const getLatsProvider = (): LatsDataProvider => {
   const mode = import.meta.env.VITE_LATS_DATA_MODE || 'supabase';
   
-  console.log('🔧 LATS Data Provider Mode:', mode);
+
   
-  console.log('📊 Using Supabase provider for real database');
+
   return supabaseProvider;
 };

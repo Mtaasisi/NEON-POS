@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Package, Plus, Minus, Loader2 } from 'lucide-react';
 import { ProductSearchResult } from '../../types/pos';
-import { ProductImage } from '../../../../lib/robustImageService';
 import { toast } from 'react-hot-toast';
 import { RESPONSIVE_OPTIMIZATIONS } from '../../../shared/constants/theme';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
@@ -91,16 +90,34 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
 
   // Skeleton loader component
   const SkeletonLoader = () => (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden animate-pulse">
-      {/* Image skeleton */}
-      <div className={`${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.hd} bg-gray-200`}></div>
-      
-      {/* Content skeleton */}
-      <div className={`${RESPONSIVE_OPTIMIZATIONS.productCard.padding.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.padding.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.padding.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.padding.hd} space-y-2`}>
-        <div className="h-3 bg-gray-200 rounded w-3/4"></div>
-        <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-        <div className="h-4 bg-gray-200 rounded w-1/3"></div>
-        <div className="h-8 bg-gray-200 rounded"></div>
+    <div className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden animate-pulse">
+      <div className="p-6">
+        {/* Product Info Skeleton */}
+        <div className="flex items-center gap-4">
+          {/* Image skeleton */}
+          <div className="w-20 h-20 bg-gray-200 rounded-xl"></div>
+          
+          {/* Name and Price skeleton */}
+          <div className="flex-1 space-y-2">
+            <div className="h-5 bg-gray-200 rounded w-3/4"></div>
+            <div className="h-6 bg-gray-200 rounded w-1/2"></div>
+          </div>
+        </div>
+        
+        {/* Divider */}
+        <div className="h-px bg-gray-200 my-4"></div>
+        
+        {/* Badges skeleton */}
+        <div className="flex items-center justify-between">
+          <div className="h-6 bg-gray-200 rounded w-16"></div>
+          <div className="h-6 bg-gray-200 rounded w-20"></div>
+        </div>
+        
+        {/* Divider */}
+        <div className="h-px bg-gray-200 my-3"></div>
+        
+        {/* Click text skeleton */}
+        <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
       </div>
     </div>
   );
@@ -117,127 +134,111 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
   return (
     <div 
       ref={cardRef}
-      className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden transition-all duration-300"
+      onClick={handleAddToCart}
+      className="pos-product-card relative bg-white border-2 rounded-xl transition-all duration-300 overflow-hidden cursor-pointer hover:border-blue-300 hover:shadow-lg active:scale-98 border-gray-200"
       style={{
         opacity: isLoaded ? 1 : 0,
         transform: isLoaded ? 'translateY(0)' : 'translateY(10px)'
       }}
+      title="Click to add to cart"
     >
-      {/* Product Image */}
-      <div className={`relative ${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.imageHeight.hd} bg-gray-50`}>
-        {isImageLoaded ? (
-          <ProductImage
-            src={product.thumbnail_url}
-            alt={product.name}
-            className="w-full h-full object-cover transition-opacity duration-300"
-            fallback={
-              <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                <Package size={32} className="text-gray-400" />
-              </div>
-            }
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-200">
-            <Loader2 size={24} className="text-gray-400 animate-spin" />
-          </div>
-        )}
-        
-        {/* Stock Badge */}
-        {isTextLoaded && product.stock_quantity !== undefined && (
-          <div className={`absolute top-2 left-2 px-2 py-1 rounded-full text-xs font-medium transition-opacity duration-300 ${
-            product.stock_quantity > 10 
-              ? 'bg-green-100 text-green-700' 
-              : product.stock_quantity > 0 
-                ? 'bg-yellow-100 text-yellow-700'
-                : 'bg-red-100 text-red-700'
-          }`}>
-            {product.stock_quantity > 0 ? `${product.stock_quantity} in stock` : 'Out of stock'}
-          </div>
-        )}
-      </div>
+      {/* Stock Badge - Top Right */}
+      {isTextLoaded && product.stock_quantity !== undefined && (
+        <div className="absolute top-2 right-2 p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500">
+          <span className="text-sm font-bold text-white">{product.stock_quantity}</span>
+        </div>
+      )}
 
-      {/* Product Info */}
-      <div className={`${RESPONSIVE_OPTIMIZATIONS.productCard.padding.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.padding.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.padding.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.padding.hd}`}>
-        {isTextLoaded ? (
-          <>
-            <h3 className={`font-semibold text-gray-900 ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.title.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.title.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.title.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.title.hd} mb-1 truncate`} title={product.name}>
-              {product.name}
-            </h3>
-            
-            {product.sku && (
-              <p className={`${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.sku.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.sku.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.sku.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.sku.hd} text-gray-500 mb-2`}>SKU: {product.sku}</p>
-            )}
-
-            {/* Variants */}
-            {product.variants && product.variants.length > 1 && (
-              <div className="mb-2">
-                <select
-                  value={selectedVariant?.id || ''}
-                  onChange={(e) => {
-                    playClickSound();
-                    const variant = product.variants?.find(v => v.id === e.target.value);
-                    setSelectedVariant(variant);
+      {/* Card Content */}
+      <div className="p-6 cursor-pointer">
+        {/* Product Info Section */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            {/* Product Image/Icon */}
+            <div className="relative w-20 h-20 rounded-xl flex items-center justify-center text-lg font-bold text-blue-600 cursor-pointer hover:opacity-90 transition-opacity">
+              {isImageLoaded && product.thumbnail_url ? (
+                <img
+                  src={product.thumbnail_url}
+                  alt={product.name}
+                  className="w-full h-full object-cover rounded-xl"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.parentElement?.querySelector('.fallback-icon');
+                    if (fallback) {
+                      (fallback as HTMLElement).classList.remove('hidden');
+                    }
                   }}
-                  className="w-full text-xs border border-gray-200 rounded-lg px-2 py-1"
-                >
-                  {product.variants.map(variant => (
-                    <option key={variant.id} value={variant.id}>
-                      {variant.name} - {formatPrice(variant.price)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Price */}
-            <div className="flex items-center justify-between mb-3">
-              <span className={`font-bold text-green-600 ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.price.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.price.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.price.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.price.hd} truncate`} title={formatPrice(selectedVariant?.price || product.price)}>
-                {formatPrice(selectedVariant?.price || product.price)}
-              </span>
-              
-              {/* Quantity Selector */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setQuantity(Math.max(1, quantity - 1));
-                  }}
-                  className="p-1 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <Minus size={16} />
-                </button>
-                <span className="px-2 py-1 bg-gray-100 rounded text-sm font-medium min-w-[2rem] text-center">
-                  {quantity}
-                </span>
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setQuantity(quantity + 1);
-                  }}
-                  className="p-1 rounded-full hover:bg-gray-100 transition-colors"
-                >
-                  <Plus size={16} />
-                </button>
+                />
+              ) : null}
+              {/* Fallback Icon */}
+              <div className={`fallback-icon bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center w-full h-full rounded-xl ${product.thumbnail_url && isImageLoaded ? 'hidden' : ''}`}>
+                {!isImageLoaded ? (
+                  <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-gray-400">
+                    <path d="M16.5 9.4 7.55 4.24"></path>
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                    <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                    <line x1="12" x2="12" y1="22" y2="12"></line>
+                  </svg>
+                )}
               </div>
             </div>
 
-            {/* Add to Cart Button */}
-            <button
-              onClick={handleAddToCart}
-              disabled={product.stock_quantity === 0}
-              className={`w-full ${RESPONSIVE_OPTIMIZATIONS.buttonSizes.mobile} ${RESPONSIVE_OPTIMIZATIONS.buttonSizes.tablet} ${RESPONSIVE_OPTIMIZATIONS.buttonSizes.desktop} ${RESPONSIVE_OPTIMIZATIONS.buttonSizes.hd} bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.button.mobile} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.button.tablet} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.button.desktop} ${RESPONSIVE_OPTIMIZATIONS.productCard.textSize.button.hd}`}
-            >
-              {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
-            </button>
-          </>
-        ) : (
-          <div className="space-y-2">
-            <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
-            <div className="h-3 bg-gray-200 rounded w-2/3 animate-pulse"></div>
-            <div className="h-6 bg-gray-200 rounded w-1/3 animate-pulse"></div>
-            <div className="h-8 bg-gray-200 rounded animate-pulse"></div>
+            {/* Product Name and Price */}
+            <div className="flex-1 min-w-0">
+              {isTextLoaded ? (
+                <>
+                  <div className="font-medium text-gray-800 truncate text-xl leading-tight" title={product.name}>
+                    {product.name}
+                  </div>
+                  <div className="text-2xl text-gray-700 mt-1 font-bold">
+                    TSh {(selectedVariant?.price || product.price).toLocaleString()}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="h-5 bg-gray-200 rounded w-3/4 animate-pulse"></div>
+                  <div className="h-6 bg-gray-200 rounded w-1/2 mt-1 animate-pulse"></div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* SKU and Category Section */}
+        {isTextLoaded && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between text-sm">
+              {/* SKU Badge */}
+              <div className="flex items-center gap-4">
+                {product.sku && (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs">
+                      📦 {product.sku}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Category Badge */}
+              <div className="flex items-center gap-2">
+                {product.category_name && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-xs font-medium">
+                    📦 {product.category_name}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Click to Add to Cart Text */}
+        <div className="mt-3 pt-3 border-t border-gray-100">
+          <div className="text-center text-sm font-medium text-blue-600 opacity-70 hover:opacity-100 transition-opacity">
+            Click to Add to Cart
+          </div>
+        </div>
       </div>
     </div>
   );
