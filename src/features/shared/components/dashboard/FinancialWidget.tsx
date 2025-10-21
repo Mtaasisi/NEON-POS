@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, TrendingUp, TrendingDown, CreditCard, ExternalLink, AlertCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, CreditCard, AlertCircle, ExternalLink } from 'lucide-react';
 import { dashboardService, FinancialSummary } from '../../../../services/dashboardService';
 
 interface FinancialWidgetProps {
@@ -80,6 +80,20 @@ export const FinancialWidget: React.FC<FinancialWidgetProps> = ({ className }) =
     return null;
   };
 
+  const getPaymentMethodColor = (index: number) => {
+    const colors = [
+      { bg: 'bg-blue-50', hover: 'hover:bg-blue-100', icon: 'text-blue-500', text: 'text-blue-900' },
+      { bg: 'bg-emerald-50', hover: 'hover:bg-emerald-100', icon: 'text-emerald-500', text: 'text-emerald-900' },
+      { bg: 'bg-purple-50', hover: 'hover:bg-purple-100', icon: 'text-purple-500', text: 'text-purple-900' },
+      { bg: 'bg-orange-50', hover: 'hover:bg-orange-100', icon: 'text-orange-500', text: 'text-orange-900' },
+      { bg: 'bg-pink-50', hover: 'hover:bg-pink-100', icon: 'text-pink-500', text: 'text-pink-900' },
+      { bg: 'bg-cyan-50', hover: 'hover:bg-cyan-100', icon: 'text-cyan-500', text: 'text-cyan-900' },
+      { bg: 'bg-indigo-50', hover: 'hover:bg-indigo-100', icon: 'text-indigo-500', text: 'text-indigo-900' },
+      { bg: 'bg-teal-50', hover: 'hover:bg-teal-100', icon: 'text-teal-500', text: 'text-teal-900' },
+    ];
+    return colors[index % colors.length];
+  };
+
   if (isLoading) {
     return (
       <div className={`bg-white rounded-2xl p-7 ${className}`}>
@@ -108,7 +122,7 @@ export const FinancialWidget: React.FC<FinancialWidgetProps> = ({ className }) =
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-7 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
@@ -135,13 +149,23 @@ export const FinancialWidget: React.FC<FinancialWidgetProps> = ({ className }) =
           </div>
         </div>
         
-        {financialData.outstandingAmount > 0 && (
-          <div className="px-3 py-1.5 rounded-full bg-amber-50">
-            <span className="text-xs font-medium text-amber-600">
-              {formatCompactCurrency(financialData.outstandingAmount)}
-            </span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {financialData.outstandingAmount > 0 && (
+            <div className="px-3 py-1.5 rounded-full bg-amber-50">
+              <span className="text-xs font-medium text-amber-600">
+                {formatCompactCurrency(financialData.outstandingAmount)}
+              </span>
+            </div>
+          )}
+          <button
+            onClick={() => navigate('/finance/payments')}
+            className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
+            title="View All Payments"
+          >
+            <ExternalLink size={14} />
+            <span>View All</span>
+          </button>
+        </div>
       </div>
 
       {/* Revenue Stats */}
@@ -167,27 +191,30 @@ export const FinancialWidget: React.FC<FinancialWidgetProps> = ({ className }) =
       </div>
 
       {/* Payment Methods Summary */}
-      <div className="space-y-2 max-h-48 overflow-y-auto mb-6">
+      <div className="space-y-2 mb-6 flex-grow max-h-64 overflow-y-auto">
         <h4 className="text-xs text-gray-400 mb-3">Payment Methods</h4>
         {financialData.paymentMethods.length > 0 ? (
-          financialData.paymentMethods.slice(0, 3).map((method, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-              <div className="flex items-center gap-2">
-                <CreditCard size={14} className="text-gray-500" />
-                <span className="text-sm font-medium text-gray-900 capitalize">
-                  {method.method}
-                </span>
+          financialData.paymentMethods.map((method, index) => {
+            const colorScheme = getPaymentMethodColor(index);
+            return (
+              <div key={index} className={`flex items-center justify-between p-3 ${colorScheme.bg} rounded-lg ${colorScheme.hover} transition-colors`}>
+                <div className="flex items-center gap-2">
+                  <CreditCard size={14} className={colorScheme.icon} />
+                  <span className={`text-sm font-medium ${colorScheme.text} capitalize`}>
+                    {method.method}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${colorScheme.text}`}>
+                    {formatCompactCurrency(method.amount)}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {method.count} trans.
+                  </p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="text-sm font-semibold text-gray-900">
-                  {formatCompactCurrency(method.amount)}
-                </p>
-                <p className="text-xs text-gray-400">
-                  {method.count} trans.
-                </p>
-              </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="text-center py-8">
             <p className="text-sm text-gray-500">No payment data</p>
@@ -212,16 +239,6 @@ export const FinancialWidget: React.FC<FinancialWidgetProps> = ({ className }) =
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => navigate('/finance/payments')}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
-        >
-          <ExternalLink size={14} />
-          <span>View Finances</span>
-        </button>
-      </div>
     </div>
   );
 };

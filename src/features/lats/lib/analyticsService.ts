@@ -51,7 +51,7 @@ export class AnalyticsService {
           .select('id, name, is_active, stock_quantity'),
         supabase
           .from('lats_product_variants')
-          .select('id, variant_name, product_id, quantity, reserved_quantity, cost_price, unit_price')
+          .select('id, variant_name, product_id, quantity, reserved_quantity, cost_price, unit_price, selling_price')
       ]);
 
       if (productsResult.status === 'rejected') throw productsResult.reason;

@@ -154,7 +154,7 @@ class WhatsAppTemplateService {
       }
 
       if (filters?.search) {
-        query = query.or(`name.ilike.%${filters.search}%,template.ilike.%${filters.search}%`);
+        query = query.or(`template_name.ilike.%${filters.search}%,template_content.ilike.%${filters.search}%`);
       }
 
       const { data, error } = await query;

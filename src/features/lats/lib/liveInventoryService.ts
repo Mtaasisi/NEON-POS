@@ -68,7 +68,7 @@ export class LiveInventoryService {
       
       let variantsQuery = supabase
         .from('lats_product_variants')
-        .select('id, product_id, quantity, cost_price, unit_price, min_quantity, branch_id, is_shared');
+        .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id, is_shared');
       
       // 🔒 ISOLATION + SHARED: Show branch data + shared products from other branches
       if (currentBranchId) {
@@ -169,7 +169,7 @@ export class LiveInventoryService {
 
         // Calculate retail value for this product
         const productRetailValue = variants.reduce((sum: number, variant: any) => {
-          const sellingPrice = variant.unit_price || variant.selling_price || 0;
+          const sellingPrice = variant.selling_price || 0;
           const quantity = variant.quantity || 0;
           const variantRetailValue = sellingPrice * quantity;
           
@@ -270,7 +270,7 @@ export class LiveInventoryService {
       variants?.forEach((variant: any) => {
         const quantity = variant.quantity || 0;
         const costPrice = variant.cost_price || 0;
-        const sellingPrice = variant.unit_price || variant.selling_price || 0;
+        const sellingPrice = variant.selling_price || 0;
 
         costValue += costPrice * quantity;
         retailValue += sellingPrice * quantity;
@@ -316,7 +316,7 @@ export class LiveInventoryService {
           .eq('category_id', categoryId),
         supabase
           .from('lats_product_variants')
-          .select('id, product_id, quantity, cost_price, unit_price, min_quantity')
+          .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity')
       ]);
 
       if (productsResult.status === 'rejected') {
@@ -419,7 +419,7 @@ export class LiveInventoryService {
           .eq('supplier_id', supplierId),
         supabase
           .from('lats_product_variants')
-          .select('id, product_id, quantity, cost_price, unit_price, min_quantity')
+          .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity')
       ]);
 
       if (productsResult.status === 'rejected') {

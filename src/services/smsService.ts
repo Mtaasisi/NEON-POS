@@ -460,8 +460,10 @@ Respond in JSON format:
                                errorMessage.includes('ECONNREFUSED');
       
       if (isConnectionError) {
-        console.log('ℹ️  SMS proxy server not available - skipping SMS (expected in dev environment)');
-        return { success: false, error: 'SMS proxy server not available' };
+        // Silently handle connection errors in dev - this is expected when backend proxy isn't running
+        console.log('ℹ️  SMS proxy server not available (expected in dev - backend server not running)');
+        // Return success=false but don't treat it as a critical error
+        return { success: false, error: 'SMS proxy server not running - this is normal in development mode' };
       }
       
       console.error('📱 SMS Network Error:', error);

@@ -297,8 +297,7 @@ const UnifiedSupplierManagementPage: React.FC = () => {
             />
             
             <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
+              onSearch={setSearchQuery}
               placeholder="Search suppliers..."
               className="min-w-[200px]"
             />

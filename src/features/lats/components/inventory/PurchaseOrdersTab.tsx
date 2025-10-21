@@ -253,7 +253,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
   // Export functionality
   const handleExportToExcel = () => {
     try {
-      const headers = ['Order Number', 'Supplier', 'Status', 'Total Amount', 'Currency', 'Payment Status', 'Items Count', 'Created Date'];
+      const headers = ['Order Number', 'Supplier', 'Status', 'Total Amount', 'Currency', 'Payment Status', 'Total Quantity', 'Created Date'];
       const rows = filteredOrders.map(order => [
         order.orderNumber,
         order.supplier?.name || 'N/A',
@@ -261,7 +261,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
         order.totalAmount || 0,
         order.currency || 'TZS',
         order.payment_status || order.paymentStatus || 'unpaid',
-        order.items?.length || 0,
+        order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0,
         formatDate(order.createdAt)
       ]);
 
@@ -524,27 +524,37 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft': return 'text-gray-600 bg-gray-100 border-gray-300';
-      case 'pending_approval': return 'text-yellow-600 bg-yellow-50 border-yellow-300';
-      case 'approved': return 'text-blue-600 bg-blue-50 border-blue-300';
-      case 'sent': return 'text-purple-600 bg-purple-50 border-purple-300';
-      case 'confirmed': return 'text-indigo-600 bg-indigo-50 border-indigo-300';
-      case 'shipped': return 'text-cyan-600 bg-cyan-50 border-cyan-300';
-      case 'partial_received': return 'text-orange-600 bg-orange-50 border-orange-300';
-      case 'received': return 'text-green-600 bg-green-50 border-green-300';
-      case 'completed': return 'text-emerald-600 bg-emerald-50 border-emerald-300';
-      case 'cancelled': return 'text-red-600 bg-red-50 border-red-300';
-      default: return 'text-gray-600 bg-gray-50 border-gray-300';
+      case 'draft': return 'bg-gray-500 text-white shadow-sm';
+      case 'pending_approval': return 'bg-yellow-500 text-white shadow-sm';
+      case 'approved': return 'bg-blue-500 text-white shadow-sm';
+      case 'sent': return 'bg-purple-500 text-white shadow-sm';
+      case 'confirmed': return 'bg-indigo-500 text-white shadow-sm';
+      case 'shipped': return 'bg-cyan-500 text-white shadow-sm';
+      case 'partial_received': return 'bg-orange-500 text-white shadow-sm';
+      case 'received': return 'bg-sky-400 text-white shadow-sm';
+      case 'completed': return 'bg-green-600 text-white shadow-sm';
+      case 'cancelled': return 'bg-red-500 text-white shadow-sm';
+      default: return 'bg-gray-500 text-white shadow-sm';
     }
   };
 
   const getPaymentStatusColor = (status: string) => {
     switch (status) {
-      case 'paid': return 'text-green-600 bg-green-50 border-green-300';
-      case 'partial': return 'text-orange-600 bg-orange-50 border-orange-300';
-      case 'unpaid': return 'text-red-600 bg-red-50 border-red-300';
-      case 'overpaid': return 'text-purple-600 bg-purple-50 border-purple-300';
-      default: return 'text-gray-600 bg-gray-50 border-gray-300';
+      case 'paid': return 'bg-blue-500 text-white shadow-sm';
+      case 'partial': return 'bg-orange-500 text-white shadow-sm';
+      case 'unpaid': return 'bg-red-500 text-white shadow-sm';
+      case 'overpaid': return 'bg-purple-500 text-white shadow-sm';
+      default: return 'bg-gray-500 text-white shadow-sm';
+    }
+  };
+
+  const getPaymentStatusIcon = (status: string) => {
+    switch (status) {
+      case 'paid': return <CheckCircle className="w-3 h-3" />;
+      case 'partial': return <AlertCircle className="w-3 h-3" />;
+      case 'unpaid': return <XCircle className="w-3 h-3" />;
+      case 'overpaid': return <DollarSign className="w-3 h-3" />;
+      default: return null;
     }
   };
 
@@ -1085,7 +1095,9 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
                     {/* Items */}
                     <td className="py-4 px-4">
                       <div className="space-y-1">
-                        <p className="text-gray-900 font-semibold">{order.items?.length || 0} item{order.items?.length !== 1 ? 's' : ''}</p>
+                        <p className="text-gray-900 font-semibold">
+                          {order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0} qty
+                        </p>
                         {order.paymentTerms && (
                           <p className="text-sm text-gray-600">{order.paymentTerms}</p>
                         )}
@@ -1105,7 +1117,8 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
                     {/* Payment Status */}
                     <td className="py-4 px-4">
                       <div className="flex justify-center">
-                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm border ${getPaymentStatusColor(order.payment_status || order.paymentStatus || 'unpaid')}`}>
+                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${getPaymentStatusColor(order.payment_status || order.paymentStatus || 'unpaid')}`}>
+                          {getPaymentStatusIcon(order.payment_status || order.paymentStatus || 'unpaid')}
                           <span className="capitalize">{(order.payment_status || order.paymentStatus || 'unpaid').replace('_', ' ')}</span>
                         </div>
                       </div>
@@ -1114,7 +1127,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
                     {/* Status */}
                     <td className="py-4 px-4">
                       <div className="flex justify-center">
-                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm border ${getStatusColor(order.status)}`}>
+                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-semibold ${getStatusColor(order.status)}`}>
                           <span className="capitalize">{order.status.replace('_', ' ')}</span>
                         </div>
                       </div>
@@ -1207,18 +1220,19 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
 
               {/* Status Badges */}
               <div className="flex flex-wrap gap-2 mb-4">
-                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border ${getStatusColor(order.status)}`}>
+                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
                   <span className="capitalize">{order.status.replace('_', ' ')}</span>
                 </div>
-                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border ${getPaymentStatusColor(order.payment_status || order.paymentStatus || 'unpaid')}`}>
+                <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getPaymentStatusColor(order.payment_status || order.paymentStatus || 'unpaid')}`}>
+                  {getPaymentStatusIcon(order.payment_status || order.paymentStatus || 'unpaid')}
                   <span className="capitalize">{(order.payment_status || order.paymentStatus || 'unpaid').replace('_', ' ')}</span>
                 </div>
               </div>
 
-              {/* Items Count */}
+              {/* Total Quantity */}
               <div className="mb-4">
                 <p className="text-sm text-gray-600">
-                  {order.items?.length || 0} item{order.items?.length !== 1 ? 's' : ''}
+                  Quantity: <span className="font-semibold">{order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0}</span>
                 </p>
               </div>
 
@@ -1367,9 +1381,11 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">
-                  {filteredOrders.reduce((sum, order) => sum + (order.items?.length || 0), 0)}
+                  {filteredOrders.reduce((sum, order) => 
+                    sum + (order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0), 0
+                  )}
                 </div>
-                <div className="text-sm text-gray-600">Total Items</div>
+                <div className="text-sm text-gray-600">Total Quantity</div>
               </div>
             </div>
           </div>

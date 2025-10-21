@@ -312,6 +312,11 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
   }
 
   in(column: string, values: any[]) {
+    // Handle empty array case - return a condition that's always false
+    if (!values || values.length === 0) {
+      this.whereConditions.push('1 = 0');
+      return this;
+    }
     const formattedValues = values.map(v => this.formatValue(v)).join(', ');
     this.whereConditions.push(`${this.qualifyColumn(column)} IN (${formattedValues})`);
     return this;

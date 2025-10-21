@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Building2, ChevronDown, Check, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -15,6 +16,7 @@ interface SimpleBranch {
 
 const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = '' }) => {
   const { currentUser } = useAuth();
+  const { isDark } = useTheme();
   const [branches, setBranches] = useState<SimpleBranch[]>([]);
   const [currentBranchId, setCurrentBranchId] = useState<string>('');
   const [isOpen, setIsOpen] = useState(false);
@@ -96,9 +98,15 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
 
   if (loading) {
     return (
-      <div className={`flex items-center gap-2 px-3 py-2 bg-white/80 backdrop-blur-sm rounded-lg border border-gray-200 ${className}`}>
-        <Building2 className="w-4 h-4 text-blue-600 animate-pulse" />
-        <span className="text-sm text-gray-600">Loading...</span>
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${
+        isDark 
+          ? 'bg-blue-600' 
+          : 'bg-blue-600'
+      } text-white ${className}`}>
+        <div className="p-1 rounded bg-white/15">
+          <Building2 className="w-3.5 h-3.5 text-white animate-pulse" />
+        </div>
+        <span className="text-xs font-medium text-white">Loading...</span>
       </div>
     );
   }
@@ -107,9 +115,15 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
 
   if (!currentBranch) {
     return (
-      <div className={`flex items-center gap-2 px-3 py-2 bg-white/80 backdrop-blur-sm rounded-lg border border-gray-200 ${className}`}>
-        <Building2 className="w-4 h-4 text-gray-400" />
-        <span className="text-sm text-gray-600">No branches</span>
+      <div className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${
+        isDark 
+          ? 'bg-gray-600' 
+          : 'bg-gray-500'
+      } text-white ${className}`}>
+        <div className="p-1 rounded bg-white/15">
+          <Building2 className="w-3.5 h-3.5 text-white" />
+        </div>
+        <span className="text-xs font-medium text-white">No branches</span>
       </div>
     );
   }
@@ -139,20 +153,37 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
           console.log('🖱️ Branch selector clicked!', { isOpen, branchesCount: branches.length });
           setIsOpen(!isOpen);
         }}
-        className="flex items-center gap-2 px-3 py-2 bg-white/80 backdrop-blur-sm rounded-lg border-2 border-blue-200 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer min-w-[180px] hover:bg-blue-50"
+        className={`group flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-300 cursor-pointer ${
+          isOpen ? 'shadow-md scale-105' : 'shadow-sm'
+        } ${
+          isDark 
+            ? 'bg-blue-600 hover:bg-blue-500' 
+            : 'bg-blue-600 hover:bg-blue-700'
+        } text-white`}
         title="Click to switch branches"
       >
-        <Building2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+        {/* Icon with subtle animation on hover */}
+        <div className="p-1 rounded transition-all bg-white/15 group-hover:bg-white/25">
+          <Building2 className="w-3.5 h-3.5 text-white" />
+        </div>
+        
+        {/* Branch Info */}
         <div className="flex flex-col items-start flex-1 min-w-0">
-          <span className="text-sm font-medium text-gray-900 truncate w-full">
+          <span className="text-xs font-semibold text-white truncate w-full leading-tight">
             {currentBranch.name}
           </span>
-          <div className="flex items-center gap-1 text-xs text-gray-500">
-            <MapPin className="w-3 h-3" />
-            <span>{currentBranch.city}</span>
+          <div className="flex items-center gap-1 text-[10px] text-white/80">
+            <MapPin className="w-2.5 h-2.5 flex-shrink-0" />
+            <span className="truncate">{currentBranch.city}</span>
           </div>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        
+        {/* Chevron with smooth rotation */}
+        <ChevronDown 
+          className={`w-3.5 h-3.5 text-white/70 flex-shrink-0 transition-transform duration-300 ${
+            isOpen ? 'rotate-180' : ''
+          }`} 
+        />
       </button>
 
       {isOpen && (
@@ -164,13 +195,26 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
           />
 
           {/* Dropdown */}
-          <div className="absolute top-full mt-2 right-0 w-80 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 overflow-auto">
-            <div className="p-2">
-              <div className="px-3 py-2 border-b border-gray-100 mb-2">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase">
+          <div className={`absolute top-full mt-2 right-0 w-80 rounded-lg shadow-xl border-2 z-50 max-h-96 overflow-auto ${
+            isDark 
+              ? 'bg-slate-800 border-blue-500' 
+              : 'bg-white border-blue-300'
+          }`}>
+            {/* Header with flat blue */}
+            <div className={`px-4 py-3 border-b ${
+              isDark 
+                ? 'bg-blue-600 border-blue-500' 
+                : 'bg-blue-600 border-blue-500'
+            }`}>
+              <div className="flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-white" />
+                <h3 className="text-xs font-bold uppercase text-white">
                   Switch Branch ({branches.length})
                 </h3>
               </div>
+            </div>
+            
+            <div className="p-2">
               
               {branches.map((branch) => {
                 const isCurrent = branch.id === currentBranchId;
@@ -183,8 +227,12 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
                     onClick={() => handleSwitchBranch(branch.id)}
                     className={`w-full flex items-start gap-3 px-3 py-2 rounded-lg transition-colors ${
                       isCurrent
-                        ? 'bg-blue-50 border-2 border-blue-200'
-                        : 'hover:bg-gray-50 border-2 border-transparent'
+                        ? isDark 
+                          ? 'bg-blue-900/30 border-2 border-blue-600' 
+                          : 'bg-blue-50 border-2 border-blue-200'
+                        : isDark
+                          ? 'hover:bg-slate-700/50 border-2 border-transparent'
+                          : 'hover:bg-gray-50 border-2 border-transparent'
                     }`}
                   >
                     <div className="flex-shrink-0 mt-1">
@@ -199,22 +247,30 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
 
                     <div className="flex-1 text-left min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className={`font-medium ${isCurrent ? 'text-blue-900' : 'text-gray-900'} truncate`}>
+                        <span className={`font-medium truncate ${
+                          isCurrent 
+                            ? isDark ? 'text-blue-300' : 'text-blue-900'
+                            : isDark ? 'text-gray-200' : 'text-gray-900'
+                        }`}>
                           {branch.name}
                         </span>
                         {branch.is_main && (
-                          <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs font-semibold rounded">
+                          <span className={`px-1.5 py-0.5 text-xs font-semibold rounded ${
+                            isDark 
+                              ? 'bg-green-900/30 text-green-400' 
+                              : 'bg-green-100 text-green-700'
+                          }`}>
                             Main
                           </span>
                         )}
                       </div>
                       
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-gray-500">{branch.code}</span>
-                        <span className="text-xs text-gray-300">•</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{branch.code}</span>
+                        <span className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-300'}`}>•</span>
                         <div className="flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-gray-400" />
-                          <span className="text-xs text-gray-500">{branch.city}</span>
+                          <MapPin className={`w-3 h-3 ${isDark ? 'text-gray-500' : 'text-gray-400'}`} />
+                          <span className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{branch.city}</span>
                         </div>
                       </div>
 
@@ -234,9 +290,13 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
               })}
             </div>
 
-            <div className="border-t border-gray-100 p-3 bg-gray-50">
+            <div className={`border-t p-3 ${
+              isDark 
+                ? 'border-blue-500 bg-slate-900' 
+                : 'border-blue-300 bg-gray-50'
+            }`}>
               <div className="text-center space-y-2">
-                <p className="text-xs text-gray-500">
+                <p className={`text-xs ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
                   {branches.length} branch{branches.length !== 1 ? 'es' : ''} available
                 </p>
                 <button
@@ -245,7 +305,7 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
                     setIsOpen(false);
                     window.location.href = '/admin-settings?section=stores';
                   }}
-                  className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mx-auto"
+                  className="text-xs font-semibold flex items-center gap-1 mx-auto px-3 py-1.5 rounded-md transition-all bg-blue-600 hover:bg-blue-700 text-white"
                 >
                   <Building2 className="w-3 h-3" />
                   Manage Stores

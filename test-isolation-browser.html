@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Branch Isolation Browser Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        
+        .status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 5px;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        
+        input {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 100%;
+            margin: 10px 0;
+        }
+        
+        .code {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 10px 0;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        
+        .card {
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        
+        .card .number {
+            font-size: 36px;
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+        }
+        
+        .emoji {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔒 Branch Isolation Test Suite</h1>
+        <p class="subtitle">Interactive browser testing for multi-branch isolation</p>
+        
+        <!-- Current Status -->
+        <div class="test-section">
+            <h2>📊 Current Status</h2>
+            <div id="currentStatus"></div>
+        </div>
+        
+        <!-- Branch Control -->
+        <div class="test-section">
+            <h2>🎛️ Branch Control</h2>
+            <p>Current Branch ID: <strong id="currentBranchId">Not Set</strong></p>
+            <div class="button-group">
+                <button onclick="setMainBranch()">Set to Main Branch</button>
+                <button onclick="setBranch('custom')">Set Custom Branch</button>
+                <button onclick="clearBranch()">Clear Branch (See All)</button>
+            </div>
+            <input type="text" id="customBranchId" placeholder="Enter custom branch ID..." style="display:none;">
+        </div>
+        
+        <!-- Toggle Settings -->
+        <div class="test-section">
+            <h2>⚙️ Isolation Toggle Settings</h2>
+            <div id="toggleStatus"></div>
+            <div class="status info">
+                💡 To change toggles, edit: <code>src/features/lats/lib/data/provider.supabase.ts</code>
+            </div>
+        </div>
+        
+        <!-- Test Results -->
+        <div class="test-section">
+            <h2>🧪 Test Results</h2>
+            <div class="button-group">
+                <button onclick="runAllTests()">🚀 Run All Tests</button>
+                <button onclick="testDevices()">Test Devices</button>
+                <button onclick="testTechnicians()">Test Technicians</button>
+                <button onclick="testPayments()">Test Payments</button>
+            </div>
+            <div id="testResults"></div>
+        </div>
+        
+        <!-- Manual Testing Guide -->
+        <div class="test-section">
+            <h2>📝 Manual Testing Checklist</h2>
+            <div class="status info">
+                <strong>Follow these steps:</strong><br><br>
+                ✅ 1. Set a branch ID above<br>
+                ✅ 2. Navigate to Devices page - should only show devices from that branch<br>
+                ✅ 3. Try assigning a device - should only see technicians from that branch<br>
+                ✅ 4. Switch to different branch - should see different data<br>
+                ✅ 5. Clear branch ID - should see all data<br>
+            </div>
+        </div>
+        
+        <!-- Database Queries -->
+        <div class="test-section">
+            <h2>💾 Database Quick Checks</h2>
+            <div class="code">
+-- Check branch distribution
+SELECT 
+    b.name as branch_name,
+    COUNT(d.id) as device_count
+FROM lats_branches b
+LEFT JOIN devices d ON d.branch_id = b.id
+GROUP BY b.name;
+
+-- Check technicians by branch
+SELECT 
+    b.name as branch_name,
+    COUNT(u.id) as technician_count,
+    STRING_AGG(u.full_name, ', ') as technicians
+FROM lats_branches b
+LEFT JOIN users u ON u.branch_id = b.id 
+WHERE u.role IN ('technician', 'tech')
+GROUP BY b.name;
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update current status
+        function updateStatus() {
+            const branchId = localStorage.getItem('current_branch_id');
+            const statusDiv = document.getElementById('currentStatus');
+            const branchIdSpan = document.getElementById('currentBranchId');
+            
+            branchIdSpan.textContent = branchId || 'Not Set (Viewing All Data)';
+            
+            if (branchId) {
+                statusDiv.innerHTML = `
+                    <div class="status success">
+                        ✅ Branch isolation is ACTIVE<br>
+                        You will only see data from branch: <strong>${branchId}</strong>
+                    </div>
+                `;
+            } else {
+                statusDiv.innerHTML = `
+                    <div class="status warning">
+                        ⚠️ No branch set - Viewing ALL data from ALL branches<br>
+                        Set a branch ID to test isolation
+                    </div>
+                `;
+            }
+            
+            updateToggleStatus();
+        }
+        
+        // Update toggle status
+        function updateToggleStatus() {
+            const toggleDiv = document.getElementById('toggleStatus');
+            toggleDiv.innerHTML = `
+                <div class="grid">
+                    <div class="card">
+                        <div class="emoji">📱</div>
+                        <h3>Devices</h3>
+                        <p>ENABLE_DEVICE_ISOLATION</p>
+                        <div class="number">?</div>
+                        <small>Check in provider.supabase.ts</small>
+                    </div>
+                    <div class="card">
+                        <div class="emoji">💰</div>
+                        <h3>Payments</h3>
+                        <p>ENABLE_PAYMENT_ISOLATION</p>
+                        <div class="number">?</div>
+                        <small>Check in provider.supabase.ts</small>
+                    </div>
+                    <div class="card">
+                        <div class="emoji">👨‍🔧</div>
+                        <h3>Technicians</h3>
+                        <p>ENABLE_TECHNICIAN_ISOLATION</p>
+                        <div class="number">?</div>
+                        <small>Check in provider.supabase.ts</small>
+                    </div>
+                </div>
+                <div class="status info">
+                    ℹ️ Toggle values are set in code. Default: All ON (true)
+                </div>
+            `;
+        }
+        
+        // Set to main branch
+        function setMainBranch() {
+            const mainBranchId = '00000000-0000-0000-0000-000000000001';
+            localStorage.setItem('current_branch_id', mainBranchId);
+            updateStatus();
+            alert('✅ Switched to Main Branch!\n\nReload the page for changes to take effect.');
+        }
+        
+        // Set custom branch
+        function setBranch(type) {
+            const input = document.getElementById('customBranchId');
+            if (type === 'custom') {
+                input.style.display = 'block';
+                input.focus();
+                input.onkeypress = function(e) {
+                    if (e.key === 'Enter' && input.value.trim()) {
+                        localStorage.setItem('current_branch_id', input.value.trim());
+                        input.style.display = 'none';
+                        input.value = '';
+                        updateStatus();
+                        alert('✅ Branch ID updated!\n\nReload the page for changes to take effect.');
+                    }
+                };
+            }
+        }
+        
+        // Clear branch
+        function clearBranch() {
+            localStorage.removeItem('current_branch_id');
+            updateStatus();
+            alert('✅ Branch ID cleared!\n\nYou will now see ALL data from ALL branches.\n\nReload the page for changes to take effect.');
+        }
+        
+        // Run all tests
+        function runAllTests() {
+            const resultsDiv = document.getElementById('testResults');
+            resultsDiv.innerHTML = `
+                <div class="status info">
+                    🔄 Running tests...<br><br>
+                    <strong>Note:</strong> These are client-side checks. For full database tests, run:<br>
+                    <code>./test-branch-isolation.sh</code>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                const branchId = localStorage.getItem('current_branch_id');
+                let results = '';
+                
+                // Test 1: Branch ID Check
+                if (branchId) {
+                    results += `<div class="status success">✅ TEST 1 PASS: Branch ID is set (${branchId})</div>`;
+                } else {
+                    results += `<div class="status warning">⚠️ TEST 1: No branch ID set - will see all data</div>`;
+                }
+                
+                // Test 2: LocalStorage Check
+                results += `<div class="status success">✅ TEST 2 PASS: LocalStorage is accessible</div>`;
+                
+                // Test 3: Config Check
+                results += `<div class="status info">ℹ️ TEST 3: Check ISOLATION_CONFIG in provider.supabase.ts</div>`;
+                
+                // Test 4: UI Check
+                results += `<div class="status info">
+                    ℹ️ TEST 4: Manual UI Check Required<br>
+                    1. Navigate to /devices<br>
+                    2. Verify only branch data shows<br>
+                    3. Try assigning devices to technicians<br>
+                    4. Switch branches and verify data changes
+                </div>`;
+                
+                resultsDiv.innerHTML = results;
+            }, 1000);
+        }
+        
+        // Test devices
+        function testDevices() {
+            alert('🧪 Device Test\n\n1. Go to /devices page\n2. You should only see devices from current branch\n3. Switch branches and verify different devices appear\n\nCurrent Branch: ' + (localStorage.getItem('current_branch_id') || 'None (All Data)'));
+        }
+        
+        // Test technicians
+        function testTechnicians() {
+            alert('🧪 Technician Test\n\n1. Try to assign a device to a technician\n2. You should only see technicians from current branch\n3. Switch branches and verify different technicians appear\n\nCurrent Branch: ' + (localStorage.getItem('current_branch_id') || 'None (All Data)'));
+        }
+        
+        // Test payments
+        function testPayments() {
+            alert('🧪 Payment Test\n\n1. View customer payments\n2. You should only see payments from current branch\n3. Create a new payment - it should be assigned to current branch\n\nCurrent Branch: ' + (localStorage.getItem('current_branch_id') || 'None (All Data)'));
+        }
+        
+        // Initialize
+        updateStatus();
+        
+        // Auto-refresh status every 2 seconds
+        setInterval(updateStatus, 2000);
+    </script>
+</body>
+</html>
+

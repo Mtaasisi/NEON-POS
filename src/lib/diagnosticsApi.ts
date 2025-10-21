@@ -36,8 +36,8 @@ export async function getDiagnosticRequests(filters?: DiagnosticFilters): Promis
       .from('diagnostic_requests')
       .select(`
         *,
-        created_by_user:users!diagnostic_requests_created_by_fkey(id, name, username),
-        assigned_to_user:users!diagnostic_requests_assigned_to_fkey(id, name, username),
+        created_by_user:users!diagnostic_requests_created_by_fkey(id, full_name, email),
+        assigned_to_user:users!diagnostic_requests_assigned_to_fkey(id, full_name, email),
         devices:diagnostic_devices(
           id,
           device_name,
@@ -103,8 +103,8 @@ export async function getDiagnosticRequest(id: string): Promise<DiagnosticReques
       .from('diagnostic_requests')
       .select(`
         *,
-        created_by_user:users!diagnostic_requests_created_by_fkey(id, name, username),
-        assigned_to_user:users!diagnostic_requests_assigned_to_fkey(id, name, username),
+        created_by_user:users!diagnostic_requests_created_by_fkey(id, full_name, email),
+        assigned_to_user:users!diagnostic_requests_assigned_to_fkey(id, full_name, email),
         devices:diagnostic_devices(
           *,
           checks:diagnostic_checks(*)
@@ -405,12 +405,22 @@ export async function getDiagnosticStats(filters?: DiagnosticFilters): Promise<D
  */
 export async function getTechnicians(): Promise<any[]> {
   try {
-    const { data, error } = await supabase
+    // 🔒 Get current branch for isolation
+    const currentBranchId = localStorage.getItem('current_branch_id');
+    
+    let query = supabase
       .from('users')
       .select('id, name, username, role')
       .in('role', ['tech', 'admin', 'manager'])
       .order('name');
+    
+    // 🔒 COMPLETE ISOLATION: Only show technicians from current branch
+    // Note: This can be disabled by commenting out the filter
+    if (currentBranchId) {
+      query = query.eq('branch_id', currentBranchId);
+    }
 
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   } catch (error) {

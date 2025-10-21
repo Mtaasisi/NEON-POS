@@ -30,123 +30,78 @@ import {
   CheckCircle2,
   XCircle,
   MousePointerClick,
+  MessageCircle,
   Settings,
-  Edit,
-  Trash2,
-  ExternalLink,
-  Home,
-  ShoppingCart,
-  CreditCard,
-  BarChart,
-  Target,
-  Globe,
-  Mail,
-  Phone,
-  MapPin,
-  Clock,
+  Search,
   Star,
-  Heart,
-  Shield,
-  Wifi,
-  Database,
-  Server,
-  Cloud,
   HardDrive,
-  Cpu,
-  Monitor,
-  Printer,
-  Camera,
-  Mic,
-  Headphones,
-  Gamepad2,
-  Music,
-  Video,
-  Image,
-  File,
-  Folder,
-  Archive,
+  MessageSquare,
+  Wrench,
+  Database,
   Download,
   Upload,
-  Share,
-  Lock,
-  Unlock,
-  Key,
-  Search,
-  Filter,
-  Sort,
-  Grid,
-  List,
-  Menu,
-  MoreHorizontal,
-  ChevronDown,
-  ChevronUp,
-  ChevronLeft,
-  ChevronRight,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  Maximize,
-  Minimize,
-  X,
-  Check,
-  AlertTriangle,
-  Info,
-  HelpCircle,
-  MessageCircle,
-  Send,
-  Reply,
-  Forward,
-  Copy,
-  Cut,
-  Paste,
-  Undo,
-  Redo,
-  RefreshCw,
-  ZoomIn,
-  ZoomOut,
-  Focus,
-  Layers,
-  Palette,
-  Brush,
-  Eraser,
-  Scissors,
-  Crop,
-  Move,
-  RotateCw,
-  FlipHorizontal,
-  FlipVertical,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  AlignJustify,
-  Bold,
-  Italic,
-  Underline,
-  Strikethrough,
-  Code,
-  Link,
-  Unlink,
-  Bookmark,
-  BookmarkCheck,
-  Tag,
-  Tags,
-  Hash,
-  AtSign,
-  Percent,
-  Euro,
-  Pound,
-  Yen,
-  Bitcoin,
+  UserCheck,
+  Building,
+  MapPin,
+  Bot,
+  Printer,
+  Clock,
+  Target,
   TrendingDown,
-  Minus,
-  Divide,
-  Equal,
-  Calculator
+  Shield,
+  FileSpreadsheet,
+  Layers,
+  Store,
+  Tag,
+  Truck,
+  AlertTriangle,
+  CheckCircle,
+  RefreshCw,
+  Zap as ZapIcon,
+  Globe,
+  Smartphone as PhoneIcon,
+  Monitor,
+  ClipboardList,
+  BarChart,
+  PieChart as PieChartIcon,
+  LineChart as LineChartIcon,
+  Activity as ActivityIcon,
+  TrendingUp as TrendingUpIcon,
+  Users as UsersIcon,
+  Package as PackageIcon,
+  Calendar as CalendarIcon,
+  Bell as BellIcon,
+  Settings as SettingsIcon,
+  Search as SearchIcon,
+  Star as StarIcon,
+  HardDrive as HardDriveIcon,
+  MessageSquare as MessageSquareIcon,
+  Wrench as WrenchIcon,
+  Database as DatabaseIcon,
+  Download as DownloadIcon,
+  Upload as UploadIcon,
+  UserCheck as UserCheckIcon,
+  Building as BuildingIcon,
+  MapPin as MapPinIcon,
+  Bot as BotIcon,
+  Printer as PrinterIcon,
+  Clock as ClockIcon,
+  Target as TargetIcon,
+  TrendingDown as TrendingDownIcon,
+  Shield as ShieldIcon,
+  FileSpreadsheet as FileSpreadsheetIcon,
+  Layers as LayersIcon,
+  Store as StoreIcon,
+  Tag as TagIcon,
+  Truck as TruckIcon,
+  AlertTriangle as AlertTriangleIcon,
+  CheckCircle as CheckCircleIcon,
+  RefreshCw as RefreshCwIcon
 } from 'lucide-react';
 
 interface DashboardSettings {
   quickActions: {
+    // Core Business Features
     devices: boolean;
     addDevice: boolean;
     customers: boolean;
@@ -155,16 +110,51 @@ interface DashboardSettings {
     purchaseOrders: boolean;
     payments: boolean;
     adGenerator: boolean;
+    pos: boolean;
+    reports: boolean;
+    employees: boolean;
+    whatsapp: boolean;
+    settings: boolean;
+    search: boolean;
+    loyalty: boolean;
+    backup: boolean;
+    
+    // SMS & Communication Features
+    sms: boolean;
+    bulkSms: boolean;
+    smsLogs: boolean;
+    smsSettings: boolean;
+    
+    // Diagnostic & Repair Features
+    diagnostics: boolean;
+    newDiagnostic: boolean;
+    diagnosticReports: boolean;
+    diagnosticTemplates: boolean;
+    
+    // Import/Export & Data Management
+    excelImport: boolean;
+    excelTemplates: boolean;
+    productExport: boolean;
+    customerImport: boolean;
+    
+    // Advanced System Features
+    userManagement: boolean;
+    databaseSetup: boolean;
+    integrationSettings: boolean;
+    integrationsTest: boolean;
+    aiTraining: boolean;
+    bluetoothPrinter: boolean;
+    
+    // Business Management
+    categoryManagement: boolean;
+    supplierManagement: boolean;
+    storeLocations: boolean;
+    
+    // Advanced Analytics & Reports
+    reminders: boolean;
+    mobile: boolean;
+    myAttendance: boolean;
   };
-  customQuickActions: Array<{
-    id: string;
-    title: string;
-    description: string;
-    path: string;
-    icon: string;
-    color: string;
-    enabled: boolean;
-  }>;
   widgets: {
     revenueTrendChart: boolean;
     deviceStatusChart: boolean;
@@ -173,35 +163,38 @@ interface DashboardSettings {
     performanceMetricsChart: boolean;
     customerActivityChart: boolean;
     salesFunnelChart: boolean;
+    purchaseOrderChart: boolean;
     appointmentWidget: boolean;
     employeeWidget: boolean;
     notificationWidget: boolean;
     financialWidget: boolean;
     analyticsWidget: boolean;
     serviceWidget: boolean;
+    reminderWidget: boolean;
     customerInsightsWidget: boolean;
     systemHealthWidget: boolean;
     inventoryWidget: boolean;
     activityFeedWidget: boolean;
+    purchaseOrderWidget: boolean;
+    chatWidget: boolean;
+    salesWidget: boolean;
+    topProductsWidget: boolean;
+    expensesWidget: boolean;
+    staffPerformanceWidget: boolean;
+    salesChart: boolean;
+    paymentMethodsChart: boolean;
+    salesByCategoryChart: boolean;
+    profitMarginChart: boolean;
   };
-  customWidgets: Array<{
-    id: string;
-    title: string;
-    description: string;
-    type: 'chart' | 'widget';
-    component: string;
-    enabled: boolean;
-  }>;
 }
 
 const DashboardCustomizationSettings: React.FC = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showAddQuickAction, setShowAddQuickAction] = useState(false);
-  const [showAddWidget, setShowAddWidget] = useState(false);
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({
     quickActions: {
+      // Core Business Features
       devices: true,
       addDevice: true,
       customers: true,
@@ -209,9 +202,52 @@ const DashboardCustomizationSettings: React.FC = () => {
       appointments: true,
       purchaseOrders: true,
       payments: true,
-      adGenerator: true
+      adGenerator: true,
+      pos: true,
+      reports: true,
+      employees: true,
+      whatsapp: true,
+      settings: true,
+      search: true,
+      loyalty: true,
+      backup: true,
+      
+      // SMS & Communication Features
+      sms: true,
+      bulkSms: true,
+      smsLogs: true,
+      smsSettings: true,
+      
+      // Diagnostic & Repair Features
+      diagnostics: true,
+      newDiagnostic: true,
+      diagnosticReports: true,
+      diagnosticTemplates: true,
+      
+      // Import/Export & Data Management
+      excelImport: true,
+      excelTemplates: true,
+      productExport: true,
+      customerImport: true,
+      
+      // Advanced System Features
+      userManagement: true,
+      databaseSetup: true,
+      integrationSettings: true,
+      integrationsTest: true,
+      aiTraining: true,
+      bluetoothPrinter: true,
+      
+      // Business Management
+      categoryManagement: true,
+      supplierManagement: true,
+      storeLocations: true,
+      
+      // Advanced Analytics & Reports
+      reminders: true,
+      mobile: true,
+      myAttendance: true
     },
-    customQuickActions: [],
     widgets: {
       revenueTrendChart: true,
       deviceStatusChart: true,
@@ -220,18 +256,21 @@ const DashboardCustomizationSettings: React.FC = () => {
       performanceMetricsChart: true,
       customerActivityChart: true,
       salesFunnelChart: true,
+      purchaseOrderChart: true,
       appointmentWidget: true,
       employeeWidget: true,
       notificationWidget: true,
       financialWidget: true,
       analyticsWidget: true,
       serviceWidget: true,
+      reminderWidget: true,
       customerInsightsWidget: true,
       systemHealthWidget: true,
       inventoryWidget: true,
-      activityFeedWidget: true
-    },
-    customWidgets: []
+      activityFeedWidget: true,
+      purchaseOrderWidget: true,
+      chatWidget: true
+    }
   });
 
   // Load settings on mount
@@ -293,6 +332,7 @@ const DashboardCustomizationSettings: React.FC = () => {
   const handleReset = () => {
     const defaultSettings: DashboardSettings = {
       quickActions: {
+        // Core Business Features
         devices: true,
         addDevice: true,
         customers: true,
@@ -300,7 +340,51 @@ const DashboardCustomizationSettings: React.FC = () => {
         appointments: true,
         purchaseOrders: true,
         payments: true,
-        adGenerator: true
+        adGenerator: true,
+        pos: true,
+        reports: true,
+        employees: true,
+        whatsapp: true,
+        settings: true,
+        search: true,
+        loyalty: true,
+        backup: true,
+        
+        // SMS & Communication Features
+        sms: true,
+        bulkSms: true,
+        smsLogs: true,
+        smsSettings: true,
+        
+        // Diagnostic & Repair Features
+        diagnostics: true,
+        newDiagnostic: true,
+        diagnosticReports: true,
+        diagnosticTemplates: true,
+        
+        // Import/Export & Data Management
+        excelImport: true,
+        excelTemplates: true,
+        productExport: true,
+        customerImport: true,
+        
+        // Advanced System Features
+        userManagement: true,
+        databaseSetup: true,
+        integrationSettings: true,
+        integrationsTest: true,
+        aiTraining: true,
+        bluetoothPrinter: true,
+        
+        // Business Management
+        categoryManagement: true,
+        supplierManagement: true,
+        storeLocations: true,
+        
+        // Advanced Analytics & Reports
+        reminders: true,
+        mobile: true,
+        myAttendance: true
       },
       widgets: {
         revenueTrendChart: true,
@@ -310,6 +394,7 @@ const DashboardCustomizationSettings: React.FC = () => {
         performanceMetricsChart: true,
         customerActivityChart: true,
         salesFunnelChart: true,
+        purchaseOrderChart: true,
         appointmentWidget: true,
         employeeWidget: true,
         notificationWidget: true,
@@ -319,7 +404,17 @@ const DashboardCustomizationSettings: React.FC = () => {
         customerInsightsWidget: true,
         systemHealthWidget: true,
         inventoryWidget: true,
-        activityFeedWidget: true
+        activityFeedWidget: true,
+        purchaseOrderWidget: true,
+        chatWidget: true,
+        salesWidget: true,
+        topProductsWidget: true,
+        expensesWidget: true,
+        staffPerformanceWidget: true,
+        salesChart: true,
+        paymentMethodsChart: true,
+        salesByCategoryChart: true,
+        profitMarginChart: true
       }
     };
     setDashboardSettings(defaultSettings);
@@ -366,75 +461,8 @@ const DashboardCustomizationSettings: React.FC = () => {
     }));
   };
 
-  // Custom Quick Action Functions
-  const addCustomQuickAction = (action: Omit<DashboardSettings['customQuickActions'][0], 'id'>) => {
-    const newAction = {
-      ...action,
-      id: `custom_${Date.now()}`,
-      enabled: true
-    };
-    
-    setDashboardSettings(prev => ({
-      ...prev,
-      customQuickActions: [...prev.customQuickActions, newAction]
-    }));
-    
-    setShowAddQuickAction(false);
-    toast.success('Custom quick action added!');
-  };
-
-  const removeCustomQuickAction = (id: string) => {
-    setDashboardSettings(prev => ({
-      ...prev,
-      customQuickActions: prev.customQuickActions.filter(action => action.id !== id)
-    }));
-    toast.success('Custom quick action removed!');
-  };
-
-  const toggleCustomQuickAction = (id: string) => {
-    setDashboardSettings(prev => ({
-      ...prev,
-      customQuickActions: prev.customQuickActions.map(action =>
-        action.id === id ? { ...action, enabled: !action.enabled } : action
-      )
-    }));
-  };
-
-  // Custom Widget Functions
-  const addCustomWidget = (widget: Omit<DashboardSettings['customWidgets'][0], 'id'>) => {
-    const newWidget = {
-      ...widget,
-      id: `custom_widget_${Date.now()}`,
-      enabled: true
-    };
-    
-    setDashboardSettings(prev => ({
-      ...prev,
-      customWidgets: [...prev.customWidgets, newWidget]
-    }));
-    
-    setShowAddWidget(false);
-    toast.success('Custom widget added!');
-  };
-
-  const removeCustomWidget = (id: string) => {
-    setDashboardSettings(prev => ({
-      ...prev,
-      customWidgets: prev.customWidgets.filter(widget => widget.id !== id)
-    }));
-    toast.success('Custom widget removed!');
-  };
-
-  const toggleCustomWidget = (id: string) => {
-    setDashboardSettings(prev => ({
-      ...prev,
-      customWidgets: prev.customWidgets.map(widget =>
-        widget.id === id ? { ...widget, enabled: !widget.enabled } : widget
-      )
-    }));
-  };
-
   const quickActionItems = [
+    // Core Business Features
     { key: 'devices' as const, label: 'Devices', icon: Smartphone, description: 'Manage devices' },
     { key: 'addDevice' as const, label: 'Add Device', icon: Plus, description: 'Add new device' },
     { key: 'customers' as const, label: 'Customers', icon: Users, description: 'View customers' },
@@ -442,7 +470,51 @@ const DashboardCustomizationSettings: React.FC = () => {
     { key: 'appointments' as const, label: 'Appointments', icon: Calendar, description: 'Schedule appointments' },
     { key: 'purchaseOrders' as const, label: 'Purchase Orders', icon: Box, description: 'Manage orders' },
     { key: 'payments' as const, label: 'Payments', icon: DollarSign, description: 'Payment management' },
-    { key: 'adGenerator' as const, label: 'Ad Generator', icon: FileText, description: 'Create product ads' }
+    { key: 'adGenerator' as const, label: 'Ad Generator', icon: FileText, description: 'Create product ads' },
+    { key: 'pos' as const, label: 'POS System', icon: DollarSign, description: 'Point of sale' },
+    { key: 'reports' as const, label: 'Sales Reports', icon: BarChart3, description: 'View sales reports' },
+    { key: 'employees' as const, label: 'Employees', icon: Users, description: 'Manage staff' },
+    { key: 'whatsapp' as const, label: 'WhatsApp', icon: MessageCircle, description: 'WhatsApp chat' },
+    { key: 'settings' as const, label: 'Settings', icon: Settings, description: 'System settings' },
+    { key: 'search' as const, label: 'Search', icon: Search, description: 'Global search' },
+    { key: 'loyalty' as const, label: 'Loyalty Program', icon: Star, description: 'Customer loyalty' },
+    { key: 'backup' as const, label: 'Backup', icon: HardDrive, description: 'Data backup' },
+    
+    // SMS & Communication Features
+    { key: 'sms' as const, label: 'SMS Center', icon: MessageSquare, description: 'SMS management' },
+    { key: 'bulkSms' as const, label: 'Bulk SMS', icon: MessageSquare, description: 'Mass messaging' },
+    { key: 'smsLogs' as const, label: 'SMS Logs', icon: MessageSquare, description: 'Message history' },
+    { key: 'smsSettings' as const, label: 'SMS Settings', icon: Settings, description: 'SMS configuration' },
+    
+    // Diagnostic & Repair Features
+    { key: 'diagnostics' as const, label: 'Diagnostics', icon: Wrench, description: 'Device diagnostics' },
+    { key: 'newDiagnostic' as const, label: 'New Diagnostic', icon: Plus, description: 'Create diagnostic request' },
+    { key: 'diagnosticReports' as const, label: 'Diagnostic Reports', icon: BarChart3, description: 'Diagnostic analytics' },
+    { key: 'diagnosticTemplates' as const, label: 'Diagnostic Templates', icon: FileText, description: 'Template management' },
+    
+    // Import/Export & Data Management
+    { key: 'excelImport' as const, label: 'Excel Import', icon: Upload, description: 'Data import' },
+    { key: 'excelTemplates' as const, label: 'Excel Templates', icon: Download, description: 'Template downloads' },
+    { key: 'productExport' as const, label: 'Product Export', icon: Download, description: 'Export products' },
+    { key: 'customerImport' as const, label: 'Customer Import', icon: Upload, description: 'Import customers' },
+    
+    // Advanced System Features
+    { key: 'userManagement' as const, label: 'User Management', icon: UserCheck, description: 'User administration' },
+    { key: 'databaseSetup' as const, label: 'Database Setup', icon: Database, description: 'Database configuration' },
+    { key: 'integrationSettings' as const, label: 'Integration Settings', icon: Settings, description: 'System integrations' },
+    { key: 'integrationsTest' as const, label: 'Integrations Test', icon: Target, description: 'Test integrations' },
+    { key: 'aiTraining' as const, label: 'AI Training', icon: Bot, description: 'AI training system' },
+    { key: 'bluetoothPrinter' as const, label: 'Bluetooth Printer', icon: Printer, description: 'Printer management' },
+    
+    // Business Management
+    { key: 'categoryManagement' as const, label: 'Category Management', icon: Tag, description: 'Product categories' },
+    { key: 'supplierManagement' as const, label: 'Supplier Management', icon: Building, description: 'Supplier management' },
+    { key: 'storeLocations' as const, label: 'Store Locations', icon: MapPin, description: 'Location management' },
+    
+    // Advanced Analytics & Reports
+    { key: 'reminders' as const, label: 'Reminders', icon: Clock, description: 'Reminder system' },
+    { key: 'mobile' as const, label: 'Mobile', icon: Smartphone, description: 'Mobile features' },
+    { key: 'myAttendance' as const, label: 'My Attendance', icon: Clock, description: 'Personal attendance' }
   ];
 
   const widgetItems = [
@@ -454,18 +526,30 @@ const DashboardCustomizationSettings: React.FC = () => {
     { key: 'performanceMetricsChart' as const, label: 'Performance Metrics Chart', icon: Activity, category: 'Charts' },
     { key: 'customerActivityChart' as const, label: 'Customer Activity Chart', icon: Users, category: 'Charts' },
     { key: 'salesFunnelChart' as const, label: 'Sales Funnel Chart', icon: PieChart, category: 'Charts' },
+    { key: 'purchaseOrderChart' as const, label: 'Purchase Order Chart', icon: Box, category: 'Charts' },
+    { key: 'salesChart' as const, label: 'Sales Chart', icon: DollarSign, category: 'Charts' },
+    { key: 'paymentMethodsChart' as const, label: 'Payment Methods Chart', icon: Briefcase, category: 'Charts' },
+    { key: 'salesByCategoryChart' as const, label: 'Sales by Category Chart', icon: Tag, category: 'Charts' },
+    { key: 'profitMarginChart' as const, label: 'Profit Margin Chart', icon: TrendingUp, category: 'Charts' },
     
     // Widgets
     { key: 'appointmentWidget' as const, label: 'Appointment Widget', icon: Calendar, category: 'Widgets' },
     { key: 'employeeWidget' as const, label: 'Employee Widget', icon: UserCog, category: 'Widgets' },
     { key: 'notificationWidget' as const, label: 'Notification Widget', icon: Bell, category: 'Widgets' },
-    { key: 'financialWidget' as const, label: 'Financial Widget', icon: DollarSignIcon, category: 'Widgets' },
+    { key: 'financialWidget' as const, label: 'Financial Widget', icon: DollarSign, category: 'Widgets' },
     { key: 'analyticsWidget' as const, label: 'Analytics Widget', icon: BarChart3, category: 'Widgets' },
-    { key: 'serviceWidget' as const, label: 'Service Widget', icon: Briefcase, category: 'Widgets' },
+    { key: 'serviceWidget' as const, label: 'Service Widget', icon: Wrench, category: 'Widgets' },
+    { key: 'reminderWidget' as const, label: 'Reminder Widget', icon: Bell, category: 'Widgets' },
     { key: 'customerInsightsWidget' as const, label: 'Customer Insights Widget', icon: Users, category: 'Widgets' },
     { key: 'systemHealthWidget' as const, label: 'System Health Widget', icon: Activity, category: 'Widgets' },
     { key: 'inventoryWidget' as const, label: 'Inventory Widget', icon: Package, category: 'Widgets' },
-    { key: 'activityFeedWidget' as const, label: 'Activity Feed Widget', icon: LineChart, category: 'Widgets' }
+    { key: 'activityFeedWidget' as const, label: 'Activity Feed Widget', icon: LineChart, category: 'Widgets' },
+    { key: 'purchaseOrderWidget' as const, label: 'Purchase Order Widget', icon: Box, category: 'Widgets' },
+    { key: 'chatWidget' as const, label: 'Chat Widget', icon: MessageCircle, category: 'Widgets' },
+    { key: 'salesWidget' as const, label: 'Sales Widget', icon: DollarSign, category: 'Widgets' },
+    { key: 'topProductsWidget' as const, label: 'Top Products Widget', icon: TrendingUp, category: 'Widgets' },
+    { key: 'expensesWidget' as const, label: 'Expenses Widget', icon: Briefcase, category: 'Widgets' },
+    { key: 'staffPerformanceWidget' as const, label: 'Staff Performance Widget', icon: Users, category: 'Widgets' }
   ];
 
   if (loading) {
@@ -539,7 +623,7 @@ const DashboardCustomizationSettings: React.FC = () => {
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
               <p className="text-sm text-gray-600">
-                <span className="font-semibold text-blue-600">{enabledQuickActionsCount} of 8</span> selected
+                <span className="font-semibold text-blue-600">{enabledQuickActionsCount} of 39</span> selected
               </p>
             </div>
           </div>

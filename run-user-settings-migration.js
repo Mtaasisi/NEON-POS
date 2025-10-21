@@ -27,10 +27,11 @@ async function runMigration() {
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
     
     console.log('🚀 Executing migration...');
-    const result = await sql(migrationSQL);
+    // Execute the entire migration as one block to handle dollar-quoted strings
+    console.log('📝 Executing full migration...');
+    await sql.query(migrationSQL);
     
     console.log('✅ User settings table created successfully!');
-    console.log('📊 Result:', result);
     
     // Test the table creation
     console.log('🧪 Testing table access...');

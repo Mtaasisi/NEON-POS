@@ -219,6 +219,7 @@ class POSPriceService {
           sku,
           variant_name,
           unit_price,
+          selling_price,
           cost_price,
           quantity
         `)
@@ -236,7 +237,7 @@ class POSPriceService {
         variantId: variant.id,
         sku: variant.sku || '',
         name: variant.variant_name || '',
-        sellingPrice: variant.unit_price || 0,
+        sellingPrice: variant.selling_price || 0,
         costPrice: variant.cost_price || 0,
         quantity: variant.quantity || 0,
 

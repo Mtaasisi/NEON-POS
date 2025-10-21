@@ -283,7 +283,7 @@ const DiagnosticDeviceCard: React.FC<DiagnosticDeviceCardProps> = React.memo(({
             <div className="min-w-0">
               <p className="text-xs text-gray-500 font-medium">Assigned</p>
               <p className="text-sm font-semibold text-purple-700 truncate">
-                {request.assigned_to_user?.name || 'Unassigned'}
+                {request.assigned_to_user?.full_name || 'Unassigned'}
               </p>
             </div>
           </div>

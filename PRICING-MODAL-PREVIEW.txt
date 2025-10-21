@@ -1,0 +1,265 @@
+╔══════════════════════════════════════════════════════════════════════════════════╗
+║                         💰 SET PRODUCT PRICES                                    ║
+║                   Configure selling prices before receiving inventory             ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                  ║
+║  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           ║
+║  │ Total Cost  │  │Total Selling│  │Total Profit │  │ Avg Markup  │           ║
+║  │ 3,000 TZS   │  │ 3,900 TZS   │  │  900 TZS    │  │   30.0%     │           ║
+║  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘           ║
+║                                                                                  ║
+║  Quick Apply: [20% Markup] [30% Markup] [50% Markup] [100% Markup]             ║
+║                                                                                  ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║                                                                                  ║
+║  ┌────────────────────────────────────────────────────────────────────────────┐ ║
+║  │ 📦 sada                                     Profit: +900.00 TZS  ✅         │ ║
+║  │ Quantity to receive: 6 units                                               │ ║
+║  │                                                                            │ ║
+║  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │ ║
+║  │  │ Cost Price  │  │Selling Price│  │  Markup %   │  │ Profit/Unit │     │ ║
+║  │  │   (fixed)   │  │  (editable) │  │  (editable) │  │ (calculated)│     │ ║
+║  │  │             │  │             │  │             │  │             │     │ ║
+║  │  │   500 TZS   │  │ [650] TZS   │  │   [30] %    │  │  150 TZS    │     │ ║
+║  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     │ ║
+║  │                                                                            │ ║
+║  │  🔼 Total profit for 6 units: 900.00 TZS                                  │ ║
+║  └────────────────────────────────────────────────────────────────────────────┘ ║
+║                                                                                  ║
+║  ┌────────────────────────────────────────────────────────────────────────────┐ ║
+║  │ 📦 iPhone 13 Pro                            Profit: +1,500.00 TZS  ✅      │ ║
+║  │ Quantity to receive: 3 units                                               │ ║
+║  │                                                                            │ ║
+║  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐     │ ║
+║  │  │ 500,000 TZS │  │[650,000] TZS│  │   [30] %    │  │150,000 TZS  │     │ ║
+║  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘     │ ║
+║  │                                                                            │ ║
+║  │  🔼 Total profit for 3 units: 450,000.00 TZS                              │ ║
+║  └────────────────────────────────────────────────────────────────────────────┘ ║
+║                                                                                  ║
+╠══════════════════════════════════════════════════════════════════════════════════╣
+║  🧮 All prices will be saved to inventory items and product variants            ║
+║                                                                                  ║
+║  [      Cancel      ]  [ Confirm & Receive Items → ]                            ║
+╚══════════════════════════════════════════════════════════════════════════════════╝
+
+
+FEATURES:
+─────────
+
+✨ AUTOMATIC CALCULATIONS:
+   • Change Selling Price → Markup % updates automatically
+   • Change Markup % → Selling Price updates automatically
+   • Profit calculated in real-time
+
+✨ QUICK MARKUP BUTTONS:
+   • Click "30% Markup" → All items get 30% markup instantly
+   • Great for applying consistent pricing strategy
+
+✨ VISUAL INDICATORS:
+   • ✅ Green = Profitable (selling > cost)
+   • ❌ Red = Loss (selling < cost)
+   • 🔼 Profit shown per item and total
+
+✨ VALIDATION:
+   • Can't proceed without all prices set
+   • Warns if selling price < cost price
+   • Clear error messages
+
+✨ STATISTICS DASHBOARD:
+   • See total cost of all items
+   • See total potential selling value
+   • See expected profit
+   • See average markup percentage
+
+
+EXAMPLE WORKFLOW:
+────────────────
+
+1. USER: Clicks "Receive" button on Purchase Order
+   
+2. SYSTEM: Opens pricing modal (shown above)
+   
+3. USER: Options:
+   - Click "30% Markup" for quick pricing
+   - Or manually edit each selling price
+   - Or manually edit each markup percentage
+   
+4. SYSTEM: Updates calculations in real-time
+   
+5. USER: Reviews totals at top
+   - Total Cost: 3,000 TZS
+   - Total Selling: 3,900 TZS
+   - Total Profit: 900 TZS ✅
+   
+6. USER: Clicks "Confirm & Receive Items"
+   
+7. SYSTEM: 
+   ✅ Updates variant selling prices in database
+   ✅ Receives items into inventory
+   ✅ Updates inventory item selling prices
+   ✅ Shows success message
+   ✅ Redirects to received items tab
+   
+8. RESULT: All items ready for sale with prices!
+
+
+INTERACTION EXAMPLES:
+────────────────────
+
+Example 1: Using Quick Markup
+─────────────────────────────
+Cost: 500 TZS
+[Click "30% Markup" button]
+→ Selling: 650 TZS (auto-filled)
+→ Profit: 150 TZS (calculated)
+
+Example 2: Manual Selling Price
+───────────────────────────────
+Cost: 500 TZS
+[Type "700" in Selling Price field]
+→ Markup: 40% (auto-calculated)
+→ Profit: 200 TZS (calculated)
+
+Example 3: Manual Markup
+────────────────────────
+Cost: 500 TZS
+[Type "50" in Markup % field]
+→ Selling: 750 TZS (auto-calculated)
+→ Profit: 250 TZS (calculated)
+
+
+DATABASE UPDATES:
+────────────────
+
+When "Confirm & Receive Items" is clicked:
+
+Step 1: Update Variants
+```sql
+UPDATE lats_product_variants
+SET 
+  selling_price = 650.00,
+  cost_price = 500.00,
+  updated_at = NOW()
+WHERE id = 'variant-uuid'
+```
+
+Step 2: Receive Items (create inventory records)
+```
+Calls: PurchaseOrderService.completeReceive(...)
+```
+
+Step 3: Update Inventory Items
+```sql
+UPDATE inventory_items
+SET
+  selling_price = 650.00,
+  cost_price = 500.00,
+  updated_at = NOW()
+WHERE purchase_order_id = 'po-uuid'
+```
+
+Result:
+✅ 6 items in inventory
+✅ All with selling price = 650 TZS
+✅ All with cost price = 500 TZS
+✅ Ready to sell in POS
+
+
+BENEFITS:
+────────
+
+Before This Feature:
+❌ Items received without prices
+❌ Manual price entry needed later
+❌ Risk of selling at wrong price
+❌ Extra work for staff
+
+After This Feature:
+✅ All items have prices when received
+✅ Bulk pricing with one click
+✅ Visual profit tracking
+✅ Items immediately ready for sale
+✅ Consistent pricing strategy
+✅ No missing prices in inventory
+
+
+TECHNICAL DETAILS:
+─────────────────
+
+Component: SetPricingModal.tsx
+Props:
+  - isOpen: boolean
+  - onClose: () => void
+  - purchaseOrder: PurchaseOrder
+  - onConfirm: (pricingData) => Promise<void>
+  - isLoading: boolean
+
+State:
+  - pricingData: Map<itemId, {
+      cost_price: number,
+      selling_price: number,
+      markup_percentage: number,
+      profit_per_unit: number
+    }>
+
+Methods:
+  - updateSellingPrice(itemId, price)
+  - updateMarkupPercentage(itemId, markup)
+  - applyMarkupToAll(markup)
+  - handleConfirm()
+
+Validation:
+  - All items must have selling_price > 0
+  - Shows errors for missing prices
+  - Warns for negative margins
+
+
+STYLING:
+────────
+
+Colors:
+  - Header: Gradient (green-500 to blue-600)
+  - Stats Cards: White with shadow
+  - Cost Price: Gray (read-only)
+  - Selling Price: Blue border (editable)
+  - Markup: Green border (editable)
+  - Profit (positive): Green background
+  - Profit (negative): Red background
+  - Buttons: Gradient hover effects
+
+Layout:
+  - Responsive grid (4 columns for stats)
+  - Responsive grid (4 columns for pricing)
+  - Max height: 90vh (scrollable)
+  - Centered modal with backdrop blur
+
+
+USER EXPERIENCE:
+───────────────
+
+1. Modal opens immediately after "Receive" click
+2. Default 30% markup pre-filled for all items
+3. User can accept defaults or customize
+4. Real-time calculations as user types
+5. Clear visual feedback (colors, icons)
+6. Can't proceed without valid data
+7. Loading state during save
+8. Success message on completion
+9. Automatic redirect to see results
+
+
+ACCESSIBILITY:
+─────────────
+
+✅ Keyboard navigation supported
+✅ Clear labels on all inputs
+✅ Error messages are descriptive
+✅ High contrast colors
+✅ Large touch targets for mobile
+✅ Focus states visible
+✅ Screen reader friendly
+
+
+THIS FEATURE IS NOW COMPLETE AND READY TO USE! 🎉
+

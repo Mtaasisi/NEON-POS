@@ -150,7 +150,7 @@ export const validateProductData = (productData: any): { isValid: boolean; error
   }
 
   // Support both camelCase and snake_case for price fields
-  const price = productData.price ?? productData.unit_price ?? 0;
+  const price = productData.price ?? productData.sellingPrice ?? productData.selling_price ?? 0;
   const costPrice = productData.costPrice ?? productData.cost_price ?? 0;
   const stockQuantity = productData.stockQuantity ?? productData.stock_quantity ?? 0;
 

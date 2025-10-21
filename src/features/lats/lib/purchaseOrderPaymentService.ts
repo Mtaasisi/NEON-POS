@@ -41,6 +41,37 @@ class PurchaseOrderPaymentService {
         throw new Error('Missing required payment data');
       }
 
+      // Check if purchase order is already fully paid
+      const { data: poData, error: poError } = await supabase
+        .from('lats_purchase_orders')
+        .select('payment_status, total_amount, total_paid')
+        .eq('id', data.purchaseOrderId)
+        .single();
+
+      if (poError) {
+        console.error('❌ Error fetching purchase order:', poError);
+        throw new Error('Failed to verify purchase order payment status');
+      }
+
+      if (poData.payment_status === 'paid') {
+        return {
+          success: false,
+          message: 'This purchase order has already been fully paid'
+        };
+      }
+
+      // Check if this payment would exceed the total amount
+      const currentPaid = poData.total_paid || 0;
+      const totalAmount = poData.total_amount || 0;
+      const remainingAmount = totalAmount - currentPaid;
+
+      if (data.amount > remainingAmount) {
+        return {
+          success: false,
+          message: `Payment amount (${data.amount}) exceeds remaining balance (${remainingAmount})`
+        };
+      }
+
       // Use the database function for atomic payment processing
       const { data: result, error } = await supabase
         .rpc('process_purchase_order_payment', {

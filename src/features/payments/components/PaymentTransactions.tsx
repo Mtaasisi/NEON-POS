@@ -874,8 +874,7 @@ Date: ${new Date(payment.created_at || payment.date).toLocaleDateString()}`;
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 min-w-64">
             <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
+              onSearch={setSearchQuery}
               placeholder="Search transactions..."
               className="w-full"
             />

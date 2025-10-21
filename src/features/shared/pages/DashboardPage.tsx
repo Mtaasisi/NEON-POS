@@ -7,7 +7,12 @@ import { useDashboardSettings } from '../../../hooks/useDashboardSettings';
 import {
   Smartphone, Users, Package, Plus,
   DollarSign, Calendar,
-  Zap, RefreshCw, FileText
+  Zap, RefreshCw, FileText,
+  BarChart3, MessageCircle, Settings,
+  Search, Star, HardDrive,
+  MessageSquare, Wrench, Download, Upload,
+  UserCheck, Database, Target, Bot,
+  Printer, Tag, Building, MapPin, Clock
 } from 'lucide-react';
 import {
   NotificationWidget,
@@ -16,17 +21,30 @@ import {
   InventoryWidget,
   FinancialWidget,
   AnalyticsWidget,
+  ServiceWidget,
+  ReminderWidget,
   SystemHealthWidget,
   ActivityFeedWidget,
   CustomerInsightsWidget,
-  ServiceWidget,
+  QuickSearchWidget,
+  PurchaseOrderWidget,
+  ChatWidget,
+  SalesWidget,
+  TopProductsWidget,
+  ExpensesWidget,
+  StaffPerformanceWidget,
   RevenueTrendChart,
   DeviceStatusChart,
   AppointmentsTrendChart,
   StockLevelChart,
   CustomerActivityChart,
   PerformanceMetricsChart,
-  SalesFunnelChart
+  SalesFunnelChart,
+  PurchaseOrderChart,
+  SalesChart,
+  PaymentMethodsChart,
+  SalesByCategoryChart,
+  ProfitMarginChart
 } from '../components/dashboard';
 import { dashboardService, DashboardStats } from '../../../services/dashboardService';
 
@@ -110,6 +128,7 @@ const DashboardPage: React.FC = () => {
 
   // Quick action cards - streamlined for comprehensive dashboard
   const allQuickActions = [
+    // Core Business Features
     {
       id: 'devices' as const,
       title: 'Devices',
@@ -164,7 +183,7 @@ const DashboardPage: React.FC = () => {
       description: 'Payment management',
       icon: DollarSign,
       color: 'from-emerald-500 to-emerald-600',
-      path: '/finance/payments'
+      path: '/payments'
     },
     {
       id: 'adGenerator' as const,
@@ -173,6 +192,274 @@ const DashboardPage: React.FC = () => {
       icon: FileText,
       color: 'from-rose-500 to-rose-600',
       path: '/ad-generator'
+    },
+    {
+      id: 'pos' as const,
+      title: 'POS System',
+      description: 'Point of sale',
+      icon: DollarSign,
+      color: 'from-cyan-500 to-cyan-600',
+      path: '/pos'
+    },
+    {
+      id: 'reports' as const,
+      title: 'Sales Reports',
+      description: 'View sales reports',
+      icon: BarChart3,
+      color: 'from-violet-500 to-violet-600',
+      path: '/lats/sales-reports'
+    },
+    {
+      id: 'employees' as const,
+      title: 'Employees',
+      description: 'Manage staff',
+      icon: Users,
+      color: 'from-teal-500 to-teal-600',
+      path: '/employees'
+    },
+    {
+      id: 'whatsapp' as const,
+      title: 'WhatsApp',
+      description: 'WhatsApp chat',
+      icon: MessageCircle,
+      color: 'from-green-500 to-green-600',
+      path: '/lats/whatsapp-chat'
+    },
+    {
+      id: 'settings' as const,
+      title: 'Settings',
+      description: 'System settings',
+      icon: Settings,
+      color: 'from-gray-500 to-gray-600',
+      path: '/admin-settings'
+    },
+    {
+      id: 'search' as const,
+      title: 'Search',
+      description: 'Global search',
+      icon: Search,
+      color: 'from-amber-500 to-amber-600',
+      path: '/search'
+    },
+    {
+      id: 'loyalty' as const,
+      title: 'Loyalty Program',
+      description: 'Customer loyalty',
+      icon: Star,
+      color: 'from-yellow-500 to-yellow-600',
+      path: '/lats/loyalty'
+    },
+    {
+      id: 'backup' as const,
+      title: 'Backup',
+      description: 'Data backup',
+      icon: HardDrive,
+      color: 'from-slate-500 to-slate-600',
+      path: '/backup-management'
+    },
+    
+    // SMS & Communication Features
+    {
+      id: 'sms' as const,
+      title: 'SMS Center',
+      description: 'SMS management',
+      icon: MessageSquare,
+      color: 'from-blue-500 to-blue-600',
+      path: '/sms'
+    },
+    {
+      id: 'bulkSms' as const,
+      title: 'Bulk SMS',
+      description: 'Mass messaging',
+      icon: MessageSquare,
+      color: 'from-indigo-500 to-indigo-600',
+      path: '/sms/bulk'
+    },
+    {
+      id: 'smsLogs' as const,
+      title: 'SMS Logs',
+      description: 'Message history',
+      icon: MessageSquare,
+      color: 'from-purple-500 to-purple-600',
+      path: '/sms/logs'
+    },
+    {
+      id: 'smsSettings' as const,
+      title: 'SMS Settings',
+      description: 'SMS configuration',
+      icon: Settings,
+      color: 'from-gray-500 to-gray-600',
+      path: '/sms/settings'
+    },
+    
+    // Diagnostic & Repair Features
+    {
+      id: 'diagnostics' as const,
+      title: 'Diagnostics',
+      description: 'Device diagnostics',
+      icon: Wrench,
+      color: 'from-orange-500 to-orange-600',
+      path: '/diagnostics'
+    },
+    {
+      id: 'newDiagnostic' as const,
+      title: 'New Diagnostic',
+      description: 'Create diagnostic request',
+      icon: Plus,
+      color: 'from-red-500 to-red-600',
+      path: '/diagnostics/new'
+    },
+    {
+      id: 'diagnosticReports' as const,
+      title: 'Diagnostic Reports',
+      description: 'Diagnostic analytics',
+      icon: BarChart3,
+      color: 'from-green-500 to-green-600',
+      path: '/diagnostics/reports'
+    },
+    {
+      id: 'diagnosticTemplates' as const,
+      title: 'Diagnostic Templates',
+      description: 'Template management',
+      icon: FileText,
+      color: 'from-teal-500 to-teal-600',
+      path: '/diagnostics/templates'
+    },
+    
+    // Import/Export & Data Management
+    {
+      id: 'excelImport' as const,
+      title: 'Excel Import',
+      description: 'Data import',
+      icon: Upload,
+      color: 'from-emerald-500 to-emerald-600',
+      path: '/excel-import'
+    },
+    {
+      id: 'excelTemplates' as const,
+      title: 'Excel Templates',
+      description: 'Template downloads',
+      icon: Download,
+      color: 'from-cyan-500 to-cyan-600',
+      path: '/excel-templates'
+    },
+    {
+      id: 'productExport' as const,
+      title: 'Product Export',
+      description: 'Export products',
+      icon: Download,
+      color: 'from-pink-500 to-pink-600',
+      path: '/product-export'
+    },
+    {
+      id: 'customerImport' as const,
+      title: 'Customer Import',
+      description: 'Import customers',
+      icon: Upload,
+      color: 'from-rose-500 to-rose-600',
+      path: '/customers/import'
+    },
+    
+    // Advanced System Features
+    {
+      id: 'userManagement' as const,
+      title: 'User Management',
+      description: 'User administration',
+      icon: UserCheck,
+      color: 'from-indigo-500 to-indigo-600',
+      path: '/users'
+    },
+    {
+      id: 'databaseSetup' as const,
+      title: 'Database Setup',
+      description: 'Database configuration',
+      icon: Database,
+      color: 'from-slate-500 to-slate-600',
+      path: '/database-setup'
+    },
+    {
+      id: 'integrationSettings' as const,
+      title: 'Integration Settings',
+      description: 'System integrations',
+      icon: Settings,
+      color: 'from-gray-500 to-gray-600',
+      path: '/integration-settings'
+    },
+    {
+      id: 'integrationsTest' as const,
+      title: 'Integrations Test',
+      description: 'Test integrations',
+      icon: Target,
+      color: 'from-orange-500 to-orange-600',
+      path: '/integrations-test'
+    },
+    {
+      id: 'aiTraining' as const,
+      title: 'AI Training',
+      description: 'AI training system',
+      icon: Bot,
+      color: 'from-purple-500 to-purple-600',
+      path: '/ai-training'
+    },
+    {
+      id: 'bluetoothPrinter' as const,
+      title: 'Bluetooth Printer',
+      description: 'Printer management',
+      icon: Printer,
+      color: 'from-blue-500 to-blue-600',
+      path: '/bluetooth-printer'
+    },
+    
+    // Business Management
+    {
+      id: 'categoryManagement' as const,
+      title: 'Category Management',
+      description: 'Product categories',
+      icon: Tag,
+      color: 'from-green-500 to-green-600',
+      path: '/category-management'
+    },
+    {
+      id: 'supplierManagement' as const,
+      title: 'Supplier Management',
+      description: 'Supplier management',
+      icon: Building,
+      color: 'from-indigo-500 to-indigo-600',
+      path: '/supplier-management'
+    },
+    {
+      id: 'storeLocations' as const,
+      title: 'Store Locations',
+      description: 'Location management',
+      icon: MapPin,
+      color: 'from-red-500 to-red-600',
+      path: '/store-locations'
+    },
+    
+    // Advanced Analytics & Reports
+    {
+      id: 'reminders' as const,
+      title: 'Reminders',
+      description: 'Reminder system',
+      icon: Clock,
+      color: 'from-yellow-500 to-yellow-600',
+      path: '/reminders'
+    },
+    {
+      id: 'mobile' as const,
+      title: 'Mobile',
+      description: 'Mobile features',
+      icon: Smartphone,
+      color: 'from-cyan-500 to-cyan-600',
+      path: '/mobile'
+    },
+    {
+      id: 'myAttendance' as const,
+      title: 'My Attendance',
+      description: 'Personal attendance',
+      icon: Clock,
+      color: 'from-blue-500 to-blue-600',
+      path: '/my-attendance'
     }
   ];
 
@@ -255,11 +542,16 @@ const DashboardPage: React.FC = () => {
         {!isLoading && !settingsLoading && dashboardStats && (
           <>
             {/* Top Row - Chart Cards */}
-            {(isWidgetEnabled('revenueTrendChart') || isWidgetEnabled('deviceStatusChart') || isWidgetEnabled('appointmentsTrendChart')) && (
+            {(isWidgetEnabled('revenueTrendChart') || isWidgetEnabled('deviceStatusChart') || isWidgetEnabled('appointmentsTrendChart') || isWidgetEnabled('purchaseOrderChart') || isWidgetEnabled('salesChart') || isWidgetEnabled('paymentMethodsChart') || isWidgetEnabled('salesByCategoryChart') || isWidgetEnabled('profitMarginChart')) && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {isWidgetEnabled('revenueTrendChart') && <RevenueTrendChart />}
+                {isWidgetEnabled('salesChart') && <SalesChart />}
                 {isWidgetEnabled('deviceStatusChart') && <DeviceStatusChart />}
                 {isWidgetEnabled('appointmentsTrendChart') && <AppointmentsTrendChart />}
+                {isWidgetEnabled('purchaseOrderChart') && <PurchaseOrderChart />}
+                {isWidgetEnabled('paymentMethodsChart') && <PaymentMethodsChart />}
+                {isWidgetEnabled('salesByCategoryChart') && <SalesByCategoryChart />}
+                {isWidgetEnabled('profitMarginChart') && <ProfitMarginChart />}
               </div>
             )}
 
@@ -284,6 +576,12 @@ const DashboardPage: React.FC = () => {
         {/* Comprehensive Widgets Layout */}
         {!isLoading && !settingsLoading && dashboardStats && (
           <div className="space-y-6">
+            {/* Quick Search Widget - Always visible for quick access */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <QuickSearchWidget className="lg:col-span-1" />
+              {/* Add more prominent widgets here if needed */}
+            </div>
+
             {/* Top Priority Row - Operations */}
             {(isWidgetEnabled('appointmentWidget') || isWidgetEnabled('employeeWidget') || isWidgetEnabled('notificationWidget')) && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -302,15 +600,30 @@ const DashboardPage: React.FC = () => {
               </div>
             )}
 
-            {/* Service & Customer Insights Row */}
-            {(isWidgetEnabled('serviceWidget') || isWidgetEnabled('customerInsightsWidget')) && (
+            {/* Customer Insights & Service Row */}
+            {(isWidgetEnabled('customerInsightsWidget') || isWidgetEnabled('serviceWidget') || isWidgetEnabled('reminderWidget')) && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('serviceWidget') && (
-                  <div className={isWidgetEnabled('customerInsightsWidget') ? 'lg:col-span-2' : 'lg:col-span-3'}>
-                    <ServiceWidget />
-                  </div>
-                )}
                 {isWidgetEnabled('customerInsightsWidget') && <CustomerInsightsWidget />}
+                {isWidgetEnabled('serviceWidget') && <ServiceWidget />}
+                {isWidgetEnabled('reminderWidget') && <ReminderWidget />}
+              </div>
+            )}
+
+            {/* Sales & Business Row */}
+            {(isWidgetEnabled('salesWidget') || isWidgetEnabled('topProductsWidget') || isWidgetEnabled('expensesWidget')) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {isWidgetEnabled('salesWidget') && <SalesWidget />}
+                {isWidgetEnabled('topProductsWidget') && <TopProductsWidget />}
+                {isWidgetEnabled('expensesWidget') && <ExpensesWidget />}
+              </div>
+            )}
+
+            {/* Purchase Orders & Communication Row */}
+            {(isWidgetEnabled('purchaseOrderWidget') || isWidgetEnabled('chatWidget') || isWidgetEnabled('staffPerformanceWidget')) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {isWidgetEnabled('purchaseOrderWidget') && <PurchaseOrderWidget />}
+                {isWidgetEnabled('chatWidget') && <ChatWidget />}
+                {isWidgetEnabled('staffPerformanceWidget') && <StaffPerformanceWidget />}
               </div>
             )}
 

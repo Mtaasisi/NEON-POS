@@ -300,7 +300,7 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                     {settings.show_product_names && <th className="pb-2 font-semibold">Item</th>}
                     {settings.show_product_skus && <th className="pb-2 font-semibold">SKU</th>}
                     {settings.show_quantities && <th className="pb-2 font-semibold text-center">Qty</th>}
-                    {settings.show_unit_prices && <th className="pb-2 font-semibold text-right">Unit Price</th>}
+                    {settings.show_unit_prices && <th className="pb-2 font-semibold text-right">Price</th>}
                     <th className="pb-2 font-semibold text-right">Total</th>
                   </tr>
                 </thead>

@@ -13,13 +13,13 @@ export interface DiagnosticRequest {
   // Joined fields
   created_by_user?: {
     id: string;
-    name: string;
-    username: string;
+    full_name: string;
+    email: string;
   };
   assigned_to_user?: {
     id: string;
-    name: string;
-    username: string;
+    full_name: string;
+    email: string;
   };
   devices?: DiagnosticDevice[];
   device_count?: number;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Heart, Star, TrendingUp, Gift, ExternalLink, Award } from 'lucide-react';
+import { Users, Heart, Star, TrendingUp, Gift, Award, ExternalLink } from 'lucide-react';
 import GlassCard from '../ui/GlassCard';
 import GlassButton from '../ui/GlassButton';
 
@@ -185,7 +185,7 @@ export const CustomerInsightsWidget: React.FC<CustomerInsightsWidgetProps> = ({ 
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-7 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
@@ -199,6 +199,14 @@ export const CustomerInsightsWidget: React.FC<CustomerInsightsWidgetProps> = ({ 
             </p>
           </div>
         </div>
+        <button
+          onClick={() => navigate('/customers')}
+          className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
+          title="View All Customers"
+        >
+          <ExternalLink size={14} />
+          <span>View All</span>
+        </button>
       </div>
 
       {/* Key Metrics */}
@@ -234,7 +242,7 @@ export const CustomerInsightsWidget: React.FC<CustomerInsightsWidgetProps> = ({ 
       </div>
 
       {/* Top Customers */}
-      <div className="space-y-3 mb-6">
+      <div className="space-y-3 mb-6 flex-grow">
         <h4 className="text-xs text-gray-400 mb-3">Top Customers</h4>
         {insights.topCustomers.slice(0, 3).map((customer, index) => (
           <div key={customer.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
@@ -270,21 +278,14 @@ export const CustomerInsightsWidget: React.FC<CustomerInsightsWidgetProps> = ({ 
         ))}
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => navigate('/customers')}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all"
-        >
-          <ExternalLink size={14} />
-          <span>Customers</span>
-        </button>
+      {/* Actions - Always at bottom */}
+      <div className="flex gap-2 mt-auto pt-6">
         <button
           onClick={() => navigate('/customers/loyalty')}
-          className="px-5 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors flex items-center gap-2"
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
           <Award size={14} />
-          <span>Loyalty</span>
+          <span>Loyalty Program</span>
         </button>
       </div>
     </div>

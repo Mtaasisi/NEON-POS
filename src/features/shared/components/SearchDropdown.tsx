@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
+import { useGlobalSearchModal } from '../../../context/GlobalSearchContext';
 import SearchService, { SearchResult as ServiceSearchResult } from '../../../lib/searchService';
 import {
   Search,
@@ -37,6 +38,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { openSearch } = useGlobalSearchModal();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -176,9 +178,10 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({
         handleResultClick(searchResults[selectedIndex]);
       } else if (searchQuery.trim()) {
         saveSearch(searchQuery);
-        // Navigate to full search page
-        navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+        // Open full search modal
+        openSearch(searchQuery.trim());
         setIsOpen(false);
+        onClose?.();
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false);
@@ -317,7 +320,7 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({
                 <button
                   onClick={() => {
                     saveSearch(searchQuery);
-                    navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                    openSearch(searchQuery.trim());
                     setIsOpen(false);
                     onClose?.();
                   }}

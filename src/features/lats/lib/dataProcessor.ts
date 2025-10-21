@@ -123,10 +123,9 @@ export function processProductData(products: Product[]): Product[] {
       delete processedProduct.shelf_code;
     }
 
-    // Transform price fields
-    if (processedProduct.unit_price !== undefined) {
-      processedProduct.price = processedProduct.unit_price;
-      delete processedProduct.unit_price;
+    // Transform price fields - prioritize selling_price
+    if (processedProduct.selling_price !== undefined) {
+      processedProduct.price = processedProduct.selling_price;
     }
 
     if (processedProduct.cost_price !== undefined) {
@@ -189,10 +188,12 @@ export function processProductData(products: Product[]): Product[] {
           delete processedVariant.variant_name;
         }
         
-        if (processedVariant.unit_price !== undefined) {
-          processedVariant.price = processedVariant.unit_price;
-          processedVariant.sellingPrice = processedVariant.unit_price; // Also set sellingPrice for compatibility
-          delete processedVariant.unit_price;
+        // Use selling_price
+        if (processedVariant.selling_price !== undefined) {
+          const priceValue = processedVariant.selling_price;
+          processedVariant.price = priceValue;
+          processedVariant.sellingPrice = priceValue;
+          delete processedVariant.selling_price;
         }
         
         if (processedVariant.cost_price !== undefined) {

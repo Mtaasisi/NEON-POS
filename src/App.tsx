@@ -12,6 +12,7 @@ import { LoadingProvider, useLoading } from './context/LoadingContext';
 import { GeneralSettingsProvider } from './context/GeneralSettingsContext';
 import { PaymentMethodsProvider } from './context/PaymentMethodsContext';
 import { ErrorProvider } from './context/ErrorContext';
+import { GlobalSearchProvider } from './context/GlobalSearchContext';
 import ErrorManager from './components/ErrorManager';
 import { Toaster } from 'react-hot-toast';
 // Load branch debugging tools (makes them available in console)
@@ -77,11 +78,9 @@ const EmployeeAttendancePage = lazy(() => import('./features/employees/pages/Emp
 const AttendanceManagementPage = lazy(() => import('./features/employees/pages/AttendanceManagementPage'));
 const MyAttendancePage = lazy(() => import('./features/employees/pages/MyAttendancePage'));
 
-const ServiceManagementPage = lazy(() => import('./features/services/pages/ServiceManagementPage'));
 
 const UnifiedAppointmentPage = lazy(() => import('./features/appointments/pages/UnifiedAppointmentPage'));
 const RemindersPage = lazy(() => import('./features/reminders/pages/RemindersPage'));
-const MobileOptimizationPage = lazy(() => import('./features/mobile/pages/MobileOptimizationPage'));
 const GlobalSearchPage = lazy(() => import('./features/shared/pages/GlobalSearchPage'));
 const ProductAdGeneratorPage = lazy(() => import('./features/shared/pages/ProductAdGeneratorPage'));
 
@@ -126,8 +125,6 @@ const StorageRoomDetailPage = lazy(() => import('./features/lats/pages/StorageRo
 const WhatsAppConnectionManager = lazy(() => import('./features/lats/pages/WhatsAppConnectionManager'));
 const WhatsAppChatPage = lazy(() => import('./features/lats/pages/WhatsAppChatPage'));
 const BluetoothPrinterPage = lazy(() => import('./pages/BluetoothPrinterPage'));
-
-const AITrainingManagerPage = lazy(() => import('./pages/AITrainingManagerPage'));
 
 // Previously unlinked pages - now added for testing
 const TechnicianDashboardPage = lazy(() => import('./features/shared/pages/TechnicianDashboardPage'));
@@ -702,14 +699,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           {/* Reminders Routes */}
           <Route path="/reminders" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care', 'technician']}><Suspense fallback={<DynamicPageLoader />}><RemindersPage /></Suspense></RoleProtectedRoute>} />
           
-          {/* Service Management Routes */}
-          <Route path="/services" element={
-            <RoleProtectedRoute allowedRoles={['admin']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <ServiceManagementPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
           
           {/* Employee Management Routes */}
           <Route path="/employees" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><EmployeeManagementPage /></Suspense></RoleProtectedRoute>} />
@@ -722,15 +711,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* Calendar View Routes */}
 
-          
-          {/* Mobile Optimization Routes */}
-          <Route path="/mobile" element={
-            <RoleProtectedRoute allowedRoles={['admin', 'manager']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <MobileOptimizationPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
           
           {/* Diagnostics Routes - Admin and Customer Care only */}
           <Route path="/diagnostics" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
@@ -835,22 +815,13 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
 
         {/* Bluetooth Printer Management Route */}
         <Route path="/bluetooth-printer" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><BluetoothPrinterPage /></Suspense></RoleProtectedRoute>} />
-
-          {/* AI Training Manager Route */}
-          <Route path="/ai-training" element={
-            <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <AITrainingManagerPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
           
-          {/* Global Search Route */}
-          <Route path="/search" element={
+          {/* Global Search Route - Now using modal instead */}
+          {/* <Route path="/search" element={
             <Suspense fallback={<DynamicPageLoader />}>
               <GlobalSearchPage />
             </Suspense>
-          } />
+          } /> */}
         </Route>
 
         {/* Full-page routes (outside AppLayout) */}
@@ -1005,39 +976,41 @@ function App() {
       <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ThemeProvider>
           <AuthProvider>
-            <BranchProvider>
-              <ErrorProvider>
-                {/* <RepairProvider> */}
-                <DevicesProvider>
-                <CustomersProvider>
-                  <UserGoalsProvider>
-                    <PaymentsProvider>
-                      <PaymentMethodsProvider>
-                        <LoadingProvider>
-                        <GeneralSettingsProvider>
-                            <SuppliersProvider>
-                              <WhatsAppProvider>
-                              <POSSettingsDatabaseSetup>
-                                <AppContent 
-                                  isOnline={isOnline} 
-                                  isSyncing={isSyncing} 
-                                />
-                                <LoadingProgressWrapper />
-                                <BackgroundDataLoader />
-                                <ErrorManager />
-                              </POSSettingsDatabaseSetup>
-                            </WhatsAppProvider>
-                          </SuppliersProvider>
-                      </GeneralSettingsProvider>
-                      </LoadingProvider>
-                    </PaymentMethodsProvider>
-                  </PaymentsProvider>
-                </UserGoalsProvider>
-              </CustomersProvider>
-              </DevicesProvider>
-              {/* </RepairProvider> */}
-              </ErrorProvider>
-            </BranchProvider>
+            <GlobalSearchProvider>
+              <BranchProvider>
+                <ErrorProvider>
+                  {/* <RepairProvider> */}
+                  <DevicesProvider>
+                  <CustomersProvider>
+                    <UserGoalsProvider>
+                      <PaymentsProvider>
+                        <PaymentMethodsProvider>
+                          <LoadingProvider>
+                          <GeneralSettingsProvider>
+                              <SuppliersProvider>
+                                <WhatsAppProvider>
+                                <POSSettingsDatabaseSetup>
+                                  <AppContent 
+                                    isOnline={isOnline} 
+                                    isSyncing={isSyncing} 
+                                  />
+                                  <LoadingProgressWrapper />
+                                  <BackgroundDataLoader />
+                                  <ErrorManager />
+                                </POSSettingsDatabaseSetup>
+                              </WhatsAppProvider>
+                            </SuppliersProvider>
+                        </GeneralSettingsProvider>
+                        </LoadingProvider>
+                      </PaymentMethodsProvider>
+                    </PaymentsProvider>
+                  </UserGoalsProvider>
+                </CustomersProvider>
+                </DevicesProvider>
+                {/* </RepairProvider> */}
+                </ErrorProvider>
+              </BranchProvider>
+            </GlobalSearchProvider>
           </AuthProvider>
         </ThemeProvider>
       </BrowserRouter>

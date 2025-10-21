@@ -1,13 +1,50 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Package, Plus, Minus, Loader2 } from 'lucide-react';
-import { ProductSearchResult } from '../../types/pos';
+import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
+import { Package, ChevronDown, ChevronUp, Tag, Hash, Plus, Minus, Search, AlertCircle, Image, Eye, Edit, Trash2, CheckCircle, Loader2 } from 'lucide-react';
+import SimpleImageDisplay from '../../../../components/SimpleImageDisplay';
+import { format } from '../../lib/format';
+import { ProductSearchResult, ProductSearchVariant } from '../../types/pos';
+import { 
+  isSingleVariantProduct, 
+  isMultiVariantProduct, 
+  getPrimaryVariant, 
+  getProductDisplayPrice, 
+  getProductTotalStock,
+  getProductStockStatus,
+  getBestVariant 
+} from '../../lib/productUtils';
+import { RealTimeStockService } from '../../lib/realTimeStock';
+import VariantSelectionModal from './VariantSelectionModal';
+import { SafeImage } from '../../../../components/SafeImage';
+import { ProductImage } from '../../../../lib/robustImageService';
+import { ImagePopupModal } from '../../../../components/ImagePopupModal';
+import ProductInfoModal from './ProductInfoModal';
+import { useGeneralSettingsUI } from '../../../../hooks/useGeneralSettingsUI';
+import { getSpecificationIcon, getSpecificationTooltip, getShelfDisplay, getShelfIcon, formatSpecificationValue } from '../../lib/specificationUtils';
 import { toast } from 'react-hot-toast';
 import { RESPONSIVE_OPTIMIZATIONS } from '../../../shared/constants/theme';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 
 interface DynamicMobileProductCardProps {
   product: ProductSearchResult;
-  onAddToCart: (product: ProductSearchResult, variant?: any, quantity?: number) => void;
+  onAddToCart?: (product: ProductSearchResult, variant: ProductSearchVariant, quantity: number) => void;
+  onViewDetails?: (product: ProductSearchResult) => void;
+  onView?: (product: ProductSearchResult) => void;
+  onEdit?: (product: ProductSearchResult) => void;
+  onDelete?: (product: ProductSearchResult) => void;
+  variant?: 'default' | 'compact' | 'detailed';
+  showStockInfo?: boolean;
+  showCategory?: boolean;
+  showActions?: boolean;
+  isSelected?: boolean;
+  onSelect?: (productId: string) => void;
+  showCheckbox?: boolean;
+  className?: string;
+  primaryColor?: 'blue' | 'orange' | 'green' | 'purple';
+  actionText?: string;
+  allowOutOfStockSelection?: boolean;
+  realTimeStockData?: Map<string, number>;
   isVisible?: boolean;
   priority?: boolean;
 }
@@ -15,11 +52,50 @@ interface DynamicMobileProductCardProps {
 const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
   product,
   onAddToCart,
+  onViewDetails,
+  onView,
+  onEdit,
+  onDelete,
+  variant = 'default',
+  showStockInfo = true,
+  showCategory = true,
+  showActions = false,
+  isSelected = false,
+  onSelect,
+  showCheckbox = false,
+  className = '',
+  primaryColor = 'blue',
+  actionText = 'Add to Cart',
+  allowOutOfStockSelection = false,
+  realTimeStockData,
   isVisible = true,
   priority = false
 }) => {
+  // Add error state for React refresh issues
+  const [hasError, setHasError] = useState(false);
+
+  // Real-time stock state - use prop if provided, otherwise create local state
+  const [localRealTimeStock, setLocalRealTimeStock] = useState<Map<string, number>>(new Map());
+  const realTimeStock = realTimeStockData || localRealTimeStock;
+  const [isLoadingStock, setIsLoadingStock] = useState(false);
+  const [lastStockUpdate, setLastStockUpdate] = useState<Date | null>(null);
+
+  // Get general settings
+  const generalSettings = useGeneralSettingsUI();
+  const {
+    showProductImages,
+    showStockLevels,
+    showPrices,
+    showBarcodes
+  } = generalSettings;
+
+  const navigate = useNavigate();
+  const [selectedVariant, setSelectedVariant] = useState<ProductSearchVariant | null>(null);
+  const [showVariantModal, setShowVariantModal] = useState(false);
+  const [isImagePopupOpen, setIsImagePopupOpen] = useState(false);
+  const [isProductInfoOpen, setIsProductInfoOpen] = useState(false);
+  const [showAllSpecifications, setShowAllSpecifications] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [selectedVariant, setSelectedVariant] = useState(product.variants?.[0]);
   const [isLoaded, setIsLoaded] = useState(priority);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isTextLoaded, setIsTextLoaded] = useState(false);
@@ -27,6 +103,249 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
 
   // Initialize click sounds
   const { playCartAddSound, playClickSound } = usePOSClickSounds();
+
+  // Reset error state on mount/remount (helps with React refresh)
+  useEffect(() => {
+    setHasError(false);
+  }, []);
+
+  // Only fetch real-time stock if no pre-fetched data is provided
+  useEffect(() => {
+    // Skip if stock data is provided from parent (to prevent N+1 queries)
+    if (realTimeStockData) {
+      return;
+    }
+    
+    if (product?.id) {
+      // Add a small delay to prevent multiple rapid requests
+      const timer = setTimeout(() => {
+        fetchRealTimeStock();
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [product?.id, realTimeStockData]);
+
+  // Theme configuration based on primaryColor
+  const getThemeConfig = () => {
+    switch (primaryColor) {
+      case 'orange':
+        return {
+          hoverBorder: 'hover:border-orange-300',
+          textColor: 'text-orange-600',
+          iconColor: 'text-orange-600',
+          priceColor: 'text-orange-900',
+          errorColor: 'text-orange-600'
+        };
+      case 'green':
+        return {
+          hoverBorder: 'hover:border-green-300',
+          textColor: 'text-green-600',
+          iconColor: 'text-green-600',
+          priceColor: 'text-green-900',
+          errorColor: 'text-green-600'
+        };
+      case 'purple':
+        return {
+          hoverBorder: 'hover:border-purple-300',
+          textColor: 'text-purple-600',
+          iconColor: 'text-purple-600',
+          priceColor: 'text-purple-900',
+          errorColor: 'text-purple-600'
+        };
+      default: // blue
+        return {
+          hoverBorder: 'hover:border-blue-300',
+          textColor: 'text-blue-600',
+          iconColor: 'text-blue-600',
+          priceColor: 'text-blue-900',
+          errorColor: 'text-blue-600'
+        };
+    }
+  };
+
+  const theme = getThemeConfig();
+
+  // Defensive check for product
+  if (!product) {
+    console.error('DynamicMobileProductCard: Product is null or undefined');
+    return (
+      <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+        <p className="text-red-600 text-sm">Product data is missing</p>
+      </div>
+    );
+  }
+
+  // Get primary variant using utility function with error handling
+  let primaryVariant;
+  let stockStatus;
+  try {
+    primaryVariant = getPrimaryVariant(product);
+    stockStatus = getProductStockStatus(product);
+  } catch (error) {
+    console.error('Error getting product data:', error);
+    setHasError(true);
+    return (
+      <div className="p-4 border border-red-200 bg-red-50 rounded-lg">
+        <p className="text-red-600 text-sm">Error loading product data</p>
+        <button 
+          onClick={() => setHasError(false)}
+          className="mt-2 text-blue-600 text-xs hover:underline"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+  
+  // Get stock status using utility function
+  const getStockStatusBadge = () => {
+    // Handle products with no variants
+    if (!product.variants || product.variants.length === 0) {
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">No Variants</span>;
+    }
+    
+    if (!primaryVariant) return null;
+    
+    switch (stockStatus) {
+      case 'out-of-stock':
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">Out of Stock</span>;
+      case 'low-stock':
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">Low Stock</span>;
+      default:
+        return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">In Stock</span>;
+    }
+  };
+
+  // Get price display - show only the cheapest price
+  const getPriceDisplay = () => {
+    if (!product.variants || product.variants.length === 0) {
+      return 'No variants';
+    }
+
+    // Get all valid prices - convert to numbers first
+    const prices = product.variants
+      .map(v => Number(v.sellingPrice) || 0)
+      .filter(p => p > 0)
+      .sort((a, b) => a - b);
+
+    if (prices.length === 0) {
+      return 'No price set';
+    }
+
+    // Return only the cheapest price
+    return `$${prices[0].toFixed(2)}`;
+  };
+
+  // Fetch real-time stock data (only used if no pre-fetched data provided)
+  const fetchRealTimeStock = async () => {
+    if (!product?.id || realTimeStockData) return;
+    
+    try {
+      setIsLoadingStock(true);
+      const stockService = RealTimeStockService.getInstance();
+      const stockLevels = await stockService.getStockLevels([product.id]);
+      
+      // Convert ProductStockLevels object to Map<string, number>
+      const stockMap = new Map<string, number>();
+      Object.entries(stockLevels).forEach(([productId, levels]) => {
+        // Sum up all variant quantities for this product
+        const totalStock = levels.reduce((sum, level) => sum + level.quantity, 0);
+        stockMap.set(productId, totalStock);
+      });
+      
+      setLocalRealTimeStock(stockMap);
+      setLastStockUpdate(new Date());
+    } catch (error) {
+      console.error('❌ Error fetching real-time stock:', error);
+    } finally {
+      setIsLoadingStock(false);
+    }
+  };
+
+  // Get real-time stock for current product
+  const getRealTimeStockForProduct = (): number => {
+    if (!product?.id) return 0;
+    return realTimeStock.get(product.id) || 0;
+  };
+
+  // Get total stock using real-time data if available, otherwise fall back to cached data
+  const getTotalStock = () => {
+    const realTimeStockValue = getRealTimeStockForProduct();
+    if (realTimeStockValue > 0 || realTimeStock.has(product.id)) {
+      return realTimeStockValue;
+    }
+    return getProductTotalStock(product);
+  };
+
+  // Handle card click
+  const handleCardClick = () => {
+    // In inventory management mode, clicking opens details modal
+    if (showActions && onView) {
+      onView(product);
+      return;
+    }
+    
+    // Don't allow interaction for products with no variants
+    if (!product.variants || product.variants.length === 0) {
+      console.warn('⚠️ Cannot add product to cart: No variants available', product);
+      return;
+    }
+    
+    // If onViewDetails is provided (like in purchase orders), use that instead
+    if (onViewDetails) {
+      onViewDetails(product);
+      return;
+    }
+    
+    // For purchase orders, allow out-of-stock products; for POS, block them
+    if (!primaryVariant || (!allowOutOfStockSelection && primaryVariant.quantity <= 0)) {
+      if (!allowOutOfStockSelection) {
+        return; // Don't do anything if out of stock in POS mode
+      }
+    }
+    
+    if (isMultiVariantProduct(product)) {
+      // If product has multiple variants, open the variant selection modal
+      setShowVariantModal(true);
+    } else {
+      // If single variant, directly add to cart
+      if (onAddToCart) {
+        onAddToCart(product, primaryVariant, 1);
+      }
+    }
+  };
+
+  // Handle variant selection
+  const handleVariantSelect = (variant: ProductSearchVariant) => {
+    setSelectedVariant(variant);
+    onAddToCart(product, variant, 1); // Add selected variant to cart
+    setShowVariantModal(false); // Close modal after selection
+  };
+
+  // Check if product has multiple variants using utility function
+  const hasMultipleVariants = isMultiVariantProduct(product);
+
+  // Convert product images to new format
+  const convertToProductImages = (): ProductImage[] => {
+    if (!product.images || product.images.length === 0) {
+      return [];
+    }
+    
+    const convertedImages = product.images.map((imageUrl, index) => ({
+      id: `temp-${product.id}-${index}`,
+      url: imageUrl,
+      thumbnailUrl: imageUrl,
+      fileName: `product-image-${index + 1}`,
+      fileSize: 0,
+      isPrimary: index === 0,
+      uploadedAt: new Date().toISOString()
+    }));
+    
+    return convertedImages;
+  };
+
+  const productImages = convertToProductImages();
 
   // Intersection Observer for lazy loading
   useEffect(() => {
@@ -74,173 +393,344 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
     };
   }, [isLoaded]);
 
-  const handleAddToCart = useCallback(() => {
-    console.log('🛒 DynamicMobileProductCard: handleAddToCart called for', product.name);
+  // Compact variant with subtle colors
+  if (variant === 'compact') {
+    const hasNoVariants = !product.variants || product.variants.length === 0;
+    const isDisabled = hasNoVariants || !primaryVariant || (!allowOutOfStockSelection && primaryVariant.quantity <= 0);
     
-    // Play cart add sound
-    playCartAddSound();
-    
-    onAddToCart(product, selectedVariant, quantity);
-    toast.success(`${quantity}x ${product.name} added to cart`);
-  }, [product, selectedVariant, quantity, onAddToCart, playCartAddSound]);
-
-  const formatPrice = useCallback((price: number) => {
-    return price.toLocaleString() + ' TSH';
-  }, []);
-
-  // Skeleton loader component
-  const SkeletonLoader = () => (
-    <div className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden animate-pulse">
-      <div className="p-6">
-        {/* Product Info Skeleton */}
-        <div className="flex items-center gap-4">
-          {/* Image skeleton */}
-          <div className="w-20 h-20 bg-gray-200 rounded-xl"></div>
-          
-          {/* Name and Price skeleton */}
-          <div className="flex-1 space-y-2">
-            <div className="h-5 bg-gray-200 rounded w-3/4"></div>
-            <div className="h-6 bg-gray-200 rounded w-1/2"></div>
-          </div>
-        </div>
-        
-        {/* Divider */}
-        <div className="h-px bg-gray-200 my-4"></div>
-        
-        {/* Badges skeleton */}
-        <div className="flex items-center justify-between">
-          <div className="h-6 bg-gray-200 rounded w-16"></div>
-          <div className="h-6 bg-gray-200 rounded w-20"></div>
-        </div>
-        
-        {/* Divider */}
-        <div className="h-px bg-gray-200 my-3"></div>
-        
-        {/* Click text skeleton */}
-        <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
-      </div>
-    </div>
-  );
-
-  // Show skeleton while loading
-  if (!isLoaded) {
     return (
-      <div ref={cardRef}>
-        <SkeletonLoader />
-      </div>
-    );
-  }
-
-  return (
-    <div 
-      ref={cardRef}
-      onClick={handleAddToCart}
-      className="pos-product-card relative bg-white border-2 rounded-xl transition-all duration-300 overflow-hidden cursor-pointer hover:border-blue-300 hover:shadow-lg active:scale-98 border-gray-200"
-      style={{
-        opacity: isLoaded ? 1 : 0,
-        transform: isLoaded ? 'translateY(0)' : 'translateY(10px)'
-      }}
-      title="Click to add to cart"
-    >
-      {/* Stock Badge - Top Right */}
-      {isTextLoaded && product.stock_quantity !== undefined && (
-        <div className="absolute top-2 right-2 p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 w-10 h-10 bg-gradient-to-r from-green-500 to-emerald-500">
-          <span className="text-sm font-bold text-white">{product.stock_quantity}</span>
-        </div>
-      )}
-
-      {/* Card Content */}
-      <div className="p-6 cursor-pointer">
-        {/* Product Info Section */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4 flex-1 min-w-0">
-            {/* Product Image/Icon */}
-            <div className="relative w-20 h-20 rounded-xl flex items-center justify-center text-lg font-bold text-blue-600 cursor-pointer hover:opacity-90 transition-opacity">
-              {isImageLoaded && product.thumbnail_url ? (
-                <img
-                  src={product.thumbnail_url}
-                  alt={product.name}
-                  className="w-full h-full object-cover rounded-xl"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                    const fallback = e.currentTarget.parentElement?.querySelector('.fallback-icon');
-                    if (fallback) {
-                      (fallback as HTMLElement).classList.remove('hidden');
-                    }
-                  }}
-                />
-              ) : null}
-              {/* Fallback Icon */}
-              <div className={`fallback-icon bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex items-center justify-center w-full h-full rounded-xl ${product.thumbnail_url && isImageLoaded ? 'hidden' : ''}`}>
-                {!isImageLoaded ? (
-                  <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-gray-400">
-                    <path d="M16.5 9.4 7.55 4.24"></path>
-                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                    <polyline points="3.29 7 12 12 20.71 7"></polyline>
-                    <line x1="12" x2="12" y1="22" y2="12"></line>
-                  </svg>
-                )}
-              </div>
+      <>
+        <div 
+          className={`bg-white border border-gray-200 rounded-lg p-4 transition-all duration-200 ${className} ${
+            isDisabled ? 'opacity-50 cursor-not-allowed' : `cursor-pointer ${theme.hoverBorder} hover:shadow-md active:scale-95`
+          } ${hasNoVariants ? 'border-gray-300 bg-gray-50' : ''}`}
+          onClick={handleCardClick}
+          style={{ minHeight: '60px' }}
+          title={hasNoVariants ? 'This product has no variants and cannot be added to cart. Please add variants in the inventory management.' : `Click to ${actionText.toLowerCase()}`}
+        >
+          <div className="flex items-center gap-2">
+            {/* Product Image */}
+            <div 
+              className="flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsProductInfoOpen(true);
+              }}
+            >
+              <SimpleImageDisplay
+                images={productImages.map(img => img.url)}
+                productName={product.name}
+                size="sm"
+                className="w-10 h-10"
+              />
             </div>
 
-            {/* Product Name and Price */}
+            {/* Product Info */}
             <div className="flex-1 min-w-0">
-              {isTextLoaded ? (
-                <>
-                  <div className="font-medium text-gray-800 truncate text-xl leading-tight" title={product.name}>
-                    {product.name}
-                  </div>
-                  <div className="text-2xl text-gray-700 mt-1 font-bold">
-                    TSh {(selectedVariant?.price || product.price).toLocaleString()}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="h-5 bg-gray-200 rounded w-3/4 animate-pulse"></div>
-                  <div className="h-6 bg-gray-200 rounded w-1/2 mt-1 animate-pulse"></div>
-                </>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className={`font-medium truncate text-base ${hasNoVariants ? 'text-gray-500' : 'text-gray-900'}`} title={product.name}>{product.name}</h3>
+                {getStockStatusBadge()}
+              </div>
+              <p className="text-xs text-gray-500 font-mono">{primaryVariant?.sku || 'N/A'}</p>
+              
+              {/* Category Display */}
+              {showCategory && (product.categoryName || product.category?.name) && (
+                <div className="mt-1">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200 font-medium">
+                    📦 {product.categoryName || product.category?.name}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Price */}
+            <div className="text-right">
+              {showPrices && (
+                <div className={`font-semibold text-base ${hasNoVariants ? 'text-gray-500' : theme.priceColor}`} title={getPriceDisplay()}>{getPriceDisplay()}</div>
+              )}
+              {showStockLevels && (
+                <div className="text-xs text-gray-500">Stock: {getTotalStock()}</div>
               )}
             </div>
           </div>
         </div>
+      </>
+    );
+  }
 
-        {/* SKU and Category Section */}
-        {isTextLoaded && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center justify-between text-sm">
-              {/* SKU Badge */}
-              <div className="flex items-center gap-4">
-                {product.sku && (
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs">
-                      📦 {product.sku}
+  // Default detailed variant with cart-style UI
+  const hasNoVariants = !product.variants || product.variants.length === 0;
+  const isDisabled = hasNoVariants || !primaryVariant || (!allowOutOfStockSelection && primaryVariant.quantity <= 0);
+  
+  // Calculate profit margin
+  const costPrice = primaryVariant?.costPrice || 0;
+  const sellingPrice = primaryVariant?.sellingPrice || 0;
+  const profitMargin = sellingPrice > 0 ? ((sellingPrice - costPrice) / sellingPrice * 100).toFixed(1) : '0';
+  
+  return (
+    <>
+      <div 
+        className={`pos-product-card relative bg-white border-2 rounded-xl transition-all duration-300 overflow-hidden ${className} ${
+          isDisabled ? 'opacity-50 cursor-not-allowed' : `cursor-pointer ${theme.hoverBorder} hover:shadow-lg active:scale-98`
+        } ${hasNoVariants ? 'border-gray-300 bg-gray-50' : 'border-gray-200'} ${isSelected ? 'ring-4 ring-blue-400 border-blue-500' : ''}`}
+        onClick={(e) => {
+          // Don't trigger onClick if clicking on action buttons or checkboxes
+          if ((e.target as HTMLElement).closest('.action-button')) return;
+          
+          // In selection mode, clicking selects the card
+          if (showCheckbox && onSelect) {
+            onSelect(product.id);
+          } else {
+            // Otherwise, handle normal click (opens modal in inventory mode)
+            handleCardClick();
+          }
+        }}
+        title={hasNoVariants ? 'This product has no variants and cannot be added to cart. Please add variants in the inventory management.' : showActions ? 'Click to view details' : `Click to ${actionText.toLowerCase()}`}
+      >
+        
+        {/* Checkbox for Selection - Only show when parent enables selection mode */}
+        {showCheckbox && (
+          <div className="absolute top-3 left-3 z-30 action-button">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                if (onSelect) onSelect(product.id);
+              }}
+              className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-2 cursor-pointer"
+            />
+          </div>
+        )}
+        
+        {/* Stock Count Badge - Card Corner */}
+        {showStockLevels && showStockInfo && getTotalStock() > 0 && (
+          <div className={`absolute top-2 right-2 p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 w-10 h-10 ${
+            getTotalStock() <= 5 ? 'bg-gradient-to-r from-red-500 to-red-600' :
+            getTotalStock() <= 10 ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
+            'bg-gradient-to-r from-green-500 to-emerald-500'
+          }`}>
+            <span className="text-sm font-bold text-white">
+              {isLoadingStock ? '...' : (getTotalStock() >= 1000 ? `${(getTotalStock() / 1000).toFixed(1)}K` : getTotalStock())}
+            </span>
+            {isLoadingStock && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </div>
+        )}
+        {/* Product Card Header */}
+        <div className="p-6 cursor-pointer">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 flex-1 min-w-0">
+              {/* Product Icon */}
+              {showProductImages && (
+                <div 
+                  className={`relative w-20 h-20 rounded-xl flex items-center justify-center text-lg font-bold ${theme.iconColor} cursor-pointer hover:opacity-90 transition-opacity`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsProductInfoOpen(true);
+                  }}
+                >
+                  <SimpleImageDisplay
+                    images={productImages.map(img => img.url)}
+                    productName={product.name}
+                    size="lg"
+                    className="w-full h-full rounded-xl"
+                  />
+                
+                {/* Variant Count Badge */}
+                {product.variants && product.variants.length > 1 && (
+                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+                    <span className="text-xs font-bold text-white">
+                      {product.variants.length}
                     </span>
                   </div>
                 )}
-              </div>
+                </div>
+              )}
 
-              {/* Category Badge */}
-              <div className="flex items-center gap-2">
-                {product.category_name && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-xs font-medium">
-                    📦 {product.category_name}
-                  </span>
-                )}
+              {/* Product Info */}
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-gray-800 truncate text-xl leading-tight">
+                  {product.name}
+                </div>
+                <div className="text-2xl text-gray-700 mt-1 font-bold">
+                  TSh {getPriceDisplay().replace('$', '').replace('.00', '').replace('.0', '')}
+                </div>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Click to Add to Cart Text */}
-        <div className="mt-3 pt-3 border-t border-gray-100">
-          <div className="text-center text-sm font-medium text-blue-600 opacity-70 hover:opacity-100 transition-opacity">
-            Click to Add to Cart
-          </div>
+          {/* Enhanced Product Info Grid - Only show in Inventory Management mode */}
+          {showActions ? (
+            <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+              {/* Pricing & Margin Row */}
+              {showPrices && (
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="flex flex-col">
+                    <span className="text-gray-500 font-medium">Cost</span>
+                    <span className="text-gray-900 font-semibold">{format.currency(costPrice)}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-gray-500 font-medium">Selling</span>
+                    <span className="text-green-700 font-semibold">{format.currency(sellingPrice)}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-gray-500 font-medium">Margin</span>
+                    <span className={`font-semibold ${parseFloat(profitMargin) < 10 ? 'text-red-600' : parseFloat(profitMargin) < 30 ? 'text-orange-600' : 'text-green-600'}`}>
+                      {profitMargin}%
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Location & Category Row */}
+              <div className="flex flex-wrap gap-2">
+                {/* Shelf Information */}
+                {(product.shelfCode || product.shelfName || product.storeLocationName || product.storageRoomName) && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs">
+                    📍 {product.shelfCode || product.shelfName || product.storeLocationName || product.storageRoomName}
+                  </span>
+                )}
+                
+                {/* Category */}
+                {showCategory && (product.categoryName || product.category?.name) && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-xs font-medium">
+                    📦 {product.categoryName || product.category?.name}
+                  </span>
+                )}
+
+                {/* Supplier */}
+                {product.supplierName && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-green-50 text-green-700 border border-green-200 text-xs">
+                    🏢 {product.supplierName}
+                  </span>
+                )}
+
+                {/* Featured Badge */}
+                {product.isFeatured && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-md bg-yellow-50 text-yellow-700 border border-yellow-200 text-xs font-medium">
+                    ⭐ Featured
+                  </span>
+                )}
+              </div>
+
+              {/* Variants Info */}
+              {product.variants && product.variants.length > 1 && (
+                <div className="flex items-center justify-between text-xs bg-gradient-to-r from-indigo-50 to-purple-50 px-3 py-2 rounded-lg">
+                  <span className="text-gray-600">
+                    <span className="font-semibold text-indigo-700">{product.variants.length}</span> variants available
+                  </span>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Simple info for POS mode */
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-4">
+                  {/* Shelf Information */}
+                  {(product.shelfCode || product.shelfName || product.storeLocationName || product.storageRoomName) && (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-xs">
+                        📦 {product.shelfCode || product.shelfName || product.storeLocationName || product.storageRoomName || 'Shelf Info'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {showCategory && (product.categoryName || product.category?.name) && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-xs font-medium">
+                      📦 {product.categoryName || product.category?.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons for Inventory Management */}
+          {showActions ? (
+            <div className="mt-4 pt-4 border-t border-gray-200 space-y-2 action-button">
+              {/* Quick Action Buttons */}
+              <div className="grid grid-cols-3 gap-2">
+                {onView && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onView(product);
+                    }}
+                    className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    View
+                  </button>
+                )}
+                {onEdit && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit(product);
+                    }}
+                    className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 rounded-lg transition-colors"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    Edit
+                  </button>
+                )}
+                {onDelete && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(product);
+                    }}
+                    className="flex items-center justify-center gap-1 px-3 py-2 text-xs font-medium bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </button>
+                )}
+              </div>
+
+              {/* Status Indicator */}
+              <div className="flex items-center justify-between text-xs px-2">
+                <span className="text-gray-500">Status:</span>
+                <span className={`font-medium ${product.isActive ? 'text-green-600' : 'text-gray-400'}`}>
+                  {product.isActive ? '● Active' : '○ Inactive'}
+                </span>
+              </div>
+            </div>
+          ) : !isDisabled ? (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <div className={`text-center text-sm font-medium ${theme.textColor} opacity-70 hover:opacity-100 transition-opacity`}>
+                Click to {actionText}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
-    </div>
+
+      {/* Variant Selection Modal - Rendered at root level */}
+      {showVariantModal && createPortal(
+        <VariantSelectionModal
+          isOpen={showVariantModal}
+          onClose={() => setShowVariantModal(false)}
+          product={product}
+          onSelectVariant={handleVariantSelect}
+        />,
+        document.body
+      )}
+
+      {/* Product Info Modal */}
+      <ProductInfoModal
+        isOpen={isProductInfoOpen}
+        onClose={() => setIsProductInfoOpen(false)}
+        product={product}
+        onAddToCart={onAddToCart}
+      />
+    </>
   );
 };
 

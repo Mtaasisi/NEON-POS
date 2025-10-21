@@ -224,9 +224,7 @@ const StoreLocationsTab: React.FC = () => {
       <GlassCard className="p-4">
         <SearchBar
           placeholder="Search store locations..."
-          value={searchQuery}
-          onChange={setSearchQuery}
-          icon={<Search size={18} />}
+          onSearch={setSearchQuery}
         />
       </GlassCard>
 

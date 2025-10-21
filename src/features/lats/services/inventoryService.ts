@@ -1,7 +1,8 @@
 import { supabase } from '../../../lib/supabaseClient';
 import { Product } from '../types/inventory';
 import { draftProductsService } from './draftProductsService';
-import { validateAndCreateDefaultVariant } from '../lib/variantUtils';
+// ⚠️ DISABLED: Automatic default variant creation
+// import { validateAndCreateDefaultVariant } from '../lib/variantUtils';
 
 export interface ReceiveShipmentResult {
   success: boolean;
@@ -191,28 +192,33 @@ class InventoryService {
         return { success: false, error: productError?.message || 'Failed to create product' };
       }
 
-      // Create default variant using utility
-      const defaultVariantResult = await validateAndCreateDefaultVariant(
-        product.id,
-        product.name,
-        {
-          costPrice: costPrice,
-          sellingPrice: costPrice * 1.5, // 50% markup
-          quantity: box.quantity,
-          minQuantity: 0,
-          sku: `SHIP-${Date.now()}-VAR`,
-          attributes: {
-            source: 'shipment',
-            cargoBoxId: box.id
-          }
-        }
-      );
-
-      if (!defaultVariantResult.success) {
-        // Roll back product creation if variant creation fails
-        await supabase.from('lats_products').delete().eq('id', product.id);
-        return { success: false, error: defaultVariantResult.error || 'Failed to create product variant' };
-      }
+      // ⚠️ DISABLED: Automatic default variant creation
+      // Only variants explicitly created by the user will be added
+      // Note: For shipment products, you may need to manually create variants
+      // const defaultVariantResult = await validateAndCreateDefaultVariant(
+      //   product.id,
+      //   product.name,
+      //   {
+      //     costPrice: costPrice,
+      //     sellingPrice: costPrice * 1.5, // 50% markup
+      //     quantity: box.quantity,
+      //     minQuantity: 0,
+      //     sku: `SHIP-${Date.now()}-VAR`,
+      //     attributes: {
+      //       source: 'shipment',
+      //       cargoBoxId: box.id
+      //     }
+      //   }
+      // );
+      //
+      // if (!defaultVariantResult.success) {
+      //   // Roll back product creation if variant creation fails
+      //   await supabase.from('lats_products').delete().eq('id', product.id);
+      //   return { success: false, error: defaultVariantResult.error || 'Failed to create product variant' };
+      // }
+      
+      // Placeholder for variant ID (will be null since no default variant is created)
+      const defaultVariantResult = { success: true, variantId: null };
 
       // Create stock movement record
       const { error: movementError } = await supabase

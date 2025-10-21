@@ -4,7 +4,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { 
   Package, Search, Plus, RefreshCw,
   AlertCircle, Edit, Eye, Trash2, DollarSign, FileText, 
-  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle
+  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle, MoreVertical
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -175,20 +175,20 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft': return 'bg-slate-500 text-white';
-      case 'pending_approval': return 'bg-amber-500 text-white';
-      case 'approved': return 'bg-sky-500 text-white';
-      case 'sent': return 'bg-blue-600 text-white';
-      case 'confirmed': return 'bg-purple-600 text-white';
-      case 'processing': return 'bg-orange-500 text-white';
-      case 'shipping': return 'bg-yellow-500 text-white';
-      case 'shipped': return 'bg-cyan-500 text-white';
-      case 'partial_received': return 'bg-teal-500 text-white';
-      case 'received': return 'bg-emerald-600 text-white';
-      case 'quality_checked': return 'bg-green-600 text-white';
-      case 'completed': return 'bg-green-700 text-white';
-      case 'cancelled': return 'bg-red-600 text-white';
-      default: return 'bg-gray-500 text-white';
+      case 'draft': return 'bg-slate-500 text-white shadow-sm';
+      case 'pending_approval': return 'bg-amber-500 text-white shadow-sm';
+      case 'approved': return 'bg-sky-500 text-white shadow-sm';
+      case 'sent': return 'bg-blue-600 text-white shadow-sm';
+      case 'confirmed': return 'bg-purple-600 text-white shadow-sm';
+      case 'processing': return 'bg-orange-500 text-white shadow-sm';
+      case 'shipping': return 'bg-yellow-500 text-white shadow-sm';
+      case 'shipped': return 'bg-cyan-500 text-white shadow-sm';
+      case 'partial_received': return 'bg-orange-500 text-white shadow-sm';
+      case 'received': return 'bg-sky-400 text-white shadow-sm';
+      case 'quality_checked': return 'bg-emerald-600 text-white shadow-sm';
+      case 'completed': return 'bg-green-600 text-white shadow-sm';
+      case 'cancelled': return 'bg-red-600 text-white shadow-sm';
+      default: return 'bg-gray-500 text-white shadow-sm';
     }
   };
 
@@ -247,153 +247,73 @@ const PurchaseOrdersPage: React.FC = () => {
     });
   };
 
-  // Smart action buttons - enforce proper workflow: Approve → Pay → Receive
+  // Simplified action buttons - cleaner workflow
   const getSmartActionButtons = (order: any) => {
     const actions = [];
     const paymentStatus = order.payment_status || 'unpaid';
     
-    // Debug logging
-    console.log('🔍 PurchaseOrdersPage: Order data:', {
-      id: order.id,
-      status: order.status,
-      payment_status: paymentStatus,
-      order: order
-    });
-    
-    // Always show View Details
-    actions.push({
-      type: 'view',
-      label: 'View Details',
-      icon: <Eye className="w-4 h-4" />,
-      color: 'bg-blue-600 hover:bg-blue-700',
-      onClick: () => navigate(`/lats/purchase-orders/${order.id}`)
-    });
-
-    // Workflow sequence: Draft → Approve → Pay → Receive
+    // Workflow sequence: Draft → Sent → Received → Completed
     switch (order.status) {
       case 'draft':
-        // Step 1: Draft - Can edit, approve, or delete
-        actions.push({
-          type: 'edit',
-          label: 'Edit Order',
-          icon: <Edit className="w-4 h-4" />,
-          color: 'bg-gray-600 hover:bg-gray-700',
-          onClick: () => navigate(`/lats/purchase-orders/create?edit=${order.id}`)
-        });
+        // Draft - Primary action: Approve & Send (combined)
         actions.push({
           type: 'approve',
-          label: 'Approve',
+          label: 'Approve & Send',
           icon: <CheckSquare className="w-4 h-4" />,
           color: 'bg-green-600 hover:bg-green-700',
-          onClick: () => handleApproveOrder(order.id)
+          onClick: () => handleApproveAndSend(order.id)
         });
-        actions.push({
-          type: 'delete',
-          label: 'Delete Order',
-          icon: <Trash2 className="w-4 h-4" />,
-          color: 'bg-red-600 hover:bg-red-700',
-          onClick: () => handleDeleteOrder(order.id)
-        });
-        break;
-
-      case 'pending_approval':
-        // Step 1.5: Pending Approval - Waiting for manager approval
-        actions.push({
-          type: 'approve',
-          label: 'Review Approval',
-          icon: <CheckSquare className="w-4 h-4" />,
-          color: 'bg-yellow-600 hover:bg-yellow-700',
-          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=approve`)
-        });
-        break;
-
-      case 'approved':
-        // Step 2: Approved - Ready to send to supplier
-        actions.push({
-          type: 'send',
-          label: 'Send to Supplier',
-          icon: <Send className="w-4 h-4" />,
-          color: 'bg-blue-600 hover:bg-blue-700',
-          onClick: () => handleSendOrder(order.id)
-        });
+        if (hasPermission('delete')) {
+          actions.push({
+            type: 'delete',
+            label: 'Delete',
+            icon: <Trash2 className="w-4 h-4" />,
+            color: 'bg-red-600 hover:bg-red-700',
+            onClick: () => handleDeleteOrder(order.id)
+          });
+        }
         break;
       
       case 'sent':
-      case 'confirmed':
-      case 'processing':
-        // Step 2: Approved/Processing - Must pay before receiving
-        if (paymentStatus === 'unpaid' || paymentStatus === 'partial' || !paymentStatus) {
+      case 'shipped':
+        // Sent/Shipped - Show payment or receive based on payment status
+        if (paymentStatus !== 'paid') {
           actions.push({
             type: 'pay',
-            label: 'Pay',
+            label: 'Make Payment',
             icon: <CreditCard className="w-4 h-4" />,
             color: 'bg-orange-600 hover:bg-orange-700',
-            onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=pay`)
+            onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=payment`)
           });
-        }
-        // Only show receive if fully paid
-        if (paymentStatus === 'paid') {
+        } else {
           actions.push({
             type: 'receive',
             label: 'Receive',
-            icon: <CheckSquare className="w-4 h-4" />,
+            icon: <Package className="w-4 h-4" />,
             color: 'bg-green-600 hover:bg-green-700',
-            onClick: () => handleReceiveOrder(order.id)
-          });
-        }
-        break;
-      
-      case 'shipping':
-      case 'shipped':
-        // Step 3-4: Shipping/Shipped - Can receive if paid
-        if (paymentStatus === 'paid') {
-          actions.push({
-            type: 'receive',
-            label: 'Receive',
-            icon: <CheckSquare className="w-4 h-4" />,
-            color: 'bg-green-600 hover:bg-green-700',
-            onClick: () => handleReceiveOrder(order.id)
+            onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
           });
         }
         break;
       
       case 'partial_received':
-        // Step 4.5: Partial Received - Can continue receiving if paid
+        // Partial Received - Continue receiving if paid
         if (paymentStatus === 'paid') {
           actions.push({
             type: 'receive',
-            label: 'Continue Receiving',
-            icon: <CheckSquare className="w-4 h-4" />,
+            label: 'Continue',
+            icon: <Package className="w-4 h-4" />,
             color: 'bg-blue-600 hover:bg-blue-700',
-            onClick: () => handleReceiveOrder(order.id)
-          });
-        } else {
-          actions.push({
-            type: 'pay',
-            label: 'Pay Remaining',
-            icon: <CreditCard className="w-4 h-4" />,
-            color: 'bg-orange-600 hover:bg-orange-700',
-            onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=pay`)
+            onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
           });
         }
         break;
       
       case 'received':
-        // Step 5: Received - Can do quality check
-        actions.push({
-          type: 'quality_check',
-          label: 'Quality Check',
-          icon: <PackageCheck className="w-4 h-4" />,
-          color: 'bg-purple-600 hover:bg-purple-700',
-          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=quality_check`)
-        });
-        break;
-
-      case 'quality_checked':
-        // Step 6: Quality Checked - Can complete order
+        // Received - Complete order
         actions.push({
           type: 'complete',
-          label: 'Complete Order',
+          label: 'Complete',
           icon: <CheckCircle className="w-4 h-4" />,
           color: 'bg-green-600 hover:bg-green-700',
           onClick: () => handleCompleteOrder(order.id)
@@ -401,10 +321,10 @@ const PurchaseOrdersPage: React.FC = () => {
         break;
 
       case 'completed':
-        // Step 7: Completed - Order finished
+        // Completed - Duplicate option
         actions.push({
           type: 'duplicate',
-          label: 'Create Similar',
+          label: 'Duplicate',
           icon: <Copy className="w-4 h-4" />,
           color: 'bg-blue-600 hover:bg-blue-700',
           onClick: () => navigate(`/lats/purchase-orders/create?duplicate=${order.id}`)
@@ -412,16 +332,51 @@ const PurchaseOrdersPage: React.FC = () => {
         break;
       
       case 'cancelled':
-        // Cancelled - No additional actions needed
+        // Cancelled - No primary actions
         break;
         
       default:
-        // Unknown status - show basic actions
         console.warn(`Unknown purchase order status: ${order.status}`);
         break;
     }
+    
+    // Always add "More" dropdown for secondary actions
+    actions.push({
+      type: 'more',
+      label: 'More',
+      icon: <MoreVertical className="w-4 h-4" />,
+      color: 'bg-gray-600 hover:bg-gray-700',
+      onClick: () => navigate(`/lats/purchase-orders/${order.id}`)
+    });
 
     return actions;
+  };
+  
+  // Combined approve and send handler
+  const handleApproveAndSend = async (orderId: string) => {
+    try {
+      const response = await approvePurchaseOrder(orderId);
+      if (response.ok) {
+        // After approval, automatically update to sent
+        const sendResponse = await updatePurchaseOrder(orderId, { status: 'sent' });
+        if (sendResponse.ok) {
+          toast.success('Order approved and sent to supplier');
+        } else {
+          toast.success('Order approved (send manually from details)');
+        }
+      } else {
+        toast.error(response.message || 'Failed to approve order');
+      }
+    } catch (error) {
+      console.error('Error approving and sending order:', error);
+      toast.error('Failed to process order');
+    }
+  };
+  
+  // Permission check helper
+  const hasPermission = (action: string) => {
+    // This is a simplified check - adjust based on your auth context
+    return true; // Placeholder
   };
 
   // Standardized approve order handler
@@ -439,20 +394,6 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  // Send order to supplier handler
-  const handleSendOrder = async (orderId: string) => {
-    try {
-      const response = await updatePurchaseOrder(orderId, { status: 'sent' });
-      if (response.ok) {
-        toast.success('Purchase order sent to supplier successfully');
-      } else {
-        toast.error(response.message || 'Failed to send purchase order');
-      }
-    } catch (error) {
-      console.error('Error sending purchase order:', error);
-      toast.error('Failed to send purchase order');
-    }
-  };
 
   // Complete order handler
   const handleCompleteOrder = async (orderId: string) => {
@@ -773,7 +714,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     <div className="col-span-1 text-center">
                       <div className="flex items-center justify-center gap-1 text-sm font-medium text-gray-900">
                         <Package className="w-4 h-4 text-gray-600" />
-                        <span>{order.items?.length || 0}</span>
+                        <span>{order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0}</span>
                       </div>
                     </div>
 
@@ -785,17 +726,18 @@ const PurchaseOrdersPage: React.FC = () => {
                       </div>
                     </div>
 
-                  {/* Smart Actions */}
+                  {/* Smart Actions - Simplified */}
                   <div className="col-span-1">
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-end gap-2">
                       {getSmartActionButtons(order).map((action, index) => (
                         <button
                           key={`${action.type}-${index}`}
                           onClick={action.onClick}
-                          className={`p-2 text-white rounded-lg transition-colors ${action.color}`}
+                          className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
                           title={action.label}
                         >
                           {action.icon}
+                          <span className="hidden lg:inline">{action.label}</span>
                         </button>
                       ))}
                     </div>

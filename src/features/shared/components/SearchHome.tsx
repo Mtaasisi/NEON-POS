@@ -14,6 +14,7 @@ import {
   Calendar,
   MessageSquare,
   ArrowRight,
+  DollarSign,
 } from 'lucide-react';
 
 interface SearchHomeProps {

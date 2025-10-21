@@ -52,7 +52,7 @@ interface ProductVariant {
   variant_name: string;
   sku: string;
   quantity: number;
-  unit_price: number;
+  selling_price: number;
   branch_id: string;
   product?: {
     name: string;
@@ -833,7 +833,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
           variant_name,
           sku,
           quantity,
-          unit_price,
+          selling_price,
           branch_id,
           product:lats_products!product_id(name)
         `)
@@ -1222,7 +1222,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                                 </div>
                                 {!hasMultipleVariants && (
                                   <div className="text-xs text-gray-500">
-                                    TSh {Number(availableVariants[0].unit_price || 0).toLocaleString()}
+                                    TSh {Number(availableVariants[0].selling_price || 0).toLocaleString()}
                                   </div>
                                 )}
                               </div>
@@ -1456,7 +1456,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                                 {variant.quantity} in stock
                               </div>
                               <div className="text-xs text-gray-500">
-                                TSh {Number(variant.unit_price || 0).toLocaleString()}
+                                TSh {Number(variant.selling_price || 0).toLocaleString()}
                               </div>
                             </div>
                           </div>

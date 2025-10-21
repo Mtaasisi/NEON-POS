@@ -240,9 +240,7 @@ const SuppliersTab: React.FC = () => {
           <div className="flex-1">
             <SearchBar
               placeholder="Search suppliers by name, company, contact person, or email..."
-              value={searchQuery}
-              onChange={setSearchQuery}
-              icon={<Search size={18} />}
+              onSearch={setSearchQuery}
             />
           </div>
           <div className="sm:w-48">

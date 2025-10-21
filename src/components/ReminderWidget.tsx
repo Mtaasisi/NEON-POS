@@ -108,7 +108,7 @@ const ReminderWidget: React.FC = () => {
   const upcomingCount = reminders.filter(r => !isOverdue(r)).length;
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -150,7 +150,7 @@ const ReminderWidget: React.FC = () => {
       </div>
 
       {/* Reminders List */}
-      <div className="space-y-2">
+      <div className="space-y-2 flex-grow mb-4">
         {loading ? (
           <div className="text-center py-4 text-gray-500 dark:text-gray-400">
             <Clock className="w-5 h-5 animate-spin mx-auto mb-2" />
@@ -213,16 +213,18 @@ const ReminderWidget: React.FC = () => {
         )}
       </div>
 
-      {/* Quick Action */}
-      {reminders.length > 0 && (
-        <button
-          onClick={() => navigate('/reminders')}
-          className="w-full mt-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-        >
-          <Plus className="w-4 h-4" />
-          Add Reminder
-        </button>
-      )}
+      {/* Quick Action - Always at bottom */}
+      <div className="mt-auto pt-4">
+        {reminders.length > 0 && (
+          <button
+            onClick={() => navigate('/reminders')}
+            className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Reminder
+          </button>
+        )}
+      </div>
     </div>
   );
 };

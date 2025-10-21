@@ -84,7 +84,7 @@ const ZenoPayPaymentModal: React.FC<ZenoPayPaymentModalProps> = ({
             product_name: item.productName,
             variant_name: item.variantName,
             quantity: item.quantity,
-            unit_price: item.unitPrice,
+            price: item.unitPrice,
             total_price: item.totalPrice
           })),
           customer_id: customer!.id,

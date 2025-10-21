@@ -162,9 +162,7 @@ const CategoriesTab: React.FC = () => {
           <div className="flex-1">
             <SearchBar
               placeholder="Search categories..."
-              value={searchQuery}
-              onChange={setSearchQuery}
-              icon={<Search size={18} />}
+              onSearch={setSearchQuery}
             />
           </div>
           

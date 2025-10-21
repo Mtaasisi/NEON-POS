@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, Database, Shield, HardDrive, Wifi, ExternalLink, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
+import { Activity, Database, Shield, HardDrive, Wifi, CheckCircle, AlertTriangle, XCircle, ExternalLink } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
 import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
 import GlassCard from '../ui/GlassCard';
@@ -199,7 +199,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
   const statusBg = overallStatus.color === 'green' ? 'bg-emerald-50' : overallStatus.color === 'orange' ? 'bg-amber-50' : 'bg-rose-50';
 
   return (
-    <div className={`bg-white rounded-2xl p-7 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 flex flex-col ${className}`}>
       {/* Header with Status Badge */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
@@ -211,9 +211,19 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
             <p className="text-xs text-gray-400 mt-0.5">Real-time monitoring</p>
           </div>
         </div>
-        <div className={`px-3 py-1.5 rounded-full ${statusBg} flex items-center gap-1.5`}>
-          <div className={`w-1.5 h-1.5 rounded-full ${statusColor.replace('text-', 'bg-')} animate-pulse`}></div>
-          <span className={`text-xs font-medium ${statusColor} capitalize`}>{overallStatus.status}</span>
+        <div className="flex items-center gap-3">
+          <div className={`px-3 py-1.5 rounded-full ${statusBg} flex items-center gap-1.5`}>
+            <div className={`w-1.5 h-1.5 rounded-full ${statusColor.replace('text-', 'bg-')} animate-pulse`}></div>
+            <span className={`text-xs font-medium ${statusColor} capitalize`}>{overallStatus.status}</span>
+          </div>
+          <button
+            onClick={() => navigate('/settings')}
+            className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
+            title="View Settings"
+          >
+            <ExternalLink size={14} />
+            <span>View All</span>
+          </button>
         </div>
       </div>
 
@@ -230,7 +240,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
       </div>
 
       {/* Status Grid - Modern Cards */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+      <div className="grid grid-cols-2 gap-3 mb-6 flex-grow">
         <div className="p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
           <div className="flex items-center gap-2 mb-2">
             <Database size={14} className="text-gray-500" />
@@ -278,18 +288,11 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
         <span className="text-sm font-medium text-gray-900">{formatLastBackup(systemStatus.lastBackup)}</span>
       </div>
 
-      {/* Actions - Minimal Buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => navigate('/settings')}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all"
-        >
-          <ExternalLink size={14} />
-          <span>Settings</span>
-        </button>
+      {/* Actions - Always at bottom */}
+      <div className="flex gap-2 mt-auto pt-6">
         <button
           onClick={loadSystemHealth}
-          className="px-5 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors flex items-center gap-2"
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
           <Activity size={14} />
           <span>Refresh</span>

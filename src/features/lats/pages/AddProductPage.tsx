@@ -18,7 +18,8 @@ import { StoreLocation } from '../../settings/types/storeLocation';
 import { storeLocationApi } from '../../settings/utils/storeLocationApi';
 import { generateSKU } from '../lib/skuUtils';
 import { duplicateProduct, generateProductReport, exportProductData } from '../lib/productUtils';
-import { validateAndCreateDefaultVariant } from '../lib/variantUtils';
+// ⚠️ DISABLED: Automatic default variant creation
+// import { validateAndCreateDefaultVariant } from '../lib/variantUtils';
 import { useInventoryStore } from '../stores/useInventoryStore';
 import { productCacheService } from '../../../lib/productCacheService';
 
@@ -648,7 +649,7 @@ const AddProductPageOptimized: React.FC = () => {
 
         // Only set these fields if NOT using variants
         cost_price: useVariants ? 0 : (formData.costPrice || 0),
-        unit_price: useVariants ? 0 : (formData.price || 0),
+        selling_price: useVariants ? 0 : (formData.price || 0),
         stock_quantity: useVariants ? 0 : (formData.stockQuantity || 0),
         min_stock_level: useVariants ? 0 : (formData.minStockLevel || 0),
         total_quantity: totalQuantity,
@@ -732,7 +733,7 @@ const AddProductPageOptimized: React.FC = () => {
             sku: variant.sku || `${formData.sku}-V${index + 1}`,
             name: variant.name,
             cost_price: variant.costPrice,
-            unit_price: variant.price,
+            selling_price: variant.price,
             quantity: variant.stockQuantity,
             min_quantity: variant.minStockLevel,
             attributes: {
@@ -740,36 +741,39 @@ const AddProductPageOptimized: React.FC = () => {
               specification: variant.specification || null
             }
           }));
-        } else {
-          // No variants provided - create a default variant automatically using utility
-          console.log('Creating default variant for product:', createdProduct.id);
-          
-          const defaultVariantResult = await validateAndCreateDefaultVariant(
-            createdProduct.id,
-            createdProduct.name,
-            {
-              costPrice: formData.costPrice,
-              sellingPrice: formData.price,
-              quantity: formData.stockQuantity,
-              minQuantity: formData.minStockLevel,
-              // Don't pass sku to avoid duplicate SKU constraint violation
-              // The variant will generate its own unique SKU
-              attributes: {
-                specification: formData.specification || null
-              }
-            }
-          );
-
-          if (!defaultVariantResult.success) {
-            console.error('❌ Failed to create default variant:', defaultVariantResult.error);
-            toast.error(`Failed to create default variant: ${defaultVariantResult.error}`);
-            return;
-          }
-          
-          console.log('✅ Default variant created successfully');
-          // Skip the manual variant creation since it's already done
-          variantsToCreate = [];
-        }
+        } 
+        // ⚠️ DISABLED: Automatic default variant creation
+        // Only variants explicitly created by the user will be added
+        // else {
+        //   // No variants provided - create a default variant automatically using utility
+        //   console.log('Creating default variant for product:', createdProduct.id);
+        //   
+        //   const defaultVariantResult = await validateAndCreateDefaultVariant(
+        //     createdProduct.id,
+        //     createdProduct.name,
+        //     {
+        //       costPrice: formData.costPrice,
+        //       sellingPrice: formData.price,
+        //       quantity: formData.stockQuantity,
+        //       minQuantity: formData.minStockLevel,
+        //       // Don't pass sku to avoid duplicate SKU constraint violation
+        //       // The variant will generate its own unique SKU
+        //       attributes: {
+        //         specification: formData.specification || null
+        //       }
+        //     }
+        //   );
+        //
+        //   if (!defaultVariantResult.success) {
+        //     console.error('❌ Failed to create default variant:', defaultVariantResult.error);
+        //     toast.error(`Failed to create default variant: ${defaultVariantResult.error}`);
+        //     return;
+        //   }
+        //   
+        //   console.log('✅ Default variant created successfully');
+        //   // Skip the manual variant creation since it's already done
+        //   variantsToCreate = [];
+        // }
 
         console.log('Variant data to insert:', variantsToCreate);
 

@@ -63,6 +63,7 @@ import {
   MobileIcon,
   Maximize2,
   Minimize2,
+  Search,
 } from 'lucide-react';
 import ActivityCounter from './ui/ActivityCounter';
 import GlassButton from './ui/GlassButton';
@@ -70,6 +71,8 @@ import SearchDropdown from './SearchDropdown';
 import CacheClearButton from '../../../components/CacheClearButton';
 import SimpleBranchSelector from '../../../components/SimpleBranchSelector';
 import QuickExpenseModal from '../../../components/QuickExpenseModal';
+import QuickReminderModal from '../../../components/QuickReminderModal';
+import { useGlobalSearchModal } from '../../../context/GlobalSearchContext';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -80,7 +83,9 @@ interface TopBarProps {
 const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapsed }) => {
   const { currentUser, logout } = useAuth();
   const { isDark } = useTheme();
+  const { openSearch } = useGlobalSearchModal();
   const [showQuickExpense, setShowQuickExpense] = useState(false);
+  const [showQuickReminder, setShowQuickReminder] = useState(false);
   
   // Safely access devices context with error handling for HMR
   let devices: any[] = [];
@@ -105,7 +110,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     dismissNotification 
   } = useNotifications();
   
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
   const [isOnline, _setIsOnline] = useState(navigator.onLine);
@@ -147,16 +151,12 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     return () => clearInterval(interval);
   }, []);
   
-  const userMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const createDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setShowUserMenu(false);
-      }
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
@@ -321,39 +321,58 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             </button>
           </div>
 
-          {/* Center Section - Search & Create Dropdown */}
+          {/* Center Section - Search */}
           <div className="hidden md:flex items-center gap-3 flex-1 max-w-md mx-4">
-            <SearchDropdown 
-              placeholder="Search devices, customers..."
-              className="flex-1"
-            />
-            <div className={`hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg ${isDark ? 'bg-slate-800/50 text-gray-400' : 'bg-gray-100/50 text-gray-500'} text-xs`}>
-              <span>⌘K</span>
-            </div>
+            <button
+              onClick={() => openSearch()}
+              className={`flex-1 flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 ${
+                isDark 
+                  ? 'bg-slate-800/60 hover:bg-slate-700/60 text-gray-300 border border-slate-700' 
+                  : 'bg-white/60 hover:bg-white/80 text-gray-700 border border-gray-200'
+              } cursor-pointer backdrop-blur-sm`}
+            >
+              <Search size={18} className="text-gray-400" />
+              <span className="text-sm text-gray-500">Search devices, customers, products...</span>
+              <div className={`ml-auto hidden lg:flex items-center gap-1 px-2 py-1 rounded ${isDark ? 'bg-slate-700/70 text-gray-400' : 'bg-gray-100 text-gray-500'} text-xs`}>
+                <span>⌘K</span>
+              </div>
+            </button>
           </div>
 
-          {/* Quick Expense Button - Admins only */}
-          {currentUser?.role === 'admin' && (
-            <button
-              onClick={() => setShowQuickExpense(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-              title="Quick Expense (⚡ Fast Entry)"
-            >
-              <DollarSign size={16} />
-              <span className="hidden lg:inline font-medium">Expense</span>
-            </button>
-          )}
-
-          {/* Create Dropdown - Role-based */}
-          {currentUser?.role !== 'technician' && (
-            <div className="relative" ref={createDropdownRef}>
+          {/* Right Section - Action Buttons Group */}
+          <div className="flex items-center gap-2">
+            {/* Quick Expense Button - Admins only */}
+            {currentUser?.role === 'admin' && (
               <button
-                onClick={() => setShowCreateDropdown(!showCreateDropdown)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                onClick={() => setShowQuickExpense(true)}
+                className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                title="Quick Expense (⚡ Fast Entry)"
               >
-                <span className="font-medium">Create</span>
-                <ChevronDown size={16} className={`transition-transform duration-200 ${showCreateDropdown ? 'rotate-180' : ''}`} />
+                <DollarSign size={18} />
+                <span className="hidden lg:inline font-medium">Expense</span>
               </button>
+            )}
+
+            {/* Quick Reminder Button - All roles */}
+            <button
+              onClick={() => setShowQuickReminder(true)}
+              className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+              title="Quick Reminder (⚡ Fast Entry)"
+            >
+              <Bell size={18} />
+              <span className="hidden lg:inline font-medium">Reminder</span>
+            </button>
+
+            {/* Create Dropdown - Role-based */}
+            {currentUser?.role !== 'technician' && (
+              <div className="relative" ref={createDropdownRef}>
+                <button
+                  onClick={() => setShowCreateDropdown(!showCreateDropdown)}
+                  className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                >
+                  <span className="font-medium">Create</span>
+                  <ChevronDown size={18} className={`transition-transform duration-200 ${showCreateDropdown ? 'rotate-180' : ''}`} />
+                </button>
               
               {/* Create Dropdown Menu - Image Style */}
               {showCreateDropdown && (
@@ -489,6 +508,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               )}
             </div>
           )}
+          </div>
 
           {/* Technician Quick Actions */}
           {currentUser?.role === 'technician' && (
@@ -661,11 +681,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               )}
             </div>
 
-            {/* Branch Selector - Admin Only */}
-            {currentUser?.role === 'admin' && (
-              <SimpleBranchSelector />
-            )}
-            
             {/* Status Indicator */}
             <div className="hidden sm:flex items-center justify-center w-6 h-6">
               <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'} animate-pulse`}></div>
@@ -825,67 +840,11 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               </button>
             </div> */}
 
-            {/* User Menu */}
-            <div className="relative" ref={userMenuRef}>
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 hover:from-gray-600 hover:to-gray-700 transition-all duration-300 shadow-sm border border-white/30"
-              >
-                <span className="text-white text-sm font-semibold">
-                  {currentUser?.name?.charAt(0).toUpperCase() || 'U'}
-                </span>
-              </button>
-              
-              {/* User Menu Dropdown */}
-              {showUserMenu && (
-                <div className={`absolute right-0 top-full mt-3 w-64 ${isDark ? 'bg-slate-800/95' : 'bg-white/95'} backdrop-blur-xl rounded-xl shadow-xl ${isDark ? 'border-slate-700' : 'border-white/30'} border z-50`}>
-                  <div className="p-4">
-                    <div className={`flex items-center gap-3 p-3 rounded-lg ${isDark ? 'bg-gradient-to-br from-slate-700 to-slate-800' : 'bg-gradient-to-br from-gray-100 to-gray-50'} mb-3 ${isDark ? 'border-slate-600' : 'border-gray-200'} border`}>
-                      <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white">
-                        <User size={20} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{currentUser.name}</p>
-                        <p className={`text-sm capitalize truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{currentUser.role.replace('-', ' ')}</p>
-                        {currentUser.email && (
-                          <p className={`text-xs truncate ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{currentUser.email}</p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => {
-                          navigate('/settings');
-                          setShowUserMenu(false);
-                        }}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} transition-colors`}
-                      >
-                        <Settings size={16} className={isDark ? 'text-gray-400' : 'text-gray-500'} />
-                        <span className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Settings</span>
-                      </button>
-                      
-                      <div className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-orange-50 transition-colors">
-                        <Trash2 size={16} className="text-orange-500" />
-                        <CacheClearButton 
-                          variant="text" 
-                          className="text-sm text-orange-700 hover:text-orange-800"
-                          showConfirmation={true}
-                        />
-                      </div>
-                      
-                      <button
-                        onClick={handleLogout}
-                        className={`w-full flex items-center gap-3 p-2 rounded-lg ${isDark ? 'hover:bg-red-900/30' : 'hover:bg-red-50'} transition-colors`}
-                      >
-                        <LogOut size={16} className="text-red-500" />
-                        <span className={`text-sm ${isDark ? 'text-red-400' : 'text-red-700'}`}>Logout</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Branch Selector - Admin Only - Right Corner */}
+            {currentUser?.role === 'admin' && (
+              <SimpleBranchSelector />
+            )}
+
           </div>
         </div>
       </div>
@@ -893,10 +852,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
       {/* Mobile Search Bar & Create Button */}
       <div className={`md:hidden px-4 py-3 ${isDark ? 'bg-slate-900/40' : 'bg-white/20'} backdrop-blur-sm ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-b`}>
         <div className="flex items-center gap-3">
-          <SearchDropdown 
-            placeholder="Search devices, customers..."
-            className="flex-1"
-          />
+          <button
+            onClick={() => openSearch()}
+            className={`flex-1 flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 ${
+              isDark 
+                ? 'bg-slate-800/60 text-gray-300 border border-slate-700' 
+                : 'bg-white/60 text-gray-700 border border-gray-200'
+            } cursor-pointer backdrop-blur-sm`}
+          >
+            <Search size={18} className="text-gray-400" />
+            <span className="text-sm text-gray-500">Search...</span>
+          </button>
           <button
             onClick={() => setShowCreateDropdown(!showCreateDropdown)}
             className="p-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 shadow-sm"
@@ -1022,6 +988,16 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
         onSuccess={() => {
           // Optional: Show toast or refresh data
           console.log('Expense recorded successfully');
+        }}
+      />
+
+      {/* Quick Reminder Modal */}
+      <QuickReminderModal
+        isOpen={showQuickReminder}
+        onClose={() => setShowQuickReminder(false)}
+        onSuccess={() => {
+          // Optional: Show toast or refresh data
+          console.log('Reminder created successfully');
         }}
       />
     </header>

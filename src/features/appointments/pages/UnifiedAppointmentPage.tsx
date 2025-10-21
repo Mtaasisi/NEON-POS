@@ -164,8 +164,7 @@ const UnifiedAppointmentPage: React.FC = () => {
             />
             
             <SearchBar
-              value={searchQuery}
-              onChange={setSearchQuery}
+              onSearch={setSearchQuery}
               placeholder="Search appointments..."
               className="min-w-[200px]"
             />

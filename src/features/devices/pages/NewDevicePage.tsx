@@ -251,16 +251,41 @@ const DeviceIntakeUnifiedPage: React.FC = () => {
     }
   };
 
-  // Fetch technicians from auth_users
+  // Fetch technicians from users table
   useEffect(() => {
-    // Fetch technicians from auth_users
     const fetchTechnicians = async () => {
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name, email')
-        .eq('role', 'technician');
-      if (!error && data) setTechnicians(data);
+      try {
+        // Use select('*') to avoid column-specific errors
+        const { data, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('role', 'technician')
+          .eq('is_active', true);
+        
+        if (error) {
+          console.error('Error fetching technicians:', error);
+          // Set empty array to prevent re-trying
+          setTechnicians([]);
+          return;
+        }
+        
+        if (data && data.length > 0) {
+          // Map data to ensure consistent structure
+          const mappedTechnicians = data.map((tech: any) => ({
+            id: tech.id,
+            full_name: tech.full_name || tech.name || 'Unknown',
+            email: tech.email || ''
+          }));
+          setTechnicians(mappedTechnicians);
+        } else {
+          setTechnicians([]);
+        }
+      } catch (err) {
+        console.error('Exception fetching technicians:', err);
+        setTechnicians([]);
+      }
     };
+    
     fetchTechnicians();
   }, []);
 

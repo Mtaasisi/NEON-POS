@@ -271,7 +271,8 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           variant_name: v.name || v.attributes?.color || 'Default',
           sku: v.sku,
           quantity: v.quantity || 0,
-          unit_price: v.costPrice || 0,
+          selling_price: v.sellingPrice || v.price || 0,
+          cost_price: v.costPrice || 0,
           product_id: product.id,
           product: {
             name: product.name

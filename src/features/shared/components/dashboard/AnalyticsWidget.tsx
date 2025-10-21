@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BarChart3, TrendingUp, TrendingDown, ExternalLink, Target, Users } from 'lucide-react';
+import { BarChart3, TrendingUp, TrendingDown, Target, Users, ExternalLink } from 'lucide-react';
 import { dashboardService } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
 
@@ -13,7 +13,7 @@ interface AnalyticsMetrics {
   customerGrowth: number;
   avgOrderValue: number;
   totalOrders: number;
-  topPerformingServices: string[];
+  topPerformingServices: string[]; // Deprecated - kept for compatibility
 }
 
 export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) => {
@@ -42,7 +42,7 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
         customerGrowth: stats.customerGrowth,
         avgOrderValue: stats.averageOrderValue,
         totalOrders: stats.completedToday,
-        topPerformingServices: stats.popularServices
+        topPerformingServices: [] // No longer available since we removed services
       });
     } catch (error) {
       console.error('Error loading analytics data:', error);
@@ -97,7 +97,7 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-7 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
@@ -109,6 +109,14 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
             <p className="text-xs text-gray-400 mt-0.5">Key performance indicators</p>
           </div>
         </div>
+        <button
+          onClick={() => navigate('/lats/analytics')}
+          className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
+          title="View All Analytics"
+        >
+          <ExternalLink size={14} />
+          <span>View All</span>
+        </button>
       </div>
 
       {/* Growth Metrics */}
@@ -192,16 +200,6 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => navigate('/lats/analytics')}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
-        >
-          <ExternalLink size={14} />
-          <span>View Analytics</span>
-        </button>
-      </div>
     </div>
   );
 };

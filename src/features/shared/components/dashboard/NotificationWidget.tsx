@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, AlertCircle, ExternalLink, Clock } from 'lucide-react';
+import { Bell, AlertCircle, Clock, ExternalLink } from 'lucide-react';
 import { dashboardService, NotificationSummary } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
 
@@ -74,7 +74,7 @@ export const NotificationWidget: React.FC<NotificationWidgetProps> = ({ classNam
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-7 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
@@ -89,16 +89,26 @@ export const NotificationWidget: React.FC<NotificationWidgetProps> = ({ classNam
           </div>
         </div>
         
-        {unreadCount > 0 && (
-          <div className="px-3 py-1.5 rounded-full bg-rose-50 flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
-            <span className="text-xs font-medium text-rose-500">{unreadCount}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {unreadCount > 0 && (
+            <div className="px-3 py-1.5 rounded-full bg-rose-50 flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></div>
+              <span className="text-xs font-medium text-rose-500">{unreadCount}</span>
+            </div>
+          )}
+          <button
+            onClick={() => navigate('/notifications')}
+            className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
+            title="View All Notifications"
+          >
+            <ExternalLink size={14} />
+            <span>View All</span>
+          </button>
+        </div>
       </div>
 
       {/* Notifications List */}
-      <div className="space-y-3 max-h-64 overflow-y-auto mb-6">
+      <div className="space-y-3 max-h-64 overflow-y-auto mb-6 flex-grow">
         {notifications.length > 0 ? (
           notifications.map((notification) => (
             <div 
@@ -144,16 +154,6 @@ export const NotificationWidget: React.FC<NotificationWidgetProps> = ({ classNam
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => navigate('/notifications')}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
-        >
-          <ExternalLink size={14} />
-          <span>View All</span>
-        </button>
-      </div>
     </div>
   );
 };

@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { PackageCheck, Plus, X, AlertCircle, ChevronDown, ChevronUp, Calendar, DollarSign, Shield, Smartphone } from 'lucide-react';
+import { PackageCheck, X, AlertCircle, Package, MapPin, Building, LayoutGrid } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { storageRoomApi, StorageRoom } from '../../../settings/utils/storageRoomApi';
+import { storeShelfApi, StoreShelf } from '../../../settings/utils/storeShelfApi';
 
 interface PurchaseOrderItem {
   id: string;
   product_id: string;
   variant_id?: string;
-  name: string;
+  name?: string;
   quantity: number;
   receivedQuantity?: number;
   cost_price: number;
+  product?: {
+    name: string;
+    sku?: string;
+  };
+  variant?: {
+    name: string;
+    sku?: string;
+  };
 }
 
 interface SerialNumberData {
@@ -52,80 +62,126 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     quantity: number;
     serialNumbers: SerialNumberData[];
   }>>(new Map());
-  
-  const [expandedSerials, setExpandedSerials] = useState<Set<string>>(new Set());
 
-  // Initialize received items when modal opens
+  // Storage location state
+  const [storageRooms, setStorageRooms] = useState<StorageRoom[]>([]);
+  const [allShelves, setAllShelves] = useState<Record<string, StoreShelf[]>>({});
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [selectedLocationIndex, setSelectedLocationIndex] = useState<{ itemId: string; index: number } | null>(null);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Load storage rooms on mount
+  useEffect(() => {
+    loadStorageRooms();
+  }, []);
+
+  // Load all shelves for all rooms
+  useEffect(() => {
+    if (storageRooms.length > 0) {
+      loadAllShelves();
+    }
+  }, [storageRooms]);
+
+  // Initialize received items when modal opens - Auto-generate rows based on quantity
   useEffect(() => {
     if (isOpen) {
       const initialItems = new Map();
       purchaseOrder.items.forEach(item => {
+        const quantity = item.quantity - (item.receivedQuantity || 0);
+        
+        // Auto-generate empty serial number rows for each quantity
+        const serialNumbers: SerialNumberData[] = [];
+        for (let i = 0; i < quantity; i++) {
+          const warrantyStart = new Date().toISOString().split('T')[0];
+          const warrantyEndDate = new Date();
+          warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
+          const warrantyEnd = warrantyEndDate.toISOString().split('T')[0];
+          
+          serialNumbers.push({
+            serial_number: '',
+            imei: '',
+            mac_address: '',
+            barcode: '',
+            location: '',
+            warranty_start: warrantyStart,
+            warranty_end: warrantyEnd,
+            warranty_months: 12,
+            cost_price: item.cost_price,
+            selling_price: undefined,
+            notes: ''
+          });
+        }
+        
         initialItems.set(item.id, {
-          quantity: item.receivedQuantity || 0,
-          serialNumbers: []
+          quantity,
+          serialNumbers
         });
       });
       setReceivedItems(initialItems);
     }
   }, [isOpen, purchaseOrder.items]);
 
-  const updateReceivedQuantity = (itemId: string, quantity: number) => {
-    const maxQuantity = purchaseOrder.items.find(item => item.id === itemId)?.quantity || 0;
-    if (quantity < 0 || quantity > maxQuantity) return;
-
-    setReceivedItems(prev => {
-      const newMap = new Map(prev);
-      const current = newMap.get(itemId) || { quantity: 0, serialNumbers: [] };
-      newMap.set(itemId, {
-        ...current,
-        quantity
-      });
-      return newMap;
-    });
+  const loadStorageRooms = async () => {
+    try {
+      const rooms = await storageRoomApi.getAll();
+      setStorageRooms(rooms || []);
+    } catch (error) {
+      console.error('Error loading storage rooms:', error);
+      setStorageRooms([]);
+    }
   };
 
-  const addSerialNumber = (itemId: string) => {
-    setReceivedItems(prev => {
-      const newMap = new Map(prev);
-      const current = newMap.get(itemId) || { quantity: 0, serialNumbers: [] };
-      const item = purchaseOrder.items.find(i => i.id === itemId);
+  const loadAllShelves = async () => {
+    try {
+      const shelvesData: Record<string, StoreShelf[]> = {};
       
-      // Calculate warranty end date (12 months from today by default)
-      const warrantyStart = new Date().toISOString().split('T')[0];
-      const warrantyEndDate = new Date();
-      warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
-      const warrantyEnd = warrantyEndDate.toISOString().split('T')[0];
+      for (const room of storageRooms) {
+        const roomShelves = await storeShelfApi.getShelvesByStorageRoom(room.id);
+        shelvesData[room.id] = roomShelves || [];
+      }
       
-      newMap.set(itemId, {
-        ...current,
-        serialNumbers: [...current.serialNumbers, {
-          serial_number: '',
-          imei: '',
-          mac_address: '',
-          barcode: '',
-          location: '',
-          warranty_start: warrantyStart,
-          warranty_end: warrantyEnd,
-          warranty_months: 12,
-          cost_price: item?.cost_price || 0,
-          selling_price: undefined,
-          notes: ''
-        }]
-      });
-      return newMap;
-    });
+      setAllShelves(shelvesData);
+    } catch (error) {
+      console.error('Error loading shelves:', error);
+      setAllShelves({});
+    }
   };
 
-  const removeSerialNumber = (itemId: string, index: number) => {
-    setReceivedItems(prev => {
-      const newMap = new Map(prev);
-      const current = newMap.get(itemId) || { quantity: 0, serialNumbers: [] };
-      newMap.set(itemId, {
-        ...current,
-        serialNumbers: current.serialNumbers.filter((_, i) => i !== index)
-      });
-      return newMap;
-    });
+  const handleLocationSelect = (roomId: string, shelfId: string) => {
+    if (!selectedLocationIndex) return;
+
+    const room = storageRooms.find(r => r.id === roomId);
+    const shelf = allShelves[roomId]?.find(s => s.id === shelfId);
+    
+    if (room && shelf) {
+      const locationText = `${room.code} - ${shelf.code}`;
+      updateSerialNumber(
+        selectedLocationIndex.itemId, 
+        selectedLocationIndex.index, 
+        'location', 
+        locationText
+      );
+    }
+    
+    setShowLocationModal(false);
+    setSelectedLocationIndex(null);
+  };
+
+  const openLocationModal = (itemId: string, index: number) => {
+    setSelectedLocationIndex({ itemId, index });
+    setSelectedRoomId(storageRooms[0]?.id || '');
+    setShowLocationModal(true);
+  };
+
+  const getFilteredShelves = () => {
+    const shelves = allShelves[selectedRoomId] || [];
+    if (!searchTerm) return shelves;
+    
+    return shelves.filter(shelf => 
+      shelf.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (shelf.name && shelf.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
   };
 
   const updateSerialNumber = (itemId: string, index: number, field: keyof SerialNumberData, value: string | number) => {
@@ -175,6 +231,21 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
 
   const handleConfirm = async () => {
     try {
+      // Validate all serial numbers are filled
+      let hasErrors = false;
+      receivedItems.forEach((data, itemId) => {
+        data.serialNumbers.forEach((serial, index) => {
+          if (!serial.serial_number.trim()) {
+            hasErrors = true;
+          }
+        });
+      });
+
+      if (hasErrors) {
+        toast.error('Please fill in Serial Number or IMEI for all items');
+        return;
+      }
+
       const receivedItemsArray: Array<{
         id: string;
         receivedQuantity: number;
@@ -207,283 +278,311 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     });
     return total;
   };
-  
-  const toggleSerialExpanded = (key: string) => {
-    setExpandedSerials(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        newSet.add(key);
-      }
-      return newSet;
-    });
-  };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center gap-3 mb-4 p-6 border-b border-gray-100">
-          <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-            <PackageCheck className="w-5 h-5 text-orange-600" />
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
+      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                <PackageCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Receive Stock with Serial Numbers</h3>
+                <p className="text-xs text-gray-500">Enter Serial Number or IMEI for each item</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Receive Stock with Serial Numbers</h3>
-            <p className="text-sm text-gray-600">Optional: Add serial numbers for individual items</p>
-          </div>
-        </div>
-        
-        <div className="p-6">
-          <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-            <div className="flex items-center gap-2 text-blue-800">
-              <AlertCircle className="w-4 h-4" />
-              <span className="text-sm font-medium">
-                Total items to receive: {getTotalReceivedItems()}
+
+          {/* Summary Info */}
+          <div className="mt-4 flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-blue-600" />
+              <span className="text-blue-900 font-medium">
+                Total Items: {getTotalReceivedItems()}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
+              <Package className="w-4 h-4 text-green-600" />
+              <span className="text-green-900 font-medium">
+                Products: {purchaseOrder.items.length}
               </span>
             </div>
           </div>
-          
-          <div className="space-y-6">
+        </div>
+
+        {/* Table Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-8">
             {purchaseOrder.items.map((item) => {
               const itemData = receivedItems.get(item.id) || { quantity: 0, serialNumbers: [] };
               
+              if (itemData.quantity === 0) return null;
+              
+              // Get product name from different possible sources
+              const productName = item.name || 
+                                 (item.product?.name || '') + 
+                                 (item.variant?.name ? ` - ${item.variant.name}` : '');
+              
               return (
-                <div key={item.id} className="p-4 border border-gray-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h4 className="font-medium text-gray-900">{item.name}</h4>
-                      <p className="text-sm text-gray-600">Cost: ${item.cost_price}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateReceivedQuantity(item.id, Math.max(0, itemData.quantity - 1))}
-                        className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center">{itemData.quantity}</span>
-                      <button
-                        onClick={() => updateReceivedQuantity(item.id, Math.min(item.quantity, itemData.quantity + 1))}
-                        className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50"
-                      >
-                        +
-                      </button>
+                <div key={item.id} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                  {/* Product Header */}
+                  <div className="mb-4 pb-3 border-b-2 border-gray-300">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-lg font-bold text-gray-900">{productName}</h4>
+                        <p className="text-sm text-gray-600 mt-1">
+                          Quantity: <span className="font-semibold text-gray-900">{itemData.quantity} pcs</span> • 
+                          Cost: <span className="font-semibold text-gray-900">${(item.cost_price || 0).toFixed(2)}</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                  
-                  {itemData.quantity > 0 && (
-                    <div className="mt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-sm font-medium text-gray-700">
-                          Serial Numbers ({itemData.serialNumbers.length})
-                        </span>
-                        <button
-                          onClick={() => addSerialNumber(item.id)}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          <Plus className="w-3 h-3" />
-                          Add Serial
-                        </button>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        {itemData.serialNumbers.map((serial, index) => {
-                          const serialKey = `${item.id}-${index}`;
-                          const isExpanded = expandedSerials.has(serialKey);
-                          
-                          return (
-                            <div key={index} className="border border-gray-200 rounded-lg bg-gray-50">
-                              {/* Header - Always Visible */}
-                              <div className="p-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <Smartphone className="w-4 h-4 text-gray-500" />
-                                  <input
-                                    type="text"
-                                    placeholder="Serial Number *"
-                                    value={serial.serial_number}
-                                    onChange={(e) => updateSerialNumber(item.id, index, 'serial_number', e.target.value)}
-                                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium"
-                                  />
-                                  <button
-                                    onClick={() => toggleSerialExpanded(serialKey)}
-                                    className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
-                                    title={isExpanded ? "Show less" : "Show more"}
-                                  >
-                                    {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                  </button>
-                                  <button
-                                    onClick={() => removeSerialNumber(item.id, index)}
-                                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                                    title="Remove serial"
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </button>
-                                </div>
-                                
-                                {/* Expanded Details */}
-                                {isExpanded && (
-                                  <div className="mt-3 space-y-4 pt-3 border-t border-gray-200">
-                                    {/* Device Identifiers Section */}
-                                    <div>
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Smartphone className="w-4 h-4 text-blue-600" />
-                                        <span className="text-xs font-semibold text-gray-700 uppercase">Device Identifiers</span>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <input
-                                          type="text"
-                                          placeholder="IMEI (optional)"
-                                          value={serial.imei || ''}
-                                          onChange={(e) => updateSerialNumber(item.id, index, 'imei', e.target.value)}
-                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                        />
-                                        <input
-                                          type="text"
-                                          placeholder="MAC Address (optional)"
-                                          value={serial.mac_address || ''}
-                                          onChange={(e) => updateSerialNumber(item.id, index, 'mac_address', e.target.value)}
-                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                        />
-                                        <input
-                                          type="text"
-                                          placeholder="Barcode (optional)"
-                                          value={serial.barcode || ''}
-                                          onChange={(e) => updateSerialNumber(item.id, index, 'barcode', e.target.value)}
-                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                        />
-                                        <input
-                                          type="text"
-                                          placeholder="Location (optional)"
-                                          value={serial.location || ''}
-                                          onChange={(e) => updateSerialNumber(item.id, index, 'location', e.target.value)}
-                                          className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                        />
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Warranty Section */}
-                                    <div>
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <Shield className="w-4 h-4 text-green-600" />
-                                        <span className="text-xs font-semibold text-gray-700 uppercase">Warranty Information</span>
-                                      </div>
-                                      <div className="grid grid-cols-3 gap-2">
-                                        <div>
-                                          <label className="text-xs text-gray-600 mb-1 block">Start Date</label>
-                                          <input
-                                            type="date"
-                                            value={serial.warranty_start || ''}
-                                            onChange={(e) => updateSerialNumber(item.id, index, 'warranty_start', e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                          />
-                                        </div>
-                                        <div>
-                                          <label className="text-xs text-gray-600 mb-1 block">Months</label>
-                                          <input
-                                            type="number"
-                                            min="0"
-                                            max="120"
-                                            value={serial.warranty_months || 12}
-                                            onChange={(e) => updateSerialNumber(item.id, index, 'warranty_months', parseInt(e.target.value) || 0)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                          />
-                                        </div>
-                                        <div>
-                                          <label className="text-xs text-gray-600 mb-1 block">End Date</label>
-                                          <input
-                                            type="date"
-                                            value={serial.warranty_end || ''}
-                                            readOnly
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-gray-100 cursor-not-allowed"
-                                            title="Auto-calculated from start date and months"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Pricing Section */}
-                                    <div>
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <DollarSign className="w-4 h-4 text-yellow-600" />
-                                        <span className="text-xs font-semibold text-gray-700 uppercase">Pricing</span>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                          <label className="text-xs text-gray-600 mb-1 block">Cost Price</label>
-                                          <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            value={serial.cost_price || item.cost_price}
-                                            onChange={(e) => updateSerialNumber(item.id, index, 'cost_price', parseFloat(e.target.value) || 0)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                          />
-                                        </div>
-                                        <div>
-                                          <label className="text-xs text-gray-600 mb-1 block">Selling Price (optional)</label>
-                                          <input
-                                            type="number"
-                                            step="0.01"
-                                            min="0"
-                                            value={serial.selling_price || ''}
-                                            onChange={(e) => updateSerialNumber(item.id, index, 'selling_price', parseFloat(e.target.value) || 0)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-                                            placeholder="Leave empty to use variant price"
-                                          />
-                                        </div>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Notes Section */}
-                                    <div>
-                                      <label className="text-xs text-gray-600 mb-1 block">Notes (optional)</label>
-                                      <textarea
-                                        value={serial.notes || ''}
-                                        onChange={(e) => updateSerialNumber(item.id, index, 'notes', e.target.value)}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none"
-                                        rows={2}
-                                        placeholder="Any additional notes about this item..."
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      
-                      {itemData.serialNumbers.length === 0 && (
-                        <div className="text-center py-4 text-sm text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                          No serial numbers added yet. Click "Add Serial" to begin.
-                        </div>
-                      )}
-                    </div>
-                  )}
+
+                  {/* Excel-like Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-green-600 text-white">
+                          <th className="border-2 border-green-700 px-3 py-2 text-center text-sm font-semibold w-12">#</th>
+                          <th className="border-2 border-green-700 px-3 py-2 text-left text-sm font-semibold min-w-[200px]">
+                            Product Name
+                          </th>
+                          <th className="border-2 border-green-700 px-3 py-2 text-left text-sm font-semibold min-w-[250px]">
+                            Serial Number / IMEI *
+                          </th>
+                          <th className="border-2 border-green-700 px-3 py-2 text-left text-sm font-semibold min-w-[180px]">
+                            Location
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {itemData.serialNumbers.map((serial, index) => (
+                          <tr 
+                            key={index} 
+                            className={index % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                          >
+                            {/* Row Number */}
+                            <td className="border-2 border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">
+                              {index + 1}
+                            </td>
+                            
+                            {/* Product Name */}
+                            <td className="border-2 border-gray-300 px-3 py-2 font-medium text-gray-900">
+                              {productName}
+                            </td>
+                            
+                            {/* Serial Number / IMEI */}
+                            <td className="border-2 border-gray-300 p-1">
+                              <input
+                                type="text"
+                                placeholder="Enter Serial Number or IMEI"
+                                value={serial.serial_number}
+                                onChange={(e) => updateSerialNumber(item.id, index, 'serial_number', e.target.value)}
+                                className={`w-full px-3 py-2 border-2 rounded focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                                  !serial.serial_number.trim() 
+                                    ? 'border-red-300 bg-red-50' 
+                                    : 'border-transparent bg-white'
+                                }`}
+                              />
+                            </td>
+                            
+                            {/* Location */}
+                            <td className="border-2 border-gray-300 p-1">
+                              <button
+                                type="button"
+                                onClick={() => openLocationModal(item.id, index)}
+                                className="w-full px-3 py-2 border-2 border-transparent rounded hover:border-green-500 bg-white text-left flex items-center gap-2 transition-colors"
+                              >
+                                <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                <span className={serial.location ? 'text-gray-900' : 'text-gray-400'}>
+                                  {serial.location || 'Select shelf'}
+                                </span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Table Footer Info */}
+                  <div className="mt-3 text-xs text-gray-500 italic">
+                    * Serial Number / IMEI is required (enter either one)
+                  </div>
                 </div>
               );
             })}
           </div>
-          
-          <div className="flex gap-3 mt-6">
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-6 border-t border-gray-200 bg-gray-50">
+          <div className="flex gap-3">
             <button
+              type="button"
               onClick={onClose}
-              className="w-full px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
             >
-              Close
+              Cancel
             </button>
             <button
+              type="button"
               onClick={handleConfirm}
               disabled={isLoading || getTotalReceivedItems() === 0}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Processing...' : 'Confirm Receive'}
+              {isLoading ? 'Processing...' : `Confirm Receive (${getTotalReceivedItems()} items)`}
             </button>
           </div>
+          <p className="text-xs text-center text-gray-500 mt-3">
+            All items must have a Serial Number or IMEI before confirming
+          </p>
         </div>
       </div>
+
+      {/* Storage Location Modal */}
+      {showLocationModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100000] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
+              <div className="flex items-center gap-3">
+                <MapPin className="w-5 h-5 text-green-600" />
+                <h3 className="text-lg font-bold text-gray-900">Select Storage Location</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowLocationModal(false);
+                  setSelectedLocationIndex(null);
+                }}
+                className="p-2 hover:bg-white/50 rounded transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Storage Room Tabs */}
+            <div className="border-b border-gray-200 bg-gray-50">
+              <div className="flex overflow-x-auto px-4 py-2 gap-2">
+                {storageRooms.map((room) => (
+                  <button
+                    key={room.id}
+                    onClick={() => setSelectedRoomId(room.id)}
+                    className={`flex-shrink-0 px-4 py-2 rounded font-medium text-sm transition-colors ${
+                      selectedRoomId === room.id
+                        ? 'bg-green-600 text-white shadow-md'
+                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Building className="w-4 h-4" />
+                      <span>{room.name}</span>
+                      <span className="text-xs opacity-75">({room.code})</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search Bar */}
+            <div className="p-4 border-b border-gray-200 bg-white">
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Search shelves by code..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 bg-white border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-500"
+                />
+              </div>
+            </div>
+
+            {/* Shelves Grid */}
+            <div className="p-4 overflow-y-auto max-h-[50vh]">
+              {getFilteredShelves().length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                  {getFilteredShelves().map((shelf) => {
+                    if (!shelf || !shelf.code) return null;
+                    
+                    const currentRoom = storageRooms.find(r => r.id === selectedRoomId);
+                    const roomCode = currentRoom?.code || '';
+                    const completeCellNumber = shelf.code.startsWith(roomCode) 
+                      ? shelf.code 
+                      : `${roomCode}${shelf.code}`;
+                    
+                    const foundLetter = shelf.code.toUpperCase().match(/[A-Z]/)?.[0];
+                    
+                    const getLetterColor = (letter: string) => {
+                      const colors: { [key: string]: string } = {
+                        'A': 'bg-blue-500',
+                        'B': 'bg-green-500',
+                        'C': 'bg-purple-500',
+                        'D': 'bg-orange-500',
+                        'E': 'bg-red-500',
+                        'F': 'bg-teal-500',
+                        'G': 'bg-pink-500',
+                        'H': 'bg-indigo-500'
+                      };
+                      return colors[letter] || 'bg-gray-500';
+                    };
+                    
+                    const bgColor = foundLetter ? getLetterColor(foundLetter) : 'bg-gray-500';
+                    
+                    return (
+                      <button
+                        key={shelf.id}
+                        onClick={() => handleLocationSelect(selectedRoomId, shelf.id)}
+                        className={`py-3 px-2 rounded-lg border-2 font-bold text-center text-white text-sm ${bgColor} border-transparent hover:border-white hover:shadow-lg transition-all`}
+                      >
+                        {completeCellNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <LayoutGrid size={48} className="text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Shelves Found</h3>
+                  <p className="text-sm text-gray-600">
+                    {searchTerm 
+                      ? 'Try adjusting your search.'
+                      : 'No shelves available in this room.'
+                    }
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center p-4 border-t border-gray-200 bg-gray-50">
+              <div className="text-sm text-gray-600">
+                {getFilteredShelves().length} shelf{getFilteredShelves().length !== 1 ? 'ves' : ''} available
+              </div>
+              <button
+                onClick={() => {
+                  setShowLocationModal(false);
+                  setSelectedLocationIndex(null);
+                }}
+                className="px-4 py-2 text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -562,7 +562,7 @@ const RemindersPage: React.FC = () => {
 };
 
 // Enhanced Reminder Modal with all features
-interface EnhancedReminderModalProps {
+export interface EnhancedReminderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
@@ -571,7 +571,7 @@ interface EnhancedReminderModalProps {
   branchId?: string;
 }
 
-const EnhancedReminderModal: React.FC<EnhancedReminderModalProps> = ({
+export const EnhancedReminderModal: React.FC<EnhancedReminderModalProps> = ({
   isOpen,
   onClose,
   onSuccess,

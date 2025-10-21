@@ -203,8 +203,7 @@ const SerialNumberSelector: React.FC<SerialNumberSelectorProps> = ({
         {/* Search */}
         <div className="mb-6">
           <SearchBar
-            value={searchTerm}
-            onChange={setSearchTerm}
+            onSearch={setSearchTerm}
             placeholder="Search by serial number, IMEI, MAC address, or barcode..."
           />
         </div>

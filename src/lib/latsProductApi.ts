@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
-import { validateAndCreateDefaultVariant } from '../features/lats/lib/variantUtils';
+// ⚠️ DISABLED: Automatic default variant creation
+// import { validateAndCreateDefaultVariant } from '../features/lats/lib/variantUtils';
 import { ImageUploadService } from './imageUpload';
 
 // Use the main supabase client instead of creating a separate one
@@ -110,7 +111,7 @@ export async function createProduct(
       productInsertData.cost_price = productWithoutImages.costPrice;
     }
     if (productWithoutImages.sellingPrice !== undefined || productWithoutImages.price !== undefined) {
-      productInsertData.unit_price = productWithoutImages.sellingPrice ?? productWithoutImages.price;
+      productInsertData.selling_price = productWithoutImages.sellingPrice ?? productWithoutImages.price;
     }
     if (productWithoutImages.quantity !== undefined || productWithoutImages.stockQuantity !== undefined) {
       productInsertData.stock_quantity = productWithoutImages.quantity ?? productWithoutImages.stockQuantity;
@@ -179,27 +180,30 @@ export async function createProduct(
         console.error('Variants data being inserted:', variants);
         throw variantsError;
       }
-    } else {
-      // No variants provided - create a default variant automatically
-      
-      const defaultVariantResult = await validateAndCreateDefaultVariant(
-        product.id,
-        product.name,
-        {
-          costPrice: productWithoutImages.costPrice,
-          sellingPrice: productWithoutImages.sellingPrice,
-          quantity: productWithoutImages.quantity,
-          minQuantity: productWithoutImages.minQuantity,
-          sku: productWithoutImages.sku,
-          attributes: productWithoutImages.attributes
-        }
-      );
-
-      if (!defaultVariantResult.success) {
-        console.error('❌ Failed to create default variant:', defaultVariantResult.error);
-        throw new Error(`Failed to create default variant: ${defaultVariantResult.error}`);
-      }
-    }
+    } 
+    // ⚠️ DISABLED: Automatic default variant creation
+    // Only variants explicitly created by the user will be added
+    // else {
+    //   // No variants provided - create a default variant automatically
+    //   
+    //   const defaultVariantResult = await validateAndCreateDefaultVariant(
+    //     product.id,
+    //     product.name,
+    //     {
+    //       costPrice: productWithoutImages.costPrice,
+    //       sellingPrice: productWithoutImages.sellingPrice,
+    //       quantity: productWithoutImages.quantity,
+    //       minQuantity: productWithoutImages.minQuantity,
+    //       sku: productWithoutImages.sku,
+    //       attributes: productWithoutImages.attributes
+    //     }
+    //   );
+    //
+    //   if (!defaultVariantResult.success) {
+    //     console.error('❌ Failed to create default variant:', defaultVariantResult.error);
+    //     throw new Error(`Failed to create default variant: ${defaultVariantResult.error}`);
+    //   }
+    // }
 
     // Handle images if provided
     if (images && images.length > 0) {
@@ -254,6 +258,11 @@ export async function createProduct(
 
 // Get a product by ID with images
 export async function getProduct(productId: string): Promise<LatsProduct & { images: any[] }> {
+  // Validate productId
+  if (!productId || productId === 'undefined' || productId === 'null') {
+    throw new Error(`Invalid product ID: ${productId}`);
+  }
+
   const { data: product, error: productError } = await supabase
     .from('lats_products')
     .select('*')
@@ -261,6 +270,7 @@ export async function getProduct(productId: string): Promise<LatsProduct & { ima
     .single();
 
   if (productError) throw productError;
+  if (!product) throw new Error('Product not found');
 
   // Fetch category and supplier separately
   const [categoryResult, supplierResult] = await Promise.all([
@@ -310,7 +320,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
     
     let query = supabase
       .from('lats_products')
-      .select('id, name, description, sku, barcode, category_id, supplier_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id')
+      .select('id, name, description, sku, barcode, category_id, supplier_id, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id')
       .order('created_at', { ascending: false });
     
     // 🔒 IMPROVED BRANCH FILTERING - Respects store isolation settings
@@ -376,7 +386,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
     if (currentBranchId && branchSettings && branchSettings.data_isolation_mode !== 'isolated') {
       const { data: nullBranchProducts, error: nullError } = await supabase
         .from('lats_products')
-        .select('id, name, description, sku, barcode, category_id, supplier_id, unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
+        .select('id, name, description, sku, barcode, category_id, supplier_id, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
         .is('branch_id', null)
         .order('created_at', { ascending: false });
       
@@ -420,15 +430,28 @@ export async function getProducts(): Promise<LatsProduct[]> {
     const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
     const supplierIds = [...new Set(products.map(p => p.supplier_id).filter(Boolean))];
     
-    // Fetch categories and suppliers using supabase client
+    console.log(`📊 [getProducts] Found ${categoryIds.length} unique categories and ${supplierIds.length} unique suppliers in products`);
+    
+    // 🔧 ALWAYS fetch ALL suppliers to ensure they're available even if products don't have supplier_id yet
     const [categoriesResult, suppliersResult] = await Promise.all([
       categoryIds.length > 0 ? supabase.from('lats_categories').select('id, name').in('id', categoryIds) : Promise.resolve({ data: [] }),
-      supplierIds.length > 0 ? supabase.from('lats_suppliers').select('id, name').in('id', supplierIds) : Promise.resolve({ data: [] })
+      // Always fetch all active suppliers for potential assignment
+      supabase.from('lats_suppliers').select('id, name').eq('is_active', true).order('name')
     ]);
+    
+    // Log any errors in fetching
+    if (categoriesResult.error) {
+      console.error('❌ Error fetching categories:', categoriesResult.error);
+    }
+    if (suppliersResult && 'error' in suppliersResult && suppliersResult.error) {
+      console.error('❌ Error fetching suppliers:', suppliersResult.error);
+    }
     
     // Extract data from supabase responses
     const categoriesData = categoriesResult.data || [];
     const suppliersData = suppliersResult.data || [];
+    
+    console.log(`✅ [getProducts] Fetched ${categoriesData.length} categories and ${suppliersData.length} suppliers`);
     
     // Create lookup maps
     const categoriesMap = new Map();
@@ -449,13 +472,17 @@ export async function getProducts(): Promise<LatsProduct[]> {
     
     let allVariants: any[] = [];
     
-    try {
-      // Fetch variants using supabase client
-      let variantQuery = supabase
-        .from('lats_product_variants')
-        .select('id, product_id, variant_name, sku, variant_attributes, cost_price, unit_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
-        .in('product_id', productIds)
-        .order('variant_name');
+    // ✅ FIXED: Skip variant query if no products
+    if (productIds.length === 0) {
+      console.log('ℹ️ No products to fetch variants for');
+    } else {
+      try {
+        // Fetch variants using supabase client
+        let variantQuery = supabase
+          .from('lats_product_variants')
+          .select('id, product_id, variant_name, sku, variant_attributes, cost_price, selling_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
+          .in('product_id', productIds)
+          .order('variant_name');
       
       // 🔒 BRANCH FILTER: Filter variants based on isolation mode
       const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
@@ -480,7 +507,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
       if (currentBranchIdForVariants && productIds.length > 0 && branchSettings?.data_isolation_mode !== 'isolated') {
         const { data: nullBranchVariants } = await supabase
           .from('lats_product_variants')
-          .select('id, product_id, variant_name, sku, variant_attributes, cost_price, unit_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
+          .select('id, product_id, variant_name, sku, variant_attributes, cost_price, selling_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
           .in('product_id', productIds)
           .is('branch_id', null)
           .order('variant_name');
@@ -495,29 +522,30 @@ export async function getProducts(): Promise<LatsProduct[]> {
       } else if (branchSettings?.data_isolation_mode === 'isolated') {
       }
       
-      const duration = Date.now() - variantsStartTime;
-    } catch (exception) {
-      console.error('❌ Exception fetching variants:', exception);
-      
-      // Fallback to batched approach if single query fails
-      const BATCH_SIZE = 50;
-      
-      try {
-        for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-          const batch = productIds.slice(i, i + BATCH_SIZE);
-          const { data: batchVariants, error: batchError } = await supabase
-            .from('lats_product_variants')
-            .select('id, product_id, variant_name, sku, variant_attributes, cost_price, unit_price, quantity, min_quantity, created_at, updated_at')
-            .in('product_id', batch)
-            .order('variant_name');
-            
-          if (!batchError && batchVariants) {
-            allVariants.push(...batchVariants);
+        const duration = Date.now() - variantsStartTime;
+      } catch (exception) {
+        console.error('❌ Exception fetching variants:', exception);
+        
+        // Fallback to batched approach if single query fails
+        const BATCH_SIZE = 50;
+        
+        try {
+          for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+            const batch = productIds.slice(i, i + BATCH_SIZE);
+            const { data: batchVariants, error: batchError } = await supabase
+              .from('lats_product_variants')
+              .select('id, product_id, variant_name, sku, variant_attributes, cost_price, selling_price, quantity, min_quantity, created_at, updated_at')
+              .in('product_id', batch)
+              .order('variant_name');
+              
+            if (!batchError && batchVariants) {
+              allVariants.push(...batchVariants);
+            }
           }
+        } catch (fallbackError) {
+          console.error('❌ Fallback also failed:', fallbackError);
+          allVariants = [];
         }
-      } catch (fallbackError) {
-        console.error('❌ Fallback also failed:', fallbackError);
-        allVariants = [];
       }
     }
 
@@ -533,21 +561,27 @@ export async function getProducts(): Promise<LatsProduct[]> {
     // Fetch product images from product_images table using supabase client
     
     let productImages: any[] = [];
-    try {
-      const imagesResult = await supabase
-        .from('product_images')
-        .select('id, product_id, image_url, is_primary')
-        .in('product_id', productIds)
-        .order('is_primary', { ascending: false });
-      
-      // Extract data from supabase response and add thumbnail_url as fallback to image_url
-      productImages = (imagesResult.data || []).map(img => ({
-        ...img,
-        thumbnail_url: img.thumbnail_url || img.image_url
-      }));
-    } catch (imagesError) {
-      console.error('⚠️  Error fetching product images:', imagesError);
-      productImages = [];
+    
+    // ✅ FIXED: Skip images query if no products
+    if (productIds.length === 0) {
+      console.log('ℹ️ No products to fetch images for');
+    } else {
+      try {
+        const imagesResult = await supabase
+          .from('product_images')
+          .select('id, product_id, image_url, is_primary')
+          .in('product_id', productIds)
+          .order('is_primary', { ascending: false });
+        
+        // Extract data from supabase response and add thumbnail_url as fallback to image_url
+        productImages = (imagesResult.data || []).map(img => ({
+          ...img,
+          thumbnail_url: img.thumbnail_url || img.image_url
+        }));
+      } catch (imagesError) {
+        console.error('⚠️  Error fetching product images:', imagesError);
+        productImages = [];
+      }
     }
 
     // Group images by product ID
@@ -585,7 +619,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
       console.warn('Could not fetch shelf data:', shelfError);
     }
 
-    return (products || []).map(product => {
+    const mappedProducts = (products || []).map(product => {
       // Get images for this product - combine image_url field and product_images table
       const images: string[] = [];
       
@@ -616,7 +650,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
         categoryId: product.category_id,
         supplierId: product.supplier_id,
         isActive: product.is_active,
-        price: product.unit_price || firstVariant?.unit_price || 0, // Add price from product or first variant
+        price: product.selling_price || firstVariant?.selling_price || 0,
         costPrice: product.cost_price || firstVariant?.cost_price || 0,
         stockQuantity: product.stock_quantity || 0,
         minStockLevel: product.min_stock_level || 0,
@@ -640,8 +674,8 @@ export async function getProducts(): Promise<LatsProduct[]> {
           name: variant.variant_name || variant.name,
           attributes: variant.variant_attributes || variant.attributes || {},
           costPrice: variant.cost_price || 0,
-          sellingPrice: variant.unit_price || 0,
-          price: variant.unit_price || 0, // Add price field
+          sellingPrice: variant.selling_price || 0,
+          price: variant.selling_price || 0,
           stockQuantity: variant.quantity || 0,
           minStockLevel: variant.min_quantity || 0,
           quantity: variant.quantity || 0,
@@ -654,6 +688,19 @@ export async function getProducts(): Promise<LatsProduct[]> {
         }))
       };
     });
+    
+    // Log supplier population statistics
+    const productsWithSupplier = mappedProducts.filter(p => p.supplier).length;
+    const productsWithoutSupplier = mappedProducts.filter(p => !p.supplier && p.supplierId).length;
+    const productsWithNoSupplierId = mappedProducts.filter(p => !p.supplierId).length;
+    
+    console.log(`📊 [getProducts] Supplier population stats:
+      - Total products: ${mappedProducts.length}
+      - Products with supplier object: ${productsWithSupplier}
+      - Products with supplier_id but no supplier object: ${productsWithoutSupplier}
+      - Products with no supplier_id: ${productsWithNoSupplierId}`);
+    
+    return mappedProducts;
   } catch (error) {
     console.error('💥 [latsProductApi] Exception in getProducts:', error);
     console.error('💥 [latsProductApi] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
@@ -784,7 +831,7 @@ export async function updateProduct(
           variant_name: variant.name || 'Default',
           variant_attributes: variant.attributes || {},
           cost_price: variant.costPrice || 0,
-          unit_price: variant.sellingPrice || variant.price || 0,
+          selling_price: variant.sellingPrice || variant.price || 0,
           quantity: variant.quantity ?? variant.stockQuantity ?? 0,
           min_quantity: variant.minQuantity ?? variant.minStockLevel ?? 0
         };

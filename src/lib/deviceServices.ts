@@ -94,7 +94,11 @@ export const deviceServices = {
   async getAllDevices() {
     try {
       console.log('🔍 deviceServices.getAllDevices() called');
-      const { data: devices, error } = await supabase
+      
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      let query = supabase
         .from('devices')
         .select(`
           id,
@@ -116,6 +120,13 @@ export const deviceServices = {
           device_ratings(*)
         `)
         .order('created_at', { ascending: false });
+      
+      // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: devices, error } = await query;
       if (error) {
         console.error('❌ Database error:', error);
         throw new Error(`Failed to fetch devices: ${error.message}`);
@@ -166,6 +177,9 @@ export const deviceServices = {
   // Create new device
   async createDevice(deviceData: Database['public']['Tables']['devices']['Insert']) {
     try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
       // Only keep allowed fields
       const sanitizedData = sanitizeDevicePayload(deviceData);
       const snakeCaseData = toSnakeCase(sanitizedData);
@@ -175,6 +189,8 @@ export const deviceServices = {
       if (!finalInsertData.status) {
         finalInsertData.status = 'received';
       }
+      // 🔒 Add branch isolation
+      finalInsertData.branch_id = currentBranchId || '00000000-0000-0000-0000-000000000001';
       console.log('Inserting sanitized device:', finalInsertData);
       const { data, error } = await supabase
         .from('devices')
@@ -371,7 +387,10 @@ export const deviceServices = {
   // Search devices
   async searchDevices(query: string) {
     try {
-      const { data, error } = await supabase
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      let deviceQuery = supabase
         .from('devices')
         .select(`
           *,
@@ -380,6 +399,13 @@ export const deviceServices = {
         `)
         .or(`brand.ilike.%${query}%,model.ilike.%${query}%,serial_number.ilike.%${query}%,id.ilike.%${query}%`)
         .order('created_at', { ascending: false });
+      
+      // 🔒 COMPLETE ISOLATION: Only search devices from current branch
+      if (currentBranchId) {
+        deviceQuery = deviceQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await deviceQuery;
 
       if (error) {
         console.error('Error searching devices:', error);
@@ -395,7 +421,10 @@ export const deviceServices = {
   // Filter devices by status
   async filterDevicesByStatus(status: string) {
     try {
-      const { data, error } = await supabase
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      let query = supabase
         .from('devices')
         .select(`
           *,
@@ -407,6 +436,13 @@ export const deviceServices = {
         `)
         .eq('status', status)
         .order('created_at', { ascending: false });
+      
+      // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
         console.error('Error filtering devices by status:', error);
@@ -423,7 +459,11 @@ export const deviceServices = {
   async getDevicesByTechnician(technicianId: string) {
     try {
       console.log('🔧 Fetching devices for technician:', technicianId);
-      const { data, error } = await supabase
+      
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      let query = supabase
         .from('devices')
         .select(`
           *,
@@ -435,6 +475,13 @@ export const deviceServices = {
         `)
         .eq('assigned_to', technicianId)
         .order('created_at', { ascending: false });
+      
+      // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
 
       if (error) {
         console.error('❌ Error fetching devices by technician:', error);
@@ -455,7 +502,10 @@ export const deviceServices = {
       const throttler = RequestThrottler.getInstance();
       
       const result = await throttler.execute(async () => {
-        const { data, error } = await supabase
+        // 🔒 Get current branch for isolation
+        const currentBranchId = localStorage.getItem('current_branch_id');
+        
+        let query = supabase
           .from('devices')
           .select(`
             *,
@@ -467,6 +517,13 @@ export const deviceServices = {
           `)
           .eq('customer_id', customerId)
           .order('created_at', { ascending: false });
+        
+        // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+        if (currentBranchId) {
+          query = query.eq('branch_id', currentBranchId);
+        }
+        
+        const { data, error } = await query;
 
         if (error) {
           console.error('Error fetching devices by customer:', error);
@@ -593,24 +650,26 @@ export const deviceServices = {
   // Get device statistics
   async getDeviceStatistics() {
     try {
-      const { data: totalDevices, error: totalError } = await supabase
-        .from('devices')
-        .select('id', { count: 'exact' });
-
-      const { data: inRepair, error: repairError } = await supabase
-        .from('devices')
-        .select('id', { count: 'exact' })
-        .in('status', ['received', 'in_progress']);
-
-      const { data: readyForPickup, error: pickupError } = await supabase
-        .from('devices')
-        .select('id', { count: 'exact' })
-        .eq('status', 'completed');
-
-      const { data: completed, error: completedError } = await supabase
-        .from('devices')
-        .select('id', { count: 'exact' })
-        .eq('status', 'completed');
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
+      let totalQuery = supabase.from('devices').select('id', { count: 'exact' });
+      let repairQuery = supabase.from('devices').select('id', { count: 'exact' }).in('status', ['received', 'in_progress']);
+      let pickupQuery = supabase.from('devices').select('id', { count: 'exact' }).eq('status', 'completed');
+      let completedQuery = supabase.from('devices').select('id', { count: 'exact' }).eq('status', 'completed');
+      
+      // 🔒 COMPLETE ISOLATION: Only count devices from current branch
+      if (currentBranchId) {
+        totalQuery = totalQuery.eq('branch_id', currentBranchId);
+        repairQuery = repairQuery.eq('branch_id', currentBranchId);
+        pickupQuery = pickupQuery.eq('branch_id', currentBranchId);
+        completedQuery = completedQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: totalDevices, error: totalError } = await totalQuery;
+      const { data: inRepair, error: repairError } = await repairQuery;
+      const { data: readyForPickup, error: pickupError } = await pickupQuery;
+      const { data: completed, error: completedError } = await completedQuery;
 
       if (totalError || repairError || pickupError || completedError) {
         console.error('Error fetching device statistics:', { totalError, repairError, pickupError, completedError });

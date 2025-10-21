@@ -6,8 +6,11 @@ import { Device } from '../types';
 export async function fetchAllDevices(): Promise<Device[]> {
   if (navigator.onLine) {
     try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
       // First try with customer join - use explicit column selection
-      const { data, error } = await supabase
+      let query = supabase
         .from('devices')
         .select(`
           id,
@@ -26,6 +29,13 @@ export async function fetchAllDevices(): Promise<Device[]> {
           deposit_amount
         `)
         .order('created_at', { ascending: false });
+      
+      // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
 
       
@@ -159,7 +169,10 @@ export async function fetchAllDevices(): Promise<Device[]> {
 }
 
 export async function fetchAllDevicesDirect() {
-  const { data, error } = await supabase
+  // 🔒 Get current branch for isolation
+  const currentBranchId = localStorage.getItem('current_branch_id');
+  
+  let query = supabase
     .from('devices')
     .select(`
       id,
@@ -174,6 +187,13 @@ export async function fetchAllDevicesDirect() {
       created_at,
       updated_at
     `);
+  
+  // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+  if (currentBranchId) {
+    query = query.eq('branch_id', currentBranchId);
+  }
+  
+  const { data, error } = await query;
   if (error) throw error;
   return (data || []).map(device => ({
     ...device,
@@ -183,9 +203,13 @@ export async function fetchAllDevicesDirect() {
 }
 
 export async function addDeviceToDb(device: Device) {
+  // 🔒 Get current branch for isolation
+  const currentBranchId = localStorage.getItem('current_branch_id');
+  
   // Map camelCase fields to snake_case for DB
   const dbDevice = {
     id: device.id,
+    branch_id: currentBranchId || '00000000-0000-0000-0000-000000000001', // 🔒 Add branch isolation
     customer_id: device.customerId,
     device_name: device.model || `${device.brand} Device` || 'Unknown Device', // REQUIRED field
     brand: device.brand,
@@ -444,8 +468,11 @@ export async function fetchDevicesPage(page: number, pageSize: number = 20): Pro
   
   if (navigator.onLine) {
     try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = localStorage.getItem('current_branch_id');
+      
       // First try with customer join - use explicit column selection
-      const { data, error } = await supabase
+      let query = supabase
         .from('devices')
         .select(`
           id,
@@ -465,6 +492,13 @@ export async function fetchDevicesPage(page: number, pageSize: number = 20): Pro
         `)
         .order('created_at', { ascending: false })
         .range(from, to);
+      
+      // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) {
 

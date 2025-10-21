@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 8000;
 // Middleware
 app.use(helmet()); // Security headers
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
   credentials: true,
 }));
 app.use(compression()); // Compress responses
@@ -62,7 +62,7 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost:${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 CORS enabled for: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);
+  console.log(`🔗 CORS enabled for: ${process.env.CORS_ORIGIN || 'http://localhost:3000, http://localhost:5173'}`);
   console.log('');
   console.log('Available endpoints:');
   console.log('  GET  /health');

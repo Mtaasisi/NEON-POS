@@ -92,33 +92,17 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   };
   const navigate = useNavigate();
   
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [viewMode, setViewMode] = useState<'mobile' | 'desktop'>(() => {
     // Get saved preference from localStorage
     const saved = localStorage.getItem('pos_view_mode');
     return (saved === 'mobile' || saved === 'desktop') ? saved : 'desktop';
   });
-  const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Permission checks for current user
   const userRole = currentUser?.role as UserRole;
   const canViewReports = rbacManager.can(userRole, 'reports', 'view');
   const canAccessSettings = rbacManager.can(userRole, 'settings', 'view');
-
-  // Close dropdowns when clicking outside
-  React.useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setShowUserMenu(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
 
   // Handle fullscreen change events
   React.useEffect(() => {
@@ -162,7 +146,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
 
   const handleExitToDashboard = () => {
     navigate('/dashboard');
-    setShowUserMenu(false);
   };
 
   const toggleFullscreen = async () => {
@@ -498,66 +481,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
               </button>
             </div>
 
-            {/* User Menu */}
-            <div className="relative" ref={userMenuRef}>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setShowUserMenu(!showUserMenu);
-                }}
-                className="flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 active:from-gray-600 active:to-gray-700 transition-all duration-300 shadow-sm border border-gray-300 touch-target"
-              >
-                <span className="text-white text-sm sm:text-base font-semibold">
-                  {currentUser?.name?.charAt(0).toUpperCase() || 'U'}
-                </span>
-              </button>
-              
-              {/* User Menu Dropdown */}
-              {showUserMenu && (
-                <div className="absolute right-0 top-full mt-2 sm:mt-3 w-56 sm:w-64 bg-white/95 backdrop-blur-xl rounded-xl shadow-lg border border-gray-200 z-50">
-                  <div className="p-3 sm:p-4">
-                    <div className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 mb-2 sm:mb-3 border border-gray-200">
-                      <div className="p-1.5 sm:p-2 rounded-full bg-gradient-to-br from-gray-700 to-gray-800 text-white">
-                        <User size={16} className="sm:hidden" />
-                        <User size={20} className="hidden sm:block" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 truncate text-sm sm:text-base">{currentUser.name}</p>
-                        <p className="text-xs sm:text-sm text-gray-600 capitalize truncate">{currentUser.role.replace('-', ' ')}</p>
-                        {currentUser.email && (
-                          <p className="text-xs text-gray-500 truncate hidden sm:block">{currentUser.email}</p>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          handleExitToDashboard();
-                        }}
-                        className="w-full flex items-center gap-2 sm:gap-3 p-2 rounded-lg active:bg-blue-50 transition-colors touch-target"
-                      >
-                        <Home size={14} className="text-blue-500 sm:hidden" />
-                        <Home size={16} className="text-blue-500 hidden sm:block" />
-                        <span className="text-xs sm:text-sm text-blue-700">Exit to Dashboard</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          handleLogout();
-                        }}
-                        className="w-full flex items-center gap-2 sm:gap-3 p-2 rounded-lg active:bg-red-50 transition-colors touch-target"
-                      >
-                        <LogOut size={14} className="text-red-500 sm:hidden" />
-                        <LogOut size={16} className="text-red-500 hidden sm:block" />
-                        <span className="text-xs sm:text-sm text-red-700">Logout</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>

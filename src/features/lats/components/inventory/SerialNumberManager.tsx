@@ -274,8 +274,7 @@ const SerialNumberManager: React.FC<SerialNumberManagerProps> = ({
         <div className="flex gap-4 mb-6">
           <div className="flex-1">
             <SearchBar
-              value={searchTerm}
-              onChange={setSearchTerm}
+              onSearch={setSearchTerm}
               placeholder="Search by serial number, IMEI, MAC address, or barcode..."
             />
           </div>

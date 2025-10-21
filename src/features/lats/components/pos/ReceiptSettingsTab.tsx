@@ -218,7 +218,7 @@ const ReceiptSettingsTab = forwardRef<ReceiptSettingsTabRef>((props, ref) => {
             onChange={(checked) => handleSettingChange('show_quantities', checked)}
           />
           <ToggleSwitch
-            label="Show Unit Prices"
+            label="Show Item Prices"
             checked={settings.show_unit_prices}
             onChange={(checked) => handleSettingChange('show_unit_prices', checked)}
           />

@@ -148,6 +148,7 @@ interface PurchaseCartItemType {
   variantName?: string;
   sku: string;
   costPrice: number;
+  sellingPrice?: number; // Store selling price for PO tracking
   quantity: number;
   totalPrice: number;
   currentStock?: number;
@@ -664,6 +665,7 @@ const POcreate: React.FC = () => {
           variantName: selectedVariant.name,
           sku: sku,
           costPrice: costPrice,
+          sellingPrice: selectedVariant.sellingPrice || selectedVariant.price || 0, // Store selling price
           quantity: quantity,
           totalPrice: costPrice * quantity,
           currentStock: currentStock,
@@ -971,6 +973,7 @@ const POcreate: React.FC = () => {
           variantId: item.variantId,
           quantity: item.quantity,
           costPrice: item.costPrice,
+          sellingPrice: item.sellingPrice || 0, // Include selling price for PO tracking
           minimumOrderQty: item.minimumOrderQty, // Add minimum order quantity
           notes: item.notes || '' // Add notes
         }))

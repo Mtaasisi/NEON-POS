@@ -138,7 +138,7 @@ export async function fetchInventoryStats(cacheDuration: number = 5000) {
       // Get variants for these products
       let variantsQuery = supabase
         .from('lats_product_variants')
-        .select('id, product_id, quantity, cost_price, unit_price, min_quantity, branch_id')
+        .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id')
         .in('product_id', productIds);
       
       // Apply branch filter to variants if branch is selected

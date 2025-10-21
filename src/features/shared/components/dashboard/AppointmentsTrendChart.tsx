@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, TrendingUp } from 'lucide-react';
+import { Calendar, TrendingUp, Plus, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { dashboardService } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
+import AppointmentModal from '../../../customers/components/forms/AppointmentModal';
+import { createAppointment } from '../../../../lib/customerApi/appointments';
+import { toast } from 'react-hot-toast';
 
 interface AppointmentsTrendChartProps {
   className?: string;
 }
 
 export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ className }) => {
+  const navigate = useNavigate();
   const { currentUser } = useAuth();
   const [appointmentData, setAppointmentData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [todayCount, setTodayCount] = useState(0);
   const [weekTotal, setWeekTotal] = useState(0);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     loadAppointmentData();
@@ -30,9 +36,31 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
         
         const currentBranchId = getCurrentBranchId();
         
-        // Fetch real appointment data from database
+        // Fetch ALL appointments once (much more efficient)
+        let allQuery = supabase
+          .from('appointments')
+          .select('id, appointment_date, appointment_time, status');
+        
+        if (currentBranchId) {
+          allQuery = allQuery.eq('branch_id', currentBranchId);
+        }
+        
+        const { data: allAppointments, error: allError } = await allQuery;
+        
+        if (allError) {
+          console.error('❌ Error fetching appointments:', allError);
+          setAppointmentData([]);
+          setTodayCount(0);
+          setWeekTotal(0);
+          return;
+        }
+        
+        console.log('📅 Total appointments in database:', allAppointments?.length || 0);
+        console.log('📅 Sample appointments:', allAppointments?.slice(0, 3));
+        
+        // Build data for last 7 days
         const data = [];
-        const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         let total = 0;
         
         for (let i = 6; i >= 0; i--) {
@@ -40,33 +68,24 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
           date.setDate(date.getDate() - i);
           const dayName = days[date.getDay()];
           
-          // Get start and end of day
-          const startOfDay = new Date(date);
-          startOfDay.setHours(0, 0, 0, 0);
-          const endOfDay = new Date(date);
-          endOfDay.setHours(23, 59, 59, 999);
+          // Format date as YYYY-MM-DD
+          const dateString = date.toISOString().split('T')[0];
           
-          // Query real appointments for this day
-          let query = supabase
-            .from('appointments')
-            .select('id')
-            .gte('appointment_date', startOfDay.toISOString())
-            .lte('appointment_date', endOfDay.toISOString());
+          // Filter appointments for this specific date
+          const dayCount = allAppointments?.filter(apt => {
+            if (!apt.appointment_date) return false;
+            
+            // Handle both date string formats: "2025-10-21" or "2025-10-21T14:30:00+00"
+            const aptDate = apt.appointment_date.split('T')[0];
+            const matches = aptDate === dateString;
+            
+            if (i === 0 && matches) {
+              console.log(`✅ Today's appointment found:`, apt);
+            }
+            
+            return matches;
+          }).length || 0;
           
-          // Note: branch_id column doesn't exist in appointments table yet
-          // Commenting out branch filter until migration is run
-          // if (currentBranchId) {
-          //   query = query.eq('branch_id', currentBranchId);
-          // }
-          
-          const { data: appointmentsData, error } = await query;
-          
-          if (error) {
-            console.error('Error fetching appointments data:', error);
-          }
-          
-          // Count appointments for this day
-          const dayCount = appointmentsData?.length || 0;
           total += dayCount;
           
           data.push({
@@ -76,13 +95,16 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
           });
         }
         
+        console.log('📊 Appointment trend data:', data);
+        console.log(`📊 Total this week: ${total}`);
+        
         setAppointmentData(data);
         setTodayCount(data[data.length - 1]?.appointments || 0);
         setWeekTotal(total);
       }
       
     } catch (error) {
-      console.error('Error loading appointment data:', error);
+      console.error('❌ Error loading appointment data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -139,7 +161,7 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
       </div>
 
       {/* Chart */}
-      <div className="h-48 -mx-2 -mb-2">
+      <div className="h-48 -mx-2 mb-4">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={appointmentData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
@@ -171,6 +193,44 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Actions - Always at bottom */}
+      <div className="flex gap-2 pt-4">
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
+        >
+          <Plus size={14} />
+          <span>Add Appointment</span>
+        </button>
+        <button
+          onClick={() => navigate('/appointments')}
+          className="px-3 py-2.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
+          title="View All Appointments"
+        >
+          <ExternalLink size={14} />
+        </button>
+      </div>
+
+      {/* Create Appointment Modal */}
+      <AppointmentModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        mode="create"
+        onSave={async (appointmentData) => {
+          try {
+            await createAppointment(appointmentData);
+            toast.success('Appointment created successfully!');
+            setShowCreateModal(false);
+            // Refresh appointment data
+            loadAppointmentData();
+          } catch (error) {
+            console.error('Error creating appointment:', error);
+            toast.error('Failed to create appointment');
+            throw error;
+          }
+        }}
+      />
     </div>
   );
 };

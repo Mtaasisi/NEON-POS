@@ -4,10 +4,18 @@ export { AppointmentWidget } from './AppointmentWidget';
 export { InventoryWidget } from './InventoryWidget';
 export { FinancialWidget } from './FinancialWidget';
 export { AnalyticsWidget } from './AnalyticsWidget';
+export { ServiceWidget } from './ServiceWidget';
+export { ReminderWidget } from './ReminderWidget';
 export { SystemHealthWidget } from './SystemHealthWidget';
 export { ActivityFeedWidget } from './ActivityFeedWidget';
 export { CustomerInsightsWidget } from './CustomerInsightsWidget';
-export { ServiceWidget } from './ServiceWidget';
+export { QuickSearchWidget } from './QuickSearchWidget';
+export { PurchaseOrderWidget } from './PurchaseOrderWidget';
+export { ChatWidget } from './ChatWidget';
+export { SalesWidget } from './SalesWidget';
+export { TopProductsWidget } from './TopProductsWidget';
+export { ExpensesWidget } from './ExpensesWidget';
+export { StaffPerformanceWidget } from './StaffPerformanceWidget';
 
 // Chart Components
 export { RevenueTrendChart } from './RevenueTrendChart';
@@ -17,3 +25,8 @@ export { StockLevelChart } from './StockLevelChart';
 export { CustomerActivityChart } from './CustomerActivityChart';
 export { PerformanceMetricsChart } from './PerformanceMetricsChart';
 export { SalesFunnelChart } from './SalesFunnelChart';
+export { PurchaseOrderChart } from './PurchaseOrderChart';
+export { SalesChart } from './SalesChart';
+export { PaymentMethodsChart } from './PaymentMethodsChart';
+export { SalesByCategoryChart } from './SalesByCategoryChart';
+export { ProfitMarginChart } from './ProfitMarginChart';

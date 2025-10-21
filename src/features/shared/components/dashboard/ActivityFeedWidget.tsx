@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Activity, Users, Smartphone, CreditCard, Calendar, Package, 
-  ExternalLink, Clock, CheckCircle, AlertTriangle, DollarSign 
+  Clock, CheckCircle, AlertTriangle, DollarSign, ExternalLink 
 } from 'lucide-react';
 import { dashboardService, RecentActivity } from '../../../../services/dashboardService';
 
@@ -112,7 +112,7 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({ classNam
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-7 ${className}`}>
+    <div className={`bg-white rounded-2xl p-7 flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
@@ -125,14 +125,24 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({ classNam
           </div>
         </div>
         
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50">
-          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-          <span className="text-xs text-emerald-600 font-medium">Live</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-50">
+            <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+            <span className="text-xs text-emerald-600 font-medium">Live</span>
+          </div>
+          <button
+            onClick={() => navigate('/reports')}
+            className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
+            title="View All Reports"
+          >
+            <ExternalLink size={14} />
+            <span>View All</span>
+          </button>
         </div>
       </div>
 
       {/* Activities List */}
-      <div className="space-y-3 h-64 overflow-y-auto mb-6">
+      <div className="space-y-3 h-64 overflow-y-auto mb-6 flex-grow">
         {activities.length > 0 ? (
           activities.map((activity) => (
             <div key={activity.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
@@ -181,16 +191,6 @@ export const ActivityFeedWidget: React.FC<ActivityFeedWidgetProps> = ({ classNam
         )}
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-2">
-        <button
-          onClick={() => navigate('/reports')}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
-        >
-          <ExternalLink size={14} />
-          <span>View All Activity</span>
-        </button>
-      </div>
     </div>
   );
 };

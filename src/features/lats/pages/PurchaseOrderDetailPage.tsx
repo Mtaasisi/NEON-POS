@@ -28,8 +28,10 @@ import { serialNumberService } from '../services/serialNumberService';
 // Import components directly for debugging
 import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
 import SerialNumberReceiveModal from '../components/purchase-order/SerialNumberReceiveModal';
+import SetPricingModal from '../components/purchase-order/SetPricingModal';
 import ApprovalModal from '../components/purchase-order/ApprovalModal';
 import PurchaseOrderActionsService from '../services/purchaseOrderActionsService';
+import ConsolidatedReceiveModal from '../components/purchase-order/ConsolidatedReceiveModal';
 
 // Import enhanced inventory components - REMOVED: These components don't exist
 // import InventoryItemActions from '../components/inventory/InventoryItemActions';
@@ -91,6 +93,19 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [isLoadingOrder, setIsLoadingOrder] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Action-specific loading states
+  const [isApproving, setIsApproving] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isShipping, setIsShipping] = useState(false);
+  const [isReceiving, setIsReceiving] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDuplicating, setIsDuplicating] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  
   // Autoloading state
   const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
@@ -105,6 +120,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [showApprovalModal, setShowApprovalModal] = useState(false);
   const [showPartialReceiveModal, setShowPartialReceiveModal] = useState(false);
   const [showSerialNumberReceiveModal, setShowSerialNumberReceiveModal] = useState(false);
+  const [showPricingModal, setShowPricingModal] = useState(false);
   const [showCommunicationModal, setShowCommunicationModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPurchaseOrderPaymentModal, setShowPurchaseOrderPaymentModal] = useState(false);
@@ -117,6 +133,8 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [showAddToInventoryModal, setShowAddToInventoryModal] = useState(false);
   const [profitMargin, setProfitMargin] = useState(30);
   const [inventoryLocation, setInventoryLocation] = useState('');
+  const [showConsolidatedReceiveModal, setShowConsolidatedReceiveModal] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   
   // Enhanced error handling and confirmation states
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -131,6 +149,8 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
   const [communicationHistory, setCommunicationHistory] = useState<any[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [paymentsCacheTime, setPaymentsCacheTime] = useState<number>(0);
+  const PAYMENTS_CACHE_DURATION = 30000; // 30 seconds cache
   const [qualityCheckItems, setQualityCheckItems] = useState<any[]>([]);
   const [, setIsLoadingQualityCheckItems] = useState(false);
   const [receivedItems, setReceivedItems] = useState<any[]>([]);
@@ -158,6 +178,24 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     dateFrom: '',
     dateTo: ''
   });
+
+  // Permission check helper function
+  const hasPermission = (action: 'approve' | 'delete' | 'cancel' | 'edit' | 'create') => {
+    if (!currentUser) return false;
+    
+    // Admin and manager have all permissions
+    if (currentUser.role === 'admin' || currentUser.role === 'manager') {
+      return true;
+    }
+    
+    // Staff can edit and create but not approve, delete, or cancel
+    if (currentUser.role === 'staff') {
+      return action === 'edit' || action === 'create';
+    }
+    
+    // Default: no permission
+    return false;
+  };
 
   // Enhanced load purchase order function with comprehensive error handling and debugging
   const loadPurchaseOrder = useCallback(async () => {
@@ -392,33 +430,31 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
         }
       }
       
-      // Load additional data in background
+      // Load additional data in background (in parallel for speed)
       if (isBackground) {
-        // Load messages
-        try {
-          const _messages = await PurchaseOrderService.getMessages(purchaseOrder.id);
-          // Update messages state if needed
-        } catch (error) {
-          console.warn('Failed to refresh messages:', error);
-        }
-        
-        // Load payments
-        try {
-          const _payments = await PurchaseOrderService.getPayments(purchaseOrder.id);
-          // Update payments state if needed
-        } catch (error) {
-          console.warn('Failed to refresh payments:', error);
-        }
-        
-        // Load received items
-        try {
-          const receivedData = await PurchaseOrderService.getReceivedItems(purchaseOrder.id);
-          if (receivedData.success && receivedData.data) {
-            setReceivedItems(receivedData.data);
-          }
-        } catch (error) {
-          console.warn('Failed to refresh received items:', error);
-        }
+        await Promise.allSettled([
+          // Load messages
+          PurchaseOrderService.getMessages(purchaseOrder.id).catch(error => {
+            console.warn('Failed to refresh messages:', error);
+          }),
+          
+          // Load payments and update cache
+          PurchaseOrderService.getPayments(purchaseOrder.id).then(_payments => {
+            setPaymentHistory(_payments);
+            setPaymentsCacheTime(Date.now());
+          }).catch(error => {
+            console.warn('Failed to refresh payments:', error);
+          }),
+          
+          // Load received items
+          PurchaseOrderService.getReceivedItems(purchaseOrder.id).then(receivedData => {
+            if (receivedData.success && receivedData.data) {
+              setReceivedItems(receivedData.data);
+            }
+          }).catch(error => {
+            console.warn('Failed to refresh received items:', error);
+          })
+        ]);
       }
       
     } catch (error) {
@@ -788,8 +824,21 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const handleDelete = async () => {
     if (!purchaseOrder) return;
     
+    // Permission check
+    if (!hasPermission('delete')) {
+      toast.error('You do not have permission to delete purchase orders');
+      return;
+    }
+    
+    // Validation: Only draft orders can be deleted
+    if (purchaseOrder.status !== 'draft') {
+      toast.error('Only draft orders can be deleted');
+      return;
+    }
+    
     if (window.confirm('Are you sure you want to delete this purchase order? This action cannot be undone.')) {
       try {
+        setIsDeleting(true);
         const result = await PurchaseOrderActionsService.deleteOrder(purchaseOrder.id);
         if (result.success) {
           toast.success(result.message);
@@ -800,25 +849,67 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       } catch (error) {
         console.error('Error deleting purchase order:', error);
         toast.error('Failed to delete purchase order');
+      } finally {
+        setIsDeleting(false);
       }
     }
   };
 
-  // Simplified workflow functions
-  const handleSubmitForApproval = async () => {
+  // Simplified workflow functions - Combined Approve & Send
+  const handleApproveAndSend = async () => {
     if (!purchaseOrder) return;
     
+    // Permission check
+    if (!hasPermission('approve')) {
+      toast.error('You do not have permission to approve orders');
+      return;
+    }
+    
+    // Validation: Only draft orders can be approved
+    if (purchaseOrder.status !== 'draft') {
+      toast.error('Only draft orders can be approved');
+      return;
+    }
+    
+    // Validation: Check if order has items
+    if (!purchaseOrder.items || purchaseOrder.items.length === 0) {
+      toast.error('Cannot approve order without items');
+      return;
+    }
+    
     try {
-      const response = await PurchaseOrderService.submitForApproval(purchaseOrder.id, currentUser?.id || '', 'Sent to supplier via page UI');
-      if (response.success) {
-        await loadPurchaseOrder();
-        toast.success('Purchase order sent to supplier');
+      setIsApproving(true);
+      
+      // Approve the order
+      const approveResponse = await PurchaseOrderService.approvePurchaseOrder(
+        purchaseOrder.id, 
+        currentUser?.id || '', 
+        'Approved and sent to supplier'
+      );
+      
+      if (approveResponse.success) {
+        // Automatically update status to sent
+        const sendResponse = await PurchaseOrderService.updateOrderStatus(
+          purchaseOrder.id,
+          'sent',
+          currentUser?.id || ''
+        );
+        
+        if (sendResponse) {
+          await loadPurchaseOrder();
+          toast.success('Order approved and sent to supplier');
+        } else {
+          await loadPurchaseOrder();
+          toast.success('Order approved (mark as sent manually)');
+        }
       } else {
-        toast.error(response.message);
+        toast.error(approveResponse.message);
       }
     } catch (error) {
-      console.error('Error sending to supplier:', error);
-      toast.error('Failed to send to supplier');
+      console.error('Error approving and sending order:', error);
+      toast.error('Failed to approve and send order');
+    } finally {
+      setIsApproving(false);
     }
   };
 
@@ -870,60 +961,84 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
 
   // New handler functions for enhanced features
   const handlePrintOrder = async () => {
+    if (!purchaseOrder) {
+      toast.error('No purchase order to print');
+      return;
+    }
+    
     try {
+      setIsPrinting(true);
       const printWindow = window.open('', '_blank');
-      if (printWindow && purchaseOrder) {
+      if (printWindow) {
         const printContent = await generatePrintContent(purchaseOrder);
         printWindow.document.write(printContent);
         printWindow.document.close();
         printWindow.print();
         toast.success('Purchase order sent to printer');
+      } else {
+        toast.error('Could not open print window. Please check popup settings.');
       }
     } catch (error) {
+      console.error('Error printing:', error);
       toast.error('Failed to print purchase order');
+    } finally {
+      setIsPrinting(false);
     }
   };
 
   const handleExportPDF = () => {
+    if (!purchaseOrder) {
+      toast.error('No purchase order to export');
+      return;
+    }
+    
     try {
-      if (purchaseOrder) {
-        const pdfContent = generatePDFContent(purchaseOrder);
-        const blob = new Blob([pdfContent], { type: 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Purchase_Order_${purchaseOrder.orderNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        toast.success('PDF exported successfully');
-      }
+      setIsExporting(true);
+      const pdfContent = generatePDFContent(purchaseOrder);
+      const blob = new Blob([pdfContent], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Purchase_Order_${purchaseOrder.orderNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF exported successfully');
     } catch (error) {
+      console.error('Error exporting PDF:', error);
       toast.error('Failed to export PDF');
+    } finally {
+      setIsExporting(false);
     }
   };
 
   const handleExportExcel = async () => {
+    if (!purchaseOrder) {
+      toast.error('No purchase order to export');
+      return;
+    }
+    
     try {
-      if (purchaseOrder) {
-        const XLSX = await import('xlsx');
-        const workbook = generateExcelContent(purchaseOrder, XLSX);
-        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Purchase_Order_${purchaseOrder.orderNumber || 'Unknown'}_${new Date().toISOString().split('T')[0]}.xlsx`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        toast.success('Excel file exported successfully');
-      }
+      setIsExporting(true);
+      const XLSX = await import('xlsx');
+      const workbook = generateExcelContent(purchaseOrder, XLSX);
+      const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Purchase_Order_${purchaseOrder.orderNumber || 'Unknown'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success('Excel file exported successfully');
     } catch (error) {
       console.error('Error exporting Excel:', error);
       toast.error('Failed to export Excel file');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -1042,11 +1157,23 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const handleViewPayments = async () => {
     setShowPaymentModal(true);
     
-    // Load payment history from database
+    // Load payment history from database with caching
     if (purchaseOrder) {
+      const now = Date.now();
+      const isCacheValid = (now - paymentsCacheTime) < PAYMENTS_CACHE_DURATION;
+      
+      // Use cached data if available and fresh
+      if (paymentHistory.length > 0 && isCacheValid) {
+        console.log('✅ Using cached payment data');
+        return;
+      }
+      
       try {
+        console.log('🔄 Fetching fresh payment data...');
         const _payments = await PurchaseOrderService.getPayments(purchaseOrder.id);
         setPaymentHistory(_payments);
+        setPaymentsCacheTime(now);
+        console.log(`✅ Loaded ${_payments.length} payments`);
       } catch (error) {
         console.error('Failed to load payment history:', error);
       }
@@ -1093,8 +1220,14 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const handleDuplicateOrder = async () => {
     if (!purchaseOrder) return;
     
+    // Validation: Check if order has items
+    if (!purchaseOrder.items || purchaseOrder.items.length === 0) {
+      toast.error('Cannot duplicate order without items');
+      return;
+    }
+    
     try {
-      setIsSaving(true);
+      setIsDuplicating(true);
       const result = await PurchaseOrderActionsService.duplicateOrder(purchaseOrder.id);
       
       if (result.success) {
@@ -1108,7 +1241,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       console.error('Error duplicating order:', error);
       toast.error('Failed to duplicate order');
     } finally {
-      setIsSaving(false);
+      setIsDuplicating(false);
     }
   };
 
@@ -1226,6 +1359,11 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   };
 
   const handleMakePayment = () => {
+    // Prevent payment if order is already fully paid
+    if (purchaseOrder?.paymentStatus === 'paid') {
+      toast.error('This purchase order has already been fully paid');
+      return;
+    }
     setShowPurchaseOrderPaymentModal(true);
   };
 
@@ -1264,6 +1402,9 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       
       setShowPurchaseOrderPaymentModal(false);
       
+      // Invalidate payment cache to ensure fresh data on next view
+      setPaymentsCacheTime(0);
+      
       // Reload purchase order to reflect payment changes
       await loadPurchaseOrder();
       
@@ -1283,12 +1424,36 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const handleCancelOrder = async () => {
     if (!purchaseOrder) return;
     
+    // Permission check
+    if (!hasPermission('cancel')) {
+      toast.error('You do not have permission to cancel purchase orders');
+      return;
+    }
+    
+    // Validation: Cannot cancel completed or already cancelled orders
+    if (purchaseOrder.status === 'completed') {
+      toast.error('Cannot cancel a completed order');
+      return;
+    }
+    
+    if (purchaseOrder.status === 'cancelled') {
+      toast.error('Order is already cancelled');
+      return;
+    }
+    
+    // Check if order has been paid
+    if (purchaseOrder.paymentStatus === 'paid') {
+      if (!confirm('This order has been fully paid. Cancelling will require a refund. Are you sure you want to continue?')) {
+        return;
+      }
+    }
+    
     if (!confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
       return;
     }
     
     try {
-      setIsSaving(true);
+      setIsCancelling(true);
       const result = await PurchaseOrderActionsService.cancelOrder(purchaseOrder.id);
       
       if (result.success) {
@@ -1303,27 +1468,161 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       console.error('Error cancelling purchase order:', error);
       toast.error('Failed to cancel purchase order');
     } finally {
-      setIsSaving(false);
+      setIsCancelling(false);
     }
   };
 
   const handleReceive = async () => {
     if (!purchaseOrder) return;
     
+    // Validation: Check if order is in a receivable status (RELAXED - allows more statuses)
+    const receivableStatuses = ['shipped', 'partial_received', 'confirmed', 'sent'];
+    if (!receivableStatuses.includes(purchaseOrder.status)) {
+      toast.error(`Cannot receive order in status: ${purchaseOrder.status}. Order must be in: ${receivableStatuses.join(', ')}`);
+      return;
+    }
+    
+    // RELAXED: Allow receiving even if not fully paid (warehouse can receive before payment)
+    // Just show a warning instead of blocking
+    if (purchaseOrder.paymentStatus !== 'paid') {
+      console.warn('⚠️ Receiving order that is not fully paid:', purchaseOrder.paymentStatus);
+      toast.success('Note: Receiving order before full payment', { duration: 3000 });
+    }
+    
+    // Validation: Check if order has items
+    if (!purchaseOrder.items || purchaseOrder.items.length === 0) {
+      toast.error('Cannot receive order without items');
+      return;
+    }
+    
+    // Check if already fully received
+    const totalOrdered = purchaseOrder.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const totalReceived = purchaseOrder.items.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0);
+    
+    // Only block if we have valid totals and order is fully received
+    if (totalOrdered > 0 && totalReceived >= totalOrdered) {
+      toast.error(`Order already fully received: ${totalReceived}/${totalOrdered} items`);
+      return;
+    }
+    
+    // Warn if total ordered is 0 (data issue)
+    if (totalOrdered === 0) {
+      console.warn('⚠️ Purchase order has 0 total quantity ordered. This may indicate a data issue.');
+      toast.error('Cannot receive order: No items to receive (total quantity is 0). Please check the order data.');
+      return;
+    }
+    
+    console.log('📦 Starting receive process - Opening pricing modal:', {
+      orderId: purchaseOrder.id,
+      orderNumber: purchaseOrder.orderNumber,
+      status: purchaseOrder.status,
+      paymentStatus: purchaseOrder.paymentStatus,
+      totalOrdered,
+      totalReceived,
+      remaining: totalOrdered - totalReceived
+    });
+    
+    // Open pricing modal to set prices before receiving
+    setShowPricingModal(true);
+  };
+
+  const handleConfirmPricingAndReceive = async (pricingData: Map<string, any>) => {
+    if (!purchaseOrder || !currentUser) return;
+    
+    console.log('💰 Pricing data confirmed:', pricingData);
+    
     try {
-      setIsSaving(true);
+      setIsReceiving(true);
       
+      // First, update the variant prices in the database
+      let priceUpdateCount = 0;
+      for (const [itemId, pricing] of pricingData.entries()) {
+        const item = purchaseOrder.items.find(i => i.id === itemId);
+        if (item && item.variantId) {
+          try {
+            console.log(`💰 Updating variant ${item.variantId} with selling price: ${pricing.selling_price}`);
+            
+            const { error: variantError } = await supabase
+              .from('lats_product_variants')
+              .update({
+                selling_price: pricing.selling_price,
+                cost_price: pricing.cost_price,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.variantId);
+            
+            if (variantError) {
+              console.error('Error updating variant price:', variantError);
+              toast.error(`Failed to update price for ${item.product?.name || 'item'}`);
+            } else {
+              console.log(`✅ Variant ${item.variantId} price updated successfully`);
+              priceUpdateCount++;
+            }
+          } catch (error) {
+            console.error('Error updating variant:', error);
+            toast.error(`Error updating variant prices`);
+          }
+        }
+      }
+      
+      console.log(`💰 Updated ${priceUpdateCount} variant prices`);
+      
+      // Small delay to ensure database commits
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Now proceed with receiving the items
       // Use the enhanced PurchaseOrderService for complete receive
+      console.log('📦 Calling PurchaseOrderService.completeReceive...');
       const result = await PurchaseOrderService.completeReceive(
         purchaseOrder.id,
-        currentUser?.id || '',
-        'Complete receive of purchase order'
+        currentUser.id,
+        'Complete receive of purchase order with pricing'
       );
       
+      console.log('📦 Receive result:', result);
+      
       if (result.success) {
-        toast.success(`Purchase order received successfully: ${result.message}`);
+        // Update inventory items with selling prices
+        try {
+          const { data: inventoryItems, error: inventoryError } = await supabase
+            .from('inventory_items')
+            .select('id, variant_id')
+            .eq('purchase_order_id', purchaseOrder.id);
+          
+          if (!inventoryError && inventoryItems) {
+            for (const invItem of inventoryItems) {
+              const poItem = purchaseOrder.items.find(i => i.variantId === invItem.variant_id);
+              if (poItem) {
+                const pricing = pricingData.get(poItem.id);
+                if (pricing) {
+                  await supabase
+                    .from('inventory_items')
+                    .update({
+                      selling_price: pricing.selling_price,
+                      cost_price: pricing.cost_price,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', invItem.id);
+                  
+                  console.log(`✅ Updated inventory item ${invItem.id} with selling price: ${pricing.selling_price}`);
+                }
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error updating inventory item prices:', error);
+        }
+        
+        toast.success(`Purchase order received successfully with prices set!`);
         if (result.summary) {
           console.log('Receive summary:', result.summary);
+          
+          // Show detailed summary in toast
+          const summary = result.summary;
+          toast.success(
+            `Received: ${summary.total_received || 0}/${summary.total_ordered || 0} items (${summary.percent_received || 0}% complete)`,
+            { duration: 5000 }
+          );
         }
         
         // Reload purchase order data
@@ -1340,21 +1639,43 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
         console.log('📋 Switched to received tab to show received items');
         
       } else {
-        toast.error(`Receive failed: ${result.message}`);
+        console.error('❌ Receive failed:', result);
+        toast.error(`Receive failed: ${result.message || 'Unknown error'}`);
+        
+        // If the error suggests a status issue, provide guidance
+        if (result.message && result.message.includes('status')) {
+          toast.error(
+            `Current status: ${purchaseOrder.status}. Try changing status to 'shipped' first.`,
+            { duration: 6000 }
+          );
+        }
       }
     } catch (error) {
       console.error('Receive error:', error);
-      toast.error('Failed to receive purchase order');
+      toast.error(`Failed to receive purchase order: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
-      setIsSaving(false);
+      setIsReceiving(false);
+      setShowPricingModal(false);
     }
   };
 
   const handleCompleteOrder = async () => {
     if (!purchaseOrder) return;
     
+    // Validation: Order must be received
+    if (purchaseOrder.status !== 'received') {
+      toast.error('Order must be received before completing');
+      return;
+    }
+    
+    // Validation: Order must be fully paid
+    if (purchaseOrder.paymentStatus !== 'paid') {
+      toast.error('Order must be fully paid before completing');
+      return;
+    }
+    
     try {
-      setIsSaving(true);
+      setIsCompleting(true);
       
       // First, check completion status
       const statusResult = await PurchaseOrderService.checkCompletionStatus(purchaseOrder.id);
@@ -1429,7 +1750,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       console.error('Completion error:', error);
       toast.error('Failed to complete purchase order');
     } finally {
-      setIsSaving(false);
+      setIsCompleting(false);
     }
   };
 
@@ -2485,33 +2806,6 @@ TERMS AND CONDITIONS:
             </div>
           </div>
           
-          {/* Refresh Controls */}
-          <div className="flex items-center gap-3">
-            {/* Manual Refresh Button */}
-            <button
-              onClick={() => refreshPurchaseOrderData(false)}
-              disabled={isBackgroundLoading}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition-colors text-sm font-medium"
-            >
-              <RefreshCw className={`w-4 h-4 ${isBackgroundLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </button>
-            
-            {/* Auto-refresh Status */}
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <div className={`w-2 h-2 rounded-full ${isBackgroundLoading ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></div>
-              Auto-refresh: {autoRefreshEnabled ? (isBackgroundLoading ? 'Active' : 'Paused') : 'Disabled'}
-            </div>
-            
-            {/* Settings Button */}
-            <button
-              onClick={() => setShowAutoRefreshSettings(!showAutoRefreshSettings)}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-              title="Auto-refresh Settings"
-            >
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
           <button 
             onClick={() => navigate('/lats/purchase-orders')}
             className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
@@ -2602,6 +2896,8 @@ TERMS AND CONDITIONS:
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <>
+              {purchaseOrder ? (
+                <>
 
               {/* Main Content Layout */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -2737,7 +3033,7 @@ TERMS AND CONDITIONS:
                       <h3 className="text-sm font-semibold text-gray-800">Actions</h3>
                     </div>
                     
-                    {/* Smart Primary Actions - Only show relevant actions */}
+                    {/* Simplified Primary Actions */}
                     <div className="space-y-2">
                       {isEditing ? (
                         <>
@@ -2759,354 +3055,152 @@ TERMS AND CONDITIONS:
                         </>
                       ) : (
                         <>
-                          {/* Step 1: Draft Status - Can edit, approve, or delete */}
+                          {/* DRAFT - Approve & Send (combined) */}
                           {purchaseOrder.status === 'draft' && (
                             <>
-            <button
-              onClick={() => window.open(`/lats/purchase-orders/create?edit=${purchaseOrder.id}`, '_blank')}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <Edit className="w-4 h-4" />
-              Edit Order
-            </button>
-            <button
-              onClick={handleSubmitForApproval}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <Shield className="w-4 h-4" />
-              Submit for Approval
-            </button>
-                              <button
-                                onClick={handleDelete}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm"
-                              >
-                                <X className="w-4 h-4" />
-                                Delete Order
-                              </button>
+                              {hasPermission('approve') && (
+                                <button
+                                  onClick={handleApproveAndSend}
+                                  disabled={isApproving || isSaving}
+                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium shadow-lg shadow-green-600/20"
+                                  aria-label="Approve and send purchase order"
+                                >
+                                  <CheckSquare className="w-4 h-4" />
+                                  {isApproving ? 'Processing...' : 'Approve & Send to Supplier'}
+                                </button>
+                              )}
+                              {hasPermission('delete') && (
+                                <button
+                                  onClick={handleDelete}
+                                  disabled={isDeleting || isSaving}
+                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium text-sm"
+                                  aria-label="Delete purchase order"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  {isDeleting ? 'Deleting...' : 'Delete Order'}
+                                </button>
+                              )}
                             </>
                           )}
                           
-                          {/* Step 2: Pending Approval - Waiting for manager approval */}
-                          {purchaseOrder.status === 'pending_approval' && (
+                          {/* SENT/SHIPPED - Payment or Receive */}
+                          {(purchaseOrder.status === 'sent' || purchaseOrder.status === 'shipped') && (
                             <>
-                              <div className="text-center py-4">
-                                <Clock className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-                                <h3 className="text-lg font-semibold text-white mb-2">Pending Approval</h3>
-                                <p className="text-gray-300 text-sm mb-4">
-                                  This purchase order is waiting for manager approval
-                                </p>
-                                <button
-                                  onClick={() => setShowApprovalModal(true)}
-                                  className="flex items-center gap-2 px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors font-medium text-sm mx-auto"
-                                >
-                                  <Shield className="w-4 h-4" />
-                                  Review Approval
-                                </button>
-                              </div>
-                            </>
-                          )}
-
-                          {/* Step 2.5: Approved - Ready to send to supplier */}
-                          {purchaseOrder.status === 'approved' && (
-                            <>
-                              <div className="text-center py-4">
-                                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                                <h3 className="text-lg font-semibold text-white mb-2">Approved</h3>
-                                <p className="text-gray-300 text-sm mb-4">
-                                  This purchase order has been approved and is ready to send to supplier
-                                </p>
-                              </div>
-                              
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const success = await PurchaseOrderService.updateOrderStatus(
-                                      purchaseOrder.id,
-                                      'sent',
-                                      currentUser?.id || ''
-                                    );
-                                    if (success) {
-                                      toast.success('Purchase order sent to supplier');
-                                      await loadPurchaseOrder();
-                                    } else {
-                                      toast.error('Failed to update order status');
-                                    }
-                                  } catch (error) {
-                                    toast.error('Failed to send order to supplier');
-                                  }
-                                }}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-                              >
-                                <Send className="w-4 h-4" />
-                                Send to Supplier
-                              </button>
-                            </>
-                          )}
-
-                          {/* Step 3: Sent - Waiting for supplier confirmation */}
-                          {purchaseOrder.status === 'sent' && (
-                            <>
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const success = await PurchaseOrderService.updateOrderStatus(
-                                      purchaseOrder.id,
-                                      'confirmed',
-                                      currentUser?.id || ''
-                                    );
-                                    if (success) {
-                                      toast.success('Order confirmed by supplier');
-                                      await loadPurchaseOrder();
-                                    } else {
-                                      toast.error('Failed to update order status');
-                                    }
-                                  } catch (error) {
-                                    toast.error('Failed to confirm order');
-                                  }
-                                }}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm"
-                              >
-                                <CheckCircle className="w-4 h-4" />
-                                Mark as Confirmed
-                              </button>
-
-                              {/* Make Payment button */}
-                              {((purchaseOrder.paymentStatus === 'unpaid' || purchaseOrder.paymentStatus === 'partial') || !purchaseOrder.paymentStatus) && (
-                                <button
-                                  onClick={handleMakePayment}
-                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors font-medium text-sm"
-                                >
-                                  <CreditCard className="w-4 h-4" />
-                                  Make Payment
-                                </button>
-                              )}
-                              
-                              {/* Cancel Order button */}
-                              {((purchaseOrder.paymentStatus === 'unpaid' || purchaseOrder.paymentStatus === 'partial') || !purchaseOrder.paymentStatus) && (
-                                <button
-                                  onClick={handleCancelOrder}
-                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm"
-                                >
-                                  <XCircle className="w-4 h-4" />
-                                  Cancel Order
-                                </button>
-                              )}
-                            </>
-                          )}
-
-                          {/* Step 4: Confirmed - Ready to ship */}
-                          {purchaseOrder.status === 'confirmed' && (
-                            <>
-                              <div className="text-center py-4">
-                                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                                <h3 className="text-lg font-semibold text-white mb-2">Confirmed by Supplier</h3>
-                                <p className="text-gray-300 text-sm mb-4">
-                                  Order confirmed and ready to ship
-                                </p>
-                              </div>
-                              
-                              <button
-                                onClick={async () => {
-                                  try {
-                                    const success = await PurchaseOrderService.updateOrderStatus(
-                                      purchaseOrder.id,
-                                      'shipped',
-                                      currentUser?.id || ''
-                                    );
-                                    if (success) {
-                                      toast.success('Order marked as shipped');
-                                      await loadPurchaseOrder();
-                                    } else {
-                                      toast.error('Failed to update order status');
-                                    }
-                                  } catch (error) {
-                                    toast.error('Failed to update shipping status');
-                                  }
-                                }}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-                              >
-                                <Truck className="w-4 h-4" />
-                                Mark as Shipped
-                              </button>
-
-                              {/* Make Payment button */}
-                              {((purchaseOrder.paymentStatus === 'unpaid' || purchaseOrder.paymentStatus === 'partial') || !purchaseOrder.paymentStatus) && (
-                                <button
-                                  onClick={handleMakePayment}
-                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors font-medium text-sm"
-                                >
-                                  <CreditCard className="w-4 h-4" />
-                                  Make Payment
-                                </button>
-                              )}
-                              
-                              {/* Cancel Order button */}
-                              {((purchaseOrder.paymentStatus === 'unpaid' || purchaseOrder.paymentStatus === 'partial') || !purchaseOrder.paymentStatus) && (
-                                <button
-                                  onClick={handleCancelOrder}
-                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium text-sm"
-                                >
-                                  <XCircle className="w-4 h-4" />
-                                  Cancel Order
-                                </button>
-                              )}
-                            </>
-                          )}
-
-                          {/* Removed 'shipping' status - using 'shipped' instead */}
-
-                          {/* Step 4: Shipped - Can receive if paid */}
-                          {purchaseOrder.status === 'shipped' && (
-                            <>
-                              {/* Only show receive if fully paid */}
-                              {(purchaseOrder.paymentStatus === 'paid') && (
-                                <button
-                                  onClick={handleReceive}
-                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm"
-                                >
-                                  <CheckSquare className="w-4 h-4" />
-                                  Receive Order
-                                </button>
-                              )}
-
-                              {/* Show payment button if not fully paid */}
-                              {(purchaseOrder.paymentStatus === 'unpaid' || purchaseOrder.paymentStatus === 'partial' || !purchaseOrder.paymentStatus) && (
-                                <button
-                                  onClick={handleMakePayment}
-                                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors font-medium text-sm"
-                                >
-                                  <CreditCard className="w-4 h-4" />
-                                  Make Payment
-                                </button>
-                              )}
-
-                              {/* Info message when payment is needed */}
-                              {(purchaseOrder.paymentStatus === 'unpaid' || purchaseOrder.paymentStatus === 'partial' || !purchaseOrder.paymentStatus) && (
-                                <div className="w-full p-3 bg-yellow-100 border border-yellow-300 rounded-lg text-sm text-yellow-800">
-                                  <AlertTriangle className="w-4 h-4 inline mr-2" />
-                                  <strong>Payment Required:</strong> Complete payment to receive this order.
+                              {purchaseOrder.paymentStatus !== 'paid' ? (
+                                <div className="space-y-3">
+                                  <div className="p-4 bg-orange-50 border-2 border-orange-200 rounded-lg">
+                                    <div className="flex items-start gap-3">
+                                      <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
+                                      <div className="flex-1">
+                                        <h4 className="font-semibold text-orange-900 mb-1">Payment Required</h4>
+                                        <p className="text-sm text-orange-700">
+                                          Complete payment before receiving this order
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <button
+                                    onClick={handleMakePayment}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors font-medium shadow-lg shadow-orange-600/20"
+                                    aria-label="Make payment for purchase order"
+                                  >
+                                    <CreditCard className="w-4 h-4" />
+                                    Make Payment
+                                  </button>
+                                  
+                                  {hasPermission('cancel') && (
+                                    <button
+                                      onClick={handleCancelOrder}
+                                      disabled={isCancelling}
+                                      className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium text-sm"
+                                    >
+                                      <XCircle className="w-4 h-4" />
+                                      {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="space-y-3">
+                                  <div className="p-3 bg-green-50 border-2 border-green-200 rounded-lg">
+                                    <div className="flex items-center gap-2">
+                                      <CheckCircle className="w-5 h-5 text-green-600" />
+                                      <span className="text-sm font-semibold text-green-900">
+                                        Payment Complete - Ready to Receive
+                                      </span>
+                                    </div>
+                                  </div>
+                                  
+                                  <button
+                                    onClick={() => setShowConsolidatedReceiveModal(true)}
+                                    disabled={isReceiving}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium shadow-lg shadow-green-600/20"
+                                    aria-label="Receive purchase order"
+                                  >
+                                    <Package className="w-4 h-4" />
+                                    {isReceiving ? 'Receiving...' : 'Receive Order'}
+                                  </button>
                                 </div>
                               )}
                             </>
                           )}
 
-                          {/* Partial Receive - Only show if paid and not fully received */}
-                          {((purchaseOrder.status === 'sent' || purchaseOrder.status === 'shipped' || purchaseOrder.status === 'partial_received') && 
-                            purchaseOrder.paymentStatus === 'paid') && (
+                          {/* PARTIAL RECEIVED - Continue receiving */}
+                          {purchaseOrder.status === 'partial_received' && purchaseOrder.paymentStatus === 'paid' && (
                             <button
-                              onClick={() => setShowPartialReceiveModal(true)}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors font-medium text-sm"
+                              onClick={() => setShowConsolidatedReceiveModal(true)}
+                              disabled={isReceiving}
+                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium shadow-lg shadow-blue-600/20"
+                              aria-label="Continue receiving items"
                             >
-                              <PackageCheck className="w-4 h-4" />
-                              Partial Receive
+                              <Package className="w-4 h-4" />
+                              {isReceiving ? 'Receiving...' : 'Continue Receiving'}
                             </button>
                           )}
 
-                          {/* Serial Number Receive - Only show if paid and not fully received */}
-                          {((purchaseOrder.status === 'sent' || purchaseOrder.status === 'shipped' || purchaseOrder.status === 'partial_received') && 
-                            purchaseOrder.paymentStatus === 'paid') && (
-                            <button
-                              onClick={() => setShowSerialNumberReceiveModal(true)}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-                            >
-                              <PackageCheck className="w-4 h-4" />
-                              Receive with Serial Numbers
-                            </button>
-                          )}
-
-                          {/* Quality Check - Only show for received orders */}
+                          {/* RECEIVED - Complete order (Quality Check is optional during receive) */}
                           {purchaseOrder.status === 'received' && (
                             <>
+                              <button
+                                onClick={handleCompleteOrder}
+                                disabled={isCompleting}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium shadow-lg shadow-green-600/20"
+                                aria-label="Complete purchase order"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                {isCompleting ? 'Completing...' : 'Complete Order'}
+                              </button>
+                              
                               <button
                                 onClick={handleQualityControl}
                                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium text-sm"
                               >
                                 <PackageCheck className="w-4 h-4" />
-                                {qualityCheckItems.length > 0 ? 'New Quality Check' : 'Quality Check'}
+                                Quality Check (Optional)
                               </button>
-                              
-                              {/* Show quality check completed indicator and add to inventory button */}
-                              {qualityCheckItems.length > 0 && (
-                                <>
-                                  <div className="w-full p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-700 flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 flex-shrink-0" />
-                                    <span>Quality check completed ({qualityCheckItems.length} items checked)</span>
-                                  </div>
-                                  
-                                  {/* Add to Inventory Button */}
-                                  <button
-                                    onClick={() => setShowAddToInventoryModal(true)}
-                                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-                                  >
-                                    <Package className="w-4 h-4" />
-                                    Add to Inventory
-                                  </button>
-                                </>
-                              )}
                             </>
                           )}
                           
-                          {/* DEBUG: Simplified workflow - Quality checks only available for received orders */}
-                          {purchaseOrder.status === 'sent' && (
-                            <div className="w-full p-2 bg-blue-100 border border-blue-300 rounded-lg text-sm text-blue-800">
-                              <strong>Info:</strong> Quality Check will be available once this order is marked as <strong>'received'</strong>.
-                              <br />
-                              <strong>Simplified workflow:</strong> sent → received (with quality checks)
-                            </div>
-                          )}
-
-                          {/* Complete Order - Only show if received and all items are fully received */}
-                          {purchaseOrder.status === 'received' && (
-                            <button
-                              onClick={handleCompleteOrder}
-                              disabled={isSaving}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium text-sm"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                              {isSaving ? 'Completing...' : 'Complete Order'}
-                            </button>
-                          )}
-
                           {/* Completed Status - Show completion message */}
                           {purchaseOrder.status === 'completed' && (
-                            <>
-                              <div className="text-center py-4">
-                                <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                                <h3 className="text-lg font-semibold text-white mb-2">Order Completed</h3>
-                                <p className="text-gray-300 text-sm mb-4">
-                                  This purchase order has been successfully completed and all items are in inventory
-                                </p>
-                              </div>
-                              
-                              <button
-                                onClick={handleDuplicateOrder}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-                              >
-                                <Copy className="w-4 h-4" />
-                                Create Similar Order
-                              </button>
-                            </>
+                            <div className="text-center py-6">
+                              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                              <h3 className="text-lg font-semibold text-gray-800 mb-2">Order Completed</h3>
+                              <p className="text-gray-600 text-sm">
+                                This purchase order has been successfully completed and all items are in inventory
+                              </p>
+                            </div>
                           )}
 
                           {/* Cancelled Status - Show cancellation message */}
                           {purchaseOrder.status === 'cancelled' && (
-                            <>
-                              <div className="text-center py-4">
-                                <XCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-                                <h3 className="text-lg font-semibold text-white mb-2">Order Cancelled</h3>
-                                <p className="text-gray-300 text-sm mb-4">
-                                  This purchase order has been cancelled and cannot be processed further
-                                </p>
-                              </div>
-                              
-                              <button
-                                onClick={handleDuplicateOrder}
-                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-                              >
-                                <Copy className="w-4 h-4" />
-                                Create New Order
-                              </button>
-                            </>
+                            <div className="text-center py-6">
+                              <XCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                              <h3 className="text-lg font-semibold text-gray-800 mb-2">Order Cancelled</h3>
+                              <p className="text-gray-600 text-sm">
+                                This purchase order has been cancelled and cannot be processed further
+                              </p>
+                            </div>
                           )}
 
                           {/* Return Order - Only show if received */}
@@ -3123,52 +3217,87 @@ TERMS AND CONDITIONS:
                       )}
                     </div>
 
-                    {/* Secondary Actions */}
-                    <div className="pt-2 border-t border-gray-100">
+                    {/* Secondary Actions - Simplified */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Documents & More</h4>
                       <div className="grid grid-cols-3 gap-2">
                         <button
                           onClick={handlePrintOrder}
-                          className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium text-sm"
+                          disabled={isPrinting}
+                          className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium text-sm"
+                          aria-label="Print purchase order"
                         >
                           <Printer className="w-4 h-4" />
                           Print
                         </button>
                         
-                        <button
-                          onClick={handleExportPDF}
-                          className="flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium text-sm"
-                        >
-                          <Download className="w-4 h-4" />
-                          Export PDF
-                        </button>
-
-                        <button
-                          onClick={handleExportExcel}
-                          className="flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm"
-                        >
-                          <FileSpreadsheet className="w-4 h-4" />
-                          Export Excel
-                        </button>
-
-                        <button
-                          onClick={handleDuplicateOrder}
-                          className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium text-sm"
-                        >
-                          <Copy className="w-4 h-4" />
-                          Duplicate
-                        </button>
+                        {/* Export Dropdown */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowExportMenu(!showExportMenu)}
+                            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium text-sm"
+                          >
+                            <Download className="w-4 h-4" />
+                            Export
+                          </button>
+                          {showExportMenu && (
+                            <>
+                              <div 
+                                className="fixed inset-0 z-10" 
+                                onClick={() => setShowExportMenu(false)}
+                              />
+                              <div className="absolute top-full mt-1 right-0 bg-white border border-gray-200 rounded-lg shadow-xl z-20 min-w-[160px]">
+                                <button
+                                  onClick={() => {
+                                    handleExportPDF();
+                                    setShowExportMenu(false);
+                                  }}
+                                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm flex items-center gap-2 text-gray-700"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                  Export as PDF
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleExportExcel();
+                                    setShowExportMenu(false);
+                                  }}
+                                  className="w-full text-left px-4 py-2.5 hover:bg-gray-50 text-sm border-t flex items-center gap-2 text-gray-700"
+                                >
+                                  <FileSpreadsheet className="w-4 h-4" />
+                                  Export as Excel
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
 
                         <button
                           onClick={handleViewNotes}
                           className="flex items-center justify-center gap-2 px-3 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition-colors font-medium text-sm"
+                          aria-label="View and add notes"
                         >
                           <FileText className="w-4 h-4" />
                           Notes
                         </button>
 
+                        {/* Only show Duplicate for completed/cancelled orders, or as a secondary action for active orders */}
+                        {(purchaseOrder.status === 'completed' || purchaseOrder.status === 'cancelled') && (
+                          <button
+                            onClick={handleDuplicateOrder}
+                            disabled={isDuplicating}
+                            className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium text-sm"
+                            aria-label="Duplicate this order"
+                          >
+                            <Copy className="w-4 h-4" />
+                            {isDuplicating ? 'Duplicating...' : 'Duplicate'}
+                          </button>
+                        )}
+
                         <button
                           onClick={() => setShowBulkActions(true)}
                           className="flex items-center justify-center gap-2 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium text-sm"
+                          aria-label="Bulk actions on items"
                         >
                           <Layers className="w-4 h-4" />
                           Bulk Actions
@@ -3225,6 +3354,18 @@ TERMS AND CONDITIONS:
                   </div>
                 </div>
               </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Info className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">Loading Order Details</h3>
+                    <p className="text-gray-500">Please wait while we load the purchase order information...</p>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -5249,39 +5390,11 @@ TERMS AND CONDITIONS:
                       <CreditCard className="w-16 h-16 mx-auto mb-4 text-gray-300" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No Payment History</h3>
                       <p className="text-sm">No payments have been made for this purchase order yet.</p>
-                      <button
-                        onClick={() => {
-                          setShowPaymentModal(false);
-                          handleMakePayment();
-                        }}
-                        className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
-                      >
-                        Make First Payment
-                      </button>
                     </div>
                   )}
                 </div>
                 
-                <div className="border-t border-gray-200 pt-4">
-                  <h4 className="font-medium text-gray-900 mb-3">Quick Actions</h4>
-                  <div className="text-center">
-                    <p className="text-sm text-gray-600 mb-4">
-                      Use the "Make Payment" button to add new payments with full validation and account integration.
-                    </p>
-                    <button
-                      onClick={() => {
-                        setShowPaymentModal(false);
-                        handleMakePayment();
-                      }}
-                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
-                    >
-                      <CreditCard className="w-4 h-4 inline mr-2" />
-                      Make New Payment
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3 mt-6">
+                <div className="flex gap-3 mt-6 border-t border-gray-200 pt-4">
                   <button
                     onClick={() => setShowPaymentModal(false)}
                     className="w-full px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
@@ -5302,6 +5415,17 @@ TERMS AND CONDITIONS:
             purchaseOrder={purchaseOrder as any}
             onConfirm={handleSerialNumberReceive}
             isLoading={isSaving}
+          />
+        )}
+
+        {/* Pricing Modal - Set prices before receiving */}
+        {showPricingModal && purchaseOrder && (
+          <SetPricingModal
+            isOpen={showPricingModal}
+            onClose={() => setShowPricingModal(false)}
+            purchaseOrder={purchaseOrder as any}
+            onConfirm={handleConfirmPricingAndReceive}
+            isLoading={isReceiving}
           />
         )}
 
@@ -5613,6 +5737,27 @@ TERMS AND CONDITIONS:
               </div>
             </div>
           </div>
+        )}
+        
+        {/* Consolidated Receive Modal */}
+        {showConsolidatedReceiveModal && purchaseOrder && (
+          <ConsolidatedReceiveModal
+            isOpen={showConsolidatedReceiveModal}
+            onClose={() => setShowConsolidatedReceiveModal(false)}
+            purchaseOrder={purchaseOrder}
+            onReceiveFull={() => {
+              setShowConsolidatedReceiveModal(false);
+              handleReceive();
+            }}
+            onReceivePartial={() => {
+              setShowConsolidatedReceiveModal(false);
+              setShowPartialReceiveModal(true);
+            }}
+            onReceiveWithSerial={() => {
+              setShowConsolidatedReceiveModal(false);
+              setShowSerialNumberReceiveModal(true);
+            }}
+          />
         )}
       </div>
     </div>

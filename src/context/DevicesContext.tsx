@@ -167,7 +167,12 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
         const newPoints = currentPoints + pointsToAdd;
         
         // Update customer points in database
-        const updateResult = await updateCustomerInDb(customerId, { points: newPoints });
+        try {
+          const updateResult = await updateCustomerInDb(customerId, { points: newPoints });
+          console.log('✅ Customer points updated successfully');
+        } catch (updateError) {
+          console.error('❌ Failed to update customer points:', updateError);
+        }
         
         // Add a note about the points being added
         try {
@@ -176,13 +181,17 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
             created_by: currentUser.id,
             customer_id: customerId
           };
+          console.log('📝 Attempting to insert note:', noteData);
           const noteResult = await supabase.from('customer_notes').insert(noteData);
           
           if (noteResult.error) {
             console.error('❌ Note insertion error:', noteResult.error);
+            console.error('❌ Full error details:', JSON.stringify(noteResult.error, null, 2));
+          } else {
+            console.log('✅ Note inserted successfully');
           }
         } catch (noteError) {
-          console.warn('Could not add note about points:', noteError);
+          console.error('💥 Exception during note insertion:', noteError);
         }
         
         console.debug(`✅ Added ${pointsToAdd} points to customer ${customerId}. New total: ${newPoints}`);
@@ -206,6 +215,7 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
 
     // Send SMS notification to customer
     try {
+      console.log('📱 Fetching customer data for SMS...');
       // Get customer information for SMS
       const { data: customerData, error: customerError } = await supabase
         .from('customers')
@@ -213,8 +223,13 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
         .eq('id', deviceData.customerId)
         .single();
 
+      if (customerError) {
+        console.error('❌ Error fetching customer for SMS:', customerError);
+        console.error('❌ Full customer error:', JSON.stringify(customerError, null, 2));
+      }
+
       if (!customerError && customerData && customerData.phone) {
-        console.log('📱 Sending device received SMS to:', customerData.phone);
+        console.log('📱 Customer data retrieved, sending SMS to:', customerData.phone);
         
         const smsResult = await smsService.sendDeviceReceivedSMS(
           customerData.phone,
@@ -230,14 +245,17 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
           console.log('✅ SMS sent successfully');
           toast.success('SMS notification sent to customer');
         } else {
-          console.error('❌ SMS sending failed:', smsResult.error);
-          toast.error('SMS notification failed to send');
+          console.warn('⚠️ SMS sending failed:', smsResult.error);
+          // Don't show error toast if it's just the dev server not running
+          if (!smsResult.error?.includes('proxy server')) {
+            toast.error('SMS notification failed to send');
+          }
         }
-      } else {
-        console.warn('⚠️ Could not send SMS - customer phone not found:', customerError);
+      } else if (!customerData?.phone) {
+        console.warn('⚠️ Customer has no phone number, skipping SMS');
       }
     } catch (smsError) {
-      console.error('💥 Error sending SMS notification:', smsError);
+      console.error('💥 Exception during SMS notification:', smsError);
       // Don't fail device creation if SMS fails
     }
 

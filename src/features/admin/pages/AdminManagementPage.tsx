@@ -139,15 +139,6 @@ const AdminManagementPage: React.FC = () => {
       color: 'from-gray-500 to-gray-600',
       category: 'system'
     },
-    {
-      id: 'mobile-optimization',
-      title: 'Mobile Optimization',
-      description: 'PWA features and mobile settings',
-      icon: <Smartphone size={24} />,
-      path: '/mobile',
-      color: 'from-pink-500 to-pink-600',
-      category: 'system'
-    },
 
     // Communication & Integration
     {
@@ -299,7 +290,7 @@ const AdminManagementPage: React.FC = () => {
         return {
           title: 'System Administration',
           description: 'Core system configuration, database management, and technical settings.',
-          features: ['Database Configuration', 'Backup & Recovery', 'System Settings', 'Mobile Optimization'],
+          features: ['Database Configuration', 'Backup & Recovery', 'System Settings'],
           icon: <Settings size={24} />
         };
       case 'security':
@@ -363,7 +354,7 @@ const AdminManagementPage: React.FC = () => {
         <div className="text-center mb-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Admin Management Overview</h2>
           <p className="text-gray-600 max-w-3xl mx-auto">
-            Comprehensive administrative control center with 18 tools organized across 5 categories. 
+            Comprehensive administrative control center with 17 tools organized across 5 categories. 
             Manage inventory, system settings, security, data operations, and communications from one central location.
           </p>
         </div>
@@ -383,8 +374,8 @@ const AdminManagementPage: React.FC = () => {
               <Settings size={20} />
             </div>
             <h3 className="font-semibold text-gray-900 mb-1">System</h3>
-            <p className="text-sm text-gray-600">4 tools</p>
-            <p className="text-xs text-gray-500 mt-1">Database, Backup, Settings, Mobile</p>
+            <p className="text-sm text-gray-600">3 tools</p>
+            <p className="text-xs text-gray-500 mt-1">Database, Backup, Settings</p>
           </div>
           
           <div className="text-center p-4 bg-white rounded-xl shadow-sm border border-gray-100">

@@ -10,8 +10,6 @@ export class SoundManager {
 
   // Initialize global user interaction listener
   static {
-
-    
     // Mark user interaction on any user action and force init AudioContext
     const markInteraction = async () => {
       this.markUserInteracted();
@@ -21,12 +19,9 @@ export class SoundManager {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext && !this.audioContext) {
           this.audioContext = new AudioContext();
-
-
           
           if (this.audioContext.state === 'suspended') {
             await this.audioContext.resume();
-
           }
           
           this.isInitialized = true;
@@ -35,7 +30,7 @@ export class SoundManager {
           this.startKeepAlive();
         }
       } catch (error) {
-        console.error('🎵 SoundManager: Error creating AudioContext:', error);
+        // Silently handle - user will be notified if sounds don't work
       }
       
       // Remove listeners after first interaction
@@ -48,8 +43,6 @@ export class SoundManager {
     document.addEventListener('click', markInteraction, true);
     document.addEventListener('keydown', markInteraction, true);
     document.addEventListener('touchstart', markInteraction, true);
-    
-    // console.log removed');
   }
 
   /**
@@ -62,9 +55,8 @@ export class SoundManager {
       if (this.audioContext && this.audioContext.state === 'suspended') {
         try {
           await this.audioContext.resume();
-
         } catch (error) {
-          console.error('❌ KeepAlive: Failed to resume AudioContext:', error);
+          // Silently handle - context will retry on next interaction
         }
       }
     }, 1000); // Check every second
@@ -107,26 +99,20 @@ export class SoundManager {
       if (!this.audioContext) {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContext) {
-          console.warn('Web Audio API not supported in this browser');
           this.isInitialized = true;
           return;
         }
 
         this.audioContext = new AudioContext();
-
         
         // Resume the context if it's suspended
         if (this.audioContext.state === 'suspended') {
-
           await this.audioContext.resume();
-
         }
         
         this.isInitialized = true;
-
       }
     } catch (error) {
-      console.error('❌ Error creating AudioContext:', error);
       this.isInitialized = true;
     }
   }
@@ -137,8 +123,6 @@ export class SoundManager {
   static markUserInteracted() {
     if (!this.userInteracted) {
       this.userInteracted = true;
-
-
       // Trigger initialization after user interaction
       this.initialize();
     }
@@ -166,8 +150,7 @@ export class SoundManager {
    */
   static logStatus() {
     const stats = this.getStats();
-
-
+    console.log('🎵 SoundManager Status:', stats);
   }
 
   /**
@@ -175,7 +158,6 @@ export class SoundManager {
    */
   static forceUserInteraction() {
     this.userInteracted = true;
-
     this.initialize();
   }
 
@@ -233,9 +215,9 @@ export class SoundManager {
   private static playFallbackSound() {
     try {
       // Simple fallback without AudioContext
-
+      // No audio element fallback - gracefully fail
     } catch (error) {
-      console.warn('Could not play remark sound:', error);
+      // Silently handle
     }
   }
 
@@ -319,35 +301,24 @@ export class SoundManager {
    * Play a click sound for button interactions
    */
   static async playClickSound() {
-    const startTime = Date.now();
-
-    
     try {
       // Ensure AudioContext exists
-
       if (!this.audioContext) {
-
         this.markUserInteracted();
         await this.initialize();
       }
 
       if (!this.audioContext) {
-        console.error('❌ FAILED: AudioContext not available for click sound');
         this.soundErrors++;
         return;
       }
-
-
       
       // ALWAYS resume context before playing (critical for repeated plays)
       if (this.audioContext.state === 'suspended') {
-
         await this.audioContext.resume();
-
       }
 
       if (this.audioContext.state === 'running') {
-
         const oscillator = this.audioContext.createOscillator();
         const gainNode = this.audioContext.createGain();
         
@@ -361,7 +332,6 @@ export class SoundManager {
         gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.05);
         
-
         oscillator.start(this.audioContext.currentTime);
         oscillator.stop(this.audioContext.currentTime + 0.05);
         
@@ -376,24 +346,11 @@ export class SoundManager {
         };
         
         this.soundsPlayed++;
-        const duration = Date.now() - startTime;
-
-
       } else {
         this.soundErrors++;
-        console.error(`❌ FAILED: AudioContext state is ${this.audioContext.state}, not running`);
-        console.error(`❌ REASON: AudioContext is ${this.audioContext.state} instead of running`);
-        console.error(`❌ NO SOUND WILL PLAY!`);
-        // console.log removed >>>>>>');
-
       }
     } catch (error) {
       this.soundErrors++;
-      const duration = Date.now() - startTime;
-      console.error(`❌ FAILED: Error playing click sound after ${duration}ms:`, error);
-      console.error(`❌ NO SOUND WILL PLAY!`);
-      // console.log removed >>>>>>');
-
     }
   }
 
@@ -401,36 +358,26 @@ export class SoundManager {
    * Play a cart add sound for adding items to cart
    */
   static playCartAddSound() {
-    const startTime = Date.now();
-
-    
     try {
       // Create AudioContext immediately if it doesn't exist (synchronously in user gesture)
       if (!this.audioContext) {
-
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
           this.audioContext = new AudioContext();
           this.isInitialized = true;
           this.userInteracted = true;
-
         }
       }
 
       if (!this.audioContext) {
-        console.error('❌ FAILED: AudioContext not available');
         this.soundErrors++;
         return;
       }
-
-
       
       // Resume AudioContext (this must happen in user gesture context)
       // Don't await - just trigger it
       if (this.audioContext.state === 'suspended') {
-
         this.audioContext.resume().then(() => {
-
           // Try to play again after resume
           this.playCartAddSoundImmediate();
         });
@@ -438,13 +385,8 @@ export class SoundManager {
       }
 
       this.playCartAddSoundImmediate();
-      
     } catch (error) {
       this.soundErrors++;
-      const duration = Date.now() - startTime;
-      console.error(`❌ FAILED: Error playing cart add sound after ${duration}ms:`, error);
-      // console.log removed >>>>>>');
-
     }
   }
 
@@ -452,24 +394,18 @@ export class SoundManager {
    * Internal method to play cart sound immediately (assumes AudioContext is running)
    */
   private static playCartAddSoundImmediate() {
-    const startTime = Date.now();
-    
     try {
       if (!this.audioContext || this.audioContext.state !== 'running') {
-        console.error(`❌ AudioContext not running: ${this.audioContext?.state || 'null'}`);
         return;
       }
-
 
       const oscillator = this.audioContext.createOscillator();
       const gainNode = this.audioContext.createGain();
       
-
       oscillator.connect(gainNode);
       gainNode.connect(this.audioContext.destination);
       
-      // Cart add sound (pleasant chime) - LOUDER
-
+      // Cart add sound (pleasant chime)
       oscillator.frequency.setValueAtTime(800, this.audioContext.currentTime);
       oscillator.frequency.setValueAtTime(1000, this.audioContext.currentTime + 0.05);
       oscillator.type = 'sine';
@@ -477,7 +413,6 @@ export class SoundManager {
       gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
       gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.15);
       
-
       oscillator.start(this.audioContext.currentTime);
       oscillator.stop(this.audioContext.currentTime + 0.15);
       
@@ -492,12 +427,8 @@ export class SoundManager {
       };
       
       this.soundsPlayed++;
-      const duration = Date.now() - startTime;
-
-
     } catch (error) {
       this.soundErrors++;
-      console.error('❌ Error in playCartAddSoundImmediate:', error);
     }
   }
 
@@ -513,7 +444,6 @@ export class SoundManager {
       }
 
       if (!this.audioContext) {
-        console.warn('⚠️ AudioContext not available for payment sound');
         this.soundErrors++;
         return;
       }
@@ -521,7 +451,6 @@ export class SoundManager {
       // ALWAYS resume context before playing
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
-
       }
 
       if (this.audioContext.state === 'running') {
@@ -554,14 +483,11 @@ export class SoundManager {
         };
         
         this.soundsPlayed++;
-
       } else {
         this.soundErrors++;
-        console.warn(`⚠️ SoundManager: AudioContext state is ${this.audioContext?.state || 'null'}`);
       }
     } catch (error) {
       this.soundErrors++;
-      console.error('❌ SoundManager: Error playing payment sound:', error);
     }
   }
 
@@ -577,7 +503,6 @@ export class SoundManager {
       }
 
       if (!this.audioContext) {
-        console.warn('⚠️ AudioContext not available for delete sound');
         this.soundErrors++;
         return;
       }
@@ -585,7 +510,6 @@ export class SoundManager {
       // ALWAYS resume context before playing
       if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
-
       }
 
       if (this.audioContext.state === 'running') {
@@ -617,14 +541,11 @@ export class SoundManager {
         };
         
         this.soundsPlayed++;
-
       } else {
         this.soundErrors++;
-        console.warn(`⚠️ SoundManager: AudioContext state is ${this.audioContext?.state || 'null'}`);
       }
     } catch (error) {
       this.soundErrors++;
-      console.error('❌ SoundManager: Error playing delete sound:', error);
     }
   }
 
@@ -632,10 +553,8 @@ export class SoundManager {
    * Test function to verify sound functionality
    */
   static async testSound() {
-
     try {
       await this.playRemarkSound();
-
     } catch (error) {
       console.error('❌ Sound test failed:', error);
     }

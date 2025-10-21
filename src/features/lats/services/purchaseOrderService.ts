@@ -169,11 +169,13 @@ export class PurchaseOrderService {
   // Payment functions - Updated to use new payment system
   static async getPayments(purchaseOrderId: string): Promise<PurchaseOrderPayment[]> {
     return this.retryOperation(async () => {
+      // Optimized query: select only needed fields for faster response
       const { data, error } = await supabase
         .from('purchase_order_payments')
-        .select('*')
+        .select('id, purchase_order_id, payment_method, method, amount, currency, status, reference, payment_date, created_at')
         .eq('purchase_order_id', purchaseOrderId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100); // Reasonable limit for performance
 
       if (error) {
         console.error('Error fetching payments:', error);
@@ -189,7 +191,7 @@ export class PurchaseOrderService {
         currency: payment.currency,
         status: payment.status,
         reference: payment.reference,
-        timestamp: payment.payment_date || payment.timestamp || payment.created_at
+        timestamp: payment.payment_date || payment.created_at
       }));
     }, 'get_payments');
   }
@@ -639,20 +641,35 @@ export class PurchaseOrderService {
         return { success: false, message: 'No valid items found for update', updatedItems: 0 };
       }
 
-      // Use the database function for atomic updates
-      const { data: functionResult, error: functionError } = await supabase
-        .rpc('update_received_quantities', {
-          purchase_order_id_param: purchaseOrderId,
-          item_updates: validItems.map(item => ({
-            id: item.id,
-            receivedQuantity: item.receivedQuantity
-          })),
-          user_id_param: userId
-        });
+      // Update each item individually (more reliable than RPC function)
+      let updateCount = 0;
+      const updateErrors: string[] = [];
 
-      if (functionError) {
-        console.error('Error updating received quantities via function:', functionError);
-        return { success: false, message: `Update failed: ${functionError.message}`, updatedItems: 0 };
+      for (const item of validItems) {
+        const { error: updateError } = await supabase
+          .from('lats_purchase_order_items')
+          .update({ 
+            quantity_received: item.receivedQuantity,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', item.id)
+          .eq('purchase_order_id', purchaseOrderId);
+
+        if (updateError) {
+          console.error(`Error updating item ${item.id}:`, updateError);
+          updateErrors.push(`Item ${item.id}: ${updateError.message}`);
+        } else {
+          updateCount++;
+        }
+      }
+
+      if (updateErrors.length > 0) {
+        console.error('Some updates failed:', updateErrors);
+        if (updateCount === 0) {
+          return { success: false, message: `All updates failed: ${updateErrors.join('; ')}`, updatedItems: 0 };
+        }
+        // Partial success
+        console.warn(`${updateCount}/${validItems.length} items updated successfully`);
       }
 
       // Check if all items were updated successfully
@@ -1103,6 +1120,7 @@ export class PurchaseOrderService {
               cost_price,
               reason,
               adjustment_type,
+              reference_id,
               created_at,
               product:lats_products!product_id(
                 id,
@@ -1115,8 +1133,8 @@ export class PurchaseOrderService {
                 sku
               )
             `)
-            .eq('purchase_order_id', purchaseOrderId)
             .eq('adjustment_type', 'receive')
+            .like('reason', `%purchase order ${purchaseOrderId}%`)
             .order('created_at', { ascending: false });
           
           if (error) throw error;
@@ -1193,6 +1211,12 @@ export class PurchaseOrderService {
     receiveNotes?: string
   ): Promise<{ success: boolean; message: string; summary?: any }> {
     try {
+      console.log('📦 [PurchaseOrderService] Starting completeReceive:', {
+        purchaseOrderId,
+        userId,
+        receiveNotes
+      });
+
       // Use the database function for complete receive
       const { data, error } = await supabase
         .rpc('complete_purchase_order_receive', {
@@ -1201,9 +1225,23 @@ export class PurchaseOrderService {
           receive_notes: receiveNotes || null
         });
 
+      console.log('📦 [PurchaseOrderService] RPC response:', { data, error });
+
       if (error) {
-        console.error('Error completing receive:', error);
+        console.error('❌ [PurchaseOrderService] Error completing receive:', error);
         return { success: false, message: `Receive failed: ${error.message}` };
+      }
+
+      // The database function returns a JSON object
+      // Check if the function returned success: false
+      if (data && typeof data === 'object' && 'success' in data) {
+        if (!data.success) {
+          console.error('❌ [PurchaseOrderService] Function returned failure:', data);
+          return { 
+            success: false, 
+            message: data.message || 'Receive operation failed'
+          };
+        }
       }
 
       // Get receive summary
@@ -1224,7 +1262,7 @@ export class PurchaseOrderService {
         summary: summaryResult.success ? summaryResult.data : null
       };
     } catch (error) {
-      console.error('Error in completeReceive:', error);
+      console.error('❌ [PurchaseOrderService] Error in completeReceive:', error);
       return { 
         success: false, 
         message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}` 
@@ -1378,7 +1416,7 @@ export class PurchaseOrderService {
       // Get purchase order items to get product_id and variant_id
       const { data: orderItems, error: itemsError } = await supabase
         .from('lats_purchase_order_items')
-        .select('id, product_id, variant_id, cost_price')
+        .select('id, product_id, variant_id, unit_cost')
         .eq('purchase_order_id', purchaseOrderId)
         .in('id', receivedItems.map(item => item.id));
 
@@ -1409,12 +1447,11 @@ export class PurchaseOrderService {
         const { error: adjustmentError } = await supabase
           .from('lats_inventory_adjustments')
           .insert({
-            purchase_order_id: purchaseOrderId,
             product_id: orderItem.product_id,
             variant_id: orderItem.variant_id,
             adjustment_type: 'receive',
             quantity: receivedItem.receivedQuantity,
-            cost_price: orderItem.cost_price,
+            cost_price: orderItem.unit_cost,
             reason: `Partial receive from purchase order ${purchaseOrderId}`,
             reference_id: receivedItem.id,
             processed_by: userId

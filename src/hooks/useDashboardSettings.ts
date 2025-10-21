@@ -4,6 +4,7 @@ import { loadUserSettings } from '../lib/userSettingsApi';
 
 export interface DashboardSettings {
   quickActions: {
+    // Core Business Features
     devices: boolean;
     addDevice: boolean;
     customers: boolean;
@@ -12,6 +13,50 @@ export interface DashboardSettings {
     purchaseOrders: boolean;
     payments: boolean;
     adGenerator: boolean;
+    pos: boolean;
+    reports: boolean;
+    employees: boolean;
+    whatsapp: boolean;
+    settings: boolean;
+    search: boolean;
+    loyalty: boolean;
+    backup: boolean;
+    
+    // SMS & Communication Features
+    sms: boolean;
+    bulkSms: boolean;
+    smsLogs: boolean;
+    smsSettings: boolean;
+    
+    // Diagnostic & Repair Features
+    diagnostics: boolean;
+    newDiagnostic: boolean;
+    diagnosticReports: boolean;
+    diagnosticTemplates: boolean;
+    
+    // Import/Export & Data Management
+    excelImport: boolean;
+    excelTemplates: boolean;
+    productExport: boolean;
+    customerImport: boolean;
+    
+    // Advanced System Features
+    userManagement: boolean;
+    databaseSetup: boolean;
+    integrationSettings: boolean;
+    integrationsTest: boolean;
+    aiTraining: boolean;
+    bluetoothPrinter: boolean;
+    
+    // Business Management
+    categoryManagement: boolean;
+    supplierManagement: boolean;
+    storeLocations: boolean;
+    
+    // Advanced Analytics & Reports
+    reminders: boolean;
+    mobile: boolean;
+    myAttendance: boolean;
   };
   widgets: {
     revenueTrendChart: boolean;
@@ -21,21 +66,34 @@ export interface DashboardSettings {
     performanceMetricsChart: boolean;
     customerActivityChart: boolean;
     salesFunnelChart: boolean;
+    purchaseOrderChart: boolean;
     appointmentWidget: boolean;
     employeeWidget: boolean;
     notificationWidget: boolean;
     financialWidget: boolean;
     analyticsWidget: boolean;
     serviceWidget: boolean;
+    reminderWidget: boolean;
     customerInsightsWidget: boolean;
     systemHealthWidget: boolean;
     inventoryWidget: boolean;
     activityFeedWidget: boolean;
+    purchaseOrderWidget: boolean;
+    chatWidget: boolean;
+    salesWidget: boolean;
+    topProductsWidget: boolean;
+    expensesWidget: boolean;
+    staffPerformanceWidget: boolean;
+    salesChart: boolean;
+    paymentMethodsChart: boolean;
+    salesByCategoryChart: boolean;
+    profitMarginChart: boolean;
   };
 }
 
 const defaultDashboardSettings: DashboardSettings = {
   quickActions: {
+    // Core Business Features
     devices: true,
     addDevice: true,
     customers: true,
@@ -43,7 +101,51 @@ const defaultDashboardSettings: DashboardSettings = {
     appointments: true,
     purchaseOrders: true,
     payments: true,
-    adGenerator: true
+    adGenerator: true,
+    pos: true,
+    reports: true,
+    employees: true,
+    whatsapp: true,
+    settings: true,
+    search: true,
+    loyalty: true,
+    backup: true,
+    
+    // SMS & Communication Features
+    sms: true,
+    bulkSms: true,
+    smsLogs: true,
+    smsSettings: true,
+    
+    // Diagnostic & Repair Features
+    diagnostics: true,
+    newDiagnostic: true,
+    diagnosticReports: true,
+    diagnosticTemplates: true,
+    
+    // Import/Export & Data Management
+    excelImport: true,
+    excelTemplates: true,
+    productExport: true,
+    customerImport: true,
+    
+    // Advanced System Features
+    userManagement: true,
+    databaseSetup: true,
+    integrationSettings: true,
+    integrationsTest: true,
+    aiTraining: true,
+    bluetoothPrinter: true,
+    
+    // Business Management
+    categoryManagement: true,
+    supplierManagement: true,
+    storeLocations: true,
+    
+    // Advanced Analytics & Reports
+    reminders: true,
+    mobile: true,
+    myAttendance: true
   },
   widgets: {
     revenueTrendChart: true,
@@ -53,16 +155,28 @@ const defaultDashboardSettings: DashboardSettings = {
     performanceMetricsChart: true,
     customerActivityChart: true,
     salesFunnelChart: true,
+    purchaseOrderChart: true,
     appointmentWidget: true,
     employeeWidget: true,
     notificationWidget: true,
     financialWidget: true,
     analyticsWidget: true,
     serviceWidget: true,
+    reminderWidget: true,
     customerInsightsWidget: true,
     systemHealthWidget: true,
     inventoryWidget: true,
-    activityFeedWidget: true
+    activityFeedWidget: true,
+    purchaseOrderWidget: true,
+    chatWidget: true,
+    salesWidget: true,
+    topProductsWidget: true,
+    expensesWidget: true,
+    staffPerformanceWidget: true,
+    salesChart: true,
+    paymentMethodsChart: true,
+    salesByCategoryChart: true,
+    profitMarginChart: true
   }
 };
 

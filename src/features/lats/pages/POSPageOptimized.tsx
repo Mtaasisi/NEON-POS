@@ -195,15 +195,19 @@ const POSPageOptimized: React.FC = () => {
     ? isMobile 
     : viewModePreference === 'mobile';
   
-  // Debug device detection and view mode (only log when device changes, not on every render)
+  // Debug device detection and view mode (only log once in development mode)
+  const hasLoggedDeviceInfo = useRef(false);
   useEffect(() => {
-    console.log('🔧 Device Detection:', { 
-      isMobile, 
-      isTablet, 
-      deviceType, 
-      viewModePreference, 
-      useMobileUI 
-    });
+    if (!hasLoggedDeviceInfo.current && process.env.NODE_ENV === 'development') {
+      console.log('🔧 Device Detection:', { 
+        isMobile, 
+        isTablet, 
+        deviceType, 
+        viewModePreference, 
+        useMobileUI 
+      });
+      hasLoggedDeviceInfo.current = true;
+    }
   }, [isMobile, isTablet, deviceType, viewModePreference, useMobileUI]);
   
   // Session tracking - tracks when the current day was opened (moved up to avoid TDZ error)
@@ -237,9 +241,9 @@ const POSPageOptimized: React.FC = () => {
     return total;
   }, [dbSales, sessionStartTime]);
   
-  // Log session info only when session actually changes (not on every sale)
+  // Log session info only when session actually changes (not on every sale) - development only
   useEffect(() => {
-    if (sessionStartTime) {
+    if (sessionStartTime && process.env.NODE_ENV === 'development') {
       console.log(`📊 Session started at: ${new Date(sessionStartTime).toLocaleTimeString()}`);
     }
   }, [sessionStartTime]);
@@ -311,23 +315,16 @@ const POSPageOptimized: React.FC = () => {
     loadSales
   } = useInventoryStore();
 
-  // Track if we've already logged the "no products" warning
-  const hasLoggedNoProducts = useRef(false);
+  // Track if we've already logged product load status
+  const hasLoggedProductStatus = useRef(false);
+  // Track if initial data load has been triggered
+  const initialLoadTriggered = useRef(false);
 
   // Transform products with category information - OPTIMIZED
   const products = useMemo(() => {
     if (dbProducts.length === 0) {
-      // Only log once to avoid console spam
-      if (!hasLoggedNoProducts.current) {
-        console.log('⚠️ [POS] No products loaded from database yet');
-        hasLoggedNoProducts.current = true;
-      }
       return [];
     }
-
-    // Reset flag when we have products
-    hasLoggedNoProducts.current = false;
-    console.log(`✅ [POS] Processing ${dbProducts.length} products from database`);
 
     // Filter out sample products first
     const filteredDbProducts = dbProducts.filter(product => {
@@ -335,12 +332,9 @@ const POSPageOptimized: React.FC = () => {
       return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
     });
     
-    console.log(`✅ [POS] ${filteredDbProducts.length} products after filtering`);
-    
     // DON'T WAIT FOR CATEGORIES - Show products immediately!
     // If no categories loaded yet, return products without category info
     if (categories.length === 0) {
-      console.log('⚡ [POS] Showing products without categories (loading faster)');
       return filteredDbProducts.map(product => ({
         ...product,
         categoryName: 'Uncategorized',
@@ -390,6 +384,20 @@ const POSPageOptimized: React.FC = () => {
       };
     });
   }, [dbProducts, categories]);
+
+  // Log product load status only when products change (not on every render)
+  useEffect(() => {
+    if (dbProducts.length > 0 && !hasLoggedProductStatus.current) {
+      console.log(`✅ [POS] ${dbProducts.length} products loaded from database`);
+      const filteredCount = products.length;
+      if (filteredCount !== dbProducts.length) {
+        console.log(`✅ [POS] ${filteredCount} products after filtering`);
+      }
+      hasLoggedProductStatus.current = true;
+    } else if (dbProducts.length === 0 && hasLoggedProductStatus.current) {
+      hasLoggedProductStatus.current = false;
+    }
+  }, [dbProducts.length, products.length]);
 
   // Performance optimization: Cache data loading state
   const [dataLoaded, setDataLoaded] = useState(false);
@@ -612,6 +620,12 @@ const POSPageOptimized: React.FC = () => {
 
   // Load initial data with comprehensive error handling - OPTIMIZED
   useEffect(() => {
+    // Prevent multiple simultaneous loads
+    if (initialLoadTriggered.current) {
+      return;
+    }
+    initialLoadTriggered.current = true;
+
     const loadInitialData = async () => {
       try {
         console.log('🚀 [POS] Starting optimized data load...');

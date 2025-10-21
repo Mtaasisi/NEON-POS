@@ -29,17 +29,23 @@ import {
   List,
   Phone,
   Percent,
-  Mail,
   Crown,
   XCircle,
   Monitor,
-  Smartphone
+  Smartphone,
+  Filter,
+  Download,
+  Star,
+  TrendingUp
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 import { useAuth } from '../../../../context/AuthContext';
+import { supabase } from '../../../../lib/supabaseClient';
+import { useBranch } from '../../../../context/BranchContext';
 import DynamicMobileProductGrid from './DynamicMobileProductGrid';
 import VariantCartItem from './VariantCartItem';
+import MobileCustomerDetailsPage from './MobileCustomerDetailsPage';
 
 interface MobilePOSWrapperProps {
   // Cart data
@@ -118,14 +124,29 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
   isQrCodeScannerEnabled
 }) => {
   const { currentUser } = useAuth();
+  const { currentBranch } = useBranch();
+  const currentBranchId = currentBranch?.id;
   const [activeTab, setActiveTab] = useState<'products' | 'cart' | 'customers' | 'more'>('products');
   const [showCartSheet, setShowCartSheet] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Customer details page state
+  const [showCustomerDetails, setShowCustomerDetails] = useState(false);
+  const [selectedCustomerForDetails, setSelectedCustomerForDetails] = useState<{
+    id: string;
+    name: string;
+    phone: string;
+  } | null>(null);
   const [systemViewMode, setSystemViewMode] = useState<'mobile' | 'desktop'>(() => {
     // Get saved preference from localStorage
     const saved = localStorage.getItem('pos_view_mode');
     return (saved === 'mobile' || saved === 'desktop') ? saved : 'mobile';
   });
+
+  // Real customers state
+  const [recentCustomers, setRecentCustomers] = useState<any[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [totalCustomersCount, setTotalCustomersCount] = useState(0);
 
   // Initialize click sounds
   const { 
@@ -139,6 +160,82 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
   const cartItemCount = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
   const cartTotal = finalAmount;
 
+  // Load recent customers from database
+  useEffect(() => {
+    const loadRecentCustomers = async () => {
+      if (!currentBranchId) return;
+      
+      setLoadingCustomers(true);
+      try {
+        // Get total count
+        const { count } = await supabase
+          .from('lats_customers')
+          .select('id', { count: 'exact', head: true })
+          .eq('branch_id', currentBranchId);
+        
+        setTotalCustomersCount(count || 0);
+
+        // Get recent customers with sales data
+        const { data: customers, error } = await supabase
+          .from('lats_customers')
+          .select('id, name, phone, email, location, city, loyalty_points, created_at')
+          .eq('branch_id', currentBranchId)
+          .order('created_at', { ascending: false })
+          .limit(8);
+
+        if (error) {
+          console.error('Error loading customers:', error);
+          return;
+        }
+
+        if (customers && customers.length > 0) {
+          // Get sales data for each customer to calculate total spent
+          const customersWithStats = await Promise.all(
+            customers.map(async (customer: any) => {
+              const { data: sales } = await supabase
+                .from('lats_sales')
+                .select('total_amount')
+                .eq('customer_id', customer.id)
+                .eq('branch_id', currentBranchId);
+
+              const totalSpent = sales?.reduce((sum: number, sale: any) => sum + (sale.total_amount || 0), 0) || 0;
+              const loyaltyPoints = customer.loyalty_points || 0;
+              
+              // Determine loyalty tier
+              let loyaltyTier = 'bronze';
+              let tierColor = 'orange';
+              if (loyaltyPoints >= 1000) {
+                loyaltyTier = 'platinum';
+                tierColor = 'purple';
+              } else if (loyaltyPoints >= 500) {
+                loyaltyTier = 'gold';
+                tierColor = 'yellow';
+              } else if (loyaltyPoints >= 200) {
+                loyaltyTier = 'silver';
+                tierColor = 'gray';
+              }
+
+              return {
+                ...customer,
+                totalSpent,
+                loyaltyTier,
+                tierColor,
+              };
+            })
+          );
+
+          setRecentCustomers(customersWithStats);
+        }
+      } catch (error) {
+        console.error('Error loading recent customers:', error);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+
+    loadRecentCustomers();
+  }, [currentBranchId]);
+
   // Auto-show cart when items are added
   useEffect(() => {
     if (cartItems.length > 0 && activeTab === 'products') {
@@ -150,7 +247,10 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
   // Apply system view mode to document body for CSS targeting
   useEffect(() => {
     document.body.setAttribute('data-view-mode', systemViewMode);
-    console.log(`📱 System view mode set to: ${systemViewMode}`);
+    // Only log in development mode to reduce console noise
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`📱 System view mode set to: ${systemViewMode}`);
+    }
   }, [systemViewMode]);
 
   // Toggle system view mode (mobile/desktop)
@@ -289,6 +389,84 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
 
   // Calculate total item count
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Helper function to get tier color class
+  const getTierColorClass = (tierColor: string) => {
+    const colorMap: { [key: string]: string } = {
+      purple: 'bg-purple-500',
+      yellow: 'bg-yellow-500',
+      gray: 'bg-gray-500',
+      orange: 'bg-orange-500',
+      blue: 'bg-blue-500',
+      green: 'bg-green-500',
+      pink: 'bg-pink-500',
+      cyan: 'bg-cyan-500',
+    };
+    return colorMap[tierColor] || 'bg-blue-500';
+  };
+
+  // Helper function to format currency
+  const formatCurrency = (amount: number) => {
+    if (amount >= 1000000) {
+      return `TZS ${(amount / 1000000).toFixed(1)}M`;
+    } else if (amount >= 1000) {
+      return `TZS ${(amount / 1000).toFixed(0)}K`;
+    }
+    return `TZS ${amount.toLocaleString()}`;
+  };
+
+  // Render customer card
+  const renderCustomerCard = (customer: any) => {
+    const initial = customer.name.charAt(0).toUpperCase();
+    const location = customer.location || customer.city || 'N/A';
+    
+    return (
+      <div 
+        key={customer.id}
+        onClick={() => {
+          playClickSound();
+          setSelectedCustomerForDetails({
+            id: customer.id,
+            name: customer.name,
+            phone: customer.phone
+          });
+          setShowCustomerDetails(true);
+        }}
+        className={`relative bg-white border border-gray-200 rounded-lg cursor-pointer transition-all duration-200 hover:border-${customer.tierColor}-500`}
+      >
+        <div className="p-3">
+          <div className="flex items-center gap-2 mb-3">
+            <div className={`w-10 h-10 ${getTierColorClass(customer.tierColor)} rounded-lg flex items-center justify-center text-white font-bold text-sm`}>
+              {initial}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-semibold text-gray-900 truncate text-sm">{customer.name}</h4>
+              <p className="text-xs text-blue-600 font-medium truncate">{customer.phone}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 mb-2 justify-center">
+            <Star className={`w-3 h-3 text-${customer.tierColor}-500 fill-current`} />
+            <span className="text-xs text-gray-700 font-semibold capitalize">{customer.loyaltyTier}</span>
+          </div>
+          {location !== 'N/A' && (
+            <div className="space-y-1 mb-3">
+              <div className="flex items-center gap-2 text-xs text-gray-600">
+                <span className="text-gray-400">📍</span>
+                <span className="truncate">{location}</span>
+              </div>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+            <div className="flex items-center gap-1">
+              <Star className="w-3 h-3 text-gray-400" />
+              <span className="text-xs text-gray-600 font-medium">{customer.loyalty_points || 0} pts</span>
+            </div>
+            <div className="text-xs font-bold text-gray-900">{formatCurrency(customer.totalSpent)}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
   
   // Cart Sheet - Redesigned to match desktop POSCartSection
   const CartSheet = () => (
@@ -565,30 +743,30 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                     
                     {/* Grid/List View Toggle */}
                     <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          setViewMode('grid');
-                        }}
-                        className={`p-2 rounded-lg transition-all ${
-                          viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600'
-                        }`}
-                        title="Grid View"
-                      >
-                        <LayoutGrid size={18} />
-                      </button>
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          setViewMode('list');
-                        }}
-                        className={`p-2 rounded-lg transition-all ${
-                          viewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600'
-                        }`}
-                        title="List View"
-                      >
-                        <List size={18} />
-                      </button>
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                        setViewMode('grid');
+                      }}
+                      className={`p-2 rounded-lg transition-all ${
+                        viewMode === 'grid' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600'
+                      }`}
+                      title="Grid View"
+                    >
+                      <LayoutGrid size={18} />
+                    </button>
+                    <button
+                      onClick={() => {
+                        playClickSound();
+                        setViewMode('list');
+                      }}
+                      className={`p-2 rounded-lg transition-all ${
+                        viewMode === 'list' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-600'
+                      }`}
+                      title="List View"
+                    >
+                      <List size={18} />
+                    </button>
                     </div>
                   </div>
                 </div>
@@ -677,136 +855,379 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
         
         {activeTab === 'customers' && (
           <div className="h-full overflow-y-auto pb-20" style={{ background: 'transparent' }}>
-            {/* Header */}
-            <div className="sticky top-0 z-10 border-b border-gray-200 px-4 py-3 shadow-sm" style={{ background: 'rgba(255, 255, 255, 0.85)', backdropFilter: 'blur(10px)' }}>
-              <h3 className="font-bold text-gray-800 text-lg">Customer Management</h3>
-              <p className="text-xs text-gray-600">Select or add a customer for your transaction</p>
+            {/* Customer Management Header */}
+            <div className="sticky top-0 z-10 px-4 py-4 shadow-sm" style={{ background: 'rgba(255, 255, 255, 0.95)', backdropFilter: 'blur(20px)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="font-bold text-gray-900 text-xl">Customer Management</h3>
+                  <p className="text-sm text-gray-600">Manage your customer database</p>
             </div>
-
-            <div className="p-4 space-y-4">
-              {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-3">
+                <div className="flex items-center gap-2">
                 <button
                   onClick={() => {
                     playClickSound();
                     onShowCustomerSearch();
                   }}
-                  className="py-4 bg-blue-500 text-white font-bold rounded-xl active:bg-blue-600 transition-all flex flex-col items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-95"
+                    className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                    title="Search Customers"
                 >
-                  <Search size={24} />
-                  <span className="text-sm">Search</span>
+                    <Search size={18} />
                 </button>
-                
                 <button
                   onClick={() => {
                     playClickSound();
                     onAddCustomer();
                   }}
-                  className="py-4 bg-green-500 text-white font-bold rounded-xl active:bg-green-600 transition-all flex flex-col items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-95"
+                    className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                    title="Add New Customer"
                 >
-                  <Plus size={24} />
-                  <span className="text-sm">Add New</span>
+                    <Plus size={18} />
                 </button>
+                </div>
+              </div>
               </div>
               
-              {/* Selected Customer Card */}
-              {selectedCustomer ? (
-                <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl p-5 shadow-md border-2 border-blue-200">
-                  <div className="flex items-start justify-between mb-3">
+            <div className="p-4 space-y-6">
+              {/* === OVERVIEW SECTION === */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide px-2">Overview</h3>
+                
+                {/* Key Metrics - 2x2 Grid - Glassmorphic */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center text-white font-black text-xl shadow-lg">
-                        {selectedCustomer.name.charAt(0).toUpperCase()}
-                      </div>
+                      <User className="w-7 h-7 text-blue-600 flex-shrink-0" />
                       <div>
-                        <h4 className="font-bold text-gray-900 text-lg">{selectedCustomer.name}</h4>
-                        <p className="text-sm text-gray-600">Selected Customer</p>
+                        <p className="text-xs text-gray-600 mb-1">Total Customers</p>
+                        <p className="text-2xl font-bold text-gray-900">1,247</p>
+                        <p className="text-xs text-gray-500 mt-1">1,200 active</p>
                       </div>
                     </div>
+                  </div>
+                  
+                  <div className="bg-green-50 rounded-lg p-5 hover:bg-green-100 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Star className="w-7 h-7 text-green-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">Total Points</p>
+                        <p className="text-2xl font-bold text-gray-900">128K</p>
+                        <p className="text-xs text-gray-500 mt-1">102 avg</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-purple-50 rounded-lg p-5 hover:bg-purple-100 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <Crown className="w-7 h-7 text-purple-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">VIP Members</p>
+                        <p className="text-2xl font-bold text-gray-900">45</p>
+                        <p className="text-xs text-gray-500 mt-1">3.6% of total</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-orange-50 rounded-lg p-5 hover:bg-orange-100 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <TrendingUp className="w-7 h-7 text-orange-600 flex-shrink-0" />
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1">Total Revenue</p>
+                        <p className="text-2xl font-bold text-gray-900">TSh 8.2M</p>
+                        <p className="text-xs text-gray-500 mt-1">from customers</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* === SEARCH & FILTER SECTION === */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide px-2">Search & Filter</h3>
+                
+                <div 
+                  className="backdrop-blur-xl rounded-xl border p-4 transition-all duration-300"
+                  style={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)', 
+                    borderColor: 'rgba(255, 255, 255, 0.3)', 
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+                  }}
+                >
+                  <div className="space-y-4">
+                    {/* Search Input with Icon */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search customers by name, phone, or email..."
+                        className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-sm bg-white"
+                      />
+                    </div>
+
+                    {/* Filter Pills */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <Filter className="w-5 h-5 text-gray-500" />
+                        <span className="text-sm font-medium text-gray-700">Filter:</span>
+                      </div>
+                      <div className="flex flex-wrap rounded-full bg-gray-100 p-1 gap-1">
+                        <button className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors bg-blue-500 text-white">
+                          All
+                        </button>
+                        <button className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors text-gray-600 hover:text-gray-900">
+                          Platinum
+                        </button>
+                        <button className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors text-gray-600 hover:text-gray-900">
+                          Gold
+                        </button>
+                        <button className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors text-gray-600 hover:text-gray-900">
+                          Silver
+                        </button>
+                        <button className="px-3 py-1.5 text-xs font-medium rounded-full transition-colors text-gray-600 hover:text-gray-900">
+                          Bronze
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* === CUSTOMERS SECTION === */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-2">
+                  <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Customer List</h3>
                     <button
                       onClick={() => {
                         playClickSound();
-                        onRemoveCustomer();
+                      onShowCustomerSearch();
                       }}
-                      className="p-2 hover:bg-red-100 rounded-lg text-red-500 transition-colors"
+                    className="text-blue-600 text-xs font-semibold hover:text-blue-700 flex items-center gap-1 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
                     >
-                      <X size={20} />
+                    <span>View All</span>
+                    <span className="bg-blue-100 px-1.5 py-0.5 rounded-full text-blue-700">{totalCustomersCount.toLocaleString()}</span>
                     </button>
                   </div>
                   
-                  <div className="space-y-2">
-                    {selectedCustomer.phone && (
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Phone size={16} className="text-blue-600" />
-                        <span className="font-medium">{selectedCustomer.phone}</span>
-                      </div>
-                    )}
-                    {selectedCustomer.email && (
-                      <div className="flex items-center gap-2 text-gray-700">
-                        <Mail size={16} className="text-blue-600" />
-                        <span className="text-sm">{selectedCustomer.email}</span>
-                      </div>
-                    )}
-                    {selectedCustomer.loyaltyLevel && (
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
-                          selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold'
-                            ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-300'
-                            : 'bg-green-100 text-green-800 border-2 border-green-300'
-                        }`}>
-                          ⭐ {selectedCustomer.loyaltyLevel} Member
-                        </span>
-                      </div>
-                    )}
-                    {selectedCustomer.points !== undefined && (
-                      <div className="flex items-center justify-between pt-2 mt-2 border-t border-blue-200">
-                        <span className="text-sm font-medium text-gray-700">Loyalty Points</span>
-                        <span className="text-lg font-black text-blue-600">{selectedCustomer.points}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-white rounded-xl p-6 text-center border-2 border-dashed border-gray-300">
-                  <User size={48} className="mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-500 font-medium">No Customer Selected</p>
-                  <p className="text-sm text-gray-400 mt-1">Search or add a customer to continue</p>
-                </div>
-              )}
-
-              {/* Quick Stats */}
-              {selectedCustomer && (
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
-                    <div className="text-2xl font-black text-blue-600">{selectedCustomer.totalPurchases || 0}</div>
-                    <div className="text-xs text-gray-600 mt-1">Purchases</div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
-                    <div className="text-2xl font-black text-green-600">
-                      {selectedCustomer.totalSpent ? `${(selectedCustomer.totalSpent / 1000).toFixed(0)}K` : '0'}
+                <div className="grid grid-cols-2 gap-3">
+                  {loadingCustomers ? (
+                    <div className="col-span-2 text-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                      <p className="text-sm text-gray-600 mt-2">Loading customers...</p>
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">Total Spent</div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 text-center shadow-sm border border-gray-200">
-                    <div className="text-2xl font-black text-purple-600">{selectedCustomer.points || 0}</div>
-                    <div className="text-xs text-gray-600 mt-1">Points</div>
+                  ) : recentCustomers.length > 0 ? (
+                    recentCustomers.map(customer => renderCustomerCard(customer))
+                  ) : (
+                    <div className="col-span-2 text-center py-8">
+                      <User className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                      <p className="text-sm text-gray-600">No customers found</p>
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          onAddCustomer();
+                        }}
+                        className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium"
+                      >
+                        Add First Customer
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* View All Button */}
+                <button 
+                  onClick={() => {
+                    playClickSound();
+                    onShowCustomerSearch();
+                    toast.success('Opening customer search...', {
+                      icon: '🔍',
+                      duration: 2000,
+                    });
+                  }}
+                  className="w-full px-4 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Search size={18} />
+                  <span>View All Customers ({totalCustomersCount.toLocaleString()})</span>
+                </button>
+              </div>
+
+              {/* === LOYALTY PROGRAM SECTION === */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide px-2">Loyalty Program</h3>
+                
+                {/* Loyalty Tiers - Glassmorphic */}
+                <div 
+                  className="backdrop-blur-xl rounded-xl border p-4 transition-all duration-300 hover:shadow-xl"
+                  style={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)', 
+                    borderColor: 'rgba(255, 255, 255, 0.3)', 
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+                  }}
+                >
+                  <h4 className="font-semibold text-gray-900 mb-4">Membership Tiers</h4>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-purple-900">Platinum</h4>
+                        <span className="text-sm font-medium text-purple-500">10% OFF</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Points Range:</span>
+                          <span className="font-semibold text-gray-900">1,000+</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Benefits:</span>
+                          <span className="font-semibold text-gray-900">Priority + Exclusive</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-yellow-900">Gold</h4>
+                        <span className="text-sm font-medium text-yellow-600">7% OFF</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Points Range:</span>
+                          <span className="font-semibold text-gray-900">500-999</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Benefits:</span>
+                          <span className="font-semibold text-gray-900">Special + Birthday</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-gray-900">Silver</h4>
+                        <span className="text-sm font-medium text-gray-600">5% OFF</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Points Range:</span>
+                          <span className="font-semibold text-gray-900">200-499</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600">Benefits:</span>
+                          <span className="font-semibold text-gray-900">Regular + Perks</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Info Card */}
-              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <User className="w-5 h-5 text-blue-600" />
+              {/* === ANALYTICS SECTION === */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide px-2">Analytics & Insights</h3>
+                
+                {/* Customer Analytics - Glassmorphic */}
+                <div 
+                  className="backdrop-blur-xl rounded-xl border p-4 transition-all duration-300 hover:shadow-xl"
+                  style={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)', 
+                    borderColor: 'rgba(255, 255, 255, 0.3)', 
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+                  }}
+                >
+                  <h4 className="font-semibold text-gray-900 mb-4">Performance Metrics</h4>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <p className="text-xs text-gray-600 mb-1">Return Rate</p>
+                      <p className="text-2xl font-bold text-gray-900">68%</p>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <p className="text-xs text-gray-600 mb-1">Avg Rating</p>
+                      <p className="text-2xl font-bold text-gray-900">4.2★</p>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <p className="text-xs text-gray-600 mb-1">New This Month</p>
+                      <p className="text-2xl font-bold text-gray-900">+156</p>
+                    </div>
+                    <div className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <p className="text-xs text-gray-600 mb-1">Active Today</p>
+                      <p className="text-2xl font-bold text-gray-900">89</p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h4 className="font-bold text-blue-900 mb-1">Why Select a Customer?</h4>
-                    <ul className="text-sm text-blue-700 space-y-1">
-                      <li>• Track purchase history</li>
-                      <li>• Apply loyalty discounts</li>
-                      <li>• Earn reward points</li>
-                      <li>• Send digital receipts</li>
-                    </ul>
+                </div>
+              </div>
+
+              {/* === ACTIONS SECTION === */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide px-2">Quick Actions</h3>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Primary Actions */}
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      onShowCustomerSearch();
+                    }}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+                  >
+                    <Search className="w-4 h-4" />
+                    <span className="hidden sm:inline">Search</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      onAddCustomer();
+                    }}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-green-600 text-white hover:bg-green-700 transition-colors text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span className="hidden sm:inline">New</span>
+                  </button>
+
+                  <button className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm">
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Export</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* === TIPS & RESOURCES SECTION === */}
+              <div className="space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide px-2">Best Practices</h3>
+                
+                {/* Management Tips - Glassmorphic */}
+                <div 
+                  className="backdrop-blur-xl rounded-xl border p-5 transition-all duration-300 hover:shadow-xl"
+                  style={{ 
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)', 
+                    borderColor: 'rgba(255, 255, 255, 0.3)', 
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' 
+                  }}
+                >
+                  <h4 className="font-semibold text-gray-900 mb-4">Customer Management Tips</h4>
+                  <div className="grid grid-cols-1 gap-3">
+                    <div className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <span className="text-sm text-gray-700">Keep customer data updated regularly</span>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <span className="text-sm text-gray-700">Use loyalty programs to increase retention</span>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <span className="text-sm text-gray-700">Track purchase patterns for better service</span>
+                      </div>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 bg-orange-500 rounded-full mt-1.5 flex-shrink-0"></div>
+                        <span className="text-sm text-gray-700">Send personalized messages to VIP customers</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -894,6 +1315,20 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
       
       <MobileBottomNav />
       <CartSheet />
+      
+      {/* Customer Details Page */}
+      {selectedCustomerForDetails && (
+        <MobileCustomerDetailsPage
+          isOpen={showCustomerDetails}
+          onClose={() => {
+            setShowCustomerDetails(false);
+            setSelectedCustomerForDetails(null);
+          }}
+          customerId={selectedCustomerForDetails.id}
+          customerName={selectedCustomerForDetails.name}
+          customerPhone={selectedCustomerForDetails.phone}
+        />
+      )}
       
       {/* Safe area styles */}
       <style>{`

@@ -165,11 +165,37 @@ export class QualityCheckService {
         throw error;
       }
 
-      console.log('✅ Quality check created successfully:', data);
+      console.log('✅ Quality check created successfully (raw):', data);
+
+      // Extract the ID from the response - handle different response formats
+      let qualityCheckId: string;
+      
+      if (Array.isArray(data)) {
+        // If it's an array, get the first element
+        const firstItem = data[0];
+        
+        if (typeof firstItem === 'string') {
+          qualityCheckId = firstItem;
+        } else if (typeof firstItem === 'object' && firstItem !== null) {
+          // RPC functions return format like: {create_quality_check_from_template: 'uuid'}
+          qualityCheckId = firstItem.create_quality_check_from_template || firstItem.id || String(firstItem);
+        } else {
+          qualityCheckId = String(firstItem);
+        }
+      } else if (typeof data === 'object' && data !== null) {
+        // If it's an object, try to extract the UUID
+        const dataObj = data as any;
+        qualityCheckId = dataObj.create_quality_check_from_template || dataObj.id || String(data);
+      } else {
+        // If it's already a string, use it directly
+        qualityCheckId = String(data);
+      }
+
+      console.log('✅ Extracted quality check ID:', qualityCheckId);
 
       return {
         success: true,
-        data: data as string,
+        data: qualityCheckId,
         message: 'Quality check created successfully'
       };
     } catch (error) {
@@ -317,29 +343,187 @@ export class QualityCheckService {
         };
       }
 
-      const { data, error } = await supabase
+      // Ensure qualityCheckId is a clean string (not JSONB or object)
+      const cleanQualityCheckId = typeof qualityCheckId === 'string' 
+        ? qualityCheckId.trim() 
+        : String(qualityCheckId);
+
+      console.log('🔍 Fetching quality check items for ID:', cleanQualityCheckId);
+
+      // First, get the quality check items
+      const { data: items, error: itemsError } = await supabase
         .from('purchase_order_quality_check_items')
-        .select(`
-          *,
-          criteria:quality_check_criteria!criteria_id(*),
-          purchase_order_item:lats_purchase_order_items!purchase_order_item_id(
-            id,
-            product_id,
-            variant_id,
-            quantity,
-            product:lats_products!product_id(name, sku),
-            variant:lats_product_variants!variant_id(name, sku)
-          )
-        `)
-        .eq('quality_check_id', qualityCheckId)
+        .select('*')
+        .eq('quality_check_id', cleanQualityCheckId)
         .order('created_at');
 
-      if (error) throw error;
-      if (!data) throw new Error('No quality check items found');
+      if (itemsError) throw itemsError;
+      if (!items || items.length === 0) {
+        console.warn('No quality check items found for ID:', qualityCheckId);
+        return {
+          success: true,
+          data: []
+        };
+      }
 
-      return {
-        success: true,
-        data: data?.map((item: any) => ({
+      // Helper function to safely extract UUID string from any value
+      const safeExtractId = (value: any): string | null => {
+        if (!value) return null;
+        // If it's already a string, return it
+        if (typeof value === 'string') return value;
+        // If it's an object with an id property, extract it
+        if (typeof value === 'object' && value.id) return String(value.id);
+        // Try to convert to string
+        try {
+          return String(value);
+        } catch {
+          return null;
+        }
+      };
+
+      // Helper function to validate UUID format
+      const isValidUUID = (uuid: string | null): boolean => {
+        if (!uuid) return false;
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(uuid);
+      };
+
+      // Get unique IDs for batch fetching - safely extract and validate UUIDs
+      const criteriaIds = [...new Set(
+        items
+          .map(i => safeExtractId(i.criteria_id))
+          .filter(id => id && id !== 'undefined' && id !== 'null' && isValidUUID(id))
+      )] as string[];
+      
+      const poItemIds = [...new Set(
+        items
+          .map(i => safeExtractId(i.purchase_order_item_id))
+          .filter(id => id && id !== 'undefined' && id !== 'null' && isValidUUID(id))
+      )] as string[];
+
+      console.log('🔍 Extracted IDs - Criteria:', criteriaIds, 'PO Items:', poItemIds);
+
+      // Fetch criteria
+      const criteriaMap = new Map();
+      if (criteriaIds.length > 0) {
+        try {
+          const { data: criteria, error: criteriaError } = await supabase
+            .from('quality_check_criteria')
+            .select('*')
+            .in('id', criteriaIds);
+          
+          if (criteriaError) {
+            console.error('Error fetching criteria:', criteriaError);
+            throw criteriaError;
+          }
+          criteria?.forEach((c: any) => criteriaMap.set(c.id, c));
+        } catch (err) {
+          console.error('❌ Failed to fetch criteria:', err);
+          throw err;
+        }
+      }
+
+      // Fetch purchase order items
+      const poItemsMap = new Map();
+      if (poItemIds.length > 0) {
+        try {
+          const { data: poItems, error: poItemsError } = await supabase
+            .from('lats_purchase_order_items')
+            .select('id, product_id, variant_id, quantity_ordered, quantity_received')
+            .in('id', poItemIds);
+          
+          if (poItemsError) {
+            console.error('Error fetching purchase order items:', poItemsError);
+            throw poItemsError;
+          }
+          poItems?.forEach((p: any) => poItemsMap.set(p.id, p));
+        } catch (err) {
+          console.error('❌ Failed to fetch PO items:', err);
+          throw err;
+        }
+      }
+
+      // Get unique product and variant IDs - safely extract and validate
+      const productIds = [...new Set(
+        Array.from(poItemsMap.values())
+          .map((p: any) => safeExtractId(p.product_id))
+          .filter(id => id && id !== 'undefined' && id !== 'null')
+      )] as string[];
+      
+      const variantIds = [...new Set(
+        Array.from(poItemsMap.values())
+          .map((p: any) => safeExtractId(p.variant_id))
+          .filter(id => id && id !== 'undefined' && id !== 'null')
+      )] as string[];
+
+      console.log('🔍 Extracted product/variant IDs - Products:', productIds, 'Variants:', variantIds);
+
+      // Fetch products
+      const productsMap = new Map();
+      if (productIds.length > 0) {
+        try {
+          console.log('🔄 Fetching products with valid UUIDs:', productIds);
+          const { data: products, error: productsError } = await supabase
+            .from('lats_products')
+            .select('id, name, sku')
+            .in('id', productIds);
+          
+          if (productsError) {
+            console.error('❌ Error fetching products:', productsError);
+            // Don't throw - products are optional for display
+          } else {
+            products?.forEach((p: any) => productsMap.set(p.id, p));
+            console.log(`✅ Fetched ${products?.length || 0} products`);
+          }
+        } catch (err) {
+          console.error('❌ Failed to fetch products:', err);
+          // Don't throw - products are optional for display
+        }
+      } else {
+        console.log('ℹ️ No valid product IDs to fetch');
+      }
+
+      // Fetch variants
+      const variantsMap = new Map();
+      if (variantIds.length > 0) {
+        try {
+          console.log('🔄 Fetching variants with valid UUIDs:', variantIds);
+          const { data: variants, error: variantsError } = await supabase
+            .from('lats_product_variants')
+            .select('id, name, sku')
+            .in('id', variantIds);
+          
+          if (variantsError) {
+            console.error('❌ Error fetching variants:', variantsError);
+            // Don't throw - variants are optional for display
+          } else {
+            variants?.forEach((v: any) => variantsMap.set(v.id, v));
+            console.log(`✅ Fetched ${variants?.length || 0} variants`);
+          }
+        } catch (err) {
+          console.error('❌ Failed to fetch variants:', err);
+          // Don't throw - variants are optional for display
+        }
+      } else {
+        console.log('ℹ️ No valid variant IDs to fetch');
+      }
+
+      // Combine all data
+      const enrichedItems = items.map((item: any) => {
+        const criteriaId = safeExtractId(item.criteria_id);
+        const poItemId = safeExtractId(item.purchase_order_item_id);
+        
+        const criteria = criteriaId ? criteriaMap.get(criteriaId) : undefined;
+        const poItem = poItemId ? poItemsMap.get(poItemId) : undefined;
+        
+        // Safely extract product and variant IDs for lookup
+        const productId = poItem ? safeExtractId(poItem.product_id) : null;
+        const variantId = poItem ? safeExtractId(poItem.variant_id) : null;
+        
+        const product = productId ? productsMap.get(productId) : undefined;
+        const variant = variantId ? variantsMap.get(variantId) : undefined;
+
+        return {
           id: item.id,
           qualityCheckId: item.quality_check_id,
           purchaseOrderItemId: item.purchase_order_item_id,
@@ -356,30 +540,36 @@ export class QualityCheckService {
           images: item.images || [],
           createdAt: item.created_at,
           updatedAt: item.updated_at,
-          criteria: item.criteria ? {
-            id: item.criteria.id,
-            templateId: item.criteria.template_id,
-            name: item.criteria.name,
-            description: item.criteria.description,
-            isRequired: item.criteria.is_required,
-            sortOrder: item.criteria.sort_order,
-            createdAt: item.criteria.created_at
+          criteria: criteria ? {
+            id: criteria.id,
+            templateId: criteria.template_id,
+            name: criteria.name,
+            description: criteria.description,
+            isRequired: criteria.is_required,
+            sortOrder: criteria.sort_order,
+            createdAt: criteria.created_at
           } : undefined,
-          purchaseOrderItem: item.purchase_order_item ? {
-            id: item.purchase_order_item.id,
-            productId: item.purchase_order_item.product_id,
-            variantId: item.purchase_order_item.variant_id,
-            quantity: item.purchase_order_item.quantity,
-            product: item.purchase_order_item.product ? {
-              name: item.purchase_order_item.product.name,
-              sku: item.purchase_order_item.product.sku
+          purchaseOrderItem: poItem ? {
+            id: poItem.id,
+            productId: poItem.product_id,
+            variantId: poItem.variant_id,
+            quantityOrdered: poItem.quantity_ordered,
+            quantityReceived: poItem.quantity_received,
+            product: product ? {
+              name: product.name,
+              sku: product.sku
             } : undefined,
-            variant: item.purchase_order_item.variant ? {
-              name: item.purchase_order_item.variant.name,
-              sku: item.purchase_order_item.variant.sku
+            variant: variant ? {
+              name: variant.name,
+              sku: variant.sku
             } : undefined
           } : undefined
-        }))
+        };
+      });
+
+      return {
+        success: true,
+        data: enrichedItems
       };
     } catch (error) {
       console.error('Error fetching quality check items:', error);

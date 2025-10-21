@@ -6,6 +6,20 @@ import { getActiveSuppliers, getAllSuppliers } from '@/lib/supplierApi';
 import { PurchaseOrderService } from '@/features/lats/services/purchaseOrderService';
 import { latsEventBus } from './eventBus';
 
+// 🔒 BRANCH ISOLATION SETTINGS
+// Toggle these to enable/disable branch isolation for different modules
+const ISOLATION_CONFIG = {
+  ENABLE_PURCHASE_ORDER_ISOLATION: true,  // Purchase orders isolation
+  ENABLE_PRODUCT_ISOLATION: true,         // Products & inventory isolation
+  ENABLE_SALES_ISOLATION: true,           // Sales & transactions isolation
+  ENABLE_DEVICE_ISOLATION: true,          // Devices & repairs isolation
+  ENABLE_PAYMENT_ISOLATION: true,         // Payment records isolation
+  ENABLE_TECHNICIAN_ISOLATION: true       // Technicians/Users isolation (NEW)
+};
+
+// Helper to get current branch ID
+const getCurrentBranchId = () => localStorage.getItem('current_branch_id');
+
 const supabaseProvider = {
   // Query data from a table
   getList: async (resource: string, params?: any) => {
@@ -435,9 +449,9 @@ const supabaseProvider = {
           name: v.name,
           sku: v.sku,
           attributes: v.attributes || {},
-          price: v.unit_price || 0, // Map unit_price to price
+          price: v.selling_price || 0,
           costPrice: v.cost_price || 0,
-          sellingPrice: v.unit_price || 0,
+          sellingPrice: v.selling_price || 0,
           stockQuantity: v.quantity || 0,
           minStockLevel: v.min_quantity || 0,
           quantity: v.quantity || 0,
@@ -579,7 +593,7 @@ const supabaseProvider = {
             name: v?.name || v?.variant_name || 'Default',
             attributes: v?.attributes || {},
             costPrice: typeof v?.costPrice === 'number' ? v.costPrice : (v?.cost_price ?? 0),
-            sellingPrice: typeof v?.sellingPrice === 'number' ? v.sellingPrice : (v?.unit_price ?? v?.price ?? 0),
+            sellingPrice: typeof v?.sellingPrice === 'number' ? v.sellingPrice : (v?.selling_price ?? v?.price ?? 0),
             quantity: typeof v?.quantity === 'number' ? v.quantity : (v?.stockQuantity ?? 0),
             minQuantity: typeof v?.minQuantity === 'number' ? v.minQuantity : (v?.minStockLevel ?? 0)
           };
@@ -687,23 +701,29 @@ const supabaseProvider = {
       const categoryIds = [...new Set(products.map((p: any) => p.category_id).filter(Boolean))];
       const supplierIds = [...new Set(products.map((p: any) => p.supplier_id).filter(Boolean))];
 
-      // Fetch variants
-      const { data: variants } = await supabase
-        .from('lats_product_variants')
-        .select('*')
-        .in('product_id', productIds);
+      // Fetch variants - only if there are products
+      const { data: variants } = productIds.length > 0
+        ? await supabase
+            .from('lats_product_variants')
+            .select('*')
+            .in('product_id', productIds)
+        : { data: [] };
 
-      // Fetch categories
-      const { data: categories } = await supabase
-        .from('lats_categories')
-        .select('id, name')
-        .in('id', categoryIds);
+      // Fetch categories - only if there are category IDs
+      const { data: categories } = categoryIds.length > 0 
+        ? await supabase
+            .from('lats_categories')
+            .select('id, name')
+            .in('id', categoryIds)
+        : { data: [] };
 
-      // Fetch suppliers
-      const { data: suppliers } = await supabase
-        .from('lats_suppliers')
-        .select('id, name')
-        .in('id', supplierIds);
+      // Fetch suppliers - only if there are supplier IDs
+      const { data: suppliers } = supplierIds.length > 0
+        ? await supabase
+            .from('lats_suppliers')
+            .select('id, name')
+            .in('id', supplierIds)
+        : { data: [] };
 
       // Create lookup maps
       const variantsByProduct = (variants || []).reduce((acc: any, v: any) => {
@@ -734,14 +754,14 @@ const supabaseProvider = {
             categoryName: categoriesMap[p.category_id]?.name,
             supplierId: p.supplier_id,
             supplierName: suppliersMap[p.supplier_id]?.name,
-            price: productVariants[0]?.unit_price || 0,
+            price: productVariants[0]?.selling_price || 0,
             costPrice: productVariants[0]?.cost_price || 0,
             totalQuantity: p.total_quantity,
             variants: productVariants.map((v: any) => ({
               id: v.id,
               name: v.name,
               sku: v.sku,
-              sellingPrice: v.unit_price,
+              sellingPrice: v.selling_price || 0,
               costPrice: v.cost_price,
               stockQuantity: v.quantity
             }))
@@ -823,7 +843,7 @@ const supabaseProvider = {
     try {
       
       // 🔒 Get current branch for isolation
-      const currentBranchId = localStorage.getItem('current_branch_id');
+      const currentBranchId = getCurrentBranchId();
       
       // Fetch purchase orders without nested select (Neon doesn't support this)
       let query = supabase
@@ -832,7 +852,7 @@ const supabaseProvider = {
         .order('created_at', { ascending: false});
       
       // 🔒 COMPLETE ISOLATION: Only show purchase orders from current branch
-      if (currentBranchId) {
+      if (ISOLATION_CONFIG.ENABLE_PURCHASE_ORDER_ISOLATION && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -843,21 +863,28 @@ const supabaseProvider = {
         return { ok: false, message: error.message, data: [] };
       }
 
-      // Fetch item counts for all purchase orders
+      // Fetch items with quantities for all purchase orders
       const poIds = purchaseOrders?.map((po: any) => po.id) || [];
-      let itemCounts = new Map();
+      let itemsDataMap = new Map();
       
       if (poIds.length > 0) {
         const { data: items, error: itemsError } = await supabase
           .from('lats_purchase_order_items')
-          .select('purchase_order_id, id')
+          .select('purchase_order_id, id, quantity_ordered')
           .in('purchase_order_id', poIds);
         
         if (!itemsError && items) {
-          // Count items per purchase order
+          // Group items by purchase order and calculate data
           items.forEach((item: any) => {
-            const count = itemCounts.get(item.purchase_order_id) || 0;
-            itemCounts.set(item.purchase_order_id, count + 1);
+            const poId = item.purchase_order_id;
+            const existing = itemsDataMap.get(poId) || { count: 0, totalQuantity: 0, items: [] };
+            existing.count += 1;
+            existing.totalQuantity += (item.quantity_ordered || 0);
+            existing.items.push({
+              id: item.id,
+              quantity: item.quantity_ordered || 0
+            });
+            itemsDataMap.set(poId, existing);
           });
         }
       }
@@ -883,7 +910,7 @@ const supabaseProvider = {
 
       // Map snake_case to camelCase for each purchase order
       const mappedOrders = (purchaseOrders || []).map((po: any) => {
-        const itemCount = itemCounts.get(po.id) || 0;
+        const itemsData = itemsDataMap.get(po.id) || { count: 0, totalQuantity: 0, items: [] };
         
         // Parse numeric values properly
         const totalAmount = typeof po.total_amount === 'string' ? parseFloat(po.total_amount) || 0 : (po.total_amount || 0);
@@ -915,8 +942,11 @@ const supabaseProvider = {
           exchangeRateSource: po.exchange_rate_source,
           totalAmountBaseCurrency: totalAmountBaseCurrency,
           supplier: supplier,
-          // Create a minimal items array for count display
-          items: Array(itemCount).fill({ id: 'placeholder' })
+          // Create items array with real quantities from database
+          items: itemsData.items.map((item: any) => ({
+            id: item.id,
+            quantity: item.quantity
+          }))
         };
         
         // Debug each mapped order
@@ -1082,7 +1112,7 @@ const supabaseProvider = {
       );
       
       // 🔒 Get current branch for isolation
-      const currentBranchId = localStorage.getItem('current_branch_id');
+      const currentBranchId = getCurrentBranchId();
       
       // Create the purchase order - using only core columns that exist
       const { data: purchaseOrder, error: poError } = await supabase
@@ -1096,7 +1126,7 @@ const supabaseProvider = {
           order_date: data.orderDate || new Date().toISOString(),
           expected_delivery_date: data.expectedDelivery || null,
           created_by: data.createdBy || null,
-          branch_id: currentBranchId // 🔒 Add branch isolation
+          branch_id: ISOLATION_CONFIG.ENABLE_PURCHASE_ORDER_ISOLATION ? currentBranchId : null // 🔒 Add branch isolation
         })
         .select()
         .single();
@@ -1307,7 +1337,7 @@ const supabaseProvider = {
       const [categoriesRes, suppliersRes, variantsRes] = await Promise.all([
         categoryIds.length > 0 ? supabase.from('lats_categories').select('id, name').in('id', categoryIds) : Promise.resolve({ data: [] }),
         supplierIds.length > 0 ? supabase.from('lats_suppliers').select('id, name, email, phone').in('id', supplierIds) : Promise.resolve({ data: [] }),
-        supabase.from('lats_spare_part_variants').select('*').in('spare_part_id', sparePartIds)
+        sparePartIds.length > 0 ? supabase.from('lats_spare_part_variants').select('*').in('spare_part_id', sparePartIds) : Promise.resolve({ data: [] })
       ]);
 
       // Create lookup maps
@@ -1555,7 +1585,7 @@ const supabaseProvider = {
     try {
       
       // Get current branch for filtering
-      const currentBranchId = localStorage.getItem('current_branch_id');
+      const currentBranchId = getCurrentBranchId();
       
       // Build query
       let query = supabase
@@ -1583,7 +1613,7 @@ const supabaseProvider = {
         .limit(500); // Limit to recent 500 sales for performance
       
       // Apply branch filter if branch ID exists
-      if (currentBranchId) {
+      if (ISOLATION_CONFIG.ENABLE_SALES_ISOLATION && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       } else {
       }
@@ -1670,6 +1700,463 @@ const supabaseProvider = {
 
   getShippingManagers: async () => {
     return { ok: true, data: [] };
+  },
+
+  // ================================================
+  // DEVICES & REPAIRS - with branch isolation
+  // ================================================
+
+  // Get all devices
+  getDevices: async () => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
+        .from('devices')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      // 🔒 COMPLETE ISOLATION: Only show devices from current branch
+      if (ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION && currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('❌ Error fetching devices:', error);
+        return { ok: false, message: error.message, data: [] };
+      }
+      
+      return { ok: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Unexpected error fetching devices:', error);
+      return { ok: false, message: error.message || 'Failed to fetch devices', data: [] };
+    }
+  },
+
+  // Get device by ID
+  getDevice: async (id: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('devices')
+        .select('*')
+        .eq('id', id)
+        .single();
+      
+      if (error) {
+        console.error('❌ Error fetching device:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true, data };
+    } catch (error: any) {
+      console.error('❌ Unexpected error fetching device:', error);
+      return { ok: false, message: error.message || 'Failed to fetch device' };
+    }
+  },
+
+  // Create device
+  createDevice: async (data: any) => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      const deviceData = {
+        ...data,
+        branch_id: ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
+      };
+      
+      const { data: device, error } = await supabase
+        .from('devices')
+        .insert(deviceData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Error creating device:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true, data: device };
+    } catch (error: any) {
+      console.error('❌ Unexpected error creating device:', error);
+      return { ok: false, message: error.message || 'Failed to create device' };
+    }
+  },
+
+  // Update device
+  updateDevice: async (id: string, data: any) => {
+    try {
+      const { data: device, error } = await supabase
+        .from('devices')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Error updating device:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true, data: device };
+    } catch (error: any) {
+      console.error('❌ Unexpected error updating device:', error);
+      return { ok: false, message: error.message || 'Failed to update device' };
+    }
+  },
+
+  // Delete device
+  deleteDevice: async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('devices')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error('❌ Error deleting device:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true };
+    } catch (error: any) {
+      console.error('❌ Unexpected error deleting device:', error);
+      return { ok: false, message: error.message || 'Failed to delete device' };
+    }
+  },
+
+  // Get repair parts for a device
+  getRepairParts: async (deviceId: string) => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
+        .from('repair_parts')
+        .select('*')
+        .eq('device_id', deviceId);
+      
+      // 🔒 Optional: Also filter repair parts by branch
+      if (ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION && currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('❌ Error fetching repair parts:', error);
+        return { ok: false, message: error.message, data: [] };
+      }
+      
+      return { ok: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Unexpected error fetching repair parts:', error);
+      return { ok: false, message: error.message || 'Failed to fetch repair parts', data: [] };
+    }
+  },
+
+  // Get customer payments
+  getCustomerPayments: async (filters?: any) => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
+        .from('customer_payments')
+        .select('*')
+        .order('payment_date', { ascending: false });
+      
+      // Apply filters if provided
+      if (filters?.customer_id) {
+        query = query.eq('customer_id', filters.customer_id);
+      }
+      if (filters?.device_id) {
+        query = query.eq('device_id', filters.device_id);
+      }
+      
+      // 🔒 COMPLETE ISOLATION: Only show payments from current branch
+      if (ISOLATION_CONFIG.ENABLE_PAYMENT_ISOLATION && currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('❌ Error fetching customer payments:', error);
+        return { ok: false, message: error.message, data: [] };
+      }
+      
+      return { ok: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Unexpected error fetching customer payments:', error);
+      return { ok: false, message: error.message || 'Failed to fetch customer payments', data: [] };
+    }
+  },
+
+  // Create customer payment
+  createCustomerPayment: async (data: any) => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      const paymentData = {
+        ...data,
+        branch_id: ISOLATION_CONFIG.ENABLE_PAYMENT_ISOLATION ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
+      };
+      
+      const { data: payment, error } = await supabase
+        .from('customer_payments')
+        .insert(paymentData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Error creating payment:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true, data: payment };
+    } catch (error: any) {
+      console.error('❌ Unexpected error creating payment:', error);
+      return { ok: false, message: error.message || 'Failed to create payment' };
+    }
+  },
+
+  // Get device statistics (branch-aware)
+  getDeviceStatistics: async () => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      let baseQuery = supabase.from('devices');
+      
+      // Build queries with optional branch filtering
+      const buildQuery = (statusFilter?: string) => {
+        let q = baseQuery.select('id', { count: 'exact' });
+        if (ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION && currentBranchId) {
+          q = q.eq('branch_id', currentBranchId);
+        }
+        if (statusFilter) {
+          q = q.eq('status', statusFilter);
+        }
+        return q;
+      };
+      
+      const [totalResult, pendingResult, inProgressResult, completedResult] = await Promise.all([
+        buildQuery(),
+        buildQuery('pending'),
+        buildQuery('in-progress'),
+        buildQuery('completed')
+      ]);
+      
+      return {
+        ok: true,
+        data: {
+          total: totalResult.data?.length || 0,
+          pending: pendingResult.data?.length || 0,
+          inProgress: inProgressResult.data?.length || 0,
+          completed: completedResult.data?.length || 0
+        }
+      };
+    } catch (error: any) {
+      console.error('❌ Error fetching device statistics:', error);
+      return {
+        ok: false,
+        message: error.message || 'Failed to fetch device statistics',
+        data: { total: 0, pending: 0, inProgress: 0, completed: 0 }
+      };
+    }
+  },
+
+  // ================================================
+  // TECHNICIANS & USERS - with branch isolation
+  // ================================================
+
+  // Get all technicians
+  getTechnicians: async () => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
+        .from('users')
+        .select('*')
+        .in('role', ['technician', 'tech', 'admin', 'manager'])
+        .eq('is_active', true)
+        .order('full_name');
+      
+      // 🔒 COMPLETE ISOLATION: Only show technicians from current branch
+      if (ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION && currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('❌ Error fetching technicians:', error);
+        return { ok: false, message: error.message, data: [] };
+      }
+      
+      return { ok: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Unexpected error fetching technicians:', error);
+      return { ok: false, message: error.message || 'Failed to fetch technicians', data: [] };
+    }
+  },
+
+  // Get all users (including non-technicians)
+  getUsers: async (filters?: any) => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
+        .from('users')
+        .select('*')
+        .eq('is_active', true)
+        .order('full_name');
+      
+      // Apply role filter if provided
+      if (filters?.role) {
+        query = query.eq('role', filters.role);
+      }
+      
+      // 🔒 COMPLETE ISOLATION: Only show users from current branch
+      if (ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION && currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('❌ Error fetching users:', error);
+        return { ok: false, message: error.message, data: [] };
+      }
+      
+      return { ok: true, data: data || [] };
+    } catch (error: any) {
+      console.error('❌ Unexpected error fetching users:', error);
+      return { ok: false, message: error.message || 'Failed to fetch users', data: [] };
+    }
+  },
+
+  // Create user
+  createUser: async (data: any) => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      const userData = {
+        ...data,
+        branch_id: ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
+      };
+      
+      const { data: user, error } = await supabase
+        .from('users')
+        .insert(userData)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Error creating user:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true, data: user };
+    } catch (error: any) {
+      console.error('❌ Unexpected error creating user:', error);
+      return { ok: false, message: error.message || 'Failed to create user' };
+    }
+  },
+
+  // Update user
+  updateUser: async (id: string, data: any) => {
+    try {
+      const { data: user, error } = await supabase
+        .from('users')
+        .update(data)
+        .eq('id', id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('❌ Error updating user:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true, data: user };
+    } catch (error: any) {
+      console.error('❌ Unexpected error updating user:', error);
+      return { ok: false, message: error.message || 'Failed to update user' };
+    }
+  },
+
+  // Delete/deactivate user
+  deleteUser: async (id: string) => {
+    try {
+      // Soft delete - just deactivate
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: false })
+        .eq('id', id);
+      
+      if (error) {
+        console.error('❌ Error deactivating user:', error);
+        return { ok: false, message: error.message };
+      }
+      
+      return { ok: true };
+    } catch (error: any) {
+      console.error('❌ Unexpected error deactivating user:', error);
+      return { ok: false, message: error.message || 'Failed to deactivate user' };
+    }
+  },
+
+  // Get user statistics (branch-aware)
+  getUserStatistics: async () => {
+    try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
+      let baseQuery = supabase.from('users').select('id, role', { count: 'exact' }).eq('is_active', true);
+      
+      // Apply branch filter if isolation is enabled
+      if (ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION && currentBranchId) {
+        baseQuery = baseQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await baseQuery;
+      
+      if (error) {
+        console.error('❌ Error fetching user statistics:', error);
+        return {
+          ok: false,
+          message: error.message,
+          data: { total: 0, technicians: 0, admins: 0, managers: 0, customerCare: 0 }
+        };
+      }
+      
+      // Count by role
+      const stats = {
+        total: data?.length || 0,
+        technicians: data?.filter((u: any) => u.role === 'technician' || u.role === 'tech').length || 0,
+        admins: data?.filter((u: any) => u.role === 'admin').length || 0,
+        managers: data?.filter((u: any) => u.role === 'manager').length || 0,
+        customerCare: data?.filter((u: any) => u.role === 'customer-care').length || 0
+      };
+      
+      return { ok: true, data: stats };
+    } catch (error: any) {
+      console.error('❌ Error fetching user statistics:', error);
+      return {
+        ok: false,
+        message: error.message || 'Failed to fetch user statistics',
+        data: { total: 0, technicians: 0, admins: 0, managers: 0, customerCare: 0 }
+      };
+    }
   }
 };
 

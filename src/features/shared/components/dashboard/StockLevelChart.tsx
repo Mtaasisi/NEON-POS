@@ -33,7 +33,10 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
       
       if (currentUser?.id) {
         // Fetch real products with variants
+        console.log('📦 Stock Levels: Loading product data...');
         const products = await getProducts();
+        console.log(`📊 Loaded ${products.length} products for stock analysis`);
+        console.log('📊 Sample products:', products.slice(0, 3).map(p => ({ name: p.name, variants: p.variants?.length || 0 })));
         
         // Calculate stock levels for each product with variants
         const stockItems: StockItem[] = [];
@@ -62,13 +65,21 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
               lowStockCounter++;
             }
             
+            // Clean and truncate product name for better display
+            const productName = product.name || 'Unnamed Product';
+            const cleanName = productName
+              .trim()
+              .substring(0, 25); // Increased from 15 to 25 characters
+            
             stockItems.push({
-              name: product.name.length > 15 ? product.name.substring(0, 15) + '...' : product.name,
+              name: productName.length > 25 ? cleanName + '...' : cleanName,
               stock: stockPercentage,
               status,
               actualQuantity: totalQuantity,
               minQuantity: Math.round(avgMinQuantity)
             });
+            
+            console.log(`📦 Product: "${productName}" | Qty: ${totalQuantity} | Min: ${Math.round(avgMinQuantity)} | Status: ${status}`);
           }
         });
         
@@ -83,12 +94,16 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
           })
           .slice(0, 10); // Show top 10 items
         
+        console.log('📊 Final stock data for chart:', sortedItems);
+        console.log(`📊 Low stock count: ${lowStockCounter}, Critical: ${criticalStockCounter}`);
+        
         setStockData(sortedItems);
         setLowStockCount(lowStockCounter + criticalStockCounter);
       }
       
     } catch (error) {
-      console.error('Error loading stock data:', error);
+      console.error('❌ Error loading stock data:', error);
+      console.error('❌ Error details:', error);
       // Set empty data on error
       setStockData([]);
       setLowStockCount(0);
@@ -151,6 +166,11 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
     );
   }
 
+  console.log('📊 Rendering chart with data:', stockData);
+  console.log('📊 Data length:', stockData.length);
+  console.log('📊 First item:', stockData[0]);
+  console.log('📊 All items stock values:', stockData.map(item => ({ name: item.name, stock: item.stock, status: item.status })));
+
   return (
     <div className={`bg-white rounded-2xl p-6 ${className}`}>
       {/* Header */}
@@ -187,9 +207,9 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
       ) : (
         <>
           {/* Chart */}
-          <div className="h-40 -mx-2">
+          <div className="h-64 -mx-2">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={stockData} layout="horizontal">
+          <BarChart data={stockData} layout="horizontal" margin={{ left: 0, right: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
             <XAxis 
               type="number" 
@@ -204,13 +224,13 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
               type="category"
               dataKey="name" 
               stroke="#9ca3af" 
-              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tick={{ fill: '#6b7280', fontSize: 10 }}
               tickLine={false}
               axisLine={false}
-              width={60}
+              width={120}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-            <Bar dataKey="stock" radius={[0, 4, 4, 0]} maxBarSize={20}>
+            <Bar dataKey="stock" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#10b981">
               {stockData.map((entry, index) => (
                 <Cell key={`cell-${index}`} fill={getBarColor(entry.status)} />
               ))}

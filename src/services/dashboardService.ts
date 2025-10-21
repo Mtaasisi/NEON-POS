@@ -3,11 +3,9 @@ import { getCurrentBranchId } from '../lib/branchAwareApi';
 import { 
   fetchDeviceStats as fetchDeviceStatsDedup,
   fetchCustomerStats as fetchCustomerStatsDedup,
-  fetchUserStats as fetchUserStatsDedup,
   fetchPaymentStats as fetchPaymentStatsDedup,
   fetchInventoryStats as fetchInventoryStatsDedup
 } from '../lib/deduplicatedQueries';
-import { Device } from '../types';
 
 export interface DashboardStats {
   // General stats
@@ -49,10 +47,6 @@ export interface DashboardStats {
   todayAppointments: number;
   appointmentCompletionRate: number;
   
-  // Services
-  servicesCompleted: number;
-  servicesInProgress: number;
-  avgServiceRating: number;
   
   // Inventory stats
   lowStockItems: number;
@@ -119,20 +113,12 @@ export interface CustomerInsight {
   }>;
 }
 
-export interface ServiceMetrics {
-  totalServices: number;
-  completedToday: number;
-  inProgress: number;
-  avgCompletionTime: number;
-  avgRating: number;
-}
 
 export interface AnalyticsData {
   revenueGrowth: number;
   customerGrowth: number;
   averageOrderValue: number;
   completedToday: number;
-  popularServices: string[];
 }
 
 export interface FinancialSummary {
@@ -212,8 +198,8 @@ class DashboardService {
         pendingPayments: paymentsData.pending,
         
         // Notifications
-        unreadNotifications: 0, // TODO: Implement notifications
-        urgentNotifications: 0,
+        unreadNotifications: await this.getNotificationCounts(userId).then(counts => counts.unread),
+        urgentNotifications: await this.getNotificationCounts(userId).then(counts => counts.urgent),
         
         // Appointments
         appointmentsToday: appointmentsData.today,
@@ -222,10 +208,6 @@ class DashboardService {
         todayAppointments: appointmentsData.today,
         appointmentCompletionRate: appointmentsData.completionRate,
         
-        // Services
-        servicesCompleted: devicesData.completed,
-        servicesInProgress: devicesData.inRepair,
-        avgServiceRating: 4.5, // TODO: Calculate from actual ratings
         
         // Inventory stats
         lowStockItems: inventoryData.lowStock,
@@ -321,7 +303,7 @@ class DashboardService {
       if (empError) throw empError;
 
       const total = employees?.length || 0;
-      const onLeaveCount = employees?.filter(e => e.status === 'on-leave').length || 0;
+      const onLeaveCount = employees?.filter((e: any) => e.status === 'on-leave').length || 0;
 
       // Get today's attendance for current branch
       let attQuery = supabase
@@ -338,7 +320,7 @@ class DashboardService {
 
       if (attError) throw attError;
 
-      const presentToday = attendance?.filter(a => a.status === 'present' || a.status === 'late').length || 0;
+      const presentToday = attendance?.filter((a: any) => a.status === 'present' || a.status === 'late').length || 0;
       const attendanceRate = total > 0 ? (presentToday / total) * 100 : 0;
 
       return {
@@ -472,12 +454,70 @@ class DashboardService {
   }
 
   /**
+   * Get notification counts for dashboard stats
+   */
+  async getNotificationCounts(userId: string): Promise<{ unread: number; urgent: number }> {
+    try {
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
+        .from('notifications')
+        .select('status, priority')
+        .eq('user_id', userId);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const notifications = data || [];
+      const unread = notifications.filter((n: any) => n.status === 'unread').length;
+      const urgent = notifications.filter((n: any) => n.priority === 'urgent' && n.status === 'unread').length;
+
+      return { unread, urgent };
+    } catch (error) {
+      console.error('Error fetching notification counts:', error instanceof Error ? error.message : error);
+      return { unread: 0, urgent: 0 };
+    }
+  }
+
+  /**
    * Get recent notifications
    */
   async getRecentNotifications(userId: string, limit: number = 10): Promise<NotificationSummary[]> {
     try {
-      // TODO: Implement notifications system
-      return [];
+      const currentBranchId = getCurrentBranchId();
+      
+      let query = supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Transform database notifications to NotificationSummary format
+      return (data || []).map((notification: any) => ({
+        id: notification.id,
+        title: notification.title,
+        message: notification.message,
+        priority: notification.priority,
+        createdAt: notification.created_at,
+        isRead: notification.status === 'read' || notification.status === 'actioned',
+        type: notification.type
+      }));
     } catch (error) {
       console.error('Error fetching notifications:', error instanceof Error ? error.message : error);
       return [];
@@ -513,7 +553,7 @@ class DashboardService {
       }
 
       // Get today's attendance for these employees in current branch
-      const employeeIds = employees.map(emp => emp.id);
+      const employeeIds = employees.map((emp: any) => emp.id);
       let attQuery = supabase
         .from('attendance_records')
         .select('employee_id, status, check_in_time')
@@ -672,9 +712,39 @@ class DashboardService {
    */
   async getTodayAppointments(limit: number = 10): Promise<AppointmentSummary[]> {
     try {
-      // TODO: Implement appointments table when available
-      // For now, return empty array since appointments table doesn't exist yet
-      return [];
+      const currentBranchId = getCurrentBranchId();
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Query appointments for current branch
+      let query = supabase
+        .from('appointments')
+        .select('id, customer_name, service_type, appointment_time, status, priority, technician_name')
+        .gte('appointment_date', today)
+        .lte('appointment_date', today)
+        .order('appointment_time', { ascending: true })
+        .limit(limit);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching appointments:', error);
+        return [];
+      }
+      
+      return (data || []).map((apt: any) => ({
+        id: apt.id,
+        customerName: apt.customer_name || 'Unknown',
+        serviceName: apt.service_type || 'Service',
+        time: apt.appointment_time || '00:00',
+        status: apt.status || 'scheduled',
+        priority: apt.priority || 'medium',
+        technicianName: apt.technician_name
+      }));
     } catch (error) {
       console.error('Error fetching today appointments:', error instanceof Error ? error.message : error);
       return [];
@@ -740,53 +810,6 @@ class DashboardService {
     }
   }
 
-  /**
-   * Get service metrics
-   */
-  async getServiceMetrics(): Promise<ServiceMetrics> {
-    try {
-      const currentBranchId = getCurrentBranchId();
-      
-      let query = supabase
-        .from('devices')
-        .select('status, created_at, estimated_completion_date');
-      
-      // Apply branch filter if branch is selected
-      if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
-      }
-      
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      const devices = data || [];
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      return {
-        totalServices: devices.length,
-        completedToday: devices.filter((d: any) => 
-          ['done', 'repair-complete'].includes(d.status) &&
-          new Date(d.created_at) >= today
-        ).length,
-        inProgress: devices.filter((d: any) => 
-          ['diagnosis-started', 'in-repair', 'reassembled-testing'].includes(d.status)
-        ).length,
-        avgCompletionTime: 0, // TODO: Calculate from actual data
-        avgRating: 4.5 // TODO: Calculate from device ratings
-      };
-    } catch (error) {
-      console.error('Error fetching service metrics:', error instanceof Error ? error.message : error);
-      return {
-        totalServices: 0,
-        completedToday: 0,
-        inProgress: 0,
-        avgCompletionTime: 0,
-        avgRating: 0
-      };
-    }
-  }
 
   /**
    * Get financial summary for the FinancialWidget
@@ -940,7 +963,7 @@ class DashboardService {
    * Get inventory alerts for low stock items
    * ✅ FIXED: Now properly fetches and returns low stock alerts
    */
-  async getInventoryAlerts(limit: number = 10): Promise<InventoryAlert[]> {
+  async getInventoryAlerts(): Promise<InventoryAlert[]> {
     try {
       const currentBranchId = getCurrentBranchId();
       
@@ -964,7 +987,7 @@ class DashboardService {
       }
       
       // Get product IDs
-      const productIds = products.map(p => p.id);
+      const productIds = products.map((p: any) => p.id);
       
       // Get variants that are low on stock
       let variantsQuery = supabase
@@ -981,17 +1004,19 @@ class DashboardService {
       
       if (variantsError) throw variantsError;
       
-      // Get categories
-      const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
-      const { data: categories } = await supabase
-        .from('lats_categories')
-        .select('id, name')
-        .in('id', categoryIds);
+      // Get categories - only if there are category IDs
+      const categoryIds = [...new Set(products.map((p: any) => p.category_id).filter(Boolean))];
+      const { data: categories } = categoryIds.length > 0
+        ? await supabase
+            .from('lats_categories')
+            .select('id, name')
+            .in('id', categoryIds)
+        : { data: [] };
       
-      const categoryMap = new Map((categories || []).map(c => [c.id, c.name]));
+      const categoryMap = new Map((categories || []).map((c: any) => [c.id, c.name]));
       
       // Create a map of products for quick lookup
-      const productMap = new Map(products.map(p => [p.id, p]));
+      const productMap = new Map(products.map((p: any) => [p.id, p]));
       
       // Filter and map variants to alerts
       const alerts: InventoryAlert[] = [];
@@ -1016,8 +1041,8 @@ class DashboardService {
         if (alertLevel) {
           alerts.push({
             id: variant.id,
-            productName: product.name,
-            category: categoryMap.get(product.category_id) || 'Uncategorized',
+            productName: (product as any).name || 'Unknown Product',
+            category: (categoryMap.get((product as any).category_id) as string) || 'Uncategorized',
             currentStock: quantity,
             minimumStock: minQuantity,
             alertLevel
@@ -1029,7 +1054,7 @@ class DashboardService {
       const severityOrder = { 'out-of-stock': 0, 'critical': 1, 'low': 2 };
       alerts.sort((a, b) => severityOrder[a.alertLevel] - severityOrder[b.alertLevel]);
       
-      return alerts.slice(0, limit);
+      return alerts.slice(0, 10);
     } catch (error: any) {
       console.error('Error fetching inventory alerts:', {
         message: error?.message,
@@ -1044,7 +1069,7 @@ class DashboardService {
   /**
    * Get analytics data for the AnalyticsWidget
    */
-  async getAnalyticsData(userId: string): Promise<AnalyticsData> {
+  async getAnalyticsData(): Promise<AnalyticsData> {
     try {
       // Get data from last month and this month for growth calculations
       const now = new Date();
@@ -1148,24 +1173,12 @@ class DashboardService {
         new Date(d.updated_at) >= today
       ).length;
 
-      // Get popular services
-      const serviceTypeCounts = devices.reduce((acc: any, device: any) => {
-        const service = device.problem_description || 'General Repair';
-        acc[service] = (acc[service] || 0) + 1;
-        return acc;
-      }, {});
-
-      const popularServices = Object.entries(serviceTypeCounts)
-        .sort(([, a]: any, [, b]: any) => b - a)
-        .slice(0, 5)
-        .map(([service]) => service as string);
 
       return {
         revenueGrowth,
         customerGrowth,
         averageOrderValue: Math.round(averageOrderValue),
-        completedToday,
-        popularServices
+        completedToday
       };
     } catch (error: any) {
       console.error('Error fetching analytics data:', {
@@ -1178,8 +1191,7 @@ class DashboardService {
         revenueGrowth: 0,
         customerGrowth: 0,
         averageOrderValue: 0,
-        completedToday: 0,
-        popularServices: []
+        completedToday: 0
       };
     }
   }
@@ -1214,9 +1226,6 @@ class DashboardService {
       upcomingAppointments: 0,
       todayAppointments: 0,
       appointmentCompletionRate: 0,
-      servicesCompleted: 0,
-      servicesInProgress: 0,
-      avgServiceRating: 0,
       lowStockItems: 0,
       criticalStockAlerts: 0,
       totalProducts: 0,

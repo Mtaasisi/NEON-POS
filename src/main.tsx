@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
 
+// Initialize console filter to reduce noise
+import './utils/consoleFilter';
+
 // Debug: Test suppliers loading
 import './lib/testSuppliers';
 import './styles/wallpapers.css';

@@ -162,7 +162,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                   sku: v.sku || '',
                   name: v.variant_name || v.name || '',
                   barcode: v.barcode || undefined,
-                  price: v.unit_price || v.selling_price || 0,
+                  price: v.selling_price || 0,
                   costPrice: v.cost_price || 0,
                   stockQuantity: v.quantity || 0,
                   minStockLevel: v.min_quantity || 0,

@@ -212,6 +212,14 @@ class SaleProcessingService {
     try {
       const variantIds = items.map(item => item.variantId);
       
+      // ✅ Handle empty items array
+      if (variantIds.length === 0) {
+        return {
+          stockValidation: { success: true },
+          itemsWithCosts: []
+        };
+      }
+      
       // Single query to get both quantity and cost_price for all variants
       const { data: variants, error } = await supabase
         .from('lats_product_variants')
@@ -294,6 +302,11 @@ class SaleProcessingService {
     try {
       const variantIds = items.map(item => item.variantId);
       
+      // ✅ Handle empty items array
+      if (variantIds.length === 0) {
+        return { success: true };
+      }
+      
       // Single query to get all variant quantities
       const { data: variants, error } = await supabase
         .from('lats_product_variants')
@@ -335,6 +348,11 @@ class SaleProcessingService {
   private async calculateCostsAndProfits(items: SaleItem[]): Promise<SaleItem[]> {
     try {
       const variantIds = items.map(item => item.variantId);
+      
+      // ✅ Handle empty items array
+      if (variantIds.length === 0) {
+        return [];
+      }
       
       // Single query to get all cost prices
       const { data: variants, error } = await supabase
@@ -843,6 +861,13 @@ class SaleProcessingService {
       
       // First, get current quantities for all variants
       const variantIds = items.map(item => item.variantId);
+      
+      // ✅ Handle empty items array
+      if (variantIds.length === 0) {
+        console.log('ℹ️ No variants to restore stock for');
+        return;
+      }
+      
       const { data: currentVariants, error: fetchError } = await supabase
         .from('lats_product_variants')
         .select('id, quantity')

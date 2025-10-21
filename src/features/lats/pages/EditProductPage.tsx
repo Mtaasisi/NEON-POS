@@ -424,7 +424,7 @@ const EditProductPageContent: React.FC = () => {
       
           condition: product.condition || 'new',  // ✅ FIXED: Default to 'new' instead of empty string
           
-          price: product.unit_price || 0,
+          price: product.selling_price || 0,
           costPrice: product.cost_price || 0,
           stockQuantity: product.stock_quantity || 0,
           minStockLevel: product.min_stock_level || 0,
@@ -491,7 +491,7 @@ const EditProductPageContent: React.FC = () => {
               name: variant.name || '',
               sku: variant.sku || '',
               costPrice: variant.cost_price || 0,
-              price: variant.unit_price || 0,
+              price: variant.selling_price || 0,
               stockQuantity: variant.quantity || 0,
               minStockLevel: variant.min_quantity || 0,
               specification: variant.attributes?.specification || '',
@@ -690,7 +690,7 @@ const EditProductPageContent: React.FC = () => {
         productData.cost_price = formData.costPrice;
       }
       if (formData.price !== undefined) {
-        productData.unit_price = formData.price;
+        productData.selling_price = formData.price;
       }
       if (formData.stockQuantity !== undefined) {
         productData.stock_quantity = formData.stockQuantity;
@@ -784,7 +784,7 @@ const EditProductPageContent: React.FC = () => {
               sku: variant.sku,
               name: variant.name,
               cost_price: variant.costPrice,
-              unit_price: variant.price,
+              selling_price: variant.price,
               quantity: variant.stockQuantity,
               min_quantity: variant.minStockLevel,
               attributes: {

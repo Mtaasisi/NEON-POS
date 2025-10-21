@@ -4,7 +4,7 @@ import {
   X, Package, Hash, DollarSign, Edit, Star, MapPin, Calendar, 
   TrendingUp, TrendingDown, BarChart3, CheckCircle,
   FileText, Layers, Truck, QrCode, ShoppingCart,
-  Target, Calculator, Banknote, Receipt, 
+  Target, Banknote, Receipt, 
   Copy, Download, Building,
   Info, CheckCircle2, ArrowUp, Plus, Trash2, Save
 } from 'lucide-react';
@@ -322,7 +322,6 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
           name: editingVariantData.name,
           sku: editingVariantData.sku,
           cost_price: editingVariantData.costPrice,
-          unit_price: editingVariantData.sellingPrice,
           selling_price: editingVariantData.sellingPrice,
           quantity: editingVariantData.quantity,
           min_quantity: editingVariantData.minQuantity,
@@ -398,7 +397,6 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
           name: newVariantData.name,
           sku: newVariantData.sku,
           cost_price: newVariantData.costPrice,
-          unit_price: newVariantData.sellingPrice,
           selling_price: newVariantData.sellingPrice,
           quantity: newVariantData.quantity,
           min_quantity: newVariantData.minQuantity,
@@ -532,20 +530,6 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
               </div>
             </button>
             <button
-              onClick={() => setActiveTab('analytics')}
-              className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'analytics'
-                  ? 'border-blue-500 text-blue-600 bg-blue-50'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <BarChart3 className="w-4 h-4" />
-                <span className="hidden sm:inline">Analytics</span>
-                <span className="sm:hidden">Stats</span>
-              </div>
-            </button>
-            <button
               onClick={() => setActiveTab('variants')}
               className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'variants'
@@ -556,6 +540,20 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
               <div className="flex items-center justify-center gap-2">
                 <Layers className="w-4 h-4" />
                 <span>Variants</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('purchase-orders')}
+              className={`flex-1 py-2 sm:py-3 px-3 sm:px-4 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'purchase-orders'
+                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Receipt className="w-4 h-4" />
+                <span className="hidden sm:inline">Purchase Orders</span>
+                <span className="sm:hidden">PO</span>
               </div>
             </button>
             <button
@@ -592,11 +590,11 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
           )}
           
           <div className="p-3 sm:p-4 pb-6">
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <>
-              {/* Financial Overview - Minimal Design */}
-              {analytics && (
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <>
+                {/* Financial Overview - Minimal Design */}
+                {analytics && (
                 <div className="mb-4">
                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                     <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-lg p-3">
@@ -919,466 +917,204 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
 
                   </div>
                 </div>
-            </>
-          )}
+              </>
+            )}
 
-           {/* Analytics Tab */}
-           {activeTab === 'analytics' && (
-             <div className="space-y-6">
-               {/* Sales Performance */}
-               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                 <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                   <TrendingUp className="w-5 h-5 text-green-600" />
-                   <h3 className="text-sm font-semibold text-gray-800">Sales Performance</h3>
-                    </div>
-                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                   <div className="text-center p-3 bg-green-50 rounded-lg">
-                     <div className="text-xs font-medium text-green-700 uppercase tracking-wide mb-1">Stock Turnover</div>
-                     <div className="text-lg font-bold text-green-900">
-                       {daysInStock > 0 ? (currentProduct.totalQuantity / daysInStock).toFixed(2) : 'N/A'}
-                    </div>
-                   </div>
-                   <div className="text-center p-3 bg-blue-50 rounded-lg">
-                     <div className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">Inventory Value</div>
-                     <div className="text-lg font-bold text-blue-900">
-                       {format.money((primaryVariant?.costPrice || 0) * (currentProduct.totalQuantity || 0))}
-                     </div>
-                   </div>
-                   <div className="text-center p-3 bg-purple-50 rounded-lg">
-                     <div className="text-xs font-medium text-purple-700 uppercase tracking-wide mb-1">Retail Value</div>
-                     <div className="text-lg font-bold text-purple-900">
-                       {format.money((primaryVariant?.sellingPrice || 0) * (currentProduct.totalQuantity || 0))}
-                     </div>
-                   </div>
-                   <div className="text-center p-3 bg-orange-50 rounded-lg">
-                     <div className="text-xs font-medium text-orange-700 uppercase tracking-wide mb-1">Profit Potential</div>
-                     <div className="text-lg font-bold text-orange-900">
-                       {format.money(((primaryVariant?.sellingPrice || 0) - (primaryVariant?.costPrice || 0)) * (currentProduct.totalQuantity || 0))}
-                     </div>
-                   </div>
-                 </div>
-               </div>
-
-               {/* Market Analysis */}
-               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                 <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                   <BarChart3 className="w-5 h-5 text-blue-600" />
-                   <h3 className="text-sm font-semibold text-gray-800">Market Analysis</h3>
-                      </div>
-                 <div className="grid grid-cols-2 gap-3">
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Price Range</span>
-                     <p className="text-sm font-medium text-gray-900">
-                       {product.variants && product.variants.length > 0 
-                         ? (() => {
-                             const prices = product.variants.map(v => v.sellingPrice || 0);
-                             const min = Math.min(...prices);
-                             const max = Math.max(...prices);
-                             return min === max ? format.money(min) : `${format.money(min)} - ${format.money(max)}`;
-                           })()
-                         : format.money(0)
-                       }
-                     </p>
-                </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Average Markup</span>
-                     <p className="text-sm font-medium text-gray-900">
-                       {product.variants && product.variants.length > 0 
-                         ? (() => {
-                             const markups = product.variants
-                               .filter(v => v.costPrice > 0)
-                               .map(v => ((v.sellingPrice - v.costPrice) / v.costPrice) * 100);
-                             return markups.length > 0 ? `${(markups.reduce((sum, m) => sum + m, 0) / markups.length).toFixed(1)}%` : 'N/A';
-                           })()
-                         : 'N/A'
-                       }
-                     </p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Total Variants</span>
-                     <p className="text-sm font-medium text-gray-900">{product.variants?.length || 0}</p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Active Variants</span>
-                     <p className="text-sm font-medium text-gray-900">
-                       {product.variants?.filter(v => (v.quantity || 0) > 0).length || 0}
-                     </p>
-                   </div>
-                 </div>
-               </div>
-
-               {/* Data Quality & Analytics */}
-               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                 <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                   <BarChart3 className="w-5 h-5 text-purple-600" />
-                   <h3 className="text-sm font-semibold text-gray-800">Data Quality & Analytics</h3>
-                  </div>
-                 <div className="grid grid-cols-2 gap-3">
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Data Completeness</span>
-                     <div className="flex items-center gap-2">
-                       <div className="w-16 bg-gray-200 rounded-full h-2">
-                         <div 
-                           className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                           style={{ width: `${completeness}%` }}
-                         />
-                       </div>
-                       <span className="text-sm font-medium text-gray-900">{completeness}%</span>
-                     </div>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Days in Inventory</span>
-                     <p className="text-sm font-medium text-gray-900">{daysInStock} days</p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Created</span>
-                     <p className="text-sm font-medium text-gray-900">
-                       {product.createdAt ? new Date(product.createdAt).toLocaleDateString() : 'Unknown'}
-                     </p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Last Updated</span>
-                     <p className="text-sm font-medium text-gray-900">
-                       {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString() : 'Never'}
-                     </p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Specifications</span>
-                     <p className="text-sm font-medium text-gray-900">{Object.keys(specifications).length} fields</p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Avg Stock per Variant</span>
-                     <p className="text-sm font-medium text-gray-900">
-                       {product.variants && product.variants.length > 0 
-                         ? Math.round(product.variants.reduce((sum, v) => sum + (v.quantity || 0), 0) / product.variants.length)
-                         : 0
-                       }
-                     </p>
-                   </div>
-                 </div>
-                </div>
-                
-               {/* Supplier Performance */}
-               {currentProduct.supplier && (
-                 <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                   <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                     <Building className="w-5 h-5 text-orange-600" />
-                     <h3 className="text-sm font-semibold text-gray-800">Supplier Performance</h3>
-                      </div>
-                   <div className="grid grid-cols-2 gap-3">
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Supplier Rating</span>
-                       <p className="text-sm font-medium text-gray-900">
-                         {(currentProduct.supplier as any).rating ? `${(currentProduct.supplier as any).rating}/5` : 'Not Rated'}
-                       </p>
-                     </div>
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Lead Time</span>
-                       <p className="text-sm font-medium text-gray-900">
-                         {(currentProduct.supplier as any).leadTime ? `${(currentProduct.supplier as any).leadTime} days` : 'Not Set'}
-                       </p>
-                     </div>
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Total Orders</span>
-                       <p className="text-sm font-medium text-gray-900">
-                         {(currentProduct.supplier as any).totalOrders || 0}
-                       </p>
-                     </div>
-                     <div className="space-y-1">
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">On-Time Delivery</span>
-                       <p className="text-sm font-medium text-gray-900">
-                         {(currentProduct.supplier as any).onTimeDeliveryRate ? `${(currentProduct.supplier as any).onTimeDeliveryRate}%` : 'Not Tracked'}
-                       </p>
-                     </div>
-                   </div>
-                 </div>
-               )}
-
-               {/* Financial Health */}
-               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                 <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                   <DollarSign className="w-5 h-5 text-green-600" />
-                   <h3 className="text-sm font-semibold text-gray-800">Financial Health</h3>
-                      </div>
-                 <div className="grid grid-cols-2 gap-3">
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Cost Efficiency</span>
-                     <p className={`text-sm font-medium ${
-                       primaryVariant?.costPrice > 0 && primaryVariant?.sellingPrice > primaryVariant?.costPrice
-                         ? 'text-green-600' : 'text-red-600'
-                     }`}>
-                       {primaryVariant?.costPrice > 0 && primaryVariant?.sellingPrice > primaryVariant?.costPrice
-                         ? 'Profitable' : 'Check Pricing'
-                       }
-                     </p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Stock Health</span>
-                     <p className={`text-sm font-medium ${
-                       product.variants && product.variants.length > 0
-                         ? (() => {
-                             const lowStock = product.variants.filter(v => (v.quantity || 0) <= (v.minQuantity || 0)).length;
-                             const total = product.variants.length;
-                             const health = ((total - lowStock) / total) * 100;
-                             return health >= 80 ? 'text-green-600' : health >= 50 ? 'text-orange-600' : 'text-red-600';
-                           })()
-                         : 'text-gray-600'
-                     }`}>
-                       {product.variants && product.variants.length > 0
-                         ? (() => {
-                             const lowStock = product.variants.filter(v => (v.quantity || 0) <= (v.minQuantity || 0)).length;
-                             const total = product.variants.length;
-                             const health = ((total - lowStock) / total) * 100;
-                             return `${health.toFixed(0)}%`;
-                           })()
-                         : 'N/A'
-                       }
-                     </p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Data Quality</span>
-                     <p className={`text-sm font-medium ${
-                       completeness >= 80 ? 'text-green-600' : completeness >= 60 ? 'text-orange-600' : 'text-red-600'
-                     }`}>
-                       {completeness >= 80 ? 'Excellent' : completeness >= 60 ? 'Good' : 'Needs Work'}
-                     </p>
-                   </div>
-                   <div className="space-y-1">
-                     <span className="text-xs text-gray-500 uppercase tracking-wide">Image Coverage</span>
-                     <p className={`text-sm font-medium ${
-                       images.length > 0 ? 'text-green-600' : 'text-orange-600'
-                     }`}>
-                       {images.length > 0 ? `${images.length} Image${images.length !== 1 ? 's' : ''}` : 'No Images'}
-                     </p>
-                   </div>
-                 </div>
-               </div>
-
-               {/* Recommendations */}
-               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                 <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                   <Target className="w-5 h-5 text-purple-600" />
-                   <h3 className="text-sm font-semibold text-gray-800">Recommendations</h3>
-                      </div>
-                 <div className="space-y-2">
-                   {(() => {
-                     const recommendations = [];
-                     
-                     // Stock recommendations
-                     if (product.variants && product.variants.length > 0) {
-                       const lowStockVariants = product.variants.filter(v => (v.quantity || 0) <= (v.minQuantity || 0));
-                       if (lowStockVariants.length > 0) {
-                         recommendations.push({
-                           type: 'warning',
-                           message: `${lowStockVariants.length} variant(s) are low on stock and need reordering`
-                         });
-                       }
-                     }
-                     
-                     // Pricing recommendations
-                     if (primaryVariant?.costPrice > 0 && primaryVariant?.sellingPrice <= primaryVariant?.costPrice) {
-                       recommendations.push({
-                         type: 'error',
-                         message: 'Selling price is at or below cost price - review pricing strategy'
-                       });
-                     }
-                     
-                     // Data quality recommendations
-                     if (completeness < 60) {
-                       recommendations.push({
-                         type: 'info',
-                         message: 'Product data is incomplete - consider adding missing information'
-                       });
-                     }
-                     
-                     // Image recommendations
-                     if (images.length === 0) {
-                       recommendations.push({
-                         type: 'info',
-                         message: 'No product images available - consider adding product photos'
-                       });
-                     }
-                     
-                     if (recommendations.length === 0) {
-                       recommendations.push({
-                         type: 'success',
-                         message: 'Product is in good condition with no immediate actions needed'
-                       });
-                     }
-                     
-                     return recommendations.map((rec, index) => (
-                       <div key={index} className={`p-3 rounded-lg ${
-                         rec.type === 'error' ? 'bg-red-50 border border-red-200' :
-                         rec.type === 'warning' ? 'bg-orange-50 border border-orange-200' :
-                         rec.type === 'info' ? 'bg-blue-50 border border-blue-200' :
-                         'bg-green-50 border border-green-200'
-                       }`}>
-                         <p className={`text-sm font-medium ${
-                           rec.type === 'error' ? 'text-red-800' :
-                           rec.type === 'warning' ? 'text-orange-800' :
-                           rec.type === 'info' ? 'text-blue-800' :
-                           'text-green-800'
-                         }`}>
-                           {rec.message}
-                         </p>
-                      </div>
-                     ));
-                   })()}
-                </div>
-               </div>
-
-              {/* Additional Product Details */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Product Performance */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                    <h3 className="text-sm font-semibold text-gray-800">Performance</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Stock Turnover</span>
-                      <p className="text-lg font-bold text-gray-900">
-                        {daysInStock > 0 ? (currentProduct.totalQuantity / daysInStock).toFixed(2) : 'N/A'}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Inventory Value</span>
-                      <p className="text-lg font-bold text-blue-600">
-                        {format.money((primaryVariant?.costPrice || 0) * (currentProduct.totalQuantity || 0))}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Retail Value</span>
-                      <p className="text-lg font-bold text-purple-600">
-                        {format.money((primaryVariant?.sellingPrice || 0) * (currentProduct.totalQuantity || 0))}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Profit Potential</span>
-                      <p className="text-xl font-bold text-green-600">
-                        {format.money(((primaryVariant?.sellingPrice || 0) - (primaryVariant?.costPrice || 0)) * (currentProduct.totalQuantity || 0))}
-                      </p>
+            {/* Purchase Orders Tab */}
+            {activeTab === 'purchase-orders' && (
+              <div className="space-y-4">
+                {/* Purchase Order Statistics Overview */}
+                {isLoadingPOHistory ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                      <p className="text-gray-600">Loading purchase order history...</p>
                     </div>
                   </div>
-                </div>
-                
-                {/* Product Metrics */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <Calculator className="w-5 h-5 text-blue-600" />
-                    <h3 className="text-sm font-semibold text-gray-800">Metrics</h3>
+                ) : !poStats || purchaseOrderHistory.length === 0 ? (
+                  <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300">
+                    <Truck className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No Purchase Orders Found</h3>
+                    <p className="text-sm text-gray-500 mb-4">This product has no purchase order history yet.</p>
+                    <p className="text-xs text-gray-400">Purchase orders will appear here once the product is ordered from suppliers.</p>
                   </div>
-                <div className="space-y-3">
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Avg Cost Price</span>
-                      <p className="text-lg font-bold text-red-600">
-                        {product.variants && product.variants.length > 0 
-                          ? format.money(product.variants.reduce((sum, v) => sum + (v.costPrice || 0), 0) / product.variants.length)
-                          : format.money(0)
-                        }
-                      </p>
-                          </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Avg Selling Price</span>
-                      <p className="text-lg font-bold text-green-600">
-                        {product.variants && product.variants.length > 0 
-                          ? format.money(product.variants.reduce((sum, v) => sum + (v.sellingPrice || 0), 0) / product.variants.length)
-                          : format.money(0)
-                        }
-                      </p>
-                          </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Avg Markup</span>
-                      <p className="text-lg font-bold text-blue-600">
-                        {product.variants && product.variants.length > 0 
-                          ? (() => {
-                              const markups = product.variants
-                                .filter(v => v.costPrice > 0)
-                                .map(v => ((v.sellingPrice - v.costPrice) / v.costPrice) * 100);
-                              return markups.length > 0 ? `${(markups.reduce((sum, m) => sum + m, 0) / markups.length).toFixed(1)}%` : 'N/A';
-                            })()
-                          : 'N/A'
-                        }
-                      </p>
-                          </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Total SKUs</span>
-                      <p className="text-lg font-bold text-gray-900">
-                        {product.variants ? product.variants.filter(v => v.sku).length : 0}
-                      </p>
-                          </div>
-                          </div>
+                ) : (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="w-5 h-5 text-green-600" />
+                        <h3 className="text-sm font-semibold text-gray-800">Purchase Order History</h3>
+                      </div>
+                      <button
+                        onClick={() => setShowPOHistory(!showPOHistory)}
+                        className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        {showPOHistory ? 'Hide Details' : 'Show Details'}
+                      </button>
                     </div>
 
-                {/* Product Health */}
-                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <Target className="w-5 h-5 text-orange-600" />
-                    <h3 className="text-sm font-semibold text-gray-800">Health</h3>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Stock Health</span>
-                      <p className={`text-lg font-bold ${
-                        product.variants && product.variants.length > 0
-                          ? (() => {
-                              const lowStock = product.variants.filter(v => (v.quantity || 0) <= (v.minQuantity || 0)).length;
-                              const total = product.variants.length;
-                              const health = ((total - lowStock) / total) * 100;
-                              return health >= 80 ? 'text-green-600' : health >= 50 ? 'text-orange-600' : 'text-red-600';
-                            })()
-                          : 'text-gray-600'
-                      }`}>
-                        {product.variants && product.variants.length > 0
-                          ? (() => {
-                              const lowStock = product.variants.filter(v => (v.quantity || 0) <= (v.minQuantity || 0)).length;
-                              const total = product.variants.length;
-                              const health = ((total - lowStock) / total) * 100;
-                              return `${health.toFixed(0)}%`;
-                            })()
-                          : 'N/A'
-                        }
-                      </p>
+                    {/* Statistics Grid */}
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      {/* Total Orders Card */}
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
+                        <div className="flex items-center gap-1 mb-1">
+                          <BarChart3 className="w-3 h-3 text-blue-600" />
+                          <span className="text-xs font-medium text-blue-700">Total Orders</span>
+                        </div>
+                        <div className="text-xl font-bold text-blue-900">{poStats.totalOrders}</div>
                       </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Data Quality</span>
-                      <p className={`text-lg font-bold ${
-                        completeness >= 80 ? 'text-green-600' : completeness >= 60 ? 'text-orange-600' : 'text-red-600'
-                      }`}>
-                        {completeness >= 80 ? 'Excellent' : completeness >= 60 ? 'Good' : 'Needs Work'}
-                      </p>
+
+                      {/* Total Quantity Card */}
+                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
+                        <div className="flex items-center gap-1 mb-1">
+                          <ShoppingCart className="w-3 h-3 text-purple-600" />
+                          <span className="text-xs font-medium text-purple-700">Ordered</span>
+                        </div>
+                        <div className="text-xl font-bold text-purple-900">{poStats.totalQuantityOrdered}</div>
+                        <div className="text-xs text-purple-600">Received: {poStats.totalQuantityReceived}</div>
                       </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Pricing Health</span>
-                      <p className={`text-lg font-bold ${
-                        primaryVariant?.costPrice > 0 && primaryVariant?.sellingPrice > primaryVariant?.costPrice
-                          ? 'text-green-600' : 'text-orange-600'
-                      }`}>
-                        {primaryVariant?.costPrice > 0 && primaryVariant?.sellingPrice > primaryVariant?.costPrice
-                          ? 'Profitable' : 'Check Pricing'
-                        }
-                      </p>
+
+                      {/* Average Cost Card */}
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
+                        <div className="flex items-center gap-1 mb-1">
+                          <DollarSign className="w-3 h-3 text-green-600" />
+                          <span className="text-xs font-medium text-green-700">Avg Cost</span>
+                        </div>
+                        <div className="text-base font-bold text-green-900">
+                          {format.money(poStats.averageCostPrice)}
+                        </div>
+                      </div>
+
+                      {/* Last Order Card */}
+                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200">
+                        <div className="flex items-center gap-1 mb-1">
+                          <Calendar className="w-3 h-3 text-amber-600" />
+                          <span className="text-xs font-medium text-amber-700">Last Order</span>
+                        </div>
+                        <div className="text-xs font-bold text-amber-900">
+                          {poStats.lastOrderDate ? new Date(poStats.lastOrderDate).toLocaleDateString('en-US', {
+                            month: 'numeric',
+                            day: 'numeric',
+                            year: 'numeric'
+                          }) : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Price Range */}
+                    {poStats.lowestCostPrice && poStats.highestCostPrice && (
+                      <div className="bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-medium text-gray-700">Price Range</span>
+                          {poStats.lastCostPrice && (
+                            <div className="flex items-center gap-1">
+                              {poStats.lastCostPrice < poStats.averageCostPrice ? (
+                                <>
+                                  <TrendingDown className="w-3 h-3 text-green-600" />
+                                  <span className="text-xs text-green-600 font-medium">Below avg</span>
+                                </>
+                              ) : (
+                                <>
+                                  <TrendingUp className="w-3 h-3 text-red-600" />
+                                  <span className="text-xs text-red-600 font-medium">Above avg</span>
+                                </>
+                              )}
                             </div>
-                    <div className="space-y-1">
-                      <span className="text-xs text-gray-500 uppercase tracking-wide">Image Coverage</span>
-                      <p className={`text-lg font-bold ${
-                        images.length > 0 ? 'text-green-600' : 'text-orange-600'
-                      }`}>
-                        {images.length > 0 ? `${images.length} Image${images.length !== 1 ? 's' : ''}` : 'No Images'}
-                      </p>
-                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <div>
+                            <div className="text-xs text-gray-500">Lowest</div>
+                            <div className="font-bold text-green-700">{format.money(poStats.lowestCostPrice)}</div>
+                          </div>
+                          <div className="flex-1 mx-3">
+                            <div className="h-2 bg-gradient-to-r from-green-300 via-yellow-300 to-red-300 rounded-full"></div>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-xs text-gray-500">Highest</div>
+                            <div className="font-bold text-red-700">{format.money(poStats.highestCostPrice)}</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                </div>
-            </div>
-          )}
+                    )}
 
-           {/* Details Tab */}
-           {activeTab === 'details' && (
-             <div className="space-y-6">
-               {/* Product Identification */}
-               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                    {/* Recent Orders List */}
+                    {showPOHistory && purchaseOrderHistory.length > 0 && (
+                      <div className="space-y-2 max-h-64 overflow-y-auto border-t border-gray-100 pt-3">
+                        <div className="text-xs font-medium text-gray-700 mb-2">
+                          Recent Orders ({purchaseOrderHistory.length})
+                        </div>
+                        {purchaseOrderHistory.map((order) => (
+                          <div
+                            key={order.id}
+                            className="bg-white rounded-lg border border-gray-200 p-3 hover:border-blue-300 transition-colors"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-mono text-xs font-medium text-blue-600">
+                                #{order.orderNumber}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                order.poStatus === 'completed' || order.poStatus === 'received' 
+                                  ? 'bg-green-100 text-green-700'
+                                  : order.poStatus === 'cancelled' 
+                                  ? 'bg-red-100 text-red-700'
+                                  : order.poStatus === 'shipped' || order.poStatus === 'partial_received'
+                                  ? 'bg-blue-100 text-blue-700'
+                                  : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {order.poStatus.replace(/_/g, ' ')}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div>
+                                <span className="text-gray-500">Supplier:</span>
+                                <div className="font-medium text-gray-800 truncate">{order.supplierName}</div>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Date:</span>
+                                <div className="font-medium text-gray-800">
+                                  {new Date(order.orderDate).toLocaleDateString('en-US', {
+                                    month: 'numeric',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </div>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Ordered:</span>
+                                <div className="font-medium text-gray-800">{order.quantity} units</div>
+                              </div>
+                              <div>
+                                <span className="text-gray-500">Received:</span>
+                                <div className="font-medium text-gray-800">
+                                  {order.receivedQuantity} units
+                                  {order.receivedQuantity === order.quantity && (
+                                    <CheckCircle2 className="w-3 h-3 text-green-600 inline ml-1" />
+                                  )}
+                                </div>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="text-gray-500">Cost:</span>
+                                <div className="font-bold text-gray-900">
+                                  {format.money(order.costPrice)} per unit
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Details Tab */}
+            {activeTab === 'details' && (
+              <div className="space-y-6">
+                {/* Product Identification */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
                    <Hash className="w-5 h-5 text-purple-600" />
                    <h3 className="text-sm font-semibold text-gray-800">Product Identification</h3>
@@ -1539,188 +1275,6 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
               </div>
               )}
 
-              {/* Purchase Order Information - Enhanced with History */}
-              <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-green-600" />
-                    <h3 className="text-sm font-semibold text-gray-800">Purchase Order History</h3>
-                  </div>
-                  {purchaseOrderHistory.length > 0 && (
-                    <button
-                      onClick={() => setShowPOHistory(!showPOHistory)}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      {showPOHistory ? 'Hide Details' : 'Show Details'}
-                    </button>
-                  )}
-                </div>
-                
-                {isLoadingPOHistory ? (
-                  <div className="flex items-center justify-center py-6">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                    <span className="ml-2 text-sm text-gray-600">Loading...</span>
-                  </div>
-                ) : !poStats || purchaseOrderHistory.length === 0 ? (
-                  <div className="text-center py-6">
-                    <Truck className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500 font-medium">No purchase history</p>
-                    <p className="text-xs text-gray-400 mt-1">No orders found for this product</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Statistics Grid */}
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                      {/* Total Orders */}
-                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3 border border-blue-200">
-                        <div className="flex items-center gap-1 mb-1">
-                          <BarChart3 className="w-3 h-3 text-blue-600" />
-                          <span className="text-xs font-medium text-blue-700">Total Orders</span>
-                        </div>
-                        <div className="text-xl font-bold text-blue-900">{poStats.totalOrders}</div>
-                      </div>
-
-                      {/* Total Ordered */}
-                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3 border border-purple-200">
-                        <div className="flex items-center gap-1 mb-1">
-                          <ShoppingCart className="w-3 h-3 text-purple-600" />
-                          <span className="text-xs font-medium text-purple-700">Ordered</span>
-                        </div>
-                        <div className="text-xl font-bold text-purple-900">{poStats.totalQuantityOrdered}</div>
-                        <div className="text-xs text-purple-600">
-                          Received: {poStats.totalQuantityReceived}
-                        </div>
-                      </div>
-
-                      {/* Average Cost */}
-                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-200">
-                        <div className="flex items-center gap-1 mb-1">
-                          <DollarSign className="w-3 h-3 text-green-600" />
-                          <span className="text-xs font-medium text-green-700">Avg Cost</span>
-                        </div>
-                        <div className="text-base font-bold text-green-900">
-                          {format.money(poStats.averageCostPrice)}
-                        </div>
-                      </div>
-
-                      {/* Last Order */}
-                      <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-200">
-                        <div className="flex items-center gap-1 mb-1">
-                          <Calendar className="w-3 h-3 text-amber-600" />
-                          <span className="text-xs font-medium text-amber-700">Last Order</span>
-                        </div>
-                        <div className="text-xs font-bold text-amber-900">
-                          {poStats.lastOrderDate ? new Date(poStats.lastOrderDate).toLocaleDateString() : 'N/A'}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Price Trend */}
-                    {poStats.lowestCostPrice && poStats.highestCostPrice && (
-                      <div className="bg-gradient-to-r from-slate-50 to-gray-50 rounded-lg p-3 border border-gray-200">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-medium text-gray-700">Price Range</span>
-                          {poStats.lastCostPrice && (
-                            <div className="flex items-center gap-1">
-                              {poStats.lastCostPrice < poStats.averageCostPrice ? (
-                                <>
-                                  <TrendingDown className="w-3 h-3 text-green-600" />
-                                  <span className="text-xs text-green-600 font-medium">Below avg</span>
-                                </>
-                              ) : (
-                                <>
-                                  <TrendingUp className="w-3 h-3 text-red-600" />
-                                  <span className="text-xs text-red-600 font-medium">Above avg</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between text-xs">
-                          <div>
-                            <div className="text-xs text-gray-500">Lowest</div>
-                            <div className="font-bold text-green-700">
-                              {format.money(poStats.lowestCostPrice)}
-                            </div>
-                          </div>
-                          <div className="flex-1 mx-3">
-                            <div className="h-2 bg-gradient-to-r from-green-300 via-yellow-300 to-red-300 rounded-full"></div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-xs text-gray-500">Highest</div>
-                            <div className="font-bold text-red-700">
-                              {format.money(poStats.highestCostPrice)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Recent Orders List (Collapsible) */}
-                    {showPOHistory && purchaseOrderHistory.length > 0 && (
-                      <div className="space-y-2 max-h-64 overflow-y-auto border-t border-gray-100 pt-3">
-                        <div className="text-xs font-medium text-gray-700 mb-2">
-                          Recent Orders ({purchaseOrderHistory.length})
-                        </div>
-                        {purchaseOrderHistory.map((order) => (
-                          <div
-                            key={order.id}
-                            className="bg-white rounded-lg border border-gray-200 p-3 hover:border-blue-300 transition-colors"
-                          >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-mono text-xs font-medium text-blue-600">
-                                #{order.orderNumber}
-                              </span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                order.poStatus === 'completed' || order.poStatus === 'received' 
-                                  ? 'bg-green-100 text-green-700'
-                                  : order.poStatus === 'cancelled' 
-                                  ? 'bg-red-100 text-red-700'
-                                  : order.poStatus === 'shipped' || order.poStatus === 'partial_received'
-                                  ? 'bg-blue-100 text-blue-700'
-                                  : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {order.poStatus.replace(/_/g, ' ')}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                              <div>
-                                <span className="text-gray-500">Supplier:</span>
-                                <div className="font-medium text-gray-800 truncate">{order.supplierName}</div>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Date:</span>
-                                <div className="font-medium text-gray-800">
-                                  {new Date(order.orderDate).toLocaleDateString()}
-                                </div>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Ordered:</span>
-                                <div className="font-medium text-gray-800">{order.quantity} units</div>
-                              </div>
-                              <div>
-                                <span className="text-gray-500">Received:</span>
-                                <div className="font-medium text-gray-800">
-                                  {order.receivedQuantity} units
-                                  {order.receivedQuantity === order.quantity && (
-                                    <CheckCircle2 className="w-3 h-3 text-green-600 inline ml-1" />
-                                  )}
-                                </div>
-                              </div>
-                              <div className="col-span-2">
-                                <span className="text-gray-500">Cost:</span>
-                                <div className="font-bold text-gray-900">
-                                  {format.money(order.costPrice)} per unit
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
 
               {/* Shipping Status */}
               {(product.shippingStatus || product.trackingNumber || product.expectedDelivery) && (
@@ -1834,295 +1388,227 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
                   </div>
               )}
 
-              {/* Business Intelligence */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                <BarChart3 className="w-5 h-5 text-purple-600" />
-                <h3 className="text-sm font-semibold text-gray-800">Analytics</h3>
-                  </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Data Completeness</span>
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${completeness}%` }}
+
+
+
+
+
+
+
+                </div>
+              </div>
+            )}
+
+            {/* Variants Tab */}
+            {activeTab === 'variants' && (
+              <div className="space-y-6">
+                {/* Add New Variant Button */}
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold text-gray-800">Manage Variants ({currentProduct.variants?.length || 0})</h3>
+                  <button
+                    onClick={() => setShowAddVariantForm(!showAddVariantForm)}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add New Variant
+                  </button>
+                </div>
+
+                {/* Add New Variant Form */}
+                {showAddVariantForm && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-4">
+                    <h4 className="font-semibold text-gray-800 flex items-center gap-2">
+                      <Plus className="w-5 h-5 text-blue-600" />
+                      Add New Variant
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Variant Name*</label>
+                        <input
+                          type="text"
+                          value={newVariantData.name}
+                          onChange={(e) => setNewVariantData({ ...newVariantData, name: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., 256GB Blue"
                         />
                       </div>
-                    <span className="text-sm font-medium text-gray-900">{completeness}%</span>
-                    </div>
-                    </div>
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Days in Inventory</span>
-                  <p className="text-sm font-medium text-gray-900">{daysInStock} days</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Created</span>
-                  <p className="text-sm font-medium text-gray-900">
-                        {product.createdAt ? new Date(product.createdAt).toLocaleDateString() : 'Unknown'}
-                  </p>
-                    </div>
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Last Updated</span>
-                  <p className="text-sm font-medium text-gray-900">
-                        {product.updatedAt ? new Date(product.updatedAt).toLocaleDateString() : 'Never'}
-                  </p>
-                    </div>
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Specifications</span>
-                  <p className="text-sm font-medium text-gray-900">{Object.keys(specifications).length} fields</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Avg Stock per Variant</span>
-                  <p className="text-sm font-medium text-gray-900">
-                    {product.variants && product.variants.length > 0 
-                      ? Math.round(product.variants.reduce((sum, v) => sum + (v.quantity || 0), 0) / product.variants.length)
-                      : 0
-                    }
-                  </p>
-            </div>
-                <div className="col-span-2 space-y-1">
-                  <span className="text-xs text-gray-500 uppercase tracking-wide">Price Range</span>
-                  <p className="text-sm font-medium text-gray-900">
-                    {product.variants && product.variants.length > 0 
-                      ? (() => {
-                          const prices = product.variants.map(v => v.sellingPrice || 0);
-                          const min = Math.min(...prices);
-                          const max = Math.max(...prices);
-                          return min === max ? format.money(min) : `${format.money(min)} - ${format.money(max)}`;
-                        })()
-                      : format.money(0)
-                    }
-                  </p>
-                    </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">SKU*</label>
+                        <input
+                          type="text"
+                          value={newVariantData.sku}
+                          onChange={(e) => setNewVariantData({ ...newVariantData, sku: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="e.g., PROD-001-256-BLU"
+                        />
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
+                        <input
+                          type="number"
+                          value={newVariantData.costPrice}
+                          onChange={(e) => setNewVariantData({ ...newVariantData, costPrice: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="0.00"
+                          step="0.01"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
+                        <input
+                          type="number"
+                          value={newVariantData.sellingPrice}
+                          onChange={(e) => setNewVariantData({ ...newVariantData, sellingPrice: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="0.00"
+                          step="0.01"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
+                        <input
+                          type="number"
+                          value={newVariantData.quantity}
+                          onChange={(e) => setNewVariantData({ ...newVariantData, quantity: parseInt(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Min Stock Level</label>
+                        <input
+                          type="number"
+                          value={newVariantData.minQuantity}
+                          onChange={(e) => setNewVariantData({ ...newVariantData, minQuantity: parseInt(e.target.value) || 2 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="2"
+                        />
                       </div>
                     </div>
-
-
-
-
-
-
-
-
-
-
-
-                </div>
-          )}
-
-          {/* Variants Tab */}
-          {activeTab === 'variants' && (
-            <div className="space-y-6">
-              {/* Add New Variant Button */}
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-800">Manage Variants ({currentProduct.variants?.length || 0})</h3>
-                <button
-                  onClick={() => setShowAddVariantForm(!showAddVariantForm)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add New Variant
-                </button>
-              </div>
-
-              {/* Add New Variant Form */}
-              {showAddVariantForm && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-4">
-                  <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                    <Plus className="w-5 h-5 text-blue-600" />
-                    Add New Variant
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Variant Name*</label>
-                      <input
-                        type="text"
-                        value={newVariantData.name}
-                        onChange={(e) => setNewVariantData({ ...newVariantData, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="e.g., 256GB Blue"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">SKU*</label>
-                      <input
-                        type="text"
-                        value={newVariantData.sku}
-                        onChange={(e) => setNewVariantData({ ...newVariantData, sku: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="e.g., PROD-001-256-BLU"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
-                      <input
-                        type="number"
-                        value={newVariantData.costPrice}
-                        onChange={(e) => setNewVariantData({ ...newVariantData, costPrice: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                        step="0.01"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price</label>
-                      <input
-                        type="number"
-                        value={newVariantData.sellingPrice}
-                        onChange={(e) => setNewVariantData({ ...newVariantData, sellingPrice: parseFloat(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0.00"
-                        step="0.01"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Stock Quantity</label>
-                      <input
-                        type="number"
-                        value={newVariantData.quantity}
-                        onChange={(e) => setNewVariantData({ ...newVariantData, quantity: parseInt(e.target.value) || 0 })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="0"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Min Stock Level</label>
-                      <input
-                        type="number"
-                        value={newVariantData.minQuantity}
-                        onChange={(e) => setNewVariantData({ ...newVariantData, minQuantity: parseInt(e.target.value) || 2 })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="2"
-                      />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAddNewVariant}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
+                      >
+                        <Save className="w-4 h-4" />
+                        Save Variant
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAddVariantForm(false);
+                          setNewVariantData({ name: '', sku: '', costPrice: 0, sellingPrice: 0, quantity: 0, minQuantity: 2 });
+                        }}
+                        className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleAddNewVariant}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-sm font-medium"
-                    >
-                      <Save className="w-4 h-4" />
-                      Save Variant
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowAddVariantForm(false);
-                        setNewVariantData({ name: '', sku: '', costPrice: 0, sellingPrice: 0, quantity: 0, minQuantity: 2 });
-                      }}
-                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors text-sm font-medium"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
+                )}
 
-              {/* Complete Variant Table */}
-              {currentProduct.variants && currentProduct.variants.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <Layers className="w-5 h-5 text-indigo-600" />
-                    <h3 className="text-sm font-semibold text-gray-800">Variant List</h3>
-                  </div>
-                  <div className="overflow-x-auto -mx-4 px-4">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-gray-50 border-b border-gray-200">
-                          <th className="text-left p-3 font-medium text-gray-700">Variant Name</th>
-                          <th className="text-left p-3 font-medium text-gray-700 hidden sm:table-cell">SKU</th>
-                          <th className="text-left p-3 font-medium text-gray-700">Stock</th>
-                          <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">Min Level</th>
-                          <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Cost Price</th>
-                          <th className="text-left p-3 font-medium text-gray-700">Selling Price</th>
-                          <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Markup</th>
-                          <th className="text-left p-3 font-medium text-gray-700">Status</th>
-                          <th className="text-left p-3 font-medium text-gray-700">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {currentProduct.variants.map((variant) => {
-                          const markup = variant.costPrice > 0 ? ((variant.sellingPrice - variant.costPrice) / variant.costPrice * 100) : 0;
-                          const isEditing = editingVariantId === variant.id;
-                          
-                          if (isEditing && editingVariantData) {
-                            return (
-                              <tr key={variant.id} className="border-b border-gray-100 bg-blue-50">
-                                <td className="p-3">
-                                  <input
-                                    type="text"
-                                    value={editingVariantData.name}
-                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, name: e.target.value })}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                  />
-                                </td>
-                                <td className="p-3 hidden sm:table-cell">
-                                  <input
-                                    type="text"
-                                    value={editingVariantData.sku}
-                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, sku: e.target.value })}
-                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <input
-                                    type="number"
-                                    value={editingVariantData.quantity}
-                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, quantity: parseInt(e.target.value) || 0 })}
-                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                                  />
-                                </td>
-                                <td className="p-3 hidden md:table-cell">
-                                  <input
-                                    type="number"
-                                    value={editingVariantData.minQuantity}
-                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, minQuantity: parseInt(e.target.value) || 0 })}
-                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
-                                  />
-                                </td>
-                                <td className="p-3 hidden lg:table-cell">
-                                  <input
-                                    type="number"
-                                    value={editingVariantData.costPrice}
-                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, costPrice: parseFloat(e.target.value) || 0 })}
-                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
-                                    step="0.01"
-                                  />
-                                </td>
-                                <td className="p-3">
-                                  <input
-                                    type="number"
-                                    value={editingVariantData.sellingPrice}
-                                    onChange={(e) => setEditingVariantData({ ...editingVariantData, sellingPrice: parseFloat(e.target.value) || 0 })}
-                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
-                                    step="0.01"
-                                  />
-                                </td>
-                                <td className="p-3 hidden lg:table-cell">-</td>
-                                <td className="p-3">-</td>
-                                <td className="p-3">
-                                  <div className="flex gap-1">
-                                    <button
-                                      onClick={handleSaveVariant}
-                                      className="p-1 text-green-600 hover:bg-green-50 rounded"
-                                      title="Save"
-                                    >
-                                      <Save className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={handleCancelEditVariant}
-                                      className="p-1 text-gray-600 hover:bg-gray-50 rounded"
-                                      title="Cancel"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          }
+                {/* Complete Variant Table */}
+                {currentProduct.variants && currentProduct.variants.length > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+                    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                      <Layers className="w-5 h-5 text-indigo-600" />
+                      <h3 className="text-sm font-semibold text-gray-800">Variant List</h3>
+                    </div>
+                    <div className="overflow-x-auto -mx-4 px-4">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-gray-50 border-b border-gray-200">
+                            <th className="text-left p-3 font-medium text-gray-700">Variant Name</th>
+                            <th className="text-left p-3 font-medium text-gray-700 hidden sm:table-cell">SKU</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Stock</th>
+                            <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">Min Level</th>
+                            <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Cost Price</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Selling Price</th>
+                            <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Markup</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Status</th>
+                            <th className="text-left p-3 font-medium text-gray-700">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {currentProduct.variants.map((variant) => {
+                            const markup = variant.costPrice > 0 ? ((variant.sellingPrice - variant.costPrice) / variant.costPrice * 100) : 0;
+                            const isEditing = editingVariantId === variant.id;
+                            
+                            if (isEditing && editingVariantData) {
+                              return (
+                                <tr key={variant.id} className="border-b border-gray-100 bg-blue-50">
+                                  <td className="p-3">
+                                    <input
+                                      type="text"
+                                      value={editingVariantData.name}
+                                      onChange={(e) => setEditingVariantData({ ...editingVariantData, name: e.target.value })}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                  </td>
+                                  <td className="p-3 hidden sm:table-cell">
+                                    <input
+                                      type="text"
+                                      value={editingVariantData.sku}
+                                      onChange={(e) => setEditingVariantData({ ...editingVariantData, sku: e.target.value })}
+                                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm font-mono"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="number"
+                                      value={editingVariantData.quantity}
+                                      onChange={(e) => setEditingVariantData({ ...editingVariantData, quantity: parseInt(e.target.value) || 0 })}
+                                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                  </td>
+                                  <td className="p-3 hidden md:table-cell">
+                                    <input
+                                      type="number"
+                                      value={editingVariantData.minQuantity}
+                                      onChange={(e) => setEditingVariantData({ ...editingVariantData, minQuantity: parseInt(e.target.value) || 0 })}
+                                      className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    />
+                                  </td>
+                                  <td className="p-3 hidden lg:table-cell">
+                                    <input
+                                      type="number"
+                                      value={editingVariantData.costPrice}
+                                      onChange={(e) => setEditingVariantData({ ...editingVariantData, costPrice: parseFloat(e.target.value) || 0 })}
+                                      className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                      step="0.01"
+                                    />
+                                  </td>
+                                  <td className="p-3">
+                                    <input
+                                      type="number"
+                                      value={editingVariantData.sellingPrice}
+                                      onChange={(e) => setEditingVariantData({ ...editingVariantData, sellingPrice: parseFloat(e.target.value) || 0 })}
+                                      className="w-24 px-2 py-1 border border-gray-300 rounded text-sm"
+                                      step="0.01"
+                                    />
+                                  </td>
+                                  <td className="p-3 hidden lg:table-cell">-</td>
+                                  <td className="p-3">-</td>
+                                  <td className="p-3">
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={handleSaveVariant}
+                                        className="p-1 text-green-600 hover:bg-green-50 rounded"
+                                        title="Save"
+                                      >
+                                        <Save className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={handleCancelEditVariant}
+                                        className="p-1 text-gray-600 hover:bg-gray-50 rounded"
+                                        title="Cancel"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            }
                           
                           return (
                             <tr key={variant.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -2179,29 +1665,29 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
                                 </div>
                               </td>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
-              
-              {(!currentProduct.variants || currentProduct.variants.length === 0) && !showAddVariantForm && (
-                <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
-                  <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                  <p className="text-gray-600 mb-4">No variants found for this product</p>
-                  <button
-                    onClick={() => setShowAddVariantForm(true)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add First Variant
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+                
+                {(!currentProduct.variants || currentProduct.variants.length === 0) && !showAddVariantForm && (
+                  <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-200">
+                    <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                    <p className="text-gray-600 mb-4">No variants found for this product</p>
+                    <button
+                      onClick={() => setShowAddVariantForm(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add First Variant
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

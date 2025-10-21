@@ -48,9 +48,13 @@ export interface SalesStats {
 }
 
 class LatsAnalyticsService {
+  private enableLogging = process.env.NODE_ENV === 'development';
+
   track(event: string, properties?: Record<string, any>): void {
-    // Simple analytics tracking - can be enhanced with actual analytics service
-    console.log(`[Analytics] ${event}:`, properties);
+    // Only log analytics in development mode to reduce console noise
+    if (this.enableLogging) {
+      console.log(`[Analytics] ${event}:`, properties);
+    }
     
     // In a real implementation, this would send data to an analytics service
     // like Google Analytics, Mixpanel, or a custom analytics endpoint

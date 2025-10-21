@@ -25,74 +25,95 @@ export const SalesFunnelChart: React.FC<SalesFunnelChartProps> = ({ className })
       
       const currentBranchId = getCurrentBranchId();
       
-      // Fetch real device data to build repair pipeline funnel
+      console.log('🔍 Sales Funnel: Loading data for branch:', currentBranchId);
+      
+      // Fetch real sales data to build sales funnel
       let query = supabase
-        .from('devices')
-        .select('status, created_at');
+        .from('lats_sales')
+        .select('payment_status, total_amount, created_at, customer_id');
       
       if (currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
-      const { data: devicesData, error } = await query;
+      const { data: salesData, error } = await query;
       
       if (error) {
-        console.error('Error fetching devices for funnel:', error);
+        console.error('❌ Error fetching sales for funnel:', error);
         throw error;
       }
       
-      const devices = devicesData || [];
+      const sales = salesData || [];
+      console.log('✅ Loaded', sales.length, 'sales records for funnel');
       
-      // Map device statuses to funnel stages
+      // Also get unique customers for lead tracking
+      const uniqueCustomers = new Set(sales.map(s => s.customer_id));
+      
+      // Map payment statuses to funnel stages
       const statusCounts = {
-        'Inquiries': 0,      // New devices (assigned, returned-to-customer-care)
-        'Quotes': 0,         // Awaiting parts, parts-arrived
-        'Proposals': 0,      // In-repair, diagnosis-started
-        'Negotiations': 0,   // Reassembled-testing
-        'Closed': 0          // Done, repair-complete
+        'Leads': uniqueCustomers.size,  // Unique customers (potential leads)
+        'Initiated': 0,                  // All sales created
+        'Pending': 0,                    // Payment pending
+        'Completed': 0,                  // Payment completed
+        'Converted': 0                   // Revenue generated
       };
       
-      devices.forEach((device: any) => {
-        const status = device.status?.toLowerCase() || '';
+      let totalRevenue = 0;
+      
+      sales.forEach((sale: any) => {
+        const status = sale.payment_status?.toLowerCase() || 'pending';
+        statusCounts['Initiated']++;
         
-        if (['assigned', 'returned-to-customer-care'].includes(status)) {
-          statusCounts['Inquiries']++;
-        } else if (['awaiting-parts', 'parts-arrived'].includes(status)) {
-          statusCounts['Quotes']++;
-        } else if (['in-repair', 'diagnosis-started'].includes(status)) {
-          statusCounts['Proposals']++;
-        } else if (['reassembled-testing'].includes(status)) {
-          statusCounts['Negotiations']++;
-        } else if (['done', 'repair-complete'].includes(status)) {
-          statusCounts['Closed']++;
+        if (status === 'pending') {
+          statusCounts['Pending']++;
+        } else if (status === 'completed') {
+          statusCounts['Completed']++;
+          statusCounts['Converted']++;
+          totalRevenue += parseFloat(sale.total_amount || 0);
         }
       });
       
-      // Convert to funnel data format
-      const totalInquiries = statusCounts['Inquiries'];
-      const stages = Object.entries(statusCounts)
-        .filter(([_, count]) => count > 0)
-        .map(([stage, value], index) => {
-          const percentage = totalInquiries > 0 ? Math.round((value / totalInquiries) * 100) : 0;
-          const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981'];
-          return {
-            stage,
-            value,
-            color: colors[index] || '#6b7280',
-            percentage
-          };
-        });
+      // Convert to funnel data format - create progressive funnel
+      const funnelStages = [
+        { stage: 'Leads', value: statusCounts['Leads'], color: '#3b82f6' },
+        { stage: 'Initiated', value: statusCounts['Initiated'], color: '#8b5cf6' },
+        { stage: 'Pending', value: statusCounts['Pending'], color: '#f59e0b' },
+        { stage: 'Completed', value: statusCounts['Completed'], color: '#10b981' },
+        { stage: 'Revenue', value: Math.round(totalRevenue), color: '#059669', isRevenue: true }
+      ];
       
-      // Calculate conversion rate (inquiries to closed)
-      const conversionRate = totalInquiries > 0 
-        ? Math.round((statusCounts['Closed'] / totalInquiries) * 100)
+      // Calculate percentages based on leads (top of funnel)
+      const totalLeads = Math.max(statusCounts['Leads'], statusCounts['Initiated']);
+      const stages = funnelStages.map(stage => {
+        const percentage = totalLeads > 0 ? Math.round((stage.value / totalLeads) * 100) : 0;
+        return {
+          ...stage,
+          percentage: Math.min(percentage, 100) // Cap at 100%
+        };
+      });
+      
+      // Calculate conversion rate (leads to completed)
+      const conversionRate = totalLeads > 0 
+        ? Math.round((statusCounts['Completed'] / totalLeads) * 100)
         : 0;
+      
+      console.log('📊 Funnel Data:', {
+        leads: statusCounts['Leads'],
+        initiated: statusCounts['Initiated'],
+        pending: statusCounts['Pending'],
+        completed: statusCounts['Completed'],
+        revenue: totalRevenue,
+        conversionRate: `${conversionRate}%`
+      });
       
       setFunnelData(stages);
       setConversionRate(conversionRate);
       
     } catch (error) {
-      console.error('Error loading funnel data:', error);
+      console.error('❌ Error loading sales funnel data:', error);
+      // Set empty data on error to show component is working but has no data
+      setFunnelData([]);
+      setConversionRate(0);
     } finally {
       setIsLoading(false);
     }
@@ -158,11 +179,14 @@ export const SalesFunnelChart: React.FC<SalesFunnelChartProps> = ({ className })
       <div className="space-y-2 mb-6">
         {funnelData.map((stage, index) => {
           const width = stage.percentage;
+          const isRevenue = stage.stage === 'Revenue';
           return (
             <div key={index} className="relative">
               <div className="flex items-center gap-3 mb-1">
                 <span className="text-xs font-medium text-gray-700 w-24">{stage.stage}</span>
-                <span className="text-xs text-gray-500">{stage.value}</span>
+                <span className="text-xs text-gray-500">
+                  {isRevenue ? `TSh ${stage.value.toLocaleString()}` : stage.value}
+                </span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-8 overflow-hidden">
                 <div 
