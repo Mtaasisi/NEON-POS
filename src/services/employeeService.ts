@@ -166,16 +166,28 @@ class EmployeeService {
    */
   async getAllEmployees(): Promise<Employee[]> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch without PostgREST relationship syntax
+      const { data: employees, error } = await supabase
         .from('employees')
-        .select(`
-          *,
-          branch:store_locations!branch_id(id, name, code, is_main)
-        `)
+        .select('*')
         .order('created_at', { ascending: false});
 
       if (error) throw error;
-      return toCamelCase(data || []);
+      if (!employees || employees.length === 0) return [];
+
+      // Fetch branches separately
+      const branchIds = [...new Set(employees.map(e => e.branch_id).filter(Boolean))];
+      const branchesResult = branchIds.length > 0
+        ? await supabase.from('store_locations').select('id, name, code, is_main').in('id', branchIds)
+        : { data: [], error: null };
+
+      // Map data
+      const branchesMap = new Map(branchesResult.data?.map(b => [b.id, b]) || []);
+
+      return toCamelCase(employees.map(emp => ({
+        ...emp,
+        branch: emp.branch_id ? branchesMap.get(emp.branch_id) : null
+      })));
     } catch (error) {
       console.error('Error fetching employees:', error);
       toast.error('Failed to load employees');
@@ -188,17 +200,28 @@ class EmployeeService {
    */
   async getEmployeeById(id: string): Promise<Employee | null> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch without PostgREST relationship syntax
+      const { data: employee, error } = await supabase
         .from('employees')
-        .select(`
-          *,
-          branch:store_locations!branch_id(id, name, code, is_main)
-        `)
+        .select('*')
         .eq('id', id)
         .single();
 
       if (error) throw error;
-      return toCamelCase(data);
+      if (!employee) return null;
+
+      // Fetch branch separately
+      let branch = null;
+      if (employee.branch_id) {
+        const { data: branchData } = await supabase
+          .from('store_locations')
+          .select('id, name, code, is_main')
+          .eq('id', employee.branch_id)
+          .single();
+        branch = branchData;
+      }
+
+      return toCamelCase({ ...employee, branch });
     } catch (error) {
       console.error('Error fetching employee:', error);
       toast.error('Failed to load employee details');
@@ -230,17 +253,29 @@ class EmployeeService {
    */
   async getActiveEmployees(): Promise<Employee[]> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch without PostgREST relationship syntax
+      const { data: employees, error } = await supabase
         .from('employees')
-        .select(`
-          *,
-          branch:store_locations!branch_id(id, name, code, is_main)
-        `)
+        .select('*')
         .eq('status', 'active')
-        .order('first_name', { ascending: true });
+        .order('full_name', { ascending: true });
 
       if (error) throw error;
-      return toCamelCase(data || []);
+      if (!employees || employees.length === 0) return [];
+
+      // Fetch branches separately
+      const branchIds = [...new Set(employees.map(e => e.branch_id).filter(Boolean))];
+      const branchesResult = branchIds.length > 0
+        ? await supabase.from('store_locations').select('id, name, code, is_main').in('id', branchIds)
+        : { data: [], error: null };
+
+      // Map data
+      const branchesMap = new Map(branchesResult.data?.map(b => [b.id, b]) || []);
+
+      return toCamelCase(employees.map(emp => ({
+        ...emp,
+        branch: emp.branch_id ? branchesMap.get(emp.branch_id) : null
+      })));
     } catch (error) {
       console.error('Error fetching active employees:', error);
       throw error;
@@ -324,8 +359,8 @@ class EmployeeService {
       const { data, error } = await supabase
         .from('employees')
         .select('*')
-        .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,position.ilike.%${query}%,department.ilike.%${query}%`)
-        .order('first_name', { ascending: true });
+        .or(`full_name.ilike.%${query}%,email.ilike.%${query}%,role.ilike.%${query}%`)
+        .order('full_name', { ascending: true });
 
       if (error) throw error;
       return toCamelCase(data || []);
@@ -336,21 +371,35 @@ class EmployeeService {
   }
 
   /**
-   * Get employees by department
+   * Get employees by department (using role since department column doesn't exist)
+   * ✅ FIXED: employees table uses 'role' column, not 'department'
    */
   async getEmployeesByDepartment(department: string): Promise<Employee[]> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch without PostgREST relationship syntax
+      // Note: Using 'role' instead of 'department' as that's what exists in the table
+      const { data: employees, error } = await supabase
         .from('employees')
-        .select(`
-          *,
-          branch:store_locations!branch_id(id, name, code, is_main)
-        `)
-        .eq('department', department)
-        .order('first_name', { ascending: true });
+        .select('*')
+        .eq('role', department)
+        .order('full_name', { ascending: true });
 
       if (error) throw error;
-      return toCamelCase(data || []);
+      if (!employees || employees.length === 0) return [];
+
+      // Fetch branches separately
+      const branchIds = [...new Set(employees.map(e => e.branch_id).filter(Boolean))];
+      const branchesResult = branchIds.length > 0
+        ? await supabase.from('store_locations').select('id, name, code, is_main').in('id', branchIds)
+        : { data: [], error: null };
+
+      // Map data
+      const branchesMap = new Map(branchesResult.data?.map(b => [b.id, b]) || []);
+
+      return toCamelCase(employees.map(emp => ({
+        ...emp,
+        branch: emp.branch_id ? branchesMap.get(emp.branch_id) : null
+      })));
     } catch (error) {
       console.error('Error fetching employees by department:', error);
       throw error;
@@ -362,17 +411,27 @@ class EmployeeService {
    */
   async getEmployeesByBranch(branchId: string): Promise<Employee[]> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch without PostgREST relationship syntax
+      const { data: employees, error } = await supabase
         .from('employees')
-        .select(`
-          *,
-          branch:store_locations!branch_id(id, name, code, is_main)
-        `)
+        .select('*')
         .eq('branch_id', branchId)
-        .order('first_name', { ascending: true });
+        .order('full_name', { ascending: true });
 
       if (error) throw error;
-      return toCamelCase(data || []);
+      if (!employees || employees.length === 0) return [];
+
+      // Fetch branch separately
+      const { data: branch } = await supabase
+        .from('store_locations')
+        .select('id, name, code, is_main')
+        .eq('id', branchId)
+        .single();
+
+      return toCamelCase(employees.map(emp => ({
+        ...emp,
+        branch: branch
+      })));
     } catch (error) {
       console.error('Error fetching employees by branch:', error);
       throw error;
@@ -384,20 +443,25 @@ class EmployeeService {
    */
   async assignEmployeeToBranch(employeeId: string, branchId: string): Promise<Employee> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch without PostgREST relationship syntax
+      const { data: employee, error } = await supabase
         .from('employees')
         .update({ branch_id: branchId })
         .eq('id', employeeId)
-        .select(`
-          *,
-          branch:store_locations!branch_id(id, name, code, is_main)
-        `)
+        .select('*')
         .single();
 
       if (error) throw error;
+
+      // Fetch branch separately
+      const { data: branch } = await supabase
+        .from('store_locations')
+        .select('id, name, code, is_main')
+        .eq('id', branchId)
+        .single();
       
       toast.success('Employee assigned to branch successfully');
-      return toCamelCase(data);
+      return toCamelCase({ ...employee, branch });
     } catch (error: any) {
       console.error('Error assigning employee to branch:', error);
       toast.error(error.message || 'Failed to assign employee to branch');
@@ -410,20 +474,18 @@ class EmployeeService {
    */
   async removeEmployeeFromBranch(employeeId: string): Promise<Employee> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch without PostgREST relationship syntax
+      const { data: employee, error } = await supabase
         .from('employees')
         .update({ branch_id: null })
         .eq('id', employeeId)
-        .select(`
-          *,
-          branch:store_locations!branch_id(id, name, code, is_main)
-        `)
+        .select('*')
         .single();
 
       if (error) throw error;
       
       toast.success('Employee removed from branch');
-      return toCamelCase(data);
+      return toCamelCase({ ...employee, branch: null });
     } catch (error: any) {
       console.error('Error removing employee from branch:', error);
       toast.error(error.message || 'Failed to remove employee from branch');

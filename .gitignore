@@ -7,6 +7,8 @@
 *.tar.gz
 *.rar
 *.7z
+*.dmg
+*.iso
 
 # Node modules
 node_modules/
@@ -25,6 +27,8 @@ yarn-error.log*
 dist/
 build/
 out/
+server/dist/
+android/build/
 
 # IDE files
 .vscode/
@@ -59,6 +63,8 @@ coverage/
 # Backup files
 *.backup
 *.bak
+*.old
+*.broken
 backup_*/
 
 # Large media files
@@ -101,3 +107,8 @@ GitHub-Backup/
 crm_system/database/crm.db
 crm_system/
 archive/
+.playwright-mcp/
+
+# Workspace files (keep in root only)
+**/.code-workspace
+src/**/*.code-workspace

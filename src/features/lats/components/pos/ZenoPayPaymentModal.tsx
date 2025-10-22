@@ -390,7 +390,32 @@ const ZenoPayPaymentModal: React.FC<ZenoPayPaymentModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black bg-opacity-50"
+        onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
       <GlassCard className="w-full max-w-md p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
@@ -644,7 +669,8 @@ const ZenoPayPaymentModal: React.FC<ZenoPayPaymentModalProps> = ({
           </div>
         )}
       </GlassCard>
-    </div>
+      </div>
+    </>
   );
 };
 

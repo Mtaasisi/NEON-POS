@@ -25,10 +25,17 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 
 // Middleware
-app.use(helmet()); // Security headers
+// CORS needs to be BEFORE helmet to work properly
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:5173'],
+  origin: true, // Allow all origins in development
   credentials: true,
+  optionsSuccessStatus: 200,
+}));
+
+// Configure helmet with CORS-friendly settings
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
 app.use(compression()); // Compress responses
 app.use(express.json({ limit: '10mb' })); // Parse JSON

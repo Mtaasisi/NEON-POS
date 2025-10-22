@@ -149,7 +149,11 @@ class DashboardService {
   /**
    * Get comprehensive dashboard statistics
    */
-  async getDashboardStats(userId: string): Promise<DashboardStats> {
+  async getDashboardStats(
+    userId: string, 
+    startDate?: string, 
+    endDate?: string
+  ): Promise<DashboardStats> {
     try {
       // Fetch all necessary data in parallel for better performance
       const [
@@ -160,11 +164,11 @@ class DashboardService {
         appointmentsData,
         inventoryData
       ] = await Promise.all([
-        this.getDeviceStats(),
-        this.getCustomerStats(),
+        this.getDeviceStats(startDate, endDate),
+        this.getCustomerStats(startDate, endDate),
         this.getEmployeeStats(),
-        this.getPaymentStats(),
-        this.getAppointmentStats(),
+        this.getPaymentStats(startDate, endDate),
+        this.getAppointmentStats(startDate, endDate),
         this.getInventoryStats()
       ]);
 
@@ -224,29 +228,38 @@ class DashboardService {
   /**
    * Get device statistics
    */
-  private async getDeviceStats() {
+  private async getDeviceStats(startDate?: string, endDate?: string) {
     try {
       // Use deduplicated query to prevent duplicate calls
       const devices = await fetchDeviceStatsDedup();
       const now = new Date();
 
+      // Filter by date range if provided
+      let filteredDevices = devices;
+      if (startDate && endDate) {
+        filteredDevices = devices.filter((d: any) => {
+          const deviceDate = new Date(d.created_at);
+          return deviceDate >= new Date(startDate) && deviceDate <= new Date(endDate);
+        });
+      }
+
       return {
-        total: devices.length,
-        active: devices.filter((d: any) => 
+        total: filteredDevices.length,
+        active: filteredDevices.filter((d: any) => 
           !['done', 'failed', 'repair-complete'].includes(d.status)
         ).length,
-        completed: devices.filter((d: any) => 
+        completed: filteredDevices.filter((d: any) => 
           ['done', 'repair-complete'].includes(d.status)
         ).length,
-        pending: devices.filter((d: any) => 
+        pending: filteredDevices.filter((d: any) => 
           ['assigned', 'awaiting-parts'].includes(d.status)
         ).length,
-        overdue: devices.filter((d: any) => {
+        overdue: filteredDevices.filter((d: any) => {
           if (!d.estimated_completion_date) return false;
           return new Date(d.estimated_completion_date) < now && 
                  !['done', 'failed', 'repair-complete'].includes(d.status);
         }).length,
-        inRepair: devices.filter((d: any) => 
+        inRepair: filteredDevices.filter((d: any) => 
           ['diagnosis-started', 'in-repair', 'reassembled-testing'].includes(d.status)
         ).length
       };
@@ -260,19 +273,24 @@ class DashboardService {
   /**
    * Get customer statistics
    */
-  private async getCustomerStats() {
+  private async getCustomerStats(startDate?: string, endDate?: string) {
     try {
       // Use deduplicated query to prevent duplicate calls
       const customers = await fetchCustomerStatsDedup();
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+      // Filter by date range if provided
+      let filteredCustomers = customers;
+      if (startDate && endDate) {
+        filteredCustomers = customers.filter((c: any) => {
+          const joinDate = new Date(c.joined_date);
+          return joinDate >= new Date(startDate) && joinDate <= new Date(endDate);
+        });
+      }
 
       return {
-        total: customers.length,
+        total: customers.length, // Total is always all customers
         active: customers.filter((c: any) => c.is_active).length,
-        newThisMonth: customers.filter((c: any) => 
-          new Date(c.joined_date) >= monthStart
-        ).length
+        newThisMonth: filteredCustomers.length // New customers in selected date range
       };
     } catch (error) {
       console.error('Error fetching customer stats:', error instanceof Error ? error.message : error);
@@ -338,10 +356,20 @@ class DashboardService {
   /**
    * Get payment statistics
    */
-  private async getPaymentStats() {
+  private async getPaymentStats(startDate?: string, endDate?: string) {
     try {
       // Use deduplicated query to prevent duplicate calls
       const payments = await fetchPaymentStatsDedup();
+
+      // Filter by date range if provided
+      let filteredPayments = payments;
+      if (startDate && endDate) {
+        filteredPayments = payments.filter((p: any) => {
+          const paymentDate = new Date(p.payment_date);
+          return paymentDate >= new Date(startDate) && paymentDate <= new Date(endDate);
+        });
+      }
+
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekStart = new Date(today);
@@ -352,22 +380,22 @@ class DashboardService {
         totalRevenue: payments
           .filter((p: any) => p.status === 'completed')
           .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
-        today: payments
+        today: filteredPayments
           .filter((p: any) => 
             new Date(p.payment_date) >= today && p.status === 'completed'
           )
           .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
-        thisWeek: payments
+        thisWeek: filteredPayments
           .filter((p: any) => 
             new Date(p.payment_date) >= weekStart && p.status === 'completed'
           )
           .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
-        thisMonth: payments
+        thisMonth: filteredPayments
           .filter((p: any) => 
             new Date(p.payment_date) >= monthStart && p.status === 'completed'
           )
           .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0),
-        pending: payments
+        pending: filteredPayments
           .filter((p: any) => p.status === 'pending')
           .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0)
       };
@@ -380,16 +408,80 @@ class DashboardService {
 
   /**
    * Get appointment statistics
+   * ✅ FIXED: Now properly handles appointment_date as TIMESTAMPTZ
    */
-  private async getAppointmentStats() {
+  private async getAppointmentStats(startDate?: string, endDate?: string) {
     try {
-      // TODO: Implement appointments table when available
-      // For now, return zeros since appointments table doesn't exist yet
+      const currentBranchId = getCurrentBranchId();
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart);
+      todayEnd.setHours(23, 59, 59, 999);
+      const weekStart = new Date(todayStart);
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+      
+      // Query appointments for current branch
+      let query = supabase
+        .from('appointments')
+        .select('id, status, appointment_date, created_at');
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+      }
+
+      // Apply date range filter if provided
+      if (startDate && endDate) {
+        query = query
+          .gte('appointment_date', startDate)
+          .lte('appointment_date', endDate);
+      }
+      
+      const { data: appointments, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching appointments:', error);
+        // Don't throw - return zeros gracefully
+        return { today: 0, thisWeek: 0, upcoming: 0, completionRate: 0 };
+      }
+      
+      const allAppointments = appointments || [];
+      
+      console.log('📅 Appointments Data:', {
+        total: allAppointments.length,
+        sample: allAppointments.slice(0, 3).map((a: any) => ({
+          id: a.id,
+          date: a.appointment_date,
+          status: a.status
+        }))
+      });
+      
+      // Calculate metrics using appointment_date (which is TIMESTAMPTZ)
+      const todayAppointments = allAppointments.filter((a: any) => {
+        const aptDate = new Date(a.appointment_date);
+        return aptDate >= todayStart && aptDate <= todayEnd;
+      });
+      
+      const upcomingAppointments = allAppointments.filter((a: any) => 
+        new Date(a.appointment_date) >= todayStart
+      );
+      
+      const completedToday = todayAppointments.filter((a: any) => 
+        a.status === 'completed'
+      ).length;
+      
+      const completionRate = todayAppointments.length > 0 
+        ? Math.round((completedToday / todayAppointments.length) * 100)
+        : 0;
+      
       return {
-        today: 0,
-        thisWeek: 0,
-        upcoming: 0,
-        completionRate: 0
+        today: todayAppointments.length,
+        thisWeek: allAppointments.filter((a: any) => 
+          new Date(a.appointment_date) >= weekStart
+        ).length,
+        upcoming: upcomingAppointments.length,
+        completionRate
       };
     } catch (error) {
       console.error('Error fetching appointment stats:', error instanceof Error ? error.message : error);
@@ -533,10 +625,12 @@ class DashboardService {
       const currentBranchId = getCurrentBranchId();
       
       // Get active employees for current branch
+      // ✅ Note: employees table uses 'full_name' column (updated schema)
+      // ✅ Note: employees table uses 'position' column
       let empQuery = supabase
         .from('employees')
-        .select('id, first_name, last_name, email, department, status')
-        .eq('status', 'active')
+        .select('id, full_name, email, phone, position')
+        .eq('is_active', true)
         .limit(10);
       
       // Apply branch filter if branch is selected
@@ -572,15 +666,14 @@ class DashboardService {
       // Map employees with their attendance status
       return employees.map((emp: any) => {
         const att = attendance?.find((a: any) => a.employee_id === emp.id);
-        const fullName = `${emp.first_name} ${emp.last_name}`;
         
         return {
           id: emp.id,
-          full_name: fullName,
+          full_name: emp.full_name || 'Unknown',
           email: emp.email,
-          role: emp.department,
+          role: emp.position || 'Staff',
           status: att?.status || 'absent',
-          department: emp.department,
+          department: emp.position || '',
           checkInTime: att?.check_in_time ? new Date(att.check_in_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : undefined
         };
       });
@@ -658,6 +751,34 @@ class DashboardService {
         });
       }
 
+      // Get recent sales for current branch (POS sales - main activity)
+      let salesQuery = supabase
+        .from('lats_sales')
+        .select('id, sale_number, total_amount, customer_name, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        salesQuery = salesQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: salesData } = await salesQuery;
+
+      if (salesData) {
+        salesData.forEach((sale: any) => {
+          activities.push({
+            id: `sale-${sale.id}`,
+            type: 'payment',
+            title: 'Sale completed',
+            description: `${sale.customer_name || 'Walk-in customer'} - ${sale.sale_number}`,
+            time: sale.created_at,
+            status: 'completed',
+            amount: sale.total_amount
+          });
+        });
+      }
+
       // Get recent customers for current branch
       let customersQuery = supabase
         .from('customers')
@@ -709,19 +830,25 @@ class DashboardService {
 
   /**
    * Get today's appointments
+   * ✅ FIXED: Now uses correct schema fields
    */
   async getTodayAppointments(limit: number = 10): Promise<AppointmentSummary[]> {
     try {
       const currentBranchId = getCurrentBranchId();
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date(todayStart);
+      todayEnd.setHours(23, 59, 59, 999);
       
-      // Query appointments for current branch
+      // Query appointments for current branch using actual schema fields
+      // Note: Try to get all possible fields, some might not exist in DB
       let query = supabase
         .from('appointments')
-        .select('id, customer_name, service_type, appointment_time, status, priority, technician_name')
-        .gte('appointment_date', today)
-        .lte('appointment_date', today)
-        .order('appointment_time', { ascending: true })
+        .select('*')
+        .gte('appointment_date', todayStart.toISOString())
+        .lte('appointment_date', todayEnd.toISOString())
+        .order('appointment_date', { ascending: true })
         .limit(limit);
       
       // Apply branch filter if branch is selected
@@ -736,14 +863,30 @@ class DashboardService {
         return [];
       }
       
-      return (data || []).map((apt: any) => ({
+      // Get customer names separately
+      const appointments = data || [];
+      if (appointments.length === 0) return [];
+      
+      const customerIds = appointments.map((a: any) => a.customer_id).filter(Boolean);
+      const { data: customers } = await supabase
+        .from('customers')
+        .select('id, name')
+        .in('id', customerIds);
+      
+      const customerMap = new Map((customers || []).map((c: any) => [c.id, c.name]));
+      
+      return appointments.map((apt: any) => ({
         id: apt.id,
-        customerName: apt.customer_name || 'Unknown',
-        serviceName: apt.service_type || 'Service',
-        time: apt.appointment_time || '00:00',
+        customerName: customerMap.get(apt.customer_id) || 'Unknown',
+        // Handle different field combinations: title, service_type, or description
+        serviceName: apt.title || apt.service_type || apt.description || 'Appointment',
+        time: new Date(apt.appointment_date).toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }),
         status: apt.status || 'scheduled',
         priority: apt.priority || 'medium',
-        technicianName: apt.technician_name
+        technicianName: undefined
       }));
     } catch (error) {
       console.error('Error fetching today appointments:', error instanceof Error ? error.message : error);
@@ -813,6 +956,7 @@ class DashboardService {
 
   /**
    * Get financial summary for the FinancialWidget
+   * ✅ FIXED: Now includes both sales revenue and service payments
    */
   async getFinancialSummary(): Promise<FinancialSummary> {
     try {
@@ -828,96 +972,141 @@ class DashboardService {
       const currentBranchId = getCurrentBranchId();
       console.log('🏢 Current Branch ID:', currentBranchId);
 
-      // Get all payments for current branch
-      let query = supabase
-        .from('customer_payments')
-        .select('amount, payment_date, status, method');
+      // Get sales data (main revenue source)
+      let salesQuery = supabase
+        .from('lats_sales')
+        .select('total_amount, created_at, payment_method, sale_number');
       
       // Apply branch filter if branch is selected
       if (currentBranchId) {
-        query = query.eq('branch_id', currentBranchId);
+        salesQuery = salesQuery.eq('branch_id', currentBranchId);
       }
       
-      const { data: paymentsData, error: paymentsError } = await query;
+      const { data: salesData, error: salesError } = await salesQuery;
 
-      if (paymentsError) {
-        console.error('Financial summary payments error:', paymentsError);
-        throw paymentsError;
+      if (salesError) {
+        console.error('Financial summary sales error:', salesError);
+        throw salesError;
       }
 
-      const payments = paymentsData || [];
+      // Also get service payments (secondary revenue source)
+      let paymentsQuery = supabase
+        .from('customer_payments')
+        .select('amount, payment_date, status, method');
       
-      console.log('📊 Raw Payments Data:', {
-        totalCount: payments.length,
-        sample: payments.slice(0, 5).map((p: any) => ({
-          method: p.method,
-          amount: p.amount,
-          type: typeof p.amount,
-          status: p.status
-        }))
+      if (currentBranchId) {
+        paymentsQuery = paymentsQuery.eq('branch_id', currentBranchId);
+      }
+      
+      const { data: paymentsData } = await paymentsQuery;
+
+      const sales = salesData || [];
+      const servicePayments = paymentsData || [];
+      
+      console.log('💰 Financial Data:', {
+        salesCount: sales.length,
+        servicePaymentsCount: servicePayments.length,
+        sampleSale: sales[0]
       });
 
-      // Calculate revenue metrics
-      const todayRevenue = payments
-        .filter((p: any) => 
-          new Date(p.payment_date) >= today && p.status === 'completed'
-        )
+      // Calculate revenue metrics from SALES (primary source)
+      const todaySales = sales
+        .filter((s: any) => new Date(s.created_at) >= today)
+        .reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0);
+      
+      const todayServiceRevenue = servicePayments
+        .filter((p: any) => new Date(p.payment_date) >= today && p.status === 'completed')
         .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      
+      const todayRevenue = todaySales + todayServiceRevenue;
 
-      const weeklyRevenue = payments
-        .filter((p: any) => 
-          new Date(p.payment_date) >= weekStart && p.status === 'completed'
-        )
+      const weeklySales = sales
+        .filter((s: any) => new Date(s.created_at) >= weekStart)
+        .reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0);
+      
+      const weeklyServiceRevenue = servicePayments
+        .filter((p: any) => new Date(p.payment_date) >= weekStart && p.status === 'completed')
         .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      
+      const weeklyRevenue = weeklySales + weeklyServiceRevenue;
 
-      const monthlyRevenue = payments
-        .filter((p: any) => 
-          new Date(p.payment_date) >= monthStart && p.status === 'completed'
-        )
+      const monthlySales = sales
+        .filter((s: any) => new Date(s.created_at) >= monthStart)
+        .reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0);
+      
+      const monthlyServiceRevenue = servicePayments
+        .filter((p: any) => new Date(p.payment_date) >= monthStart && p.status === 'completed')
         .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      
+      const monthlyRevenue = monthlySales + monthlyServiceRevenue;
 
-      const lastMonthRevenue = payments
+      const lastMonthSales = sales
+        .filter((s: any) => 
+          new Date(s.created_at) >= lastMonthStart && 
+          new Date(s.created_at) <= lastMonthEnd
+        )
+        .reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0);
+      
+      const lastMonthServiceRevenue = servicePayments
         .filter((p: any) => 
           new Date(p.payment_date) >= lastMonthStart && 
           new Date(p.payment_date) <= lastMonthEnd && 
           p.status === 'completed'
         )
         .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+      
+      const lastMonthRevenue = lastMonthSales + lastMonthServiceRevenue;
 
       const revenueGrowth = lastMonthRevenue > 0 
         ? Math.round(((monthlyRevenue - lastMonthRevenue) / lastMonthRevenue) * 100)
         : 0;
 
-      const completedPayments = payments.filter((p: any) => p.status === 'completed').length;
-      const pendingPayments = payments.filter((p: any) => p.status === 'pending').length;
-      const outstandingAmount = payments
+      // Count completed transactions (sales + service payments)
+      const completedPayments = sales.length + servicePayments.filter((p: any) => p.status === 'completed').length;
+      const pendingPayments = servicePayments.filter((p: any) => p.status === 'pending').length;
+      const outstandingAmount = servicePayments
         .filter((p: any) => p.status === 'pending')
         .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
 
-      // Group by payment method
-      const methodGroups = payments
+      // Group by payment method (from both sales and service payments)
+      const methodGroups: any = {};
+      
+      // Add sales payment methods (handle JSONB object)
+      sales.forEach((sale: any) => {
+        let method = 'cash';
+        
+        // Handle payment_method which can be a string or JSONB object
+        if (sale.payment_method) {
+          if (typeof sale.payment_method === 'string') {
+            method = sale.payment_method;
+          } else if (typeof sale.payment_method === 'object') {
+            // payment_method is stored as JSONB object, extract the method name
+            method = sale.payment_method.method || 
+                     sale.payment_method.name || 
+                     sale.payment_method.type ||
+                     Object.keys(sale.payment_method)[0] || 
+                     'cash';
+          }
+        }
+        
+        if (!methodGroups[method]) {
+          methodGroups[method] = { amount: 0, count: 0 };
+        }
+        methodGroups[method].amount += Number(sale.total_amount) || 0;
+        methodGroups[method].count += 1;
+      });
+      
+      // Add service payment methods
+      servicePayments
         .filter((p: any) => p.status === 'completed')
-        .reduce((acc: any, payment: any) => {
+        .forEach((payment: any) => {
           const method = payment.method || 'cash';
-          if (!acc[method]) {
-            acc[method] = { amount: 0, count: 0 };
+          if (!methodGroups[method]) {
+            methodGroups[method] = { amount: 0, count: 0 };
           }
-          const paymentAmount = Number(payment.amount) || 0;
-          
-          // Debug each payment being added
-          if (method === 'Tigo Pesa' || method === 'M-Pesa') {
-            console.log(`Adding ${method} payment:`, {
-              rawAmount: payment.amount,
-              convertedAmount: paymentAmount,
-              currentTotal: acc[method].amount,
-              newTotal: acc[method].amount + paymentAmount
-            });
-          }
-          
-          acc[method].amount += paymentAmount;
-          acc[method].count += 1;
-          return acc;
-        }, {});
+          methodGroups[method].amount += Number(payment.amount) || 0;
+          methodGroups[method].count += 1;
+        });
 
       console.log('💳 Payment Method Groups Final:', methodGroups);
 
@@ -1069,7 +1258,7 @@ class DashboardService {
   /**
    * Get analytics data for the AnalyticsWidget
    */
-  async getAnalyticsData(): Promise<AnalyticsData> {
+  async getAnalyticsData(startDate?: string, endDate?: string): Promise<AnalyticsData> {
     try {
       // Get data from last month and this month for growth calculations
       const now = new Date();
@@ -1086,6 +1275,13 @@ class DashboardService {
       // Apply branch filter if branch is selected
       if (currentBranchId) {
         paymentsQuery = paymentsQuery.eq('branch_id', currentBranchId);
+      }
+
+      // Apply date range filter if provided
+      if (startDate && endDate) {
+        paymentsQuery = paymentsQuery
+          .gte('payment_date', startDate)
+          .lte('payment_date', endDate);
       }
       
       const { data: paymentsData, error: paymentsError } = await paymentsQuery;
@@ -1145,32 +1341,30 @@ class DashboardService {
         ? Math.round(((thisMonthCustomers - lastMonthCustomers) / lastMonthCustomers) * 100)
         : 0;
 
-      // Calculate average order value
-      const completedPayments = payments.filter((p: any) => p.status === 'completed');
-      const averageOrderValue = completedPayments.length > 0
-        ? completedPayments.reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0) / completedPayments.length
-        : 0;
-
-      // Get completed services today
+      // Calculate average order value from actual sales (not payments)
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-
-      let devicesQuery = supabase
-        .from('devices')
-        .select('status, updated_at, problem_description');
+      
+      let salesQuery = supabase
+        .from('lats_sales')
+        .select('total_amount, created_at');
       
       // Apply branch filter if branch is selected
       if (currentBranchId) {
-        devicesQuery = devicesQuery.eq('branch_id', currentBranchId);
+        salesQuery = salesQuery.eq('branch_id', currentBranchId);
       }
       
-      const { data: devicesData } = await devicesQuery;
+      const { data: salesData } = await salesQuery;
+      const allSales = salesData || [];
+      
+      // Calculate average order value from sales
+      const averageOrderValue = allSales.length > 0
+        ? allSales.reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0) / allSales.length
+        : 0;
 
-      const devices = devicesData || [];
-
-      const completedToday = devices.filter((d: any) => 
-        ['done', 'repair-complete'].includes(d.status) &&
-        new Date(d.updated_at) >= today
+      // Get orders completed today
+      const completedToday = allSales.filter((s: any) => 
+        new Date(s.created_at) >= today
       ).length;
 
 

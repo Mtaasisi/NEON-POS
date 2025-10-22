@@ -189,15 +189,15 @@ export interface DeliverySettings {
   free_delivery_threshold: number;
   max_delivery_distance: number;
   enable_delivery_areas: boolean;
-  delivery_areas: string[];
-  area_delivery_fees: Record<string, number>;
-  area_delivery_times: Record<string, number>;
+  delivery_areas: string[] | null;
+  area_delivery_fees: Record<string, number> | null;
+  area_delivery_times: Record<string, number> | null;
   enable_delivery_hours: boolean;
   delivery_start_time: string;
   delivery_end_time: string;
   enable_same_day_delivery: boolean;
   enable_next_day_delivery: boolean;
-  delivery_time_slots: string[];
+  delivery_time_slots: string[] | null;
   notify_customer_on_delivery: boolean;
   notify_driver_on_assignment: boolean;
   enable_sms_notifications: boolean;
@@ -659,15 +659,15 @@ export class POSSettingsAPI {
           free_delivery_threshold: 50000,
           max_delivery_distance: 20,
           enable_delivery_areas: false,
-          delivery_areas: [],
-          area_delivery_fees: {},
-          area_delivery_times: {},
+          delivery_areas: null,
+          area_delivery_fees: null,
+          area_delivery_times: null,
           enable_delivery_hours: false,
           delivery_start_time: '08:00',
           delivery_end_time: '18:00',
           enable_same_day_delivery: true,
           enable_next_day_delivery: true,
-          delivery_time_slots: [],
+          delivery_time_slots: null,
           notify_customer_on_delivery: true,
           notify_driver_on_assignment: true,
           enable_sms_notifications: false,

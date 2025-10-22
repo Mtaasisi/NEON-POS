@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Package, PackageCheck, QrCode, AlertCircle } from 'lucide-react';
+import { X, Package, PackageCheck, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-type ReceiveType = 'full' | 'partial' | 'serial';
+type ReceiveType = 'full' | 'partial';
 
 interface ConsolidatedReceiveModalProps {
   isOpen: boolean;
@@ -10,7 +10,6 @@ interface ConsolidatedReceiveModalProps {
   purchaseOrder: any;
   onReceiveFull: () => void;
   onReceivePartial: () => void;
-  onReceiveWithSerial: () => void;
 }
 
 export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> = ({
@@ -18,8 +17,7 @@ export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> =
   onClose,
   purchaseOrder,
   onReceiveFull,
-  onReceivePartial,
-  onReceiveWithSerial
+  onReceivePartial
 }) => {
   const [receiveType, setReceiveType] = useState<ReceiveType>('full');
   const [includeQualityCheck, setIncludeQualityCheck] = useState(false);
@@ -41,9 +39,6 @@ export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> =
         break;
       case 'partial':
         onReceivePartial();
-        break;
-      case 'serial':
-        onReceiveWithSerial();
         break;
       default:
         toast.error('Please select a receive type');
@@ -136,13 +131,13 @@ export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> =
                 <div className="flex-1">
                   <div className="font-semibold text-gray-900">Full Receive</div>
                   <div className="text-sm text-gray-600 mt-1">
-                    Receive all {pendingItems} pending items at once. Best for complete deliveries.
+                    Receive all {pendingItems} pending items at once.
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
                       Fastest
                     </span>
-                    <span className="text-xs text-gray-500">Recommended for complete orders</span>
+                    <span className="text-xs text-gray-500">Recommended for most orders</span>
                   </div>
                 </div>
               </label>
@@ -169,46 +164,13 @@ export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> =
                 <div className="flex-1">
                   <div className="font-semibold text-gray-900">Partial Receive</div>
                   <div className="text-sm text-gray-600 mt-1">
-                    Select specific items and quantities to receive. Useful for phased deliveries.
+                    Select specific quantities per item. Receive some now, rest later.
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-medium">
                       Flexible
                     </span>
-                    <span className="text-xs text-gray-500">Good for split shipments</span>
-                  </div>
-                </div>
-              </label>
-              
-              {/* Serial Number Option */}
-              <label 
-                className={`flex items-start p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 hover:shadow-md ${
-                  receiveType === 'serial' 
-                    ? 'border-purple-500 bg-purple-50 shadow-sm' 
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="receiveType"
-                  value="serial"
-                  checked={receiveType === 'serial'}
-                  onChange={(e) => setReceiveType(e.target.value as ReceiveType)}
-                  className="mt-1 mr-4 w-4 h-4 text-purple-600 focus:ring-purple-500"
-                />
-                <QrCode className={`w-6 h-6 mr-3 flex-shrink-0 ${
-                  receiveType === 'serial' ? 'text-purple-600' : 'text-gray-400'
-                }`} />
-                <div className="flex-1">
-                  <div className="font-semibold text-gray-900">With Serial Numbers</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    Track individual items with serial numbers or IMEI. Required for electronics.
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
-                      Trackable
-                    </span>
-                    <span className="text-xs text-gray-500">Essential for warranty tracking</span>
+                    <span className="text-xs text-gray-500">Track progress easily</span>
                   </div>
                 </div>
               </label>
@@ -243,7 +205,7 @@ export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> =
           <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
             <div className="text-sm text-blue-800">
-              <strong>What happens next:</strong> After clicking "Proceed", you'll be able to set pricing for items and confirm quantities before adding them to inventory.
+              <strong>What happens next:</strong> After clicking "Proceed", you'll add serial numbers/IMEI (optional), then set pricing, and finally add items to inventory.
             </div>
           </div>
         </div>

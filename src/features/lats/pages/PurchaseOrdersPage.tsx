@@ -25,7 +25,6 @@ const PurchaseOrdersPage: React.FC = () => {
     error,
     loadPurchaseOrders,
     deletePurchaseOrder,
-    receivePurchaseOrder,
     approvePurchaseOrder,
     updatePurchaseOrder,
   } = useInventoryStore();
@@ -37,6 +36,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [sortOrder] = useState<'asc' | 'desc'>('desc');
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [showCbmCalculator, setShowCbmCalculator] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   // Enhanced load function with timestamp
   const handleLoadPurchaseOrders = async () => {
@@ -160,45 +160,29 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
-  const handleReceiveOrder = async (orderId: string) => {
-    console.log('📦 [PurchaseOrdersPage] Receive order requested:', orderId);
-    const response = await receivePurchaseOrder(orderId);
-    if (response.ok) {
-      console.log('✅ [PurchaseOrdersPage] Order received successfully');
-      toast.success('Purchase order received successfully');
-    } else {
-      console.error('❌ [PurchaseOrdersPage] Failed to receive order:', response.message);
-      toast.error(response.message || 'Failed to receive purchase order');
-    }
-  };
-
-
   const getStatusColor = (status: string) => {
+    // Option B Workflow colors
     switch (status) {
-      case 'draft': return 'bg-slate-500 text-white shadow-sm';
-      case 'pending_approval': return 'bg-amber-500 text-white shadow-sm';
-      case 'approved': return 'bg-sky-500 text-white shadow-sm';
+      case 'draft': return 'bg-gray-500 text-white shadow-sm';
       case 'sent': return 'bg-blue-600 text-white shadow-sm';
-      case 'confirmed': return 'bg-purple-600 text-white shadow-sm';
-      case 'processing': return 'bg-orange-500 text-white shadow-sm';
-      case 'shipping': return 'bg-yellow-500 text-white shadow-sm';
-      case 'shipped': return 'bg-cyan-500 text-white shadow-sm';
       case 'partial_received': return 'bg-orange-500 text-white shadow-sm';
-      case 'received': return 'bg-sky-400 text-white shadow-sm';
-      case 'quality_checked': return 'bg-emerald-600 text-white shadow-sm';
+      case 'received': return 'bg-sky-500 text-white shadow-sm';
       case 'completed': return 'bg-green-600 text-white shadow-sm';
       case 'cancelled': return 'bg-red-600 text-white shadow-sm';
-      default: return 'bg-gray-500 text-white shadow-sm';
+      default: return 'bg-gray-400 text-white shadow-sm';
     }
   };
 
   const getStatusIcon = (status: string) => {
+    // Option B Workflow icons
     switch (status) {
+      case 'draft': return <FileText className="w-3 h-3" />;
       case 'sent': return <Send className="w-3 h-3" />;
-      case 'received': return <CheckCircle className="w-3 h-3" />;
+      case 'partial_received': return <PackageCheck className="w-3 h-3" />;
+      case 'received': return <CheckSquare className="w-3 h-3" />;
       case 'completed': return <CheckCircle className="w-3 h-3" />;
       case 'cancelled': return <XCircle className="w-3 h-3" />;
-      default: return <Clock className="w-3 h-3" />;
+      default: return <Package className="w-3 h-3" />;
     }
   };
 
@@ -247,19 +231,26 @@ const PurchaseOrdersPage: React.FC = () => {
     });
   };
 
-  // Simplified action buttons - cleaner workflow
+  // Simplified action buttons - Option B workflow
   const getSmartActionButtons = (order: any) => {
     const actions = [];
-    const paymentStatus = order.payment_status || 'unpaid';
     
-    // Workflow sequence: Draft → Sent → Received → Completed
-    switch (order.status) {
+    // Validate status - Option B workflow only
+    const validStatuses = ['draft', 'sent', 'partial_received', 'received', 'completed', 'cancelled'];
+    const orderStatus = validStatuses.includes(order.status) ? order.status : 'draft';
+    
+    if (orderStatus !== order.status) {
+      console.warn(`⚠️ Invalid PO status detected: "${order.status}" for order ${order.id} - using "draft" as fallback`);
+    }
+    
+    // Option B Workflow: Draft → Sent → Partial_Received → Received → Completed
+    switch (orderStatus) {
       case 'draft':
-        // Draft - Primary action: Approve & Send (combined)
+        // Draft - Send to supplier
         actions.push({
-          type: 'approve',
-          label: 'Approve & Send',
-          icon: <CheckSquare className="w-4 h-4" />,
+          type: 'send',
+          label: 'Send to Supplier',
+          icon: <Send className="w-4 h-4" />,
           color: 'bg-green-600 hover:bg-green-700',
           onClick: () => handleApproveAndSend(order.id)
         });
@@ -275,38 +266,29 @@ const PurchaseOrdersPage: React.FC = () => {
         break;
       
       case 'sent':
-      case 'shipped':
-        // Sent/Shipped - Show payment or receive based on payment status
-        if (paymentStatus !== 'paid') {
-          actions.push({
-            type: 'pay',
-            label: 'Make Payment',
-            icon: <CreditCard className="w-4 h-4" />,
-            color: 'bg-orange-600 hover:bg-orange-700',
-            onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=payment`)
-          });
-        } else {
-          actions.push({
-            type: 'receive',
-            label: 'Receive',
-            icon: <Package className="w-4 h-4" />,
-            color: 'bg-green-600 hover:bg-green-700',
-            onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
-          });
-        }
+        // Sent - Allow receiving (payment not required)
+        actions.push({
+          type: 'receive',
+          label: 'Receive Items',
+          icon: <Package className="w-4 h-4" />,
+          color: 'bg-green-600 hover:bg-green-700',
+          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
+        });
         break;
       
       case 'partial_received':
-        // Partial Received - Continue receiving if paid
-        if (paymentStatus === 'paid') {
-          actions.push({
-            type: 'receive',
-            label: 'Continue',
-            icon: <Package className="w-4 h-4" />,
-            color: 'bg-blue-600 hover:bg-blue-700',
-            onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
-          });
-        }
+        // Partial Received - Continue receiving
+        const totalOrdered = order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
+        const totalReceived = order.items?.reduce((sum: number, item: any) => sum + (item.receivedQuantity || 0), 0) || 0;
+        const remaining = totalOrdered - totalReceived;
+        
+        actions.push({
+          type: 'receive',
+          label: `Continue (${remaining} left)`,
+          icon: <Package className="w-4 h-4" />,
+          color: 'bg-orange-600 hover:bg-orange-700',
+          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
+        });
         break;
       
       case 'received':
@@ -327,7 +309,7 @@ const PurchaseOrdersPage: React.FC = () => {
           label: 'Duplicate',
           icon: <Copy className="w-4 h-4" />,
           color: 'bg-blue-600 hover:bg-blue-700',
-          onClick: () => navigate(`/lats/purchase-orders/create?duplicate=${order.id}`)
+          onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`)
         });
         break;
       
@@ -336,7 +318,8 @@ const PurchaseOrdersPage: React.FC = () => {
         break;
         
       default:
-        console.warn(`Unknown purchase order status: ${order.status}`);
+        // Should never reach here due to validation above
+        console.warn(`⚠️ Unexpected PO status after validation: ${orderStatus}`);
         break;
     }
     
@@ -346,10 +329,88 @@ const PurchaseOrdersPage: React.FC = () => {
       label: 'More',
       icon: <MoreVertical className="w-4 h-4" />,
       color: 'bg-gray-600 hover:bg-gray-700',
-      onClick: () => navigate(`/lats/purchase-orders/${order.id}`)
+      onClick: (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setOpenDropdownId(openDropdownId === order.id ? null : order.id);
+      }
     });
 
     return actions;
+  };
+
+  // Get all dropdown actions for the More button
+  const getMoreDropdownActions = (order: any) => {
+    const dropdownActions = [];
+
+    // View Details (always available)
+    dropdownActions.push({
+      label: 'View Details',
+      icon: <Eye className="w-4 h-4" />,
+      onClick: () => navigate(`/lats/purchase-orders/${order.id}`),
+      color: 'text-blue-600 hover:bg-blue-50'
+    });
+
+    // Edit (for draft orders)
+    if (order.status === 'draft') {
+      dropdownActions.push({
+        label: 'Edit Order',
+        icon: <Edit className="w-4 h-4" />,
+        onClick: () => navigate(`/lats/purchase-orders/${order.id}?edit=true`),
+        color: 'text-green-600 hover:bg-green-50'
+      });
+    }
+
+    // Duplicate (always available)
+    dropdownActions.push({
+      label: 'Duplicate Order',
+      icon: <Copy className="w-4 h-4" />,
+      onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`),
+      color: 'text-purple-600 hover:bg-purple-50'
+    });
+
+    // Generate Documents
+    dropdownActions.push({
+      label: 'Generate PDF',
+      icon: <FileText className="w-4 h-4" />,
+      onClick: () => {
+        toast.success('Generating PDF...');
+        navigate(`/lats/purchase-orders/${order.id}?action=print`);
+      },
+      color: 'text-orange-600 hover:bg-orange-50'
+    });
+
+    // Payment (if not completed)
+    if (order.status !== 'completed' && order.status !== 'cancelled') {
+      dropdownActions.push({
+        label: 'Manage Payment',
+        icon: <CreditCard className="w-4 h-4" />,
+        onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=payment`),
+        color: 'text-indigo-600 hover:bg-indigo-50'
+      });
+    }
+
+    // Quality Check (for received orders)
+    if (order.status === 'received' || order.status === 'partial_received') {
+      dropdownActions.push({
+        label: 'Quality Check',
+        icon: <PackageCheck className="w-4 h-4" />,
+        onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=quality`),
+        color: 'text-teal-600 hover:bg-teal-50'
+      });
+    }
+
+    // Delete (for draft orders only)
+    if (order.status === 'draft' && hasPermission('delete')) {
+      dropdownActions.push({
+        label: 'Delete Order',
+        icon: <Trash2 className="w-4 h-4" />,
+        onClick: () => handleDeleteOrder(order.id),
+        color: 'text-red-600 hover:bg-red-50',
+        divider: true
+      });
+    }
+
+    return dropdownActions;
   };
   
   // Combined approve and send handler
@@ -374,26 +435,10 @@ const PurchaseOrdersPage: React.FC = () => {
   };
   
   // Permission check helper
-  const hasPermission = (action: string) => {
+  const hasPermission = (_action: string) => {
     // This is a simplified check - adjust based on your auth context
     return true; // Placeholder
   };
-
-  // Standardized approve order handler
-  const handleApproveOrder = async (orderId: string) => {
-    try {
-      const response = await approvePurchaseOrder(orderId);
-      if (response.ok) {
-        toast.success('Purchase order approved successfully');
-      } else {
-        toast.error(response.message || 'Failed to approve purchase order');
-      }
-    } catch (error) {
-      console.error('Error approving purchase order:', error);
-      toast.error('Failed to approve purchase order');
-    }
-  };
-
 
   // Complete order handler
   const handleCompleteOrder = async (orderId: string) => {
@@ -704,10 +749,41 @@ const PurchaseOrdersPage: React.FC = () => {
 
                     {/* Status */}
                     <div className="col-span-2">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
-                        {getStatusIcon(order.status)}
-                        <span className="capitalize">{order.status.replace('_', ' ')}</span>
-                      </span>
+                      <div className="space-y-1">
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
+                          {getStatusIcon(order.status)}
+                          <span className="capitalize">{order.status.replace('_', ' ')}</span>
+                        </span>
+                        
+                        {/* Progress indicator for partial_received status */}
+                        {order.status === 'partial_received' && order.items && order.items.length > 0 && (
+                          (() => {
+                            const totalOrdered = order.items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+                            const totalReceived = order.items.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0);
+                            const percentage = totalOrdered > 0 ? Math.round((totalReceived / totalOrdered) * 100) : 0;
+                            const remaining = totalOrdered - totalReceived;
+                            
+                            return (
+                              <div className="mt-1">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                                    <div 
+                                      className="bg-orange-500 h-full transition-all duration-300"
+                                      style={{ width: `${percentage}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-orange-700 font-semibold whitespace-nowrap">
+                                    {percentage}%
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-600 mt-0.5">
+                                  {totalReceived}/{totalOrdered} items • {remaining} remaining
+                                </p>
+                              </div>
+                            );
+                          })()
+                        )}
+                      </div>
                     </div>
 
                     {/* Items */}
@@ -728,17 +804,53 @@ const PurchaseOrdersPage: React.FC = () => {
 
                   {/* Smart Actions - Simplified */}
                   <div className="col-span-1">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-2 relative">
                       {getSmartActionButtons(order).map((action, index) => (
-                        <button
-                          key={`${action.type}-${index}`}
-                          onClick={action.onClick}
-                          className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
-                          title={action.label}
-                        >
-                          {action.icon}
-                          <span className="hidden lg:inline">{action.label}</span>
-                        </button>
+                        <div key={`${action.type}-${index}`} className="relative">
+                          <button
+                            onClick={action.onClick}
+                            className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
+                            title={action.label}
+                          >
+                            {action.icon}
+                            <span className="hidden lg:inline">{action.label}</span>
+                          </button>
+
+                          {/* Dropdown Menu for More button */}
+                          {action.type === 'more' && openDropdownId === order.id && (
+                            <>
+                              {/* Backdrop to close dropdown when clicking outside */}
+                              <div 
+                                className="fixed inset-0 z-10" 
+                                onClick={() => setOpenDropdownId(null)}
+                              />
+                              
+                              {/* Dropdown Content */}
+                              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 overflow-hidden">
+                                <div className="py-2">
+                                  {getMoreDropdownActions(order).map((dropdownAction, idx) => (
+                                    <React.Fragment key={idx}>
+                                      {dropdownAction.divider && (
+                                        <div className="my-2 border-t border-gray-200" />
+                                      )}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          dropdownAction.onClick();
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${dropdownAction.color}`}
+                                      >
+                                        {dropdownAction.icon}
+                                        <span className="font-medium text-sm">{dropdownAction.label}</span>
+                                      </button>
+                                    </React.Fragment>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

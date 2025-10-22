@@ -106,22 +106,22 @@ export async function fetchPaymentStats(cacheDuration: number = 5000) {
 
 /**
  * Fetch inventory statistics with deduplication
- * ✅ FIXED: Now fetches from correct tables (lats_products & lats_product_variants)
+ * ✅ FIXED: Now fetches from correct tables and properly handles shared products
  */
 export async function fetchInventoryStats(cacheDuration: number = 5000) {
   const currentBranchId = getCurrentBranchId();
   return deduplicatedQuery(
     `inventory-stats-${currentBranchId || 'all'}`,
     async () => {
-      // Get products with branch filter
+      // Get products with branch filter (including shared products)
       let productsQuery = supabase
         .from('lats_products')
-        .select('id, name, is_active, branch_id')
+        .select('id, name, is_active, branch_id, is_shared')
         .eq('is_active', true);
       
-      // Apply branch filter if branch is selected
+      // Apply branch filter if branch is selected (include shared products)
       if (currentBranchId) {
-        productsQuery = productsQuery.eq('branch_id', currentBranchId);
+        productsQuery = productsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
       }
       
       const { data: products, error: productsError } = await productsQuery;
@@ -135,20 +135,26 @@ export async function fetchInventoryStats(cacheDuration: number = 5000) {
         return [];
       }
       
-      // Get variants for these products
+      // Get variants for these products (including shared variants)
       let variantsQuery = supabase
         .from('lats_product_variants')
-        .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id')
+        .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id, is_shared')
         .in('product_id', productIds);
       
-      // Apply branch filter to variants if branch is selected
+      // Apply branch filter to variants if branch is selected (include shared variants)
       if (currentBranchId) {
-        variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+        variantsQuery = variantsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
       }
       
       const { data: variants, error: variantsError } = await variantsQuery;
       
       if (variantsError) throw variantsError;
+      
+      console.log('📦 fetchInventoryStats result:', {
+        branch: currentBranchId || 'all',
+        productsCount: products?.length || 0,
+        variantsCount: variants?.length || 0
+      });
       
       return variants || [];
     },

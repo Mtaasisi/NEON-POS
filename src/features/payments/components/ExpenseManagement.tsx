@@ -16,6 +16,8 @@ import {
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { financeAccountService, FinanceAccount } from '../../../lib/financeAccountService';
+import { useSuccessModal } from '../../../hooks/useSuccessModal';
+import SuccessModal from '../../../components/ui/SuccessModal';
 
 interface Expense {
   id: string;
@@ -65,6 +67,7 @@ interface DebugLog {
 
 const ExpenseManagement: React.FC = () => {
   const { currentUser } = useAuth();
+  const successModal = useSuccessModal();
   const [expenses, setExpenses] = useState<AccountTransaction[]>([]);
   const [paymentAccounts, setPaymentAccounts] = useState<FinanceAccount[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
@@ -312,6 +315,10 @@ const ExpenseManagement: React.FC = () => {
         category: formData.category
       });
 
+      // Check if user is admin
+      const isAdmin = currentUser?.role === 'admin';
+      const status = isAdmin ? 'approved' : 'pending';
+
       // Insert into account_transactions
       const { data, error } = await supabase
         .from('account_transactions')
@@ -321,11 +328,14 @@ const ExpenseManagement: React.FC = () => {
           amount: amount,
           description: `${formData.category ? formData.category + ': ' : ''}${formData.description}`,
           reference_number: formData.reference_number || null,
+          status: status,
           metadata: {
             category: formData.category || null,
             vendor_name: formData.vendor_name || null,
             notes: formData.notes || null,
-            expense_date: formData.expense_date
+            expense_date: formData.expense_date,
+            approval_status: status,
+            requires_approval: !isAdmin
           },
           created_by: currentUser?.id
         })
@@ -341,10 +351,9 @@ const ExpenseManagement: React.FC = () => {
       addDebugLog('success', 'ADD_EXPENSE', 'Expense created successfully!', {
         expenseId: data.id,
         amount,
-        category: formData.category
+        category: formData.category,
+        status
       }, duration);
-      
-      toast.success('Expense recorded successfully!');
       
       // Reset form
       addDebugLog('info', 'ADD_EXPENSE', 'Resetting form and refreshing data');
@@ -364,11 +373,85 @@ const ExpenseManagement: React.FC = () => {
       // Refresh data
       fetchExpenses();
       fetchPaymentAccounts();
+      
+      // Show success modal
+      const message = isAdmin 
+        ? `Expense of ${amount.toLocaleString('en-TZ', { style: 'currency', currency: 'TZS' })} has been recorded successfully!`
+        : `Expense of ${amount.toLocaleString('en-TZ', { style: 'currency', currency: 'TZS' })} has been submitted for admin approval!`;
+      
+      successModal.show(message, {
+        title: isAdmin ? 'Expense Recorded' : 'Expense Submitted',
+        actionButtons: [
+          {
+            label: 'View Expenses',
+            onClick: () => {},
+            variant: 'primary'
+          },
+          {
+            label: 'Add Another',
+            onClick: () => setShowAddModal(true),
+            variant: 'secondary'
+          }
+        ]
+      });
     } catch (error: any) {
       const duration = performance.now() - startTime;
       addDebugLog('error', 'ADD_EXPENSE', 'Failed to record expense', error, duration);
       console.error('Error adding expense:', error);
       toast.error(error.message || 'Failed to record expense');
+    }
+  };
+
+  // Handle approve expense (Admin only)
+  const handleApproveExpense = async (expenseId: string) => {
+    try {
+      if (currentUser?.role !== 'admin') {
+        toast.error('Only admins can approve expenses');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('account_transactions')
+        .update({
+          status: 'approved',
+          metadata: supabase.raw(`metadata || '{"approval_status": "approved", "approved_by": "${currentUser.id}", "approved_at": "${new Date().toISOString()}"}'::jsonb`)
+        })
+        .eq('id', expenseId);
+
+      if (error) throw error;
+
+      toast.success('Expense approved successfully!');
+      fetchExpenses();
+      fetchPaymentAccounts();
+    } catch (error: any) {
+      console.error('Error approving expense:', error);
+      toast.error('Failed to approve expense');
+    }
+  };
+
+  // Handle reject expense (Admin only)
+  const handleRejectExpense = async (expenseId: string, reason?: string) => {
+    try {
+      if (currentUser?.role !== 'admin') {
+        toast.error('Only admins can reject expenses');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('account_transactions')
+        .update({
+          status: 'rejected',
+          metadata: supabase.raw(`metadata || '{"approval_status": "rejected", "rejected_by": "${currentUser.id}", "rejected_at": "${new Date().toISOString()}", "rejection_reason": "${reason || 'No reason provided'}"}'::jsonb`)
+        })
+        .eq('id', expenseId);
+
+      if (error) throw error;
+
+      toast.success('Expense rejected');
+      fetchExpenses();
+    } catch (error: any) {
+      console.error('Error rejecting expense:', error);
+      toast.error('Failed to reject expense');
     }
   };
 
@@ -768,22 +851,39 @@ const ExpenseManagement: React.FC = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Category</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Description</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Account</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Amount</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Balance Impact</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Reference</th>
+                  {currentUser?.role === 'admin' && (
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
                 {filteredExpenses.map((expense) => {
                   const category = expense.metadata?.category || 'Other';
                   const accountName = (expense as any).finance_accounts?.name || 'Unknown';
+                  const status = expense.status || expense.metadata?.approval_status || 'approved';
+                  
+                  const statusConfig = {
+                    pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Pending' },
+                    approved: { bg: 'bg-green-100', text: 'text-green-800', label: 'Approved' },
+                    rejected: { bg: 'bg-red-100', text: 'text-red-800', label: 'Rejected' }
+                  };
+                  
+                  const statusStyle = statusConfig[status as keyof typeof statusConfig] || statusConfig.approved;
                   
                   return (
                     <tr key={expense.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}>
+                          {statusStyle.label}
+                        </span>
+                      </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           {React.createElement(getCategoryIcon(category), {
@@ -796,6 +896,9 @@ const ExpenseManagement: React.FC = () => {
                         <div className="text-sm text-gray-900">{expense.description}</div>
                         {expense.metadata?.vendor_name && (
                           <div className="text-xs text-gray-500">Vendor: {expense.metadata.vendor_name}</div>
+                        )}
+                        {expense.metadata?.rejection_reason && (
+                          <div className="text-xs text-red-600 mt-1">Reason: {expense.metadata.rejection_reason}</div>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -815,16 +918,39 @@ const ExpenseManagement: React.FC = () => {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="text-xs text-gray-600">
-                          <div>Before: {formatMoney(expense.balance_before || 0)}</div>
-                          <div>After: {formatMoney(expense.balance_after || 0)}</div>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
                         <div className="text-xs text-gray-600 font-mono">
                           {expense.reference_number || 'N/A'}
                         </div>
                       </td>
+                      {currentUser?.role === 'admin' && (
+                        <td className="py-3 px-4">
+                          {status === 'pending' && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleApproveExpense(expense.id)}
+                                className="px-3 py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded transition-colors"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const reason = prompt('Rejection reason (optional):');
+                                  handleRejectExpense(expense.id, reason || undefined);
+                                }}
+                                className="px-3 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
+                          {status === 'approved' && (
+                            <span className="text-xs text-green-600">✓ Approved</span>
+                          )}
+                          {status === 'rejected' && (
+                            <span className="text-xs text-red-600">✗ Rejected</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -976,6 +1102,9 @@ const ExpenseManagement: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Success Modal */}
+      <SuccessModal {...successModal.props} />
     </div>
   );
 };

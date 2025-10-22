@@ -167,8 +167,36 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
   return (
     <>
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <>
+          {/* Backdrop - respects sidebar and topbar */}
+          <div 
+            className="fixed bg-black/50"
+            onClick={onClose}
+            style={{
+              left: 'var(--sidebar-width, 0px)',
+              top: 'var(--topbar-height, 64px)',
+              right: 0,
+              bottom: 0,
+              zIndex: 35
+            }}
+          />
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed flex items-center justify-center p-4"
+            style={{
+              left: 'var(--sidebar-width, 0px)',
+              top: 'var(--topbar-height, 64px)',
+              right: 0,
+              bottom: 0,
+              zIndex: 50,
+              pointerEvents: 'none'
+            }}
+          >
+            <div 
+              className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              style={{ pointerEvents: 'auto' }}
+            >
             <div className="p-6">
               {/* Header */}
               <div className="flex items-center justify-between mb-6">
@@ -229,6 +257,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
             </div>
           </div>
         </div>
+        </>
       )}
       
       {/* Success Modal - Always rendered so it persists after form closes */}

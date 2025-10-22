@@ -41,18 +41,85 @@ export class ImageUploadService {
   ];
 
   /**
+   * Convert PNG with transparent background to white background
+   */
+  private static async convertPngToWhiteBackground(file: File): Promise<File> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          // Create canvas with image dimensions
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+          
+          // Fill with white background
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw the image on top of white background
+          ctx.drawImage(img, 0, 0);
+          
+          // Convert canvas to blob
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error('Failed to convert canvas to blob'));
+              return;
+            }
+            
+            // Create a new file from the blob
+            const newFile = new File([blob], file.name, {
+              type: 'image/png',
+              lastModified: Date.now()
+            });
+            
+            resolve(newFile);
+          }, 'image/png', 0.95);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  /**
    * Upload a single image to hosting storage
    */
   static async uploadImage(
     file: File,
     productId: string,
-    userId: string,
+    userId: string | null,
     isPrimary: boolean = false
   ): Promise<UploadResult> {
     try {
       console.log('🔍 DEBUG: ImageUploadService.uploadImage called');
       console.log('🔍 DEBUG: Parameters:', { productId, userId, isPrimary });
       console.log('🔍 DEBUG: File info:', { name: file.name, size: file.size, type: file.type });
+
+      // Convert PNG to white background if needed
+      let processedFile = file;
+      if (file.type === 'image/png') {
+        console.log('🎨 Converting PNG transparent background to white...');
+        try {
+          processedFile = await this.convertPngToWhiteBackground(file);
+          console.log('✅ PNG background converted to white successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to convert PNG background, using original file:', error);
+          // Continue with original file if conversion fails
+        }
+      }
 
       // Validate inputs
       if (!file) {
@@ -70,8 +137,8 @@ export class ImageUploadService {
 
       console.log('✅ DEBUG: Input validation passed');
 
-      // Validate file
-      const validationResult = this.validateFile(file);
+      // Validate file (use processedFile for validation)
+      const validationResult = this.validateFile(processedFile);
       if (!validationResult.valid) {
         console.error('❌ DEBUG: File validation failed:', validationResult.error);
         return { success: false, error: validationResult.error };
@@ -81,7 +148,7 @@ export class ImageUploadService {
 
       // Check authentication - FLEXIBLE for Neon direct mode
       console.log('🔍 DEBUG: Checking authentication...');
-      let authenticatedUserId = userId; // Use the userId parameter if provided
+      let authenticatedUserId: string | null = userId && userId !== 'system' ? userId : null; // Use the userId parameter if provided
       try {
         const { data: { user }, error: authError } = await uploadSupabase.auth.getUser();
         if (user && !authError) {
@@ -92,14 +159,15 @@ export class ImageUploadService {
           const storedUser = localStorage.getItem('user');
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
-            authenticatedUserId = parsedUser.id || userId || 'system';
+            // Only use valid UUIDs, not string "system"
+            authenticatedUserId = parsedUser.id && parsedUser.id !== 'system' ? parsedUser.id : null;
             console.log('✅ Using localStorage user:', authenticatedUserId);
           } else {
-            console.log('✅ Using provided userId or system user');
+            console.log('✅ Using null for system user (no auth)');
           }
         }
       } catch (e) {
-        console.log('⚠️ Auth check failed, using provided userId or system');
+        console.log('⚠️ Auth check failed, using null for system user');
       }
 
       console.log('✅ DEBUG: Authentication successful, user:', authenticatedUserId);
@@ -112,7 +180,7 @@ export class ImageUploadService {
       
       // Use the local storage service
       const result = await LocalProductImageStorageService.uploadProductImage(
-        file,
+        processedFile,
         productName,
         productId,
         isPrimary ? 'main' : 'gallery'
@@ -130,9 +198,9 @@ export class ImageUploadService {
         const uploadedImage: UploadedImage = {
           id: `temp-${Date.now()}-${crypto.randomUUID().replace(/-/g, '').substring(0, 8)}`,
           url: result.url || '',
-          fileName: result.fileName || file.name, // Use the generated filename if available
-          fileSize: file.size,
-          mimeType: file.type,
+          fileName: file.name,
+          fileSize: processedFile.size,
+          mimeType: processedFile.type,
           isPrimary: isPrimary,
           uploadedAt: new Date().toISOString()
         };
@@ -160,8 +228,8 @@ export class ImageUploadService {
         id: `temp-${Date.now()}`,
         url: result.url || '',
         fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
+        fileSize: processedFile.size,
+        mimeType: processedFile.type,
         isPrimary: isPrimary,
         uploadedAt: new Date().toISOString()
       };
@@ -394,7 +462,7 @@ export class ImageUploadService {
       if (!foundMatchingFiles) {
         console.log('📝 No matching files found for timestamp:', tempTimestamp);
         console.log('🔍 This might be a development mode issue where images were not properly stored');
-        console.log('🔍 Available files:', storageFiles.map(f => f.name));
+        console.log('🔍 Available files:', storageFiles.map((f: { name: string }) => f.name));
         
         // In development mode, if no matching files found, we might need to handle this differently
         // For now, we'll return success to avoid blocking product creation

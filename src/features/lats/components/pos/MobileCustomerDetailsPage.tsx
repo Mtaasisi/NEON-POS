@@ -124,7 +124,10 @@ const MobileCustomerDetailsPage: React.FC<MobileCustomerDetailsPageProps> = ({
       const salesWithItems = sales || [];
 
       // Calculate stats
-      const totalSpent = salesWithItems.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+      const totalSpent = salesWithItems.reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0);
       const totalPurchases = salesWithItems.length;
       const avgOrderValue = totalPurchases > 0 ? totalSpent / totalPurchases : 0;
       const lastPurchase = salesWithItems.length > 0 ? salesWithItems[0].created_at : null;

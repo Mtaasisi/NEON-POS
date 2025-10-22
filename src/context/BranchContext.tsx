@@ -84,9 +84,10 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
       // For non-admin users, check assignments
       try {
+        // ✅ FIXED: Fetch assignments and store_locations separately (Neon doesn't support nested selects)
         const { data: assignments, error: assignError } = await supabase
           .from('user_branch_assignments')
-          .select('*, store_locations(*)')
+          .select('*')
           .eq('user_id', currentUser?.id);
 
         if (assignError) {
@@ -99,9 +100,31 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         }
 
         if (assignments && assignments.length > 0) {
+          // Fetch store locations separately
+          const branchIds = assignments.map(a => a.branch_id).filter(Boolean);
+          const { data: storeLocations, error: storeError } = await supabase
+            .from('store_locations')
+            .select('*')
+            .in('id', branchIds);
+          
+          if (storeError) {
+            console.error('Error loading store locations:', storeError);
+            const mainBranch = branches?.find(b => b.is_main);
+            setCurrentBranch(mainBranch || branches?.[0] || null);
+            setLoading(false);
+            return;
+          }
+          
+          // Map store locations to assignments
+          const storeLocationsMap = new Map(storeLocations?.map(loc => [loc.id, loc]) || []);
+          const assignmentsWithLocations = assignments.map(assignment => ({
+            ...assignment,
+            store_locations: storeLocationsMap.get(assignment.branch_id)
+          }));
+          
           // User has branch assignments - use primary or first assigned
-          const primaryAssignment = assignments.find(a => a.is_primary);
-          const branchData = primaryAssignment?.store_locations || assignments[0].store_locations;
+          const primaryAssignment = assignmentsWithLocations.find(a => a.is_primary);
+          const branchData = primaryAssignment?.store_locations || assignmentsWithLocations[0].store_locations;
           
           // 🔥 FIX: Save branch ID to localStorage on initialization
           if (branchData) {

@@ -15,6 +15,7 @@ interface CartItem {
   quantity: number;
   subtotal: number;
   isExternal?: boolean;
+  serialNumbers?: Array<{ serial_number: string; imei?: string; mac_address?: string; }>;
 }
 
 interface PaymentData {
@@ -198,6 +199,18 @@ const ReceiptGenerator: React.FC<ReceiptGeneratorProps> = ({
                   <div className="text-lats-text-secondary text-xs font-mono">
                     {item.sku}
                   </div>
+                  {/* Serial Numbers */}
+                  {item.serialNumbers && item.serialNumbers.length > 0 && (
+                    <div className="mt-1 space-y-0.5">
+                      {item.serialNumbers.map((serial, idx) => (
+                        <div key={idx} className="text-xs text-lats-text-secondary font-mono">
+                          <span className="font-semibold">S/N:</span> {serial.serial_number}
+                          {serial.imei && <span className="ml-2">IMEI: {serial.imei}</span>}
+                          {serial.mac_address && <span className="ml-2">MAC: {serial.mac_address}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right ml-2">
                   <div className="text-lats-text">

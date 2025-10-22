@@ -102,12 +102,18 @@ const LATSDashboardPage: React.FC = () => {
           ]);
 
           // Calculate metrics
-          const todaySales = todaySalesResult.data?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+          const todaySales = todaySalesResult.data?.reduce((sum, sale) => {
+            const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+            return sum + amount;
+          }, 0) || 0;
           const todayOrders = todayOrdersResult.data?.length || 0;
           const totalProducts = productsResult.data?.length || 0;
           const activeCustomers = customersResult.data?.length || 0;
           const lowStockItems = lowStockResult.data?.length || 0;
-          const monthlyRevenue = monthlyRevenueResult.data?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+          const monthlyRevenue = monthlyRevenueResult.data?.reduce((sum, sale) => {
+            const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+            return sum + amount;
+          }, 0) || 0;
           
           // Calculate growth (simplified - compare with previous month)
           const previousMonth = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1);
@@ -118,7 +124,10 @@ const LATSDashboardPage: React.FC = () => {
             .lt('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
             .eq('status', 'completed');
           
-          const previousRevenue = previousMonthRevenue?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+          const previousRevenue = previousMonthRevenue?.reduce((sum, sale) => {
+            const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+            return sum + amount;
+          }, 0) || 0;
           const monthlyGrowth = previousRevenue > 0 ? ((monthlyRevenue - previousRevenue) / previousRevenue) * 100 : 0;
 
           setDashboardData({

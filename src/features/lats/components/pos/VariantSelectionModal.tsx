@@ -37,7 +37,32 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
   const thumbnail = getProductThumbnail();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black bg-opacity-50"
+        onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
       {/* Modal container with reasonable sizing */}
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         {/* Modal Header */}
@@ -170,10 +195,9 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
             </div>
           </div>
         </div>
-
-
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

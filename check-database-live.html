@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Database Check - INS-006</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+        h2 {
+            color: #667eea;
+            margin-top: 30px;
+            border-left: 4px solid #667eea;
+            padding-left: 15px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .loading { background: #fff3cd; color: #856404; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .data-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            border-left: 4px solid #667eea;
+        }
+        .data-box strong {
+            color: #667eea;
+        }
+        pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        th {
+            background: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+            transition: all 0.3s;
+        }
+        .card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+        }
+        .card h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .badge-success { background: #d4edda; color: #155724; }
+        .badge-warning { background: #fff3cd; color: #856404; }
+        .badge-danger { background: #f8d7da; color: #721c24; }
+        .badge-info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Live Database Check - Installment Plan INS-006</h1>
+        
+        <div id="status" class="status loading">
+            Initializing...
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="checkDatabase()" id="checkBtn">🔄 Check Database</button>
+            <button onclick="checkLocalData()">📦 Check Local Storage</button>
+            <button onclick="showAllPlans()">📋 Show All Plans</button>
+            <button onclick="exportData()">💾 Export Data</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        // This script runs INSIDE your actual app environment
+        // It uses the same database connection as your app
+        
+        console.log('🚀 Initializing database checker...');
+        
+        let supabase, sql;
+        
+        // Try to import from your actual app
+        async function initializeConnection() {
+            try {
+                // Method 1: Try to use existing app connection
+                if (window.supabase) {
+                    supabase = window.supabase;
+                    console.log('✅ Using window.supabase');
+                } else {
+                    // Method 2: Import from your module
+                    const module = await import('./src/lib/supabaseClient.js');
+                    supabase = module.supabase;
+                    sql = module.sql;
+                    console.log('✅ Imported supabase from module');
+                }
+                
+                document.getElementById('status').className = 'status success';
+                document.getElementById('status').textContent = '✅ Connected to database!';
+                document.getElementById('checkBtn').disabled = false;
+                
+                // Auto-check on load
+                setTimeout(() => checkDatabase(), 500);
+                
+            } catch (error) {
+                console.error('❌ Connection error:', error);
+                document.getElementById('status').className = 'status error';
+                document.getElementById('status').innerHTML = `
+                    ❌ Could not connect to database<br>
+                    <small>Error: ${error.message}</small><br><br>
+                    <strong>Instructions:</strong><br>
+                    1. Make sure your POS app is running<br>
+                    2. Copy this entire HTML file into your app's public folder<br>
+                    3. Access it via http://localhost:5173/check-database-live.html
+                `;
+            }
+        }
+        
+        async function checkDatabase() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="status loading">🔍 Checking database...</div>';
+            
+            try {
+                // Check for INS-006
+                console.log('Querying for INS-006...');
+                
+                const { data: plans, error } = await supabase
+                    .from('customer_installment_plans')
+                    .select(`
+                        *,
+                        customer:customers!customer_id(id, name, phone, email),
+                        sale:lats_sales!sale_id(id, sale_number, total_amount)
+                    `)
+                    .eq('plan_number', 'INS-006');
+                
+                if (error) {
+                    throw error;
+                }
+                
+                let html = '';
+                
+                if (!plans || plans.length === 0) {
+                    html += '<div class="status error">❌ <strong>INS-006 NOT FOUND in database</strong></div>';
+                    
+                    // Check recent plans
+                    const { data: recentPlans } = await supabase
+                        .from('customer_installment_plans')
+                        .select('plan_number, status, customer_id, total_amount, created_at')
+                        .order('created_at', { ascending: false })
+                        .limit(10);
+                    
+                    if (recentPlans && recentPlans.length > 0) {
+                        html += '<h2>📋 Recent Plans (Last 10)</h2>';
+                        html += '<table><tr><th>Plan #</th><th>Status</th><th>Amount</th><th>Created</th></tr>';
+                        recentPlans.forEach(p => {
+                            html += `
+                                <tr>
+                                    <td><strong>${p.plan_number}</strong></td>
+                                    <td><span class="badge badge-${p.status === 'active' ? 'success' : 'info'}">${p.status}</span></td>
+                                    <td>TSh ${p.total_amount}</td>
+                                    <td>${new Date(p.created_at).toLocaleString()}</td>
+                                </tr>
+                            `;
+                        });
+                        html += '</table>';
+                    } else {
+                        html += '<div class="status info">ℹ️ No installment plans found in database</div>';
+                    }
+                    
+                } else {
+                    const plan = plans[0];
+                    html += '<div class="status success">✅ <strong>INS-006 FOUND in database!</strong></div>';
+                    
+                    // Plan Details
+                    html += '<h2>📋 Plan Details</h2>';
+                    html += '<div class="grid">';
+                    html += `
+                        <div class="card">
+                            <h3>Basic Info</h3>
+                            <div class="data-box"><strong>Plan Number:</strong> ${plan.plan_number}</div>
+                            <div class="data-box"><strong>Status:</strong> <span class="badge badge-${plan.status === 'active' ? 'success' : 'info'}">${plan.status}</span></div>
+                            <div class="data-box"><strong>Created:</strong> ${new Date(plan.created_at).toLocaleString()}</div>
+                            <div class="data-box"><strong>Updated:</strong> ${new Date(plan.updated_at).toLocaleString()}</div>
+                        </div>
+                        <div class="card">
+                            <h3>Financial</h3>
+                            <div class="data-box"><strong>Total Amount:</strong> TSh ${plan.total_amount}</div>
+                            <div class="data-box"><strong>Down Payment:</strong> TSh ${plan.down_payment}</div>
+                            <div class="data-box"><strong>Total Paid:</strong> TSh ${plan.total_paid}</div>
+                            <div class="data-box"><strong>Balance Due:</strong> TSh ${plan.balance_due}</div>
+                        </div>
+                        <div class="card">
+                            <h3>Schedule</h3>
+                            <div class="data-box"><strong>Installments:</strong> ${plan.installments_paid} / ${plan.number_of_installments}</div>
+                            <div class="data-box"><strong>Installment Amount:</strong> TSh ${plan.installment_amount}</div>
+                            <div class="data-box"><strong>Frequency:</strong> ${plan.payment_frequency}</div>
+                            <div class="data-box"><strong>Next Payment:</strong> ${plan.next_payment_date}</div>
+                        </div>
+                        <div class="card">
+                            <h3>Dates</h3>
+                            <div class="data-box"><strong>Start:</strong> ${plan.start_date}</div>
+                            <div class="data-box"><strong>End:</strong> ${plan.end_date}</div>
+                            <div class="data-box"><strong>Days Overdue:</strong> ${plan.days_overdue}</div>
+                            <div class="data-box"><strong>Reminders:</strong> ${plan.reminder_count}</div>
+                        </div>
+                    `;
+                    html += '</div>';
+                    
+                    // Customer Info
+                    if (plan.customer) {
+                        html += '<h2>👤 Customer Information</h2>';
+                        html += `
+                            <div class="data-box">
+                                <strong>Name:</strong> ${plan.customer.name}<br>
+                                <strong>Phone:</strong> ${plan.customer.phone}<br>
+                                <strong>Email:</strong> ${plan.customer.email || 'N/A'}<br>
+                                <strong>ID:</strong> ${plan.customer.id}
+                            </div>
+                        `;
+                    }
+                    
+                    // Sale Info
+                    if (plan.sale) {
+                        html += '<h2>🛒 Sale Information</h2>';
+                        html += `
+                            <div class="data-box">
+                                <strong>Sale Number:</strong> ${plan.sale.sale_number}<br>
+                                <strong>Total Amount:</strong> TSh ${plan.sale.total_amount}<br>
+                                <strong>ID:</strong> ${plan.sale.id}
+                            </div>
+                        `;
+                    }
+                    
+                    // Check payments
+                    const { data: payments } = await supabase
+                        .from('installment_payments')
+                        .select('*')
+                        .eq('installment_plan_id', plan.id)
+                        .order('installment_number', { ascending: true });
+                    
+                    html += '<h2>💳 Payments</h2>';
+                    if (payments && payments.length > 0) {
+                        html += '<table><tr><th>#</th><th>Amount</th><th>Due Date</th><th>Payment Date</th><th>Status</th><th>Method</th></tr>';
+                        payments.forEach(p => {
+                            html += `
+                                <tr>
+                                    <td>${p.installment_number}</td>
+                                    <td>TSh ${p.amount}</td>
+                                    <td>${p.due_date}</td>
+                                    <td>${p.payment_date || '-'}</td>
+                                    <td><span class="badge badge-${p.status === 'paid' ? 'success' : 'warning'}">${p.status}</span></td>
+                                    <td>${p.payment_method || '-'}</td>
+                                </tr>
+                            `;
+                        });
+                        html += '</table>';
+                    } else {
+                        html += '<div class="status info">ℹ️ No payments recorded yet</div>';
+                    }
+                    
+                    // Raw data
+                    html += '<h2>🔧 Raw Database Data</h2>';
+                    html += '<pre>' + JSON.stringify(plan, null, 2) + '</pre>';
+                }
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `
+                    <div class="status error">
+                        ❌ <strong>Error checking database:</strong><br>
+                        ${error.message}
+                        <pre>${error.stack || ''}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        async function checkLocalData() {
+            const resultsDiv = document.getElementById('results');
+            let html = '<h2>📦 Local Storage & Browser Data</h2>';
+            
+            // Check all localStorage keys
+            html += '<h3>All localStorage Keys:</h3>';
+            html += '<table><tr><th>Key</th><th>Preview</th></tr>';
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                const preview = value.length > 100 ? value.substring(0, 100) + '...' : value;
+                html += `<tr><td><strong>${key}</strong></td><td><small>${preview}</small></td></tr>`;
+            }
+            html += '</table>';
+            
+            // Check sessionStorage
+            html += '<h3>SessionStorage Keys:</h3>';
+            html += '<table><tr><th>Key</th><th>Preview</th></tr>';
+            for (let i = 0; i < sessionStorage.length; i++) {
+                const key = sessionStorage.key(i);
+                const value = sessionStorage.getItem(key);
+                const preview = value.length > 100 ? value.substring(0, 100) + '...' : value;
+                html += `<tr><td><strong>${key}</strong></td><td><small>${preview}</small></td></tr>`;
+            }
+            html += '</table>';
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        async function showAllPlans() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<div class="status loading">📋 Loading all plans...</div>';
+            
+            try {
+                const { data: allPlans, error } = await supabase
+                    .from('customer_installment_plans')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                
+                if (error) throw error;
+                
+                let html = `<h2>📋 All Installment Plans (${allPlans.length} found)</h2>`;
+                
+                if (allPlans.length > 0) {
+                    html += '<table><tr><th>Plan #</th><th>Customer ID</th><th>Status</th><th>Amount</th><th>Installments</th><th>Created</th></tr>';
+                    allPlans.forEach(p => {
+                        const isINS006 = p.plan_number === 'INS-006';
+                        html += `
+                            <tr style="${isINS006 ? 'background: #fff3cd; font-weight: bold;' : ''}">
+                                <td>${p.plan_number}${isINS006 ? ' ⭐' : ''}</td>
+                                <td><small>${p.customer_id}</small></td>
+                                <td><span class="badge badge-${p.status === 'active' ? 'success' : 'info'}">${p.status}</span></td>
+                                <td>TSh ${p.total_amount}</td>
+                                <td>${p.installments_paid} / ${p.number_of_installments}</td>
+                                <td>${new Date(p.created_at).toLocaleString()}</td>
+                            </tr>
+                        `;
+                    });
+                    html += '</table>';
+                    
+                    const ins006Found = allPlans.some(p => p.plan_number === 'INS-006');
+                    if (ins006Found) {
+                        html = '<div class="status success">✅ INS-006 found in the list!</div>' + html;
+                    } else {
+                        html = '<div class="status warning">⚠️ INS-006 NOT in the list</div>' + html;
+                    }
+                } else {
+                    html += '<div class="status info">No plans found</div>';
+                }
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function exportData() {
+            checkDatabase().then(() => {
+                const data = document.getElementById('results').innerText;
+                const blob = new Blob([data], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `ins-006-check-${new Date().toISOString()}.txt`;
+                a.click();
+            });
+        }
+        
+        // Make functions global
+        window.checkDatabase = checkDatabase;
+        window.checkLocalData = checkLocalData;
+        window.showAllPlans = showAllPlans;
+        window.exportData = exportData;
+        
+        // Initialize
+        initializeConnection();
+    </script>
+</body>
+</html>
+

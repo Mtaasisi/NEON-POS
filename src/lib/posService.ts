@@ -152,16 +152,10 @@ class POSService {
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
       
+      // Simplified query - fetch sale items separately to avoid nested PostgREST syntax issues
       let query = supabase
         .from('lats_sales')
-        .select(`
-          *,
-          lats_sale_items(
-            *,
-            lats_products(name, description),
-            lats_product_variants(name, sku, attributes)
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(limit);
       
@@ -173,22 +167,27 @@ class POSService {
       const { data: sales, error } = await query;
 
       if (error) {
-        console.warn('Complex POS service recent sales query failed, trying simpler query:', error.message);
+        console.error('❌ Error fetching recent sales:', error);
+        return { success: false, error: error.message };
+      }
+
+      // Fetch sale items separately for each sale
+      if (sales && sales.length > 0) {
+        const salesWithItems = await Promise.all(
+          sales.map(async (sale) => {
+            const { data: items } = await supabase
+              .from('lats_sale_items')
+              .select('id, product_id, variant_id, quantity, unit_price, total_price, cost_price, profit, sku')
+              .eq('sale_id', sale.id);
+            
+            return {
+              ...sale,
+              lats_sale_items: items || []
+            };
+          })
+        );
         
-        // Fallback to simpler query without joins
-        const { data: simpleSales, error: simpleError } = await supabase
-          .from('lats_sales')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(limit);
-
-        if (simpleError) {
-          console.error('❌ Simple POS service recent sales query also failed:', simpleError);
-          return { success: false, error: simpleError.message };
-        }
-
-        console.log(`✅ Loaded ${simpleSales?.length || 0} POS service recent sales (without joins)`);
-        return { success: true, sales: simpleSales || [] };
+        return { success: true, sales: salesWithItems };
       }
 
       return { success: true, sales: sales || [] };

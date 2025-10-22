@@ -4,6 +4,10 @@ import { useAuth } from '../../../context/AuthContext';
 import { PageErrorWrapper } from '../components/PageErrorWrapper';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import { useDashboardSettings } from '../../../hooks/useDashboardSettings';
+import { useDateRange } from '../../../context/DateRangeContext';
+import { DateRangeSelector } from '../../../components/DateRangeSelector';
+import { DashboardBranchFilter } from '../../../components/DashboardBranchFilter';
+import { DashboardBranchProvider, useDashboardBranch } from '../../../context/DashboardBranchContext';
 import {
   Smartphone, Users, Package, Plus,
   DollarSign, Calendar,
@@ -26,7 +30,6 @@ import {
   SystemHealthWidget,
   ActivityFeedWidget,
   CustomerInsightsWidget,
-  QuickSearchWidget,
   PurchaseOrderWidget,
   ChatWidget,
   SalesWidget,
@@ -47,8 +50,9 @@ import {
   ProfitMarginChart
 } from '../components/dashboard';
 import { dashboardService, DashboardStats } from '../../../services/dashboardService';
+import { getDashboardTitleForRole, getDashboardDescriptionForRole } from '../../../config/roleBasedWidgets';
 
-const DashboardPage: React.FC = () => {
+const DashboardPageContent: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   
@@ -58,6 +62,12 @@ const DashboardPage: React.FC = () => {
     isWidgetEnabled, 
     loading: settingsLoading 
   } = useDashboardSettings();
+  
+  // Date range filter hook
+  const { dateRange, setDateRange, getDateRangeForQuery } = useDateRange();
+  
+  // Branch filter hook
+  const { dashboardBranchId, setDashboardBranchId } = useDashboardBranch();
   
   // Error handling
   const { handleError, withErrorHandling } = useErrorHandler({
@@ -77,7 +87,29 @@ const DashboardPage: React.FC = () => {
         setIsLoading(true);
         
         if (currentUser?.id) {
-          const stats = await dashboardService.getDashboardStats(currentUser.id);
+          const dateRangeQuery = getDateRangeForQuery();
+          
+          // Temporarily store current branch and set dashboard branch for filtering
+          const originalBranchId = localStorage.getItem('current_branch_id');
+          if (dashboardBranchId !== null) {
+            localStorage.setItem('current_branch_id', dashboardBranchId);
+          } else {
+            localStorage.removeItem('current_branch_id');
+          }
+          
+          const stats = await dashboardService.getDashboardStats(
+            currentUser.id, 
+            dateRangeQuery.startDate, 
+            dateRangeQuery.endDate
+          );
+          
+          // Restore original branch
+          if (originalBranchId) {
+            localStorage.setItem('current_branch_id', originalBranchId);
+          } else {
+            localStorage.removeItem('current_branch_id');
+          }
+          
           setDashboardStats(stats);
         }
         
@@ -86,34 +118,82 @@ const DashboardPage: React.FC = () => {
     };
 
     loadDashboardData();
-  }, [currentUser?.id, withErrorHandling]);
+  }, [currentUser?.id, withErrorHandling, dateRange, dashboardBranchId]); // Re-load when date range or branch changes
 
   // Auto refresh dashboard every 5 minutes
   useEffect(() => {
     const interval = setInterval(() => {
       if (currentUser?.id && !isLoading) {
-        dashboardService.getDashboardStats(currentUser.id).then(stats => {
+        const dateRangeQuery = getDateRangeForQuery();
+        
+        // Temporarily store current branch and set dashboard branch for filtering
+        const originalBranchId = localStorage.getItem('current_branch_id');
+        if (dashboardBranchId !== null) {
+          localStorage.setItem('current_branch_id', dashboardBranchId);
+        } else {
+          localStorage.removeItem('current_branch_id');
+        }
+        
+        dashboardService.getDashboardStats(
+          currentUser.id,
+          dateRangeQuery.startDate,
+          dateRangeQuery.endDate
+        ).then(stats => {
           setDashboardStats(stats);
+          
+          // Restore original branch
+          if (originalBranchId) {
+            localStorage.setItem('current_branch_id', originalBranchId);
+          } else {
+            localStorage.removeItem('current_branch_id');
+          }
         });
       }
     }, 300000); // 5 minutes
 
     return () => clearInterval(interval);
-  }, [currentUser?.id, isLoading]);
+  }, [currentUser?.id, isLoading, dateRange, dashboardBranchId, getDateRangeForQuery]);
 
   // Manual refresh handler
   const handleRefresh = async () => {
     if (currentUser?.id) {
       setIsLoading(true);
       try {
-        const stats = await dashboardService.getDashboardStats(currentUser.id);
+        const dateRangeQuery = getDateRangeForQuery();
+        
+        // Temporarily store current branch and set dashboard branch for filtering
+        const originalBranchId = localStorage.getItem('current_branch_id');
+        if (dashboardBranchId !== null) {
+          localStorage.setItem('current_branch_id', dashboardBranchId);
+        } else {
+          localStorage.removeItem('current_branch_id');
+        }
+        
+        const stats = await dashboardService.getDashboardStats(
+          currentUser.id,
+          dateRangeQuery.startDate,
+          dateRangeQuery.endDate
+        );
         setDashboardStats(stats);
+        
+        // Restore original branch
+        if (originalBranchId) {
+          localStorage.setItem('current_branch_id', originalBranchId);
+        } else {
+          localStorage.removeItem('current_branch_id');
+        }
       } catch (error) {
         handleError(error as Error, 'Refreshing dashboard');
       } finally {
         setIsLoading(false);
       }
     }
+  };
+  
+  // Handle branch change
+  const handleBranchChange = (branchId: string | null) => {
+    console.log('📊 Dashboard branch changed to:', branchId || 'All Branches');
+    setDashboardBranchId(branchId);
   };
 
   // Handle navigation with error handling
@@ -292,40 +372,6 @@ const DashboardPage: React.FC = () => {
       path: '/sms/settings'
     },
     
-    // Diagnostic & Repair Features
-    {
-      id: 'diagnostics' as const,
-      title: 'Diagnostics',
-      description: 'Device diagnostics',
-      icon: Wrench,
-      color: 'from-orange-500 to-orange-600',
-      path: '/diagnostics'
-    },
-    {
-      id: 'newDiagnostic' as const,
-      title: 'New Diagnostic',
-      description: 'Create diagnostic request',
-      icon: Plus,
-      color: 'from-red-500 to-red-600',
-      path: '/diagnostics/new'
-    },
-    {
-      id: 'diagnosticReports' as const,
-      title: 'Diagnostic Reports',
-      description: 'Diagnostic analytics',
-      icon: BarChart3,
-      color: 'from-green-500 to-green-600',
-      path: '/diagnostics/reports'
-    },
-    {
-      id: 'diagnosticTemplates' as const,
-      title: 'Diagnostic Templates',
-      description: 'Template management',
-      icon: FileText,
-      color: 'from-teal-500 to-teal-600',
-      path: '/diagnostics/templates'
-    },
-    
     // Import/Export & Data Management
     {
       id: 'excelImport' as const,
@@ -473,11 +519,29 @@ const DashboardPage: React.FC = () => {
                   {/* Header */}
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-              <p className="text-gray-600 mt-1">Welcome back, {currentUser?.name || currentUser?.email || 'User'}</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {getDashboardTitleForRole(currentUser?.role || 'user')}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                {getDashboardDescriptionForRole(currentUser?.role || 'user', currentUser?.name || currentUser?.email)}
+              </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {/* Branch Filter - Admin only */}
+              {currentUser?.role === 'admin' && (
+                <DashboardBranchFilter
+                  onBranchChange={handleBranchChange}
+                  defaultToCurrent={true}
+                />
+              )}
+              
+              {/* Date Range Selector */}
+              <DateRangeSelector
+                value={dateRange}
+                onChange={setDateRange}
+              />
+              
               <button
                 onClick={() => handleNavigation('/devices/new')}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
@@ -551,7 +615,7 @@ const DashboardPage: React.FC = () => {
                 {isWidgetEnabled('purchaseOrderChart') && <PurchaseOrderChart />}
                 {isWidgetEnabled('paymentMethodsChart') && <PaymentMethodsChart />}
                 {isWidgetEnabled('salesByCategoryChart') && <SalesByCategoryChart />}
-                {isWidgetEnabled('profitMarginChart') && <ProfitMarginChart />}
+                {isWidgetEnabled('profitMarginChart') && <div className="lg:col-span-2"><ProfitMarginChart /></div>}
               </div>
             )}
 
@@ -576,12 +640,6 @@ const DashboardPage: React.FC = () => {
         {/* Comprehensive Widgets Layout */}
         {!isLoading && !settingsLoading && dashboardStats && (
           <div className="space-y-6">
-            {/* Quick Search Widget - Always visible for quick access */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <QuickSearchWidget className="lg:col-span-1" />
-              {/* Add more prominent widgets here if needed */}
-            </div>
-
             {/* Top Priority Row - Operations */}
             {(isWidgetEnabled('appointmentWidget') || isWidgetEnabled('employeeWidget') || isWidgetEnabled('notificationWidget')) && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -641,6 +699,15 @@ const DashboardPage: React.FC = () => {
         </div>
       </div>
     </PageErrorWrapper>
+  );
+};
+
+// Wrapper component with DashboardBranchProvider
+const DashboardPage: React.FC = () => {
+  return (
+    <DashboardBranchProvider>
+      <DashboardPageContent />
+    </DashboardBranchProvider>
   );
 };
 

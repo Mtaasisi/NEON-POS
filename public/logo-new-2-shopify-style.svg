@@ -1,0 +1,32 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="shop1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#shop1)"/>
+  
+  <!-- Shopify-inspired shopping bag minimal -->
+  <g>
+    <!-- Simple bag shape -->
+    <path d="M 70 85 L 75 140 L 125 140 L 130 85 Z" fill="white"/>
+    
+    <!-- Handle -->
+    <path d="M 85 85 C 85 72 92 65 100 65 C 108 65 115 72 115 85" 
+          stroke="white" 
+          stroke-width="10" 
+          fill="none"
+          stroke-linecap="round"/>
+    
+    <!-- Minimalist "D" or checkmark inside -->
+    <path d="M 88 105 L 95 112 L 108 99" 
+          stroke="#10b981" 
+          stroke-width="5" 
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"/>
+  </g>
+</svg>
+

@@ -51,6 +51,15 @@ export default defineConfig(({ command, mode }) => {
         secure: false,
         rewrite: (path) => path,
         ws: true, // Enable WebSocket proxying
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.log('❌ Proxy error:', err.message);
+            // Don't crash the dev server on proxy errors
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // Silently handle proxy requests
+          });
+        },
       },
     },
     // Add better error handling for development

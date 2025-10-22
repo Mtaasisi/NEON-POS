@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check INS-006 Plan</title>
+    <script src="https://cdn.jsdelivr.net/npm/@neondatabase/serverless@0.6.0/dist/index.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+        .detail {
+            margin: 8px 0;
+            padding: 5px;
+        }
+        .label {
+            font-weight: bold;
+            display: inline-block;
+            width: 200px;
+        }
+        .value {
+            color: #555;
+        }
+        .error {
+            color: #f44336;
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .success {
+            color: #4CAF50;
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #4CAF50;
+            color: white;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Check Installment Plan INS-006</h1>
+        
+        <div id="status" class="loading">Loading database connection...</div>
+        
+        <div id="content" style="display: none;">
+            <div class="section" id="planSection">
+                <h2>📋 Plan Details</h2>
+                <div id="planDetails"></div>
+            </div>
+            
+            <div class="section" id="customerSection">
+                <h2>👤 Customer Information</h2>
+                <div id="customerDetails"></div>
+            </div>
+            
+            <div class="section" id="saleSection">
+                <h2>🛒 Sale Information</h2>
+                <div id="saleDetails"></div>
+            </div>
+            
+            <div class="section" id="paymentsSection">
+                <h2>💳 Payments</h2>
+                <div id="paymentsDetails"></div>
+            </div>
+            
+            <div class="section" id="scheduleSection">
+                <h2>📅 Schedule</h2>
+                <div id="scheduleDetails"></div>
+            </div>
+            
+            <div>
+                <button onclick="checkPlan()">🔄 Refresh</button>
+                <button onclick="showAllPlans()">📋 Show All Plans</button>
+            </div>
+            
+            <div id="allPlans" style="display: none; margin-top: 20px;">
+                <h2>All Installment Plans</h2>
+                <div id="allPlansContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // IMPORTANT: Replace with your actual Neon database URL
+        const DATABASE_URL = 'YOUR_NEON_DATABASE_URL_HERE';
+        
+        // For local development, you can also read from .env
+        // const DATABASE_URL = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
+        
+        let sql;
+        
+        async function init() {
+            try {
+                if (!window.neon) {
+                    throw new Error('Neon library not loaded');
+                }
+                
+                sql = window.neon.neon(DATABASE_URL, {
+                    fetchOptions: {
+                        cache: 'no-store',
+                    }
+                });
+                
+                document.getElementById('status').innerHTML = '<div class="success">✅ Connected to Neon Database</div>';
+                document.getElementById('content').style.display = 'block';
+                
+                await checkPlan();
+            } catch (error) {
+                document.getElementById('status').innerHTML = `
+                    <div class="error">
+                        <strong>❌ Connection Error:</strong> ${error.message}<br><br>
+                        <strong>Instructions:</strong><br>
+                        1. Open this file in a text editor<br>
+                        2. Replace <code>YOUR_NEON_DATABASE_URL_HERE</code> with your actual Neon database URL<br>
+                        3. The URL should look like: <code>postgresql://user:pass@host.neon.tech/dbname?sslmode=require</code>
+                    </div>
+                `;
+            }
+        }
+        
+        async function checkPlan() {
+            try {
+                document.getElementById('status').innerHTML = '<div class="loading">🔍 Checking plan INS-006...</div>';
+                
+                // Check if plan exists
+                const plans = await sql`
+                    SELECT * FROM customer_installment_plans 
+                    WHERE plan_number = 'INS-006'
+                `;
+                
+                if (!plans || plans.length === 0) {
+                    document.getElementById('status').innerHTML = `
+                        <div class="error">
+                            ❌ Plan INS-006 not found in database<br>
+                            <button onclick="showAllPlans()" style="margin-top:10px">View All Plans</button>
+                        </div>
+                    `;
+                    document.getElementById('content').style.display = 'none';
+                    return;
+                }
+                
+                const plan = plans[0];
+                document.getElementById('status').innerHTML = '<div class="success">✅ Plan INS-006 found!</div>';
+                
+                // Display plan details
+                document.getElementById('planDetails').innerHTML = `
+                    <div class="detail"><span class="label">Plan Number:</span> <span class="value">${plan.plan_number}</span></div>
+                    <div class="detail"><span class="label">Status:</span> <span class="value">${plan.status}</span></div>
+                    <div class="detail"><span class="label">Total Amount:</span> <span class="value">TSh ${plan.total_amount}</span></div>
+                    <div class="detail"><span class="label">Down Payment:</span> <span class="value">TSh ${plan.down_payment}</span></div>
+                    <div class="detail"><span class="label">Amount Financed:</span> <span class="value">TSh ${plan.amount_financed}</span></div>
+                    <div class="detail"><span class="label">Total Paid:</span> <span class="value">TSh ${plan.total_paid}</span></div>
+                    <div class="detail"><span class="label">Balance Due:</span> <span class="value">TSh ${plan.balance_due}</span></div>
+                    <div class="detail"><span class="label">Installment Amount:</span> <span class="value">TSh ${plan.installment_amount}</span></div>
+                    <div class="detail"><span class="label">Number of Installments:</span> <span class="value">${plan.number_of_installments}</span></div>
+                    <div class="detail"><span class="label">Installments Paid:</span> <span class="value">${plan.installments_paid}</span></div>
+                    <div class="detail"><span class="label">Payment Frequency:</span> <span class="value">${plan.payment_frequency}</span></div>
+                    <div class="detail"><span class="label">Start Date:</span> <span class="value">${plan.start_date}</span></div>
+                    <div class="detail"><span class="label">Next Payment Date:</span> <span class="value">${plan.next_payment_date}</span></div>
+                    <div class="detail"><span class="label">End Date:</span> <span class="value">${plan.end_date}</span></div>
+                    <div class="detail"><span class="label">Created:</span> <span class="value">${plan.created_at}</span></div>
+                    <div class="detail"><span class="label">Updated:</span> <span class="value">${plan.updated_at}</span></div>
+                `;
+                
+                // Get customer info
+                if (plan.customer_id) {
+                    const customers = await sql`
+                        SELECT * FROM customers WHERE id = ${plan.customer_id}
+                    `;
+                    
+                    if (customers && customers.length > 0) {
+                        const customer = customers[0];
+                        document.getElementById('customerDetails').innerHTML = `
+                            <div class="detail"><span class="label">Name:</span> <span class="value">${customer.name}</span></div>
+                            <div class="detail"><span class="label">Phone:</span> <span class="value">${customer.phone}</span></div>
+                            <div class="detail"><span class="label">Email:</span> <span class="value">${customer.email || 'N/A'}</span></div>
+                            <div class="detail"><span class="label">Customer ID:</span> <span class="value">${customer.id}</span></div>
+                        `;
+                    } else {
+                        document.getElementById('customerDetails').innerHTML = '<div class="error">⚠️ Customer not found</div>';
+                    }
+                } else {
+                    document.getElementById('customerDetails').innerHTML = '<div>No customer linked</div>';
+                }
+                
+                // Get sale info
+                if (plan.sale_id) {
+                    const sales = await sql`
+                        SELECT * FROM lats_sales WHERE id = ${plan.sale_id}
+                    `;
+                    
+                    if (sales && sales.length > 0) {
+                        const sale = sales[0];
+                        document.getElementById('saleDetails').innerHTML = `
+                            <div class="detail"><span class="label">Sale Number:</span> <span class="value">${sale.sale_number}</span></div>
+                            <div class="detail"><span class="label">Total Amount:</span> <span class="value">TSh ${sale.total_amount}</span></div>
+                            <div class="detail"><span class="label">Created:</span> <span class="value">${sale.created_at}</span></div>
+                            <div class="detail"><span class="label">Sale ID:</span> <span class="value">${sale.id}</span></div>
+                        `;
+                    } else {
+                        document.getElementById('saleDetails').innerHTML = '<div class="error">⚠️ Sale not found</div>';
+                    }
+                } else {
+                    document.getElementById('saleDetails').innerHTML = '<div>No sale linked</div>';
+                }
+                
+                // Get payments
+                const payments = await sql`
+                    SELECT * FROM installment_payments 
+                    WHERE installment_plan_id = ${plan.id}
+                    ORDER BY installment_number ASC
+                `;
+                
+                if (payments && payments.length > 0) {
+                    let paymentsHtml = '<table><tr><th>#</th><th>Amount</th><th>Due Date</th><th>Payment Date</th><th>Status</th><th>Method</th></tr>';
+                    payments.forEach(p => {
+                        paymentsHtml += `
+                            <tr>
+                                <td>${p.installment_number}</td>
+                                <td>TSh ${p.amount}</td>
+                                <td>${p.due_date}</td>
+                                <td>${p.payment_date || 'N/A'}</td>
+                                <td>${p.status}</td>
+                                <td>${p.payment_method || 'N/A'}</td>
+                            </tr>
+                        `;
+                    });
+                    paymentsHtml += '</table>';
+                    document.getElementById('paymentsDetails').innerHTML = paymentsHtml;
+                } else {
+                    document.getElementById('paymentsDetails').innerHTML = '<div>No payments recorded yet</div>';
+                }
+                
+                // Get schedule
+                const schedules = await sql`
+                    SELECT * FROM installment_schedules 
+                    WHERE installment_plan_id = ${plan.id}
+                    ORDER BY installment_number ASC
+                `;
+                
+                if (schedules && schedules.length > 0) {
+                    let scheduleHtml = '<table><tr><th>#</th><th>Due Date</th><th>Amount</th><th>Status</th></tr>';
+                    schedules.forEach(s => {
+                        scheduleHtml += `
+                            <tr>
+                                <td>${s.installment_number}</td>
+                                <td>${s.due_date}</td>
+                                <td>TSh ${s.amount}</td>
+                                <td>${s.status}</td>
+                            </tr>
+                        `;
+                    });
+                    scheduleHtml += '</table>';
+                    document.getElementById('scheduleDetails').innerHTML = scheduleHtml;
+                } else {
+                    document.getElementById('scheduleDetails').innerHTML = '<div>No schedule records (using calculated schedule)</div>';
+                }
+                
+            } catch (error) {
+                document.getElementById('status').innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong> ${error.message}<br>
+                        <pre>${error.stack}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        async function showAllPlans() {
+            try {
+                const plans = await sql`
+                    SELECT plan_number, status, customer_id, total_amount, 
+                           number_of_installments, installments_paid, created_at
+                    FROM customer_installment_plans 
+                    ORDER BY created_at DESC 
+                    LIMIT 20
+                `;
+                
+                if (plans && plans.length > 0) {
+                    let html = '<table><tr><th>Plan Number</th><th>Status</th><th>Amount</th><th>Installments</th><th>Created</th></tr>';
+                    plans.forEach(p => {
+                        html += `
+                            <tr>
+                                <td>${p.plan_number}</td>
+                                <td>${p.status}</td>
+                                <td>TSh ${p.total_amount}</td>
+                                <td>${p.installments_paid} / ${p.number_of_installments}</td>
+                                <td>${new Date(p.created_at).toLocaleDateString()}</td>
+                            </tr>
+                        `;
+                    });
+                    html += '</table>';
+                    document.getElementById('allPlansContent').innerHTML = html;
+                    document.getElementById('allPlans').style.display = 'block';
+                } else {
+                    document.getElementById('allPlansContent').innerHTML = '<div>No plans found in database</div>';
+                    document.getElementById('allPlans').style.display = 'block';
+                }
+            } catch (error) {
+                document.getElementById('allPlansContent').innerHTML = `
+                    <div class="error">Error: ${error.message}</div>
+                `;
+                document.getElementById('allPlans').style.display = 'block';
+            }
+        }
+        
+        // Make functions available globally
+        window.checkPlan = checkPlan;
+        window.showAllPlans = showAllPlans;
+        
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>
+

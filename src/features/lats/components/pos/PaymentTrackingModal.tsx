@@ -65,8 +65,37 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({ isOpe
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4 pt-16 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[85vh] overflow-hidden animate-slideUp">
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4 pt-16"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
+        <div 
+          className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[85vh] overflow-hidden animate-slideUp"
+          onClick={(e) => e.stopPropagation()}
+          style={{ pointerEvents: 'auto' }}
+        >
         {/* Modern Gradient Header */}
         <div className="relative bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 px-8 py-6 text-white">
           <div className="absolute inset-0 bg-black/10"></div>
@@ -484,7 +513,8 @@ const TransactionDetailsModal: React.FC<TransactionDetailsModalProps> = ({ isOpe
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
@@ -1430,8 +1460,6 @@ const PaymentTrackingModal: React.FC<PaymentTrackingModalProps> = ({ isOpen, onC
   );
 };
 
-export default PaymentTrackingModal;
-
 // Add animation styles
 const style = document.createElement('style');
 style.textContent = `
@@ -1468,3 +1496,5 @@ if (typeof document !== 'undefined' && !document.getElementById('transaction-mod
   style.id = 'transaction-modal-animations';
   document.head.appendChild(style);
 }
+
+export default PaymentTrackingModal;

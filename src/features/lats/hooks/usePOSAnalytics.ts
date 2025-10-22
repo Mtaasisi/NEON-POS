@@ -135,37 +135,43 @@ export const usePOSAnalytics = () => {
       setAnalyticsError('');
 
       // Get real sales data from database
+      const startDate = timeRange === '30d' ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() : 
+                       timeRange === '7d' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() :
+                       new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
       const { data: salesData, error: salesError } = await supabase
         .from('lats_sales')
-        .select(`
-          id,
-          total_amount,
-          created_at,
-          lats_sale_items (
-            id,
-            product_id,
-            variant_id,
-            quantity,
-            unit_price,
-            total_price,
-            lats_products (
-              id,
-              name,
-              cost_price
-            ),
-            lats_product_variants (
-              id,
-              name,
-              cost_price,
-              selling_price
-            )
-          )
-        `)
-        .gte('created_at', timeRange === '30d' ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() : 
-             timeRange === '7d' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() :
-             new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+        .select('id, total_amount, created_at')
+        .gte('created_at', startDate);
 
       if (salesError) throw salesError;
+
+      if (!salesData || salesData.length === 0) {
+        return [];
+      }
+
+      // Fetch sale items separately to avoid nested relationship issues
+      const saleIds = salesData.map(s => s.id);
+      const { data: saleItems } = await supabase
+        .from('lats_sale_items')
+        .select('id, sale_id, product_id, variant_id, quantity, unit_price, total_price, cost_price')
+        .in('sale_id', saleIds);
+
+      if (!saleItems || saleItems.length === 0) {
+        return [];
+      }
+
+      // Fetch product and variant details
+      const productIds = [...new Set(saleItems.map(item => item.product_id).filter(Boolean))];
+      const variantIds = [...new Set(saleItems.map(item => item.variant_id).filter(Boolean))];
+
+      const [productsResult, variantsResult] = await Promise.all([
+        productIds.length > 0 ? supabase.from('lats_products').select('id, name, cost_price').in('id', productIds) : { data: [] },
+        variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, cost_price, selling_price').in('id', variantIds) : { data: [] }
+      ]);
+
+      const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
+      const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
 
       // Process sales data to calculate product performance
       const productPerformanceMap = new Map<string, {
@@ -178,39 +184,37 @@ export const usePOSAnalytics = () => {
         margin: number;
       }>();
 
-      salesData?.forEach(sale => {
-        sale.lats_sale_items?.forEach(item => {
-          const product = item.lats_products || item.lats_product_variants;
-          if (!product) return;
+      saleItems.forEach((item: any) => {
+        const product = productsMap.get(item.product_id) || variantsMap.get(item.variant_id);
+        if (!product) return;
 
-          const productId = product.id;
-          const productName = product.name;
-          const unitsSold = item.quantity || 0;
-          const revenue = item.total_price || 0;
-          const costPrice = product.cost_price || 0;
-          const cost = costPrice * unitsSold;
-          const profit = revenue - cost;
-          const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+        const productId = product.id;
+        const productName = product.name;
+        const unitsSold = item.quantity || 0;
+        const revenue = item.total_price || 0;
+        const costPrice = item.cost_price || product.cost_price || 0;
+        const cost = costPrice * unitsSold;
+        const profit = revenue - cost;
+        const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
 
-          if (productPerformanceMap.has(productId)) {
-            const existing = productPerformanceMap.get(productId)!;
-            existing.unitsSold += unitsSold;
-            existing.revenue += revenue;
-            existing.cost += cost;
-            existing.profit += profit;
-            existing.margin = existing.revenue > 0 ? (existing.profit / existing.revenue) * 100 : 0;
-          } else {
-            productPerformanceMap.set(productId, {
-              productId,
-              name: productName,
-              unitsSold,
-              revenue,
-              cost,
-              profit,
-              margin
-            });
-          }
-        });
+        if (productPerformanceMap.has(productId)) {
+          const existing = productPerformanceMap.get(productId)!;
+          existing.unitsSold += unitsSold;
+          existing.revenue += revenue;
+          existing.cost += cost;
+          existing.profit += profit;
+          existing.margin = existing.revenue > 0 ? (existing.profit / existing.revenue) * 100 : 0;
+        } else {
+          productPerformanceMap.set(productId, {
+            productId,
+            name: productName,
+            unitsSold,
+            revenue,
+            cost,
+            profit,
+            margin
+          });
+        }
       });
 
       // Convert to array and sort by revenue
@@ -241,7 +245,7 @@ export const usePOSAnalytics = () => {
       setIsLoadingAnalytics(true);
       setAnalyticsError('');
 
-      // Get real customer data from database
+      // Get real customer data from database - Fixed: removed PostgREST relationship syntax
       const { data: customers, error: customersError } = await supabase
         .from('customers')
         .select(`
@@ -251,12 +255,7 @@ export const usePOSAnalytics = () => {
           phone,
           created_at,
           loyalty_tier,
-          total_spent,
-          lats_sales (
-            id,
-            total_amount,
-            created_at
-          )
+          total_spent
         `);
 
       if (customersError) throw customersError;
@@ -291,14 +290,20 @@ export const usePOSAnalytics = () => {
       const repeatCustomers = Array.from(customerOrderCounts.values()).filter(count => count > 1).length;
 
       // Calculate average customer value
-      const totalRevenue = sales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+      const totalRevenue = sales?.reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0) || 0;
       const averageCustomerValue = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
 
       // Get top customers by total spent
       const customerSpending = new Map<string, { name: string; totalSpent: number; visits: number }>();
       customers?.forEach(customer => {
         const customerSales = sales?.filter(sale => sale.customer_id === customer.id) || [];
-        const totalSpent = customerSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+        const totalSpent = customerSales.reduce((sum, sale) => {
+          const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+          return sum + amount;
+        }, 0);
         customerSpending.set(customer.id, {
           name: customer.name || 'Unknown',
           totalSpent,

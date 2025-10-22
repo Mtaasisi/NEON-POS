@@ -53,10 +53,10 @@ const CustomerCareSalesCard: React.FC<CustomerCareSalesCardProps> = ({ className
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
         });
 
-        // Fetch sales made by this staff member today
+        // Fetch sales made by this staff member today - simplified query
         const { data: sales, error } = await supabase
           .from('lats_sales')
-          .select('*, lats_sale_items(*)')
+          .select('*')
           .eq('createdBy', currentUser.id)
           .gte('createdAt', todayStart.toISOString())
           .lte('createdAt', todayEnd.toISOString());
@@ -71,26 +71,42 @@ const CustomerCareSalesCard: React.FC<CustomerCareSalesCardProps> = ({ className
           return;
         }
 
+        // Fetch sale items separately to avoid nested query syntax issues
+        let salesWithItems = sales || [];
+        if (sales && sales.length > 0) {
+          const saleIds = sales.map(s => s.id);
+          const { data: items } = await supabase
+            .from('lats_sale_items')
+            .select('sale_id, quantity, productName, variantName')
+            .in('sale_id', saleIds);
+
+          // Attach items to their respective sales
+          salesWithItems = sales.map(sale => ({
+            ...sale,
+            lats_sale_items: (items || []).filter(item => item.sale_id === sale.id)
+          }));
+        }
+
         console.log('✅ Sales data fetched successfully:', {
-          salesCount: sales?.length || 0,
-          hasItems: sales?.some(s => s.lats_sale_items?.length > 0)
+          salesCount: salesWithItems?.length || 0,
+          hasItems: salesWithItems?.some(s => s.lats_sale_items?.length > 0)
         });
 
-        if (!sales || sales.length === 0) {
+        if (!salesWithItems || salesWithItems.length === 0) {
           console.log('ℹ️ No sales found for today');
           setLoading(false);
           return;
         }
 
         // Calculate metrics
-        const totalSales = sales.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
-        const transactionCount = sales.length;
+        const totalSales = salesWithItems.reduce((sum, sale) => sum + (sale.totalAmount || 0), 0);
+        const transactionCount = salesWithItems.length;
         
         // Count total items sold
         let totalItems = 0;
         const productCounts: Record<string, number> = {};
         
-        sales.forEach(sale => {
+        salesWithItems.forEach(sale => {
           if (sale.lats_sale_items && Array.isArray(sale.lats_sale_items)) {
             sale.lats_sale_items.forEach((item: any) => {
               totalItems += item.quantity || 0;

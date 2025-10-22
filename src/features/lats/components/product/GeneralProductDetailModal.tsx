@@ -99,6 +99,8 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [showQRModal, setShowQRModal] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState('overview');
@@ -132,8 +134,10 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
       
       try {
         const productImages = await RobustImageService.getProductImages(product.id);
+        console.log('📸 Loaded product images:', productImages);
         setImages(productImages);
       } catch (error) {
+        console.error('❌ Error loading product images:', error);
       }
     };
 
@@ -141,6 +145,84 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
       loadImages();
     }
   }, [isOpen, product?.id]);
+
+  // Handle image upload
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0 || !product?.id) return;
+
+    setIsUploadingImage(true);
+    
+    try {
+      const file = files[0];
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('Please select an image file');
+        setIsUploadingImage(false);
+        return;
+      }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('Image size must be less than 10MB');
+        setIsUploadingImage(false);
+        return;
+      }
+
+      toast.loading('Uploading image...', { id: 'image-upload' });
+
+      // Get user ID from localStorage or auth (use null if not available)
+      let userId: string | null = null;
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          const parsedUser = JSON.parse(storedUser);
+          // Only use valid UUIDs, not string "system"
+          userId = parsedUser.id && parsedUser.id !== 'system' ? parsedUser.id : null;
+        }
+      } catch (err) {
+        console.warn('Could not get user ID:', err);
+      }
+
+      // Upload image using RobustImageService
+      const result = await RobustImageService.uploadImage(
+        file,
+        product.id,
+        userId,
+        images.length === 0 // Set as primary if it's the first image
+      );
+
+      if (!result.success) {
+        throw new Error(result.error || 'Upload failed');
+      }
+
+      // Reload images to get the updated list
+      const updatedImages = await RobustImageService.getProductImages(product.id);
+      console.log('🔄 Reloaded images after upload:', updatedImages);
+      setImages(updatedImages);
+      
+      toast.success('Image uploaded successfully!', { id: 'image-upload' });
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload image. Please try again.';
+      toast.error(errorMessage, { id: 'image-upload' });
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  // Trigger file input click
+  const handleImageAreaClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
 
   // Calculate analytics
   const analytics = React.useMemo(() => {
@@ -481,18 +563,38 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
   };
 
   return createPortal(
-    <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 overflow-y-auto" style={{ zIndex: 99999 }}>
-      {/* Backdrop */}
+    <>
+      {/* Backdrop - only covers main content area, stays below sidebar z-index (40) */}
       <div 
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        className="fixed bg-black/30 backdrop-blur-sm"
         onClick={onClose}
+        style={{
+          zIndex: 35,
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0
+        }}
       />
       
-      {/* Modal */}
+      {/* Modal Container - above sidebar but positioned after it */}
       <div 
-        className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col my-2 sm:my-4"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed flex items-center justify-center p-2 sm:p-4 overflow-y-auto" 
+        style={{ 
+          zIndex: 50,
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          pointerEvents: 'none'
+        }}
       >
+        {/* Modal */}
+        <div 
+          className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col my-2 sm:my-4"
+          onClick={(e) => e.stopPropagation()}
+          style={{ pointerEvents: 'auto' }}
+        >
         {/* Minimal Header */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -593,58 +695,89 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
             {/* Overview Tab */}
             {activeTab === 'overview' && (
               <>
-                {/* Financial Overview - Minimal Design */}
-                {analytics && (
-                <div className="mb-4">
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-lg p-3">
-                      <div className="text-xs font-medium text-emerald-700 uppercase tracking-wide mb-1">Total Value</div>
-                      <div className="text-base font-bold text-emerald-900">{format.money(analytics.totalRetailValue)}</div>
-                      </div>
-
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-3">
-                      <div className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">Profit</div>
-                      <div className="text-base font-bold text-blue-900">{format.money(analytics.potentialProfit)}</div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-lg p-3">
-                      <div className="text-xs font-medium text-orange-700 uppercase tracking-wide mb-1">Margin</div>
-                      <div className="text-base font-bold text-orange-900">{analytics.profitMargin.toFixed(1)}%</div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-lg p-3">
-                      <div className="text-xs font-medium text-purple-700 uppercase tracking-wide mb-1">Investment</div>
-                      <div className="text-base font-bold text-purple-900">{format.money(analytics.totalCostValue)}</div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Main Content Layout */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Left Column - Product Image & Basic Info */}
             <div className="space-y-4 sm:space-y-6">
               {/* Product Image */}
               <div className="space-y-3">
-                <div className="aspect-square relative rounded-lg overflow-hidden bg-gray-50 border border-gray-200">
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                
+                <div 
+                  className={`aspect-square relative rounded-lg overflow-hidden bg-gray-50 border-2 border-dashed transition-all ${
+                    images.length > 0 
+                      ? 'border-gray-200' 
+                      : isUploadingImage
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50/30 cursor-pointer'
+                  }`}
+                  onClick={images.length === 0 ? handleImageAreaClick : undefined}
+                >
                   {images.length > 0 ? (
                     <>
                       {/* Check if the image is a PNG and add white background */}
                       {(() => {
-                        const imageUrl = images[selectedImageIndex]?.thumbnailUrl || images[selectedImageIndex]?.url || images[0]?.thumbnailUrl || images[0]?.url;
+                        const currentImage = images[selectedImageIndex] || images[0];
+                        const imageUrl = currentImage?.thumbnailUrl || currentImage?.url;
+                        
+                        console.log('🖼️ Displaying image:', { 
+                          selectedImageIndex, 
+                          imageUrl: imageUrl?.substring(0, 100),
+                          totalImages: images.length 
+                        });
+                        
                         const isPngImage = imageUrl && (imageUrl.includes('.png') || imageUrl.includes('image/png'));
                         return isPngImage ? <div className="absolute inset-0 bg-white" /> : null;
                       })()}
                       <img
                         src={images[selectedImageIndex]?.thumbnailUrl || images[selectedImageIndex]?.url || images[0]?.thumbnailUrl || images[0]?.url}
                         alt={product.name}
-                        className="w-full h-full object-cover relative z-10"
+                        className="w-full h-full object-contain relative z-10"
+                        onLoad={(e) => console.log('✅ Image loaded successfully:', e.currentTarget.src?.substring(0, 100))}
+                        onError={(e) => {
+                          console.error('❌ Image failed to load:', e.currentTarget.src?.substring(0, 100));
+                          // Fallback to placeholder on error
+                          e.currentTarget.style.display = 'none';
+                        }}
                       />
                     </>
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                      <Package className="w-20 h-20" />
+                    <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 group hover:text-blue-500 transition-colors">
+                      {isUploadingImage ? (
+                        <>
+                          <div className="w-20 h-20 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin mb-3"></div>
+                          <p className="text-sm font-medium text-blue-600">Uploading...</p>
+                        </>
+                      ) : (
+                        <>
+                          <Package className="w-20 h-20 mb-3 group-hover:scale-110 transition-transform" />
+                          <p className="text-sm font-medium group-hover:text-blue-600">Click to upload thumbnail</p>
+                          <p className="text-xs mt-1 text-gray-400">PNG, JPG, WEBP (Max 10MB)</p>
+                        </>
+                      )}
                     </div>
+                  )}
+                  
+                  {/* Add image button overlay for when images exist */}
+                  {images.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleImageAreaClick();
+                      }}
+                      disabled={isUploadingImage}
+                      className="absolute bottom-3 right-3 bg-white/90 backdrop-blur-sm hover:bg-blue-500 hover:text-white text-gray-700 p-2 rounded-full shadow-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Upload new image"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
                   )}
                 </div>
                 
@@ -676,6 +809,42 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* Basic Information */}
+              <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                  <Info className="w-5 h-5 text-blue-600" />
+                  <h3 className="text-sm font-semibold text-gray-800">Basic Information</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Category</span>
+                    <p className="text-sm font-medium text-gray-900">{currentProduct.category?.name || 'Uncategorized'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Status</span>
+                    <p className={`text-sm font-medium ${product.isActive ? 'text-green-600' : 'text-red-600'}`}>
+                      {product.isActive ? 'Active' : 'Inactive'}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Product ID</span>
+                    <p className="text-sm font-medium text-gray-900 font-mono">{product.id}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Total Variants</span>
+                    <p className="text-sm font-medium text-gray-900">{product.variants?.length || 0}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Total Stock</span>
+                    <p className="text-sm font-medium text-gray-900">{currentProduct.totalQuantity || 0}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Images</span>
+                    <p className="text-sm font-medium text-gray-900">{images.length} photo{images.length !== 1 ? 's' : ''}</p>
+                  </div>
+                </div>
               </div>
 
               {/* Product Specifications - Simplified */}
@@ -716,43 +885,6 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
 
             {/* Right Column - Essential Information & Actions */}
             <div className="space-y-6">
-              {/* Basic Information */}
-              <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                  <Info className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-sm font-semibold text-gray-800">Basic Information</h3>
-                  </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500 uppercase tracking-wide">Category</span>
-                    <p className="text-sm font-medium text-gray-900">{currentProduct.category?.name || 'Uncategorized'}</p>
-                </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500 uppercase tracking-wide">Status</span>
-                    <p className={`text-sm font-medium ${product.isActive ? 'text-green-600' : 'text-red-600'}`}>
-                      {product.isActive ? 'Active' : 'Inactive'}
-                    </p>
-                    </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500 uppercase tracking-wide">Product ID</span>
-                    <p className="text-sm font-medium text-gray-900 font-mono">{product.id}</p>
-                    </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500 uppercase tracking-wide">Total Variants</span>
-                    <p className="text-sm font-medium text-gray-900">{product.variants?.length || 0}</p>
-                    </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500 uppercase tracking-wide">Total Stock</span>
-                    <p className="text-sm font-medium text-gray-900">{currentProduct.totalQuantity || 0}</p>
-                      </div>
-                  <div className="space-y-1">
-                    <span className="text-xs text-gray-500 uppercase tracking-wide">Images</span>
-                    <p className="text-sm font-medium text-gray-900">{images.length} photo{images.length !== 1 ? 's' : ''}</p>
-                    </div>
-                </div>
-                  </div>
-                  
-
 
 
 
@@ -1695,53 +1827,47 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
         <div className={`flex-shrink-0 border-t border-gray-200 bg-white p-3 sm:p-4 transition-shadow duration-200 ${
           isScrolled ? 'shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]' : ''
         }`}>
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleAddToCart}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium text-sm"
-              >
-                <ShoppingCart className="w-4 h-4" />
-                <span className="hidden sm:inline">Add to POS</span>
-                <span className="sm:hidden">POS</span>
-              </button>
-              
-              <button
-                onClick={handleGenerateQRCode}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-              >
-                <QrCode className="w-4 h-4" />
-                <span className="hidden sm:inline">QR Code</span>
-                <span className="sm:hidden">QR</span>
-              </button>
-
-              <button
-                onClick={handleExportProduct}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium text-sm"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Export</span>
-              </button>
-            </div>
+          <div className="flex flex-col sm:flex-row items-stretch gap-3">
+            <button
+              onClick={handleAddToCart}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span>Add to POS</span>
+            </button>
             
-            <div className="flex items-center gap-2">
+            <button
+              onClick={handleGenerateQRCode}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>QR Code</span>
+            </button>
+
+            <button
+              onClick={handleExportProduct}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>Export</span>
+            </button>
+            
+            <button
+              onClick={onClose}
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+            >
+              Close
+            </button>
+            
+            {onEdit && (
               <button
-                onClick={onClose}
-                className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-sm font-medium"
+                onClick={() => onEdit(product)}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
               >
-                Close
+                <Edit className="w-4 h-4" />
+                <span>Edit</span>
               </button>
-              
-              {onEdit && (
-                <button
-                  onClick={() => onEdit(product)}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-                >
-                  <Edit className="w-4 h-4" />
-                  Edit
-                </button>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
@@ -1890,8 +2016,9 @@ const GeneralProductDetailModal: React.FC<GeneralProductDetailModalProps> = ({
             </div>
           </div>
         )}
+        </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 };

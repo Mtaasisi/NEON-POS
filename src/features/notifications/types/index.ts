@@ -5,7 +5,6 @@ export type NotificationType =
   | 'inventory_low'
   | 'system_alert'
   | 'appointment_reminder'
-  | 'diagnostic_complete'
   | 'repair_complete'
   | 'customer_feedback'
   | 'whatsapp_message'
@@ -29,7 +28,6 @@ export type NotificationCategory =
   | 'inventory'
   | 'system'
   | 'appointments'
-  | 'diagnostics'
   | 'loyalty'
   | 'communications'
   | 'backup'
@@ -56,7 +54,6 @@ export interface Notification {
   customerId?: string;
   userId?: string;
   appointmentId?: string;
-  diagnosticId?: string;
   
   // Metadata
   metadata?: Record<string, any>;
@@ -97,7 +94,6 @@ export interface NotificationSettings {
   inventoryNotifications: boolean;
   systemNotifications: boolean;
   appointmentNotifications: boolean;
-  diagnosticNotifications: boolean;
   loyaltyNotifications: boolean;
   communicationNotifications: boolean;
   backupNotifications: boolean;

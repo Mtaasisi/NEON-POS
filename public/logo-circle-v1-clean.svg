@@ -1,0 +1,25 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="circleV1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0284c7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="200" height="200" rx="44" fill="url(#circleV1)"/>
+  
+  <!-- Ultra clean circle badge -->
+  <g>
+    <!-- Outer circle - thin stroke style -->
+    <circle cx="100" cy="100" r="55" fill="none" stroke="white" stroke-width="3"/>
+    
+    <!-- Inner circle with D -->
+    <circle cx="100" cy="100" r="45" fill="white"/>
+    
+    <!-- Clean D -->
+    <path d="M 85 80 L 85 120 L 105 120 C 118 120 127 111 127 100 C 127 89 118 80 105 80 Z" 
+          fill="url(#circleV1)"/>
+  </g>
+</svg>
+

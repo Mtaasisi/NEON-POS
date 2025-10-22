@@ -19,7 +19,7 @@ import {
   Shield,
   Target
 } from 'lucide-react';
-import { 
+import type { 
   NotificationFilters as FiltersType,
   NotificationStatus,
   NotificationCategory,
@@ -53,7 +53,6 @@ const NotificationFilters: React.FC<NotificationFiltersProps> = ({
     inventory: <Package size={16} />,
     system: <Settings size={16} />,
     appointments: <Calendar size={16} />,
-    diagnostics: <AlertTriangle size={16} />,
     loyalty: <Star size={16} />,
     communications: <MessageSquare size={16} />,
     backup: <Database size={16} />,

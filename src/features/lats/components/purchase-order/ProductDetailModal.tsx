@@ -43,6 +43,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [selectedVariant, setSelectedVariant] = useState<ProductSearchVariant | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [customCostPrice, setCustomCostPrice] = useState<string>('');
+  const [hasManuallyEditedPrice, setHasManuallyEditedPrice] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>(safeCurrency);
   const [exchangeRate, setExchangeRate] = useState<number>(1);
   const [minimumOrderQty] = useState<number>(1);
@@ -77,14 +78,31 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       const primary = getPrimaryVariant(product);
       if (primary) {
         setSelectedVariant(primary);
-        // Use last purchase price, then product-level costPrice, or fallback to 70% of selling price
-        const defaultCostPrice = poStats?.lastCostPrice || product.costPrice || (product.price || 0) * 0.7;
-        setCustomCostPrice(defaultCostPrice.toString());
         // Initialize minimum stock from product data (ProductSearchResult doesn't have minimumStock)
         setMinimumStock(2); // Default to 2 units for low stock alerts
       }
     }
-  }, [product, selectedVariant, poStats]);
+  }, [product, selectedVariant]);
+
+  // Update cost price when poStats loads or changes (only if user hasn't manually edited)
+  useEffect(() => {
+    if (hasManuallyEditedPrice) return; // Don't override user's manual input
+
+    if (product && poStats?.lastCostPrice && poStats.lastCostPrice > 0) {
+      setCustomCostPrice(poStats.lastCostPrice.toString());
+    } else if (product) {
+      // Fallback to product cost price or calculation if no PO history
+      const defaultCostPrice = product.costPrice || (product.price || 0) * 0.7;
+      if (defaultCostPrice > 0) {
+        setCustomCostPrice(defaultCostPrice.toString());
+      }
+    }
+  }, [poStats, product, hasManuallyEditedPrice]);
+
+  // Reset manual edit flag when product changes
+  useEffect(() => {
+    setHasManuallyEditedPrice(false);
+  }, [product?.id]);
 
   // Fetch real-time stock when modal opens (with caching to prevent unnecessary fetches)
   useEffect(() => {
@@ -611,7 +629,23 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                 {/* Cost Price with Exchange Rate */}
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-gray-900">Cost Price (per unit)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-900">Cost Price (per unit)</label>
+                    {poStats?.lastCostPrice && poStats.lastCostPrice > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCustomCostPrice(poStats.lastCostPrice.toString());
+                          setHasManuallyEditedPrice(false); // Allow auto-fill again
+                          toast.success('Last purchase price filled!');
+                        }}
+                        className="text-xs text-orange-600 hover:text-orange-700 font-medium flex items-center gap-1 px-2 py-1 rounded hover:bg-orange-50 transition-colors"
+                      >
+                        <TrendingUp className="w-3 h-3" />
+                        Use Last: {formatMoney(poStats.lastCostPrice, safeSelectedCurrency)}
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 p-2 bg-white border-2 border-gray-300 rounded-lg focus-within:border-orange-500">
                     {/* Currency Selector */}
                     <div className="flex-shrink-0 flex items-center gap-2 p-2 bg-gray-200 rounded">
@@ -650,6 +684,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           const value = e.target.value.replace(/,/g, '');
                           if (value === '' || parseFloat(value) >= 0) {
                             setCustomCostPrice(value);
+                            setHasManuallyEditedPrice(true);
                           }
                         }}
                         onFocus={(e) => {

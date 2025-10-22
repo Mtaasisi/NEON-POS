@@ -51,7 +51,7 @@ export class RobustImageService {
   static async uploadImage(
     file: File,
     productId: string,
-    userId: string,
+    userId: string | null,
     isPrimary: boolean = false
   ): Promise<UploadResult> {
     try {
@@ -62,7 +62,7 @@ export class RobustImageService {
       }
 
       // 2. Check authentication - FLEXIBLE for Neon direct mode
-      let authenticatedUserId = userId;
+      let authenticatedUserId: string | null = null;
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (user && !authError) {
@@ -73,14 +73,15 @@ export class RobustImageService {
           const storedUser = localStorage.getItem('user');
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
-            authenticatedUserId = parsedUser.id || userId || 'system';
+            // Only use valid UUIDs, not string "system"
+            authenticatedUserId = parsedUser.id && parsedUser.id !== 'system' ? parsedUser.id : null;
             console.log('✅ Using localStorage user:', authenticatedUserId);
           } else {
-            console.log('✅ Using provided userId or system user');
+            console.log('✅ Using null for system user (no auth)');
           }
         }
       } catch (e) {
-        console.log('⚠️ Auth check failed, using provided userId or system');
+        console.log('⚠️ Auth check failed, using null for system user');
       }
 
       // 3. Check limits
@@ -96,25 +97,57 @@ export class RobustImageService {
       let imageUrl: string;
       let thumbnailUrl: string;
 
-      // Always try to upload to storage first (even for temporary products)
-      try {
-        // First, check if bucket exists and is accessible
-        await this.checkBucketAccess();
-        
-        const uploadResult = await this.uploadToStorage(file, fileName);
-        imageUrl = uploadResult.url;
-        thumbnailUrl = uploadResult.thumbnailUrl;
-        console.log('✅ Uploaded to Supabase Storage:', imageUrl);
-      } catch (storageError) {
-        console.warn('Storage failed, using base64 fallback:', storageError);
-        // Fallback to base64 only if storage completely fails
-        const compressedImage = await this.compressImage(file);
-        imageUrl = compressedImage;
-        thumbnailUrl = await this.createThumbnail(file, 200);
-        console.log('⚠️ Using base64 fallback due to storage error');
+    // Always try to upload to storage first (even for temporary products)
+    try {
+      // First, check if bucket exists and is accessible
+      await this.checkBucketAccess();
+      
+      const uploadResult = await this.uploadToStorage(file, fileName);
+      imageUrl = uploadResult.url;
+      thumbnailUrl = uploadResult.thumbnailUrl;
+      
+      // ✅ Check if URLs are actually valid (not empty strings)
+      // This happens when using Neon Database without external storage
+      if (!imageUrl || imageUrl.trim() === '' || !thumbnailUrl || thumbnailUrl.trim() === '') {
+        console.log('ℹ️ Using base64 image storage (Neon Database mode)');
+        throw new Error('Storage returned empty URLs - falling back to base64');
       }
+      
+      console.log('✅ Uploaded to Supabase Storage:', {
+        imageUrl: imageUrl?.substring(0, 100),
+        thumbnailUrl: thumbnailUrl?.substring(0, 100)
+      });
+    } catch (storageError) {
+      console.log('ℹ️ Using base64 storage for Neon Database');
+      // Fallback to base64 (standard for Neon-only setups)
+      const compressedImage = await this.compressImage(file);
+      imageUrl = compressedImage;
+      thumbnailUrl = await this.createThumbnail(file, 200);
+      console.log('✅ Base64 images created:', {
+        imageSize: Math.round(imageUrl?.length / 1024) + 'KB',
+        thumbnailSize: Math.round(thumbnailUrl?.length / 1024) + 'KB'
+      });
+    }
 
-      // 6. Save to database (or create temporary record)
+      // 6. Validate URLs before saving
+      if (!imageUrl || imageUrl.trim() === '') {
+        throw new Error('Image URL is empty - upload may have failed');
+      }
+      
+      if (!thumbnailUrl || thumbnailUrl.trim() === '') {
+        console.warn('⚠️ Thumbnail URL is empty, using main image URL');
+        thumbnailUrl = imageUrl; // Fallback to main image
+      }
+      
+      console.log('💾 Saving image record to database:', {
+        productId,
+        imageUrlPreview: imageUrl?.substring(0, 50),
+        thumbnailUrlPreview: thumbnailUrl?.substring(0, 50),
+        fileName: file.name,
+        fileSize: file.size,
+        isPrimary
+      });
+      
       const uploadedImage = await this.saveImageRecord({
         productId,
         imageUrl,
@@ -122,8 +155,14 @@ export class RobustImageService {
         fileName: file.name,
         fileSize: file.size,
         isPrimary,
-        userId,
+        userId: authenticatedUserId,
         mimeType: file.type
+      });
+
+      console.log('✅ Image record saved:', {
+        id: uploadedImage.id,
+        url: uploadedImage.url?.substring(0, 50),
+        thumbnailUrl: uploadedImage.thumbnailUrl?.substring(0, 50)
       });
 
       // 7. Clear cache for this product
@@ -216,18 +255,30 @@ export class RobustImageService {
         return [];
       }
 
-      const images = data.map(row => ({
-        id: row.id,
-        url: row.image_url,
-        thumbnailUrl: row.thumbnail_url,
-        fileName: row.file_name,
-        fileSize: row.file_size,
-        isPrimary: row.is_primary,
-        uploadedAt: row.created_at,
-        mimeType: row.mime_type,
-        width: row.width,
-        height: row.height
-      }));
+      const images = data
+        .map(row => ({
+          id: row.id,
+          url: row.image_url,
+          thumbnailUrl: row.thumbnail_url,
+          fileName: row.file_name,
+          fileSize: row.file_size,
+          isPrimary: row.is_primary,
+          uploadedAt: row.created_at,
+          mimeType: row.mime_type,
+          width: row.width,
+          height: row.height
+        }))
+        // Filter out invalid image URLs (navigation paths, empty strings, etc.)
+        .filter(img => this.isValidImageUrl(img.url) || this.isValidImageUrl(img.thumbnailUrl));
+
+      console.log('✅ Retrieved images from database:', {
+        count: images.length,
+        images: images.map(img => ({
+          id: img.id,
+          url: img.url?.substring(0, 50),
+          thumbnailUrl: img.thumbnailUrl?.substring(0, 50)
+        }))
+      });
 
       // Cache the result
       this.imageCache.set(cacheKey, { data: images, timestamp: Date.now() });
@@ -260,7 +311,7 @@ export class RobustImageService {
       }
 
       // Check authentication
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await neonClient.auth.getUser();
       if (authError || !user) {
         console.error('❌ Authentication failed for delete:', authError);
         return { success: false, error: 'User not authenticated' };
@@ -394,7 +445,7 @@ export class RobustImageService {
   static async bulkUploadImages(
     files: File[],
     productId: string,
-    userId: string
+    userId: string | null
   ): Promise<{ success: boolean; images: ProductImage[]; errors: string[] }> {
     const results: ProductImage[] = [];
     const errors: string[] = [];
@@ -438,6 +489,51 @@ export class RobustImageService {
     }
 
     return { valid: true };
+  }
+
+  /**
+   * Validate if a URL is a valid image URL
+   * Filters out navigation paths and other invalid URLs
+   */
+  private static isValidImageUrl(url: string | undefined | null): boolean {
+    if (!url || typeof url !== 'string' || url.trim() === '') {
+      return false;
+    }
+
+    // Remove whitespace
+    const cleanUrl = url.trim();
+
+    // Check if it's a data URL (base64 image)
+    if (cleanUrl.startsWith('data:image/')) {
+      return true;
+    }
+
+    // Check if it's a blob URL
+    if (cleanUrl.startsWith('blob:')) {
+      return true;
+    }
+
+    // Filter out JSON strings that were incorrectly saved as image URLs
+    if (cleanUrl.startsWith('{') || cleanUrl.startsWith('[')) {
+      console.warn('⚠️ Filtering out JSON string as image URL:', cleanUrl.substring(0, 100));
+      return false;
+    }
+
+    // Filter out navigation paths (like /lats/unified-inventory)
+    // These start with / but don't have common image extensions
+    if (cleanUrl.startsWith('/') && !cleanUrl.match(/\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i)) {
+      console.warn('⚠️ Filtering out navigation path as image URL:', cleanUrl);
+      return false;
+    }
+
+    // Accept any HTTP(S) URL - this includes external images from unsplash, placeholder services, etc.
+    if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+      return true;
+    }
+
+    // If none of the above conditions match, it's probably invalid
+    console.warn('⚠️ Filtering out invalid image URL:', cleanUrl.substring(0, 100));
+    return false;
   }
 
   private static generateFileName(file: File, productId: string): string {
@@ -530,14 +626,13 @@ export class RobustImageService {
       fileLastModified: file.lastModified
     });
 
-    // Check authentication first
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // Check authentication first (optional - will use RLS policies)
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      console.error('❌ Authentication failed:', authError);
-      throw new Error('User not authenticated');
+      console.warn('⚠️ No authentication, attempting upload with RLS policies');
+    } else {
+      console.log('✅ User authenticated:', user.id);
     }
-
-    console.log('✅ User authenticated:', user.id);
 
     // Upload main image
     const { data, error } = await supabase.storage
@@ -640,7 +735,7 @@ export class RobustImageService {
     fileName: string;
     fileSize: number;
     isPrimary: boolean;
-    userId: string;
+    userId: string | null;
     mimeType: string;
   }): Promise<ProductImage> {
     // Handle temporary products - don't save to database
@@ -695,6 +790,14 @@ export class RobustImageService {
     }
 
     // Insert new image record
+    console.log('📝 Inserting into database:', {
+      product_id: data.productId,
+      image_url_preview: data.imageUrl?.substring(0, 50),
+      thumbnail_url_preview: data.thumbnailUrl?.substring(0, 50),
+      file_name: data.fileName,
+      uploaded_by: data.userId
+    });
+    
     const { data: dbData, error } = await supabase
       .from('product_images')
       .insert({
@@ -709,10 +812,22 @@ export class RobustImageService {
       })
       .select()
       .single();
+    
+    console.log('📊 Database insert result:', {
+      success: !error,
+      hasData: !!dbData,
+      id: dbData?.id,
+      image_url_from_db: dbData?.image_url?.substring(0, 50)
+    });
 
     if (error) {
       console.error('❌ Database insert error:', error);
       throw error;
+    }
+
+    if (!dbData) {
+      console.error('❌ Database insert returned null data');
+      throw new Error('Failed to save image record: No data returned from database');
     }
 
     return {

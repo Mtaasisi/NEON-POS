@@ -161,7 +161,7 @@ export const DeviceStatusChart: React.FC<DeviceStatusChartProps> = ({ className 
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex-1">
@@ -196,7 +196,7 @@ export const DeviceStatusChart: React.FC<DeviceStatusChartProps> = ({ className 
 
       {/* Chart */}
       {deviceData.length === 0 ? (
-        <div className="h-48 flex items-center justify-center">
+        <div className="flex-grow flex items-center justify-center min-h-48">
           <div className="text-center">
             <Smartphone className="w-12 h-12 text-gray-300 mx-auto mb-2" />
             <p className="text-sm text-gray-500">No repairs found</p>
@@ -204,7 +204,7 @@ export const DeviceStatusChart: React.FC<DeviceStatusChartProps> = ({ className 
           </div>
         </div>
       ) : (
-        <div className="h-48 -mx-2">
+        <div className="flex-grow -mx-2 min-h-48">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie

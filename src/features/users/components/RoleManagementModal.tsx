@@ -75,7 +75,6 @@ const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
     { value: 'reports', label: 'Reports & Analytics', description: 'View and generate reports', icon: '📊' },
     { value: 'employees', label: 'Employee Management', description: 'Manage team members', icon: '👔' },
     { value: 'devices', label: 'Device Management', description: 'Manage devices and equipment', icon: '📱' },
-    { value: 'diagnostics', label: 'Device Diagnostics', description: 'Run diagnostics and tests', icon: '🔧' },
     { value: 'spare-parts', label: 'Spare Parts', description: 'Manage spare parts inventory', icon: '⚙️' },
     { value: 'appointments', label: 'Appointments', description: 'Schedule and manage appointments', icon: '📅' },
     { value: 'pos', label: 'Point of Sale', description: 'Access POS system', icon: '💰' },

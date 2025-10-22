@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
-import DiagnosticChecklistModal from './DiagnosticChecklistModal';
 // import SparePartsSelector from '../../repair/components/SparePartsSelector';
 import { createRepairPart, createRepairParts, getRepairParts, RepairPart } from '../../lats/lib/sparePartsApi';
 import { toast } from '../../../lib/toastUtils';
@@ -77,7 +76,6 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
   const [isUpdating, setIsUpdating] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<DeviceStatus | null>(null);
   const [showValidation, setShowValidation] = useState(false);
-  const [showDiagnosticChecklist, setShowDiagnosticChecklist] = useState(false);
   const [forceUpdate, setForceUpdate] = useState(0);
   
   // Spare parts state
@@ -1121,11 +1119,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
                   <button
                     key={transition.to}
                     onClick={() => {
-                      if (transition.to === 'diagnosis-started') {
-                        setShowDiagnosticChecklist(true);
-                      } else {
-                        setSelectedStatus(transition.to);
-                      }
+                      setSelectedStatus(transition.to);
                     }}
                     className={`p-3 rounded-lg border-2 transition-all ${
                       selectedStatus === transition.to
@@ -1203,20 +1197,6 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
           </>
         )}
       </div>
-
-      {/* Diagnostic Checklist Modal */}
-      <DiagnosticChecklistModal
-        isOpen={showDiagnosticChecklist}
-        onClose={() => setShowDiagnosticChecklist(false)}
-        deviceId={device.id}
-        deviceModel={device.model}
-        issueDescription={device.issueDescription}
-        onChecklistComplete={async (results: any) => {
-          // Update device status to diagnosis-started after checklist completion
-          await onStatusUpdate(device.id, 'diagnosis-started', 'Diagnostic checklist completed');
-          setShowDiagnosticChecklist(false);
-        }}
-      />
 
       {/* Spare Parts Selector Modal */}
       {/* <SparePartsSelector

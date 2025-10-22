@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { 
@@ -13,7 +13,7 @@ import {
   CheckCircle2, CheckCircle, AlertTriangle,
   Zap, CreditCard,
   XSquare, XCircle, FileSpreadsheet,
-  Truck, RefreshCw, Settings
+  Truck, RefreshCw, Settings, Trash2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { logPurchaseOrderError, validateProductId } from '../lib/errorLogger';
@@ -25,11 +25,10 @@ import { QualityCheckService } from '../services/qualityCheckService';
 import { supabase } from '../../../lib/supabaseClient';
 import { serialNumberService } from '../services/serialNumberService';
 
-// Import components directly for debugging
+// Import components for Option B workflow
 import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
 import SerialNumberReceiveModal from '../components/purchase-order/SerialNumberReceiveModal';
 import SetPricingModal from '../components/purchase-order/SetPricingModal';
-import ApprovalModal from '../components/purchase-order/ApprovalModal';
 import PurchaseOrderActionsService from '../services/purchaseOrderActionsService';
 import ConsolidatedReceiveModal from '../components/purchase-order/ConsolidatedReceiveModal';
 
@@ -81,6 +80,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   
   // Database state management
   const { 
@@ -115,26 +115,27 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [refreshInterval] = useState(30); // seconds
   const [showAutoRefreshSettings, setShowAutoRefreshSettings] = useState(false);
   
-  // New state for enhanced features
+  // State for Option B workflow
   const [activeTab, setActiveTab] = useState('overview');
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [showPartialReceiveModal, setShowPartialReceiveModal] = useState(false);
   const [showSerialNumberReceiveModal, setShowSerialNumberReceiveModal] = useState(false);
   const [showPricingModal, setShowPricingModal] = useState(false);
-  const [showCommunicationModal, setShowCommunicationModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showPurchaseOrderPaymentModal, setShowPurchaseOrderPaymentModal] = useState(false);
-  const [, setShowShippingModal] = useState(false);
-  const [showShippingTracker, setShowShippingTracker] = useState(false);
-  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [showConsolidatedReceiveModal, setShowConsolidatedReceiveModal] = useState(false);
+  const [showPartialReceiveModal, setShowPartialReceiveModal] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [receiveMode, setReceiveMode] = useState<'full' | 'partial'>('partial');
+  const [hasPendingPricingItems, setHasPendingPricingItems] = useState(false);
+  const [tempSerialNumberData, setTempSerialNumberData] = useState<any[]>([]);  // Store serial numbers temporarily
   const [showQualityCheckModal, setShowQualityCheckModal] = useState(false);
   const [showQualityCheckDetailsModal, setShowQualityCheckDetailsModal] = useState(false);
   const [selectedQualityCheckId, setSelectedQualityCheckId] = useState<string>('');
+  const [showShippingTracker, setShowShippingTracker] = useState(false);
+  const [showCommunicationModal, setShowCommunicationModal] = useState(false);
+  const [showNotesModal, setShowNotesModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAddToInventoryModal, setShowAddToInventoryModal] = useState(false);
   const [profitMargin, setProfitMargin] = useState(30);
   const [inventoryLocation, setInventoryLocation] = useState('');
-  const [showConsolidatedReceiveModal, setShowConsolidatedReceiveModal] = useState(false);
-  const [showExportMenu, setShowExportMenu] = useState(false);
   
   // Enhanced error handling and confirmation states
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -273,6 +274,51 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
             }));
           }
           
+          // FIX: Recalculate and correct payment status if mismatched
+          // Ensure values are numbers for proper comparison
+          const totalAmount = Number(response.data.totalAmount) || 0;
+          const totalPaid = Number(response.data.totalPaid) || 0;
+          let correctPaymentStatus = response.data.paymentStatus;
+          
+          if (totalAmount > 0) {
+            if (totalPaid >= totalAmount) {
+              correctPaymentStatus = 'paid';
+            } else if (totalPaid > 0) {
+              correctPaymentStatus = 'partial';
+            } else {
+              correctPaymentStatus = 'unpaid';
+            }
+            
+            // If status is incorrect, update it in the database
+            if (correctPaymentStatus !== response.data.paymentStatus) {
+              console.warn('⚠️ Payment status mismatch detected:', {
+                totalAmount,
+                totalPaid,
+                currentStatus: response.data.paymentStatus,
+                correctStatus: correctPaymentStatus
+              });
+              
+              // Update the local data immediately for UI
+              response.data.paymentStatus = correctPaymentStatus;
+              
+              // Update in database asynchronously (don't wait for it)
+              supabase
+                .from('lats_purchase_orders')
+                .update({ 
+                  payment_status: correctPaymentStatus,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', response.data.id)
+                .then(({ error }) => {
+                  if (error) {
+                    console.error('❌ Failed to update payment status:', error);
+                  } else {
+                    console.log('✅ Payment status corrected in database:', correctPaymentStatus);
+                  }
+                });
+            }
+          }
+          
           setPurchaseOrder(response.data);
           const endTime = Date.now();
           console.log(`✅ [PurchaseOrderDetailPage] Purchase order loaded successfully in ${endTime - startTime}ms`);
@@ -305,6 +351,23 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
           } catch (error) {
             console.error('⚠️ Error during auto-fix order status (non-critical):', error);
             // Don't block the page load - this is a non-critical operation
+          }
+          
+          // Check for pending pricing items (only for orders that aren't completed)
+          try {
+            // Skip check for completed orders to avoid unnecessary warnings
+            if (response.data.status !== 'completed') {
+              const hasPending = await PurchaseOrderService.hasPendingPricingItems(response.data.id);
+              setHasPendingPricingItems(hasPending);
+              if (hasPending) {
+                console.log('⚠️ Purchase order has items pending pricing');
+              }
+            } else {
+              // For completed orders, assume no pending pricing items
+              setHasPendingPricingItems(false);
+            }
+          } catch (error) {
+            console.error('⚠️ Error checking pending pricing items (non-critical):', error);
           }
         }
       } else {
@@ -368,6 +431,18 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       loadPurchaseOrder();
     }
   }, [id, loadPurchaseOrder]);
+
+  // Handle URL action parameters (e.g., ?action=receive)
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'receive' && purchaseOrder && !showConsolidatedReceiveModal) {
+      // Auto-open receive modal when action=receive in URL
+      setShowConsolidatedReceiveModal(true);
+      // Clear the action param to avoid reopening
+      searchParams.delete('action');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, purchaseOrder, showConsolidatedReceiveModal]);
 
   // Handle editMode prop changes
   useEffect(() => {
@@ -914,52 +989,10 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   };
 
 
-  const handleApprove = async (notes: string) => {
-    if (!purchaseOrder) return;
-    
-    try {
-      const response = await PurchaseOrderService.approvePurchaseOrder(purchaseOrder.id, currentUser?.id || '', notes);
-      if (response.success) {
-        await loadPurchaseOrder();
-        toast.success('Purchase order approved');
-      } else {
-        toast.error(response.message);
-      }
-    } catch (error) {
-      console.error('Error approving purchase order:', error);
-      toast.error('Failed to approve purchase order');
-    }
-  };
-
-  const handleReject = async (reason: string) => {
-    if (!purchaseOrder) return;
-    
-    try {
-      const response = await PurchaseOrderService.rejectPurchaseOrder(purchaseOrder.id, currentUser?.id || '', reason);
-      if (response.success) {
-        await loadPurchaseOrder();
-        toast.success('Purchase order rejected');
-      } else {
-        toast.error(response.message);
-      }
-    } catch (error) {
-      console.error('Error rejecting purchase order:', error);
-      toast.error('Failed to reject purchase order');
-    }
-  };
-
-  // Missing shipping functions
-  const handleViewShipping = () => {
-    setShowShippingModal(true);
-  };
-
-  const handleAssignShipping = () => {
-    setShowShippingModal(true);
-  };
 
 
 
-  // New handler functions for enhanced features
+  // Handler functions for Option B workflow
   const handlePrintOrder = async () => {
     if (!purchaseOrder) {
       toast.error('No purchase order to print');
@@ -1364,6 +1397,37 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       toast.error('This purchase order has already been fully paid');
       return;
     }
+    
+    // Calculate remaining amount
+    const totalAmount = purchaseOrder?.totalAmount || 0;
+    const totalPaid = purchaseOrder?.totalPaid || 0;
+    let remainingAmount = totalAmount - totalPaid;
+    
+    // Handle foreign currency conversion for display
+    if (purchaseOrder?.currency && purchaseOrder.currency !== 'TZS' && purchaseOrder.exchangeRate && purchaseOrder.exchangeRate > 1) {
+      const paidInOriginalCurrency = totalPaid / purchaseOrder.exchangeRate;
+      remainingAmount = totalAmount - paidInOriginalCurrency;
+    }
+    
+    // Check if there's nothing left to pay
+    if (totalAmount === 0) {
+      toast.error('Cannot make payment: Purchase order has no total amount. Please add items to the order first.');
+      return;
+    }
+    
+    if (remainingAmount <= 0) {
+      toast.error(`This purchase order has been fully paid. Total: ${totalAmount.toLocaleString()}, Paid: ${totalPaid.toLocaleString()}`);
+      return;
+    }
+    
+    console.log('💳 Opening payment modal:', {
+      totalAmount,
+      totalPaid,
+      remainingAmount,
+      currency: purchaseOrder?.currency,
+      exchangeRate: purchaseOrder?.exchangeRate
+    });
+    
     setShowPurchaseOrderPaymentModal(true);
   };
 
@@ -1529,134 +1593,228 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const handleConfirmPricingAndReceive = async (pricingData: Map<string, any>) => {
     if (!purchaseOrder || !currentUser) return;
     
+    // Step 3 → Step 4: Store pricing data and show "Add to Inventory" confirmation
     console.log('💰 Pricing data confirmed:', pricingData);
+    console.log('📦 Serial numbers to include:', tempSerialNumberData);
     
-    try {
-      setIsReceiving(true);
-      
-      // First, update the variant prices in the database
-      let priceUpdateCount = 0;
-      for (const [itemId, pricing] of pricingData.entries()) {
-        const item = purchaseOrder.items.find(i => i.id === itemId);
-        if (item && item.variantId) {
-          try {
-            console.log(`💰 Updating variant ${item.variantId} with selling price: ${pricing.selling_price}`);
-            
-            const { error: variantError } = await supabase
-              .from('lats_product_variants')
-              .update({
-                selling_price: pricing.selling_price,
-                cost_price: pricing.cost_price,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', item.variantId);
-            
-            if (variantError) {
-              console.error('Error updating variant price:', variantError);
-              toast.error(`Failed to update price for ${item.product?.name || 'item'}`);
-            } else {
-              console.log(`✅ Variant ${item.variantId} price updated successfully`);
-              priceUpdateCount++;
-            }
-          } catch (error) {
-            console.error('Error updating variant:', error);
-            toast.error(`Error updating variant prices`);
-          }
-        }
-      }
-      
-      console.log(`💰 Updated ${priceUpdateCount} variant prices`);
-      
-      // Small delay to ensure database commits
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Now proceed with receiving the items
-      // Use the enhanced PurchaseOrderService for complete receive
-      console.log('📦 Calling PurchaseOrderService.completeReceive...');
-      const result = await PurchaseOrderService.completeReceive(
-        purchaseOrder.id,
-        currentUser.id,
-        'Complete receive of purchase order with pricing'
-      );
-      
-      console.log('📦 Receive result:', result);
-      
-      if (result.success) {
-        // Update inventory items with selling prices
+    setShowPricingModal(false);
+    
+    // Calculate total items being received
+    const totalItemsReceiving = tempSerialNumberData.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0);
+    const uniqueProducts = tempSerialNumberData.filter(item => item.receivedQuantity > 0).length;
+    
+    // Show confirmation dialog with "Add to Inventory" button
+    setConfirmAction({
+      title: '📦 Ready to Add to Inventory',
+      message: `You're about to add ${totalItemsReceiving} items (${uniqueProducts} products) to inventory with pricing${tempSerialNumberData.some(i => i.serialNumbers?.length > 0) ? ' and serial numbers' : ''}. Continue?`,
+      onConfirm: async () => {
         try {
-          const { data: inventoryItems, error: inventoryError } = await supabase
-            .from('inventory_items')
-            .select('id, variant_id')
-            .eq('purchase_order_id', purchaseOrder.id);
+          setIsReceiving(true);
+          setShowConfirmDialog(false);
           
-          if (!inventoryError && inventoryItems) {
-            for (const invItem of inventoryItems) {
-              const poItem = purchaseOrder.items.find(i => i.variantId === invItem.variant_id);
-              if (poItem) {
-                const pricing = pricingData.get(poItem.id);
-                if (pricing) {
-                  await supabase
-                    .from('inventory_items')
-                    .update({
-                      selling_price: pricing.selling_price,
-                      cost_price: pricing.cost_price,
-                      updated_at: new Date().toISOString()
-                    })
-                    .eq('id', invItem.id);
-                  
-                  console.log(`✅ Updated inventory item ${invItem.id} with selling price: ${pricing.selling_price}`);
+          // First, update the variant prices in the database
+          let priceUpdateCount = 0;
+          for (const [itemId, pricing] of pricingData.entries()) {
+            const item = purchaseOrder.items.find(i => i.id === itemId);
+            if (item && item.variantId) {
+              try {
+                console.log(`💰 Updating variant ${item.variantId} with selling price: ${pricing.selling_price}`);
+                
+                const { error: variantError } = await supabase
+                  .from('lats_product_variants')
+                  .update({
+                    selling_price: pricing.selling_price,
+                    cost_price: pricing.cost_price,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', item.variantId);
+                
+                if (variantError) {
+                  console.error('Error updating variant price:', variantError);
+                  toast.error(`Failed to update price for ${item.product?.name || 'item'}`);
+                } else {
+                  console.log(`✅ Variant ${item.variantId} price updated successfully`);
+                  priceUpdateCount++;
                 }
+              } catch (error) {
+                console.error('Error updating variant:', error);
+                toast.error(`Error updating variant prices`);
               }
             }
           }
-        } catch (error) {
-          console.error('Error updating inventory item prices:', error);
-        }
-        
-        toast.success(`Purchase order received successfully with prices set!`);
-        if (result.summary) {
-          console.log('Receive summary:', result.summary);
           
-          // Show detailed summary in toast
-          const summary = result.summary;
-          toast.success(
-            `Received: ${summary.total_received || 0}/${summary.total_ordered || 0} items (${summary.percent_received || 0}% complete)`,
-            { duration: 5000 }
+          console.log(`💰 Updated ${priceUpdateCount} variant prices`);
+          
+          // If serial numbers were provided, save them first
+          if (tempSerialNumberData.length > 0) {
+            console.log('📦 Saving serial numbers...');
+            const serialResult = await PurchaseOrderService.updateReceivedQuantities(
+              purchaseOrder.id,
+              tempSerialNumberData,
+              currentUser.id
+            );
+            
+            if (serialResult.success) {
+              toast.success('Serial numbers saved!');
+            }
+          }
+          
+          // Small delay to ensure database commits
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Calculate what we're receiving
+          const receivingQuantities = new Map<string, number>();
+          tempSerialNumberData.forEach(item => {
+            receivingQuantities.set(item.id, item.receivedQuantity);
+          });
+          
+          // Check if this is a full or partial receive
+          let allItemsFullyReceived = true;
+          let totalOrdered = 0;
+          let totalReceiving = 0;
+          let totalAlreadyReceived = 0;
+          
+          for (const item of purchaseOrder.items) {
+            const ordered = item.quantity;
+            const alreadyReceived = item.receivedQuantity || 0;
+            const nowReceiving = receivingQuantities.get(item.id) || 0;
+            const willHaveReceived = alreadyReceived + nowReceiving;
+            
+            totalOrdered += ordered;
+            totalReceiving += nowReceiving;
+            totalAlreadyReceived += alreadyReceived;
+            
+            if (willHaveReceived < ordered) {
+              allItemsFullyReceived = false;
+            }
+          }
+          
+          const isPartialReceive = receiveMode === 'partial' && !allItemsFullyReceived;
+          
+          console.log('📊 Receiving stats:', {
+            mode: receiveMode,
+            totalOrdered,
+            totalAlreadyReceived,
+            totalReceiving,
+            totalAfterReceiving: totalAlreadyReceived + totalReceiving,
+            allItemsFullyReceived,
+            isPartialReceive
+          });
+          
+          // Now proceed with receiving the items
+          console.log(isPartialReceive ? '📦 Processing partial receive...' : '📦 Processing full/final receive...');
+          const result = await PurchaseOrderService.completeReceive(
+            purchaseOrder.id,
+            currentUser.id,
+            isPartialReceive 
+              ? `Partial receive: ${totalReceiving} of ${totalOrdered} items`
+              : 'Complete receive of purchase order with pricing and serial numbers'
           );
-        }
-        
-        // Reload purchase order data
-        await loadPurchaseOrder();
-        
-        // Refresh received items tab if it's currently active
-        if (activeTab === 'received') {
-          console.log('🔄 Refreshing received items tab after receive operation');
-          await handleRefreshReceivedItems();
-        }
-        
-        // Switch to received tab to show the results with force refresh
-        await handleTabChange('received', true);
-        console.log('📋 Switched to received tab to show received items');
-        
-      } else {
-        console.error('❌ Receive failed:', result);
-        toast.error(`Receive failed: ${result.message || 'Unknown error'}`);
-        
-        // If the error suggests a status issue, provide guidance
-        if (result.message && result.message.includes('status')) {
-          toast.error(
-            `Current status: ${purchaseOrder.status}. Try changing status to 'shipped' first.`,
-            { duration: 6000 }
-          );
+          
+          console.log('📦 Receive result:', result);
+          
+          if (result.success) {
+            // Update inventory items with selling prices
+            try {
+              const { data: inventoryItems, error: inventoryError } = await supabase
+                .from('inventory_items')
+                .select('id, variant_id')
+                .eq('purchase_order_id', purchaseOrder.id);
+              
+              if (!inventoryError && inventoryItems) {
+                for (const invItem of inventoryItems) {
+                  const poItem = purchaseOrder.items.find(i => i.variantId === invItem.variant_id);
+                  if (poItem) {
+                    const pricing = pricingData.get(poItem.id);
+                    if (pricing) {
+                      await supabase
+                        .from('inventory_items')
+                        .update({
+                          selling_price: pricing.selling_price,
+                          cost_price: pricing.cost_price,
+                          status: 'available', // Change status from 'pending_pricing' to 'available'
+                          updated_at: new Date().toISOString()
+                        })
+                        .eq('id', invItem.id);
+                      
+                      console.log(`✅ Updated inventory item ${invItem.id} with selling price: ${pricing.selling_price} and status: available`);
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error('Error updating inventory item prices:', error);
+            }
+            
+            // Check result from database function - it already updated the status
+            const dbStatus = result.data?.new_status;
+            const dbIsComplete = result.data?.is_complete;
+            
+            console.log('📊 Database result:', {
+              status: dbStatus,
+              isComplete: dbIsComplete,
+              totalReceived: result.data?.total_received,
+              totalOrdered: result.data?.total_ordered
+            });
+            
+            // Show appropriate message based on completion
+            if (dbIsComplete || allItemsFullyReceived) {
+              toast.success(`🎉 All items received! Purchase order complete!`, { duration: 6000 });
+            } else {
+              const remaining = totalOrdered - (totalAlreadyReceived + totalReceiving);
+              toast.success(`✅ Items added to inventory! ${remaining} items remaining to receive.`, { duration: 5000 });
+            }
+            
+            if (result.summary) {
+              console.log('Receive summary:', result.summary);
+              
+              // Show detailed summary in toast
+              const summary = result.summary;
+              toast.success(
+                `Received: ${summary.total_received || 0}/${summary.total_ordered || 0} items (${summary.percent_received || 0}% complete)`,
+                { duration: 5000 }
+              );
+            }
+            
+            // Clear temp serial number data
+            setTempSerialNumberData([]);
+            
+            // Reload purchase order data to get updated quantities
+            await loadPurchaseOrder();
+            
+            // Refresh received items tab if it's currently active
+            if (activeTab === 'received') {
+              console.log('🔄 Refreshing received items tab after receive operation');
+              await handleRefreshReceivedItems();
+            }
+            
+            // Switch to received tab to show the results with force refresh
+            await handleTabChange('received', true);
+            console.log('📋 Switched to received tab to show received items');
+            
+          } else {
+            console.error('❌ Receive failed:', result);
+            toast.error(`Receive failed: ${result.message || 'Unknown error'}`);
+            
+            // If the error suggests a status issue, provide guidance
+            if (result.message && result.message.includes('status')) {
+              toast.error(
+                `Current status: ${purchaseOrder.status}. Try changing status to 'shipped' first.`,
+                { duration: 6000 }
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Receive error:', error);
+          toast.error(`Failed to receive purchase order: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        } finally {
+          setIsReceiving(false);
         }
       }
-    } catch (error) {
-      console.error('Receive error:', error);
-      toast.error(`Failed to receive purchase order: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsReceiving(false);
-      setShowPricingModal(false);
-    }
+    });
+    
+    // Show the confirmation dialog
+    setShowConfirmDialog(true);
   };
 
   const handleCompleteOrder = async () => {
@@ -1893,46 +2051,20 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const handleSerialNumberReceive = async (receivedItems: any[]) => {
     if (!purchaseOrder || !currentUser) return;
     
-    try {
-      setIsSaving(true);
-      const result = await PurchaseOrderService.updateReceivedQuantities(
-        purchaseOrder.id,
-        receivedItems,
-        currentUser?.id || ''
-      );
-      
-      if (result.success) {
-        // Update order status to partially_received
-        const statusSuccess = await PurchaseOrderService.updateOrderStatus(
-          purchaseOrder.id,
-          'partial_received',
-          currentUser?.id || ''
-        );
-        
-        if (statusSuccess) {
-          toast.success(`Stock received with serial numbers: ${result.message}`);
-          await loadPurchaseOrder(); // Reload to get updated data
-          
-          // Refresh received items tab if it's currently active
-          if (activeTab === 'received') {
-            console.log('🔄 Refreshing received items tab after serial number receive operation');
-            await handleRefreshReceivedItems();
-          }
-          
-          setShowSerialNumberReceiveModal(false);
-        } else {
-          toast.error('Items updated but failed to update order status');
-        }
-      } else {
-        toast.error(`Serial number receive failed: ${result.message}`);
-      }
-    } catch (error) {
-      console.error('Serial number receive error:', error);
-      toast.error('Failed to process serial number receive');
-    } finally {
-      setIsSaving(false);
-    }
+    // Step 2 → Step 3: Store serial number data temporarily and go to Pricing Modal
+    console.log('📦 Serial numbers captured:', receivedItems);
+    setTempSerialNumberData(receivedItems);
+    
+    setShowSerialNumberReceiveModal(false);
+    toast.success('Serial numbers saved! Now set pricing...');
+    
+    // Open pricing modal after a short delay
+    setTimeout(() => {
+      setShowPricingModal(true);
+    }, 300);
   };
+
+
 
 
   const handleSendMessage = async (message: string) => {
@@ -3145,18 +3277,30 @@ TERMS AND CONDITIONS:
                             </>
                           )}
 
+                          {/* PENDING PRICING - Set prices for received items and complete order */}
                           {/* PARTIAL RECEIVED - Continue receiving */}
-                          {purchaseOrder.status === 'partial_received' && purchaseOrder.paymentStatus === 'paid' && (
-                            <button
-                              onClick={() => setShowConsolidatedReceiveModal(true)}
-                              disabled={isReceiving}
-                              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium shadow-lg shadow-blue-600/20"
-                              aria-label="Continue receiving items"
-                            >
-                              <Package className="w-4 h-4" />
-                              {isReceiving ? 'Receiving...' : 'Continue Receiving'}
-                            </button>
-                          )}
+                          {(() => {
+                            // Only show if there are items left to receive
+                            const hasItemsToReceive = purchaseOrder.items?.some(item => {
+                              const received = item.receivedQuantity || 0;
+                              const ordered = item.quantity || 0;
+                              return received < ordered;
+                            }) || false;
+                            
+                            return purchaseOrder.status === 'partial_received' && 
+                                   purchaseOrder.paymentStatus === 'paid' && 
+                                   hasItemsToReceive && (
+                              <button
+                                onClick={() => setShowConsolidatedReceiveModal(true)}
+                                disabled={isReceiving}
+                                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white rounded-lg transition-colors font-medium shadow-lg shadow-blue-600/20"
+                                aria-label="Continue receiving items"
+                              >
+                                <Package className="w-4 h-4" />
+                                {isReceiving ? 'Receiving...' : 'Continue Receiving'}
+                              </button>
+                            );
+                          })()}
 
                           {/* RECEIVED - Complete order (Quality Check is optional during receive) */}
                           {purchaseOrder.status === 'received' && (
@@ -5415,6 +5559,7 @@ TERMS AND CONDITIONS:
             purchaseOrder={purchaseOrder as any}
             onConfirm={handleSerialNumberReceive}
             isLoading={isSaving}
+            mode={receiveMode}
           />
         )}
 
@@ -5428,6 +5573,8 @@ TERMS AND CONDITIONS:
             isLoading={isReceiving}
           />
         )}
+
+
 
         {/* Status Update Modal */}
         {showStatusModal && (
@@ -5576,9 +5723,9 @@ TERMS AND CONDITIONS:
         {/* Confirmation Dialog */}
         {showConfirmDialog && confirmAction && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
               <div className="flex items-center gap-2 mb-4">
-                <AlertCircle className="w-5 h-5 text-orange-600" />
+                <Package className="w-6 h-6 text-green-600" />
                 <h3 className="text-lg font-semibold text-gray-900">{confirmAction.title}</h3>
               </div>
               
@@ -5590,19 +5737,25 @@ TERMS AND CONDITIONS:
                     setShowConfirmDialog(false);
                     setConfirmAction(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={() => {
                     confirmAction.onConfirm();
-                    setShowConfirmDialog(false);
-                    setConfirmAction(null);
                   }}
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+                  disabled={isReceiving}
+                  className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium shadow-lg shadow-green-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Confirm
+                  {isReceiving ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Adding...
+                    </span>
+                  ) : (
+                    '✅ Add to Inventory'
+                  )}
                 </button>
               </div>
             </div>
@@ -5625,17 +5778,6 @@ TERMS AND CONDITIONS:
           </div>
         )}
 
-        {/* Approval Modal */}
-        {showApprovalModal && (
-          <ApprovalModal
-            isOpen={showApprovalModal}
-            onClose={() => setShowApprovalModal(false)}
-            purchaseOrder={purchaseOrder}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onSubmitForApproval={handleSubmitForApproval}
-          />
-        )}
 
         {/* Add to Inventory Modal */}
         {showAddToInventoryModal && (
@@ -5747,14 +5889,14 @@ TERMS AND CONDITIONS:
             purchaseOrder={purchaseOrder}
             onReceiveFull={() => {
               setShowConsolidatedReceiveModal(false);
-              handleReceive();
+              setReceiveMode('full');
+              // Step 1 → Step 2: Go to Serial Number Modal
+              setShowSerialNumberReceiveModal(true);
             }}
             onReceivePartial={() => {
               setShowConsolidatedReceiveModal(false);
-              setShowPartialReceiveModal(true);
-            }}
-            onReceiveWithSerial={() => {
-              setShowConsolidatedReceiveModal(false);
+              setReceiveMode('partial');
+              // Step 1 → Step 2: Go to Serial Number Modal
               setShowSerialNumberReceiveModal(true);
             }}
           />

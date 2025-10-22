@@ -72,7 +72,7 @@ const MyAttendancePage: React.FC = () => {
       setEmployee(empData);
 
       // Load attendance records for this employee
-      const records = await employeeService.getEmployeeAttendanceRecords(empData.id);
+      const records = await employeeService.getAttendanceByEmployeeId(empData.id);
       setAttendanceRecords(records);
 
       // Get today's record

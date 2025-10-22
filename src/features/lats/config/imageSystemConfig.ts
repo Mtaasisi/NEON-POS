@@ -105,7 +105,7 @@ export const IMAGE_SYSTEM_CONFIG: ImageSystemConfig = {
     requireUserId: true,
     validateFileType: true,
     validateFileSize: true,
-    autoGenerateThumbnails: false // Currently using same URL for thumbnail
+    autoGenerateThumbnails: false // Manual thumbnail upload - user controls thumbnails
   },
   
   // UI settings - Current working UI behavior

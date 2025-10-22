@@ -342,13 +342,14 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
         supabase.from('purchase_order_payments').select('*').order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
         // Use customer_payments as device_payments (filtered for device payments)
-        supabase.from('customer_payments').select('*').filter('device_id', 'IS NOT NULL', null).order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
+        supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
         // Use customer_payments as repair_payments (filtered for repair context)
-        supabase.from('customer_payments').select('*').filter('device_id', 'IS NOT NULL', null).order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
+        supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
         // Additional comprehensive data queries with graceful error handling
         supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000).then(r => r.error ? { data: [], error: r.error } : r),
         supabase.from('finance_accounts').select('*').order('created_at', { ascending: false }).then(r => r.error ? { data: [], error: r.error } : r),
-        supabase.from('payment_providers').select('*').order('created_at', { ascending: false }).then(r => r.error ? { data: [], error: r.error } : r)
+        // Use finance_accounts as payment_providers fallback (payment_providers table doesn't exist yet)
+        supabase.from('finance_accounts').select('*').eq('is_payment_method', true).order('created_at', { ascending: false }).then(r => r.error ? { data: [], error: r.error } : r)
       ]);
 
       // Handle each result individually with comprehensive error handling

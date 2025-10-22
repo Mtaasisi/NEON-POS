@@ -436,7 +436,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                       playClickSound();
                       setStockFilter('all');
                     }}
-                    className={`px-3 py-2 text-sm transition-colors ${
+                    className={`px-3 py-1.5 text-sm transition-colors ${
                       stockFilter === 'all' 
                         ? 'bg-blue-600 text-white' 
                         : 'bg-white text-gray-600 hover:bg-gray-50'
@@ -449,7 +449,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                       playClickSound();
                       setStockFilter('in-stock');
                     }}
-                    className={`px-3 py-2 text-sm transition-colors ${
+                    className={`px-3 py-1.5 text-sm transition-colors ${
                       stockFilter === 'in-stock' 
                         ? 'bg-green-600 text-white' 
                         : 'bg-white text-gray-600 hover:bg-gray-50'
@@ -462,7 +462,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                       playClickSound();
                       setStockFilter('low-stock');
                     }}
-                    className={`px-3 py-2 text-sm transition-colors ${
+                    className={`px-3 py-1.5 text-sm transition-colors ${
                       stockFilter === 'low-stock' 
                         ? 'bg-orange-600 text-white' 
                         : 'bg-white text-gray-600 hover:bg-gray-50'
@@ -480,7 +480,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                         playClickSound();
                         onAddExternalProduct();
                       }}
-                      className="px-3 py-2 text-sm bg-green-600 text-white hover:bg-green-700 transition-colors"
+                      className="px-3 py-1.5 text-sm bg-green-600 text-white hover:bg-green-700 transition-colors"
                       title="Add Product"
                     >
                       <Package className="w-4 h-4" />
@@ -493,7 +493,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                         handleUnifiedSearch(searchQuery.trim());
                       }
                     }}
-                    className="px-3 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                     title="Scan"
                   >
                     <QrCode className="w-4 h-4" />
@@ -507,7 +507,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                       playClickSound();
                       setViewMode('grid');
                     }}
-                    className={`px-3 py-2 text-sm transition-colors ${
+                    className={`px-3 py-1.5 text-sm transition-colors ${
                       viewMode === 'grid'
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-gray-600 hover:bg-gray-50'
@@ -521,7 +521,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                       playClickSound();
                       setViewMode('list');
                     }}
-                    className={`px-3 py-2 text-sm transition-colors ${
+                    className={`px-3 py-1.5 text-sm transition-colors ${
                       viewMode === 'list'
                         ? 'bg-blue-600 text-white'
                         : 'bg-white text-gray-600 hover:bg-gray-50'

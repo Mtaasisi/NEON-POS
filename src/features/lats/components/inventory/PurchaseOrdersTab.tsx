@@ -523,18 +523,15 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
   };
 
   const getStatusColor = (status: string) => {
+    // Option B Workflow colors
     switch (status) {
       case 'draft': return 'bg-gray-500 text-white shadow-sm';
-      case 'pending_approval': return 'bg-yellow-500 text-white shadow-sm';
-      case 'approved': return 'bg-blue-500 text-white shadow-sm';
-      case 'sent': return 'bg-purple-500 text-white shadow-sm';
-      case 'confirmed': return 'bg-indigo-500 text-white shadow-sm';
-      case 'shipped': return 'bg-cyan-500 text-white shadow-sm';
+      case 'sent': return 'bg-blue-600 text-white shadow-sm';
       case 'partial_received': return 'bg-orange-500 text-white shadow-sm';
-      case 'received': return 'bg-sky-400 text-white shadow-sm';
+      case 'received': return 'bg-sky-500 text-white shadow-sm';
       case 'completed': return 'bg-green-600 text-white shadow-sm';
       case 'cancelled': return 'bg-red-500 text-white shadow-sm';
-      default: return 'bg-gray-500 text-white shadow-sm';
+      default: return 'bg-gray-400 text-white shadow-sm';
     }
   };
 

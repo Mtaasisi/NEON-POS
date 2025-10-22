@@ -129,12 +129,66 @@ export class EnhancedImageUploadService {
   }
 
   /**
+   * Convert PNG with transparent background to white background
+   */
+  private static async convertPngToWhiteBackground(file: File): Promise<File> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          // Create canvas with image dimensions
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+          
+          // Fill with white background
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw the image on top of white background
+          ctx.drawImage(img, 0, 0);
+          
+          // Convert canvas to blob
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error('Failed to convert canvas to blob'));
+              return;
+            }
+            
+            // Create a new file from the blob
+            const newFile = new File([blob], file.name, {
+              type: 'image/png',
+              lastModified: Date.now()
+            });
+            
+            resolve(newFile);
+          }, 'image/png', 0.95);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  /**
    * Upload a single image with enhanced features
    */
   static async uploadImage(
     file: File,
     productId: string,
-    userId: string,
+    userId: string | null,
     options: ImageUploadOptions = {}
   ): Promise<UploadResult> {
     try {
@@ -149,6 +203,19 @@ export class EnhancedImageUploadService {
         return { success: false, error: 'User ID is required' };
       }
 
+      // Convert PNG to white background if needed
+      let processedFile = file;
+      if (file.type === 'image/png') {
+        console.log('🎨 Converting PNG transparent background to white...');
+        try {
+          processedFile = await this.convertPngToWhiteBackground(file);
+          console.log('✅ PNG background converted to white successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to convert PNG background, using original file:', error);
+          // Continue with original file if conversion fails
+        }
+      }
+
       // Set default options
       const {
         bucket = 'product-images',
@@ -159,14 +226,14 @@ export class EnhancedImageUploadService {
         isPrimary = false
       } = options;
 
-      // Validate file
-      const validationResult = this.validateFile(file, maxFileSize, allowedTypes);
+      // Validate file (use processedFile for validation)
+      const validationResult = this.validateFile(processedFile, maxFileSize, allowedTypes);
       if (!validationResult.valid) {
         return { success: false, error: validationResult.error };
       }
 
       // Check authentication - FLEXIBLE for Neon direct mode
-      let authenticatedUserId = userId;
+      let authenticatedUserId: string | null = userId && userId !== 'system' ? userId : null;
       try {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         if (user && !authError) {
@@ -177,14 +244,15 @@ export class EnhancedImageUploadService {
           const storedUser = localStorage.getItem('user');
           if (storedUser) {
             const parsedUser = JSON.parse(storedUser);
-            authenticatedUserId = parsedUser.id || userId || 'system';
+            // Only use valid UUIDs, not string "system"
+            authenticatedUserId = parsedUser.id && parsedUser.id !== 'system' ? parsedUser.id : null;
             console.log('✅ Using localStorage user:', authenticatedUserId);
           } else {
-            console.log('✅ Using provided userId or system user');
+            console.log('✅ Using null for system user (no auth)');
           }
         }
       } catch (e) {
-        console.log('⚠️ Auth check failed, using provided userId or system');
+        console.log('⚠️ Auth check failed, using null for system user');
       }
 
       // Generate safe filename
@@ -196,8 +264,8 @@ export class EnhancedImageUploadService {
 
       console.log('📤 Uploading image:', {
         fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type,
+        fileSize: processedFile.size,
+        fileType: processedFile.type,
         bucket,
         path: filePath
       });
@@ -206,10 +274,10 @@ export class EnhancedImageUploadService {
       const uploadWithTimeout = async () => {
         const uploadPromise = supabase.storage
           .from(bucket)
-          .upload(filePath, file, {
+          .upload(filePath, processedFile, {
             cacheControl: '3600',
             upsert: false,
-            contentType: file.type
+            contentType: processedFile.type
           });
 
         // Create a timeout promise
@@ -238,14 +306,14 @@ export class EnhancedImageUploadService {
         if (productId.startsWith('temp-product-') || productId.startsWith('test-product-') || productId.startsWith('temp-sparepart-')) {
           console.log('🔄 Attempting local fallback for temporary product...');
           try {
-            const localImageUrl = URL.createObjectURL(file);
+            const localImageUrl = URL.createObjectURL(processedFile);
             const uploadedImage: UploadedImage = {
               id: `local-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`,
               url: localImageUrl,
               thumbnailUrl: localImageUrl,
               fileName: file.name,
-              fileSize: file.size,
-              mimeType: file.type,
+              fileSize: processedFile.size,
+              mimeType: processedFile.type,
               isPrimary: isPrimary,
               uploadedAt: new Date().toISOString()
             };
@@ -280,22 +348,22 @@ export class EnhancedImageUploadService {
         .getPublicUrl(filePath);
 
       // Get image dimensions if possible
-      const dimensions = await this.getImageDimensions(file);
+      const dimensions = await this.getImageDimensions(processedFile);
 
       // Generate compressed thumbnail if requested
       let thumbnailUrl: string | undefined;
-      if (generateThumbnail && file.type !== 'image/svg+xml') {
+      if (generateThumbnail && processedFile.type !== 'image/svg+xml') {
         try {
           console.log('🔄 Generating optimal thumbnail with recommended specifications...');
           
           // Generate optimal thumbnail according to recommended specs
           const optimalThumbnail = await ImageCompressionService.generateOptimalThumbnail(
-            file,
+            processedFile,
             'SMALL' // Use small size (150x150) for POS grids
           );
 
           // Log compression statistics
-          const stats = ImageCompressionService.getCompressionStats(file.size, optimalThumbnail.size);
+          const stats = ImageCompressionService.getCompressionStats(processedFile.size, optimalThumbnail.size);
           console.log('📊 Optimal thumbnail stats:', {
             original: stats.originalSize,
             compressed: stats.compressedSize,
@@ -333,8 +401,8 @@ export class EnhancedImageUploadService {
           url: urlData.publicUrl,
           thumbnailUrl: thumbnailUrl,
           fileName: file.name,
-          fileSize: file.size,
-          mimeType: file.type,
+          fileSize: processedFile.size,
+          mimeType: processedFile.type,
           width: dimensions?.width,
           height: dimensions?.height,
           isPrimary: isPrimary,
@@ -367,7 +435,7 @@ export class EnhancedImageUploadService {
           image_url: urlData.publicUrl,
           thumbnail_url: thumbnailUrl,
           file_name: file.name,
-          file_size: file.size,
+          file_size: processedFile.size,
           is_primary: isPrimary,
           uploaded_by: userId
         })
@@ -392,8 +460,8 @@ export class EnhancedImageUploadService {
         url: urlData.publicUrl,
         thumbnailUrl: thumbnailUrl,
         fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
+        fileSize: processedFile.size,
+        mimeType: processedFile.type,
         width: dimensions?.width,
         height: dimensions?.height,
         isPrimary: isPrimary,
@@ -422,7 +490,7 @@ export class EnhancedImageUploadService {
   static async uploadMultipleImages(
     files: File[],
     productId: string,
-    userId: string,
+    userId: string | null,
     options: ImageUploadOptions = {}
   ): Promise<UploadResult[]> {
     const results: UploadResult[] = [];

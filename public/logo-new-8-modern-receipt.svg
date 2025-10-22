@@ -1,0 +1,26 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="receipt1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#14b8a6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d9488;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#receipt1)"/>
+  
+  <!-- Modern receipt icon - super clean -->
+  <g>
+    <!-- Receipt body -->
+    <rect x="75" y="55" width="50" height="90" rx="6" fill="white"/>
+    
+    <!-- Lines -->
+    <line x1="83" y1="70" x2="117" y2="70" stroke="#14b8a6" stroke-width="3" stroke-linecap="round"/>
+    <line x1="83" y1="82" x2="110" y2="82" stroke="#14b8a6" stroke-width="3" stroke-linecap="round"/>
+    <line x1="83" y1="94" x2="115" y2="94" stroke="#14b8a6" stroke-width="3" stroke-linecap="round"/>
+    <line x1="83" y1="106" x2="108" y2="106" stroke="#14b8a6" stroke-width="3" stroke-linecap="round"/>
+    
+    <!-- Bold total -->
+    <line x1="83" y1="125" x2="117" y2="125" stroke="#14b8a6" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>
+

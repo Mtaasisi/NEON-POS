@@ -158,6 +158,13 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                   <span className="text-blue-600">{item.variantName}</span>
                 </div>
               )}
+              {/* IMEI Selection Status */}
+              {item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0 ? (
+                <div className="flex items-center gap-1 text-xs text-green-600 mt-1">
+                  <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                  <span>IMEI: {item.selectedSerialNumbers.map((sn: any) => sn.imei || sn.serial_number).join(', ')}</span>
+                </div>
+              ) : null}
             </div>
           </div>
           
@@ -245,6 +252,13 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
             {item.variantName !== 'Default' && (
               <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
                 <span className="text-blue-600 font-medium">{item.variantName}</span>
+              </div>
+            )}
+            {/* IMEI Selection Status */}
+            {item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0 && (
+              <div className="flex items-center gap-1 text-xs text-green-600 mt-1 font-medium">
+                <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                <span>IMEI: {item.selectedSerialNumbers.map((sn: any) => sn.imei || sn.serial_number).join(', ')}</span>
               </div>
             )}
             {/* Show specifications if available */}

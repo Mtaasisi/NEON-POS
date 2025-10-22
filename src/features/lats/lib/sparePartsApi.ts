@@ -341,6 +341,38 @@ export const getSpareParts = async (
   }
 };
 
+// Get all spare parts (for Trade-In Calculator and other components)
+export const getAllSpareParts = async (): Promise<{ success: boolean; data: SparePart[] | null; message: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('lats_spare_parts')
+      .select(`
+        *,
+        category:lats_categories!category_id(name),
+        variants:lats_spare_part_variants!spare_part_id(*)
+      `)
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return {
+      success: true,
+      data: data || [],
+      message: 'Spare parts retrieved successfully'
+    };
+  } catch (error) {
+    console.error('Error fetching all spare parts:', error);
+    return {
+      success: false,
+      data: null,
+      message: error instanceof Error ? error.message : 'Failed to fetch spare parts'
+    };
+  }
+};
+
 // Get a single spare part by ID
 export const getSparePart = async (id: string): Promise<SparePartResponse> => {
   try {

@@ -172,7 +172,7 @@ export class PurchaseOrderService {
       // Optimized query: select only needed fields for faster response
       const { data, error } = await supabase
         .from('purchase_order_payments')
-        .select('id, purchase_order_id, payment_method, method, amount, currency, status, reference, payment_date, created_at')
+        .select('id, purchase_order_id, payment_method, amount, currency, status, reference, payment_date, created_at')
         .eq('purchase_order_id', purchaseOrderId)
         .order('created_at', { ascending: false })
         .limit(100); // Reasonable limit for performance
@@ -186,7 +186,7 @@ export class PurchaseOrderService {
       return (data || []).map((payment: any) => ({
         id: payment.id,
         purchaseOrderId: payment.purchase_order_id,
-        method: payment.payment_method || payment.method,
+        method: payment.payment_method,
         amount: payment.amount,
         currency: payment.currency,
         status: payment.status,
@@ -202,12 +202,12 @@ export class PurchaseOrderService {
         .from('purchase_order_payments')
         .insert({
           purchase_order_id: payment.purchaseOrderId,
-          method: payment.method,
+          payment_method: payment.method,
           amount: payment.amount,
           currency: payment.currency,
           status: payment.status,
           reference: payment.reference,
-          timestamp: new Date().toISOString()
+          payment_date: new Date().toISOString()
         });
 
       if (error) {
@@ -365,16 +365,12 @@ export class PurchaseOrderService {
       console.log(`🔍 Processing purchase order ID: "${trimmedId}" (length: ${trimmedId.length})`);
 
       return this.retryOperation(
-        // Main operation with joins
+        // FIXED: Main operation without PostgREST syntax
         async () => {
-          console.log('🔄 Attempting main query with product/variant joins...');
-          const { data, error } = await supabase
+          console.log('🔄 Attempting main query without PostgREST joins...');
+          const { data: items, error } = await supabase
             .from('lats_purchase_order_items')
-            .select(`
-              *,
-              product:lats_products!product_id(id, name, sku, description),
-              variant:lats_product_variants!variant_id(id, name, sku)
-            `)
+            .select('*')
             .eq('purchase_order_id', trimmedId);
 
           if (error) {
@@ -392,16 +388,40 @@ export class PurchaseOrderService {
             throw error;
           }
 
-          console.log(`✅ Main query succeeded, found ${data?.length || 0} items`);
+          console.log(`✅ Main query succeeded, found ${items?.length || 0} items`);
+
+          if (!items || items.length === 0) {
+            return [];
+          }
+
+          // Fetch related data separately
+          const productIds = items.map(item => item.product_id).filter(Boolean);
+          const variantIds = items.map(item => item.variant_id).filter(Boolean);
+
+          const [productsResult, variantsResult] = await Promise.all([
+            productIds.length > 0
+              ? supabase.from('lats_products').select('id, name, sku, description').in('id', productIds)
+              : Promise.resolve({ data: [], error: null }),
+            variantIds.length > 0
+              ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds)
+              : Promise.resolve({ data: [], error: null })
+          ]);
+
+          // Map data for easy lookup
+          const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
+          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
           
           // Map the data to ensure proper structure and validate product IDs
-          const mappedData = (data || []).map((item, index) => {
+          const mappedData = items.map((item, index) => {
+            const product = item.product_id ? productsMap.get(item.product_id) : null;
+            const variant = item.variant_id ? variantsMap.get(item.variant_id) : null;
+
             console.log(`🔍 Processing item ${index + 1}:`, {
               itemId: item.id,
               productId: item.product_id,
               variantId: item.variant_id,
-              hasProduct: !!item.product,
-              hasVariant: !!item.variant
+              hasProduct: !!product,
+              hasVariant: !!variant
             });
 
             // Validate product ID exists
@@ -428,11 +448,13 @@ export class PurchaseOrderService {
 
             return {
               ...item,
-              name: item.product?.name || item.variant?.name || 'Unknown Product',
-              sku: item.product?.sku || item.variant?.sku || 'N/A',
-              description: item.product?.description || '',
-              productName: item.product?.name || 'Unknown Product',
-              variantName: item.variant?.name || 'Default Variant'
+              product,
+              variant,
+              name: product?.name || variant?.name || 'Unknown Product',
+              sku: product?.sku || variant?.sku || 'N/A',
+              description: product?.description || '',
+              productName: product?.name || 'Unknown Product',
+              variantName: variant?.name || 'Default Variant'
             };
           });
 
@@ -1022,49 +1044,44 @@ export class PurchaseOrderService {
       
       const allItems: any[] = [];
 
-      // Get inventory items (items with serial numbers) with retry
+      // FIXED: Get inventory items without PostgREST syntax
       const inventoryItems = await this.retryOperation(
         async () => {
-          const { data, error } = await supabase
+          const { data: items, error } = await supabase
             .from('inventory_items')
-            .select(`
-              id,
-              product_id,
-              variant_id,
-              serial_number,
-              item_number,
-              imei,
-              mac_address,
-              barcode,
-              status,
-              location,
-              shelf,
-              bin,
-              purchase_date,
-              warranty_start,
-              warranty_end,
-              cost_price,
-              selling_price,
-              notes,
-              metadata,
-              created_at,
-              product:lats_products!product_id(
-                id,
-                name,
-                sku,
-                category_id
-              ),
-              variant:lats_product_variants!variant_id(
-                id,
-                name,
-                sku
-              )
-            `)
+            .select('id, product_id, variant_id, serial_number, item_number, imei, mac_address, barcode, status, location, shelf, bin, purchase_date, warranty_start, warranty_end, cost_price, selling_price, notes, metadata, created_at')
             .contains('metadata', { purchase_order_id: purchaseOrderId })
             .order('created_at', { ascending: false });
           
           if (error) throw error;
-          return data;
+
+          if (!items || items.length === 0) {
+            return [];
+          }
+
+          // Fetch related data separately
+          const productIds = items.map(item => item.product_id).filter(Boolean);
+          const variantIds = items.map(item => item.variant_id).filter(Boolean);
+
+          const [productsResult, variantsResult] = await Promise.all([
+            productIds.length > 0
+              ? supabase.from('lats_products').select('id, name, sku, category_id').in('id', productIds)
+              : Promise.resolve({ data: [], error: null }),
+            variantIds.length > 0
+              ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds)
+              : Promise.resolve({ data: [], error: null })
+          ]);
+
+          // Map data for easy lookup
+          const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
+          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
+
+          // Combine data
+          return items.map(item => ({
+            ...item,
+            product: item.product_id ? productsMap.get(item.product_id) : null,
+            variant: item.variant_id ? variantsMap.get(item.variant_id) : null
+          }));
         },
         'get_inventory_items'
       );
@@ -1107,38 +1124,45 @@ export class PurchaseOrderService {
         allItems.push(...formattedInventoryItems);
       }
 
-      // Get inventory adjustments (items without serial numbers) with retry
+      // FIXED: Get inventory adjustments without PostgREST syntax
       const adjustments = await this.retryOperation(
         async () => {
-          const { data, error } = await supabase
+          const { data: adjustmentItems, error } = await supabase
             .from('lats_inventory_adjustments')
-            .select(`
-              id,
-              product_id,
-              variant_id,
-              quantity,
-              cost_price,
-              reason,
-              adjustment_type,
-              reference_id,
-              created_at,
-              product:lats_products!product_id(
-                id,
-                name,
-                sku
-              ),
-              variant:lats_product_variants!variant_id(
-                id,
-                name,
-                sku
-              )
-            `)
+            .select('id, product_id, variant_id, quantity, cost_price, reason, adjustment_type, reference_id, created_at')
             .eq('adjustment_type', 'receive')
             .like('reason', `%purchase order ${purchaseOrderId}%`)
             .order('created_at', { ascending: false });
           
           if (error) throw error;
-          return data;
+
+          if (!adjustmentItems || adjustmentItems.length === 0) {
+            return [];
+          }
+
+          // Fetch related data separately
+          const productIds = adjustmentItems.map(item => item.product_id).filter(Boolean);
+          const variantIds = adjustmentItems.map(item => item.variant_id).filter(Boolean);
+
+          const [productsResult, variantsResult] = await Promise.all([
+            productIds.length > 0
+              ? supabase.from('lats_products').select('id, name, sku').in('id', productIds)
+              : Promise.resolve({ data: [], error: null }),
+            variantIds.length > 0
+              ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds)
+              : Promise.resolve({ data: [], error: null })
+          ]);
+
+          // Map data for easy lookup
+          const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
+          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
+
+          // Combine data
+          return adjustmentItems.map(item => ({
+            ...item,
+            product: item.product_id ? productsMap.get(item.product_id) : null,
+            variant: item.variant_id ? variantsMap.get(item.variant_id) : null
+          }));
         },
         'get_inventory_adjustments'
       );
@@ -1443,54 +1467,44 @@ export class PurchaseOrderService {
           continue;
         }
 
-        // Create inventory adjustment
-        const { error: adjustmentError } = await supabase
-          .from('lats_inventory_adjustments')
-          .insert({
+        // CHANGED: Create inventory items (without serial numbers) with pending_pricing status
+        // This ensures all received items go through the pricing workflow
+        const inventoryItemsToCreate = [];
+        for (let i = 0; i < receivedItem.receivedQuantity; i++) {
+          inventoryItemsToCreate.push({
             product_id: orderItem.product_id,
             variant_id: orderItem.variant_id,
-            adjustment_type: 'receive',
-            quantity: receivedItem.receivedQuantity,
-            cost_price: orderItem.unit_cost,
-            reason: `Partial receive from purchase order ${purchaseOrderId}`,
-            reference_id: receivedItem.id,
-            processed_by: userId
+            status: 'pending_pricing' as const,
+            purchase_order_id: purchaseOrderId,
+            cost_price: orderItem.unit_cost || 0,
+            selling_price: null,
+            notes: `Received from purchase order ${purchaseOrderId} - bulk item ${i + 1}`,
+            metadata: {
+              purchase_order_id: purchaseOrderId,
+              purchase_order_item_id: receivedItem.id,
+              received_by: userId,
+              received_at: new Date().toISOString(),
+              bulk_item: true,
+              bulk_index: i + 1
+            }
           });
+        }
 
-        if (adjustmentError) {
-          console.error(`Error creating inventory adjustment for order item ${receivedItem.id}:`, adjustmentError);
+        // Insert all inventory items for this product
+        const { error: insertError } = await supabase
+          .from('inventory_items')
+          .insert(inventoryItemsToCreate);
+
+        if (insertError) {
+          console.error(`Error creating inventory items for order item ${receivedItem.id}:`, insertError);
           continue;
         }
 
-        // Update product variant stock quantity
-        if (orderItem.variant_id) {
-          // First get current quantity
-          const { data: currentVariant, error: fetchError } = await supabase
-            .from('lats_product_variants')
-            .select('quantity')
-            .eq('id', orderItem.variant_id)
-            .single();
-
-          if (fetchError) {
-            console.error(`Error fetching current stock for variant ${orderItem.variant_id}:`, fetchError);
-          } else {
-            const newQuantity = (currentVariant?.quantity || 0) + receivedItem.receivedQuantity;
-            
-            const { error: stockError } = await supabase
-              .from('lats_product_variants')
-              .update({
-                quantity: newQuantity,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', orderItem.variant_id);
-
-            if (stockError) {
-              console.error(`Error updating stock for variant ${orderItem.variant_id}:`, stockError);
-            }
-          }
-        }
-
-        console.log(`✅ Created inventory adjustment for ${receivedItem.receivedQuantity} units of order item ${receivedItem.id}`);
+        // NOTE: Stock quantity update is now handled when items transition from pending_pricing to available
+        // This ensures items are only counted in stock after pricing is set
+        // The sync_variant_quantity trigger will handle the update automatically
+        
+        console.log(`✅ Created ${receivedItem.receivedQuantity} inventory items (pending pricing) for order item ${receivedItem.id}`);
       }
     } catch (error) {
       console.error('Error creating inventory adjustments:', error);
@@ -1547,7 +1561,8 @@ export class PurchaseOrderService {
           imei: serial.imei || null,
           mac_address: serial.mac_address || null,
           barcode: serial.barcode || null,
-          status: 'available' as const,
+          status: 'pending_pricing' as const, // Changed from 'available' to 'pending_pricing'
+          purchase_order_id: purchaseOrderId, // Add PO reference for querying
           location: serial.location || null,
           warranty_start: serial.warranty_start || null,
           warranty_end: serial.warranty_end || null,
@@ -1592,10 +1607,10 @@ export class PurchaseOrderService {
           inventory_item_id: insertedItems[index]?.id,
           movement_type: 'received' as const,
           from_status: null,
-          to_status: 'available',
+          to_status: 'pending_pricing', // Changed to match new status
           reference_id: purchaseOrderId,
           reference_type: 'purchase_order',
-          notes: `Received from purchase order ${purchaseOrderId}`,
+          notes: `Received from purchase order ${purchaseOrderId} - pending pricing`,
           created_by: userId
         })).filter(movement => movement.inventory_item_id);
 
@@ -1897,6 +1912,146 @@ export class PurchaseOrderService {
         success: false, 
         message: `Failed to approve purchase order: ${error instanceof Error ? error.message : 'Unknown error'}` 
       };
+    }
+  }
+
+  // Get received items that need pricing (status = 'pending_pricing')
+  // FIXED: Get received items for pricing without PostgREST syntax
+  static async getReceivedItemsForPricing(
+    purchaseOrderId: string
+  ): Promise<Array<{
+    inventory_item_id: string;
+    product_name: string;
+    variant_name?: string;
+    serial_number: string;
+    imei?: string;
+    cost_price: number;
+    selling_price?: number;
+    location?: string;
+  }>> {
+    try {
+      const { data: items, error } = await supabase
+        .from('inventory_items')
+        .select('id, product_id, variant_id, serial_number, imei, cost_price, selling_price, location')
+        .eq('purchase_order_id', purchaseOrderId)
+        .eq('status', 'pending_pricing');
+
+      if (error) {
+        console.error('Error fetching items for pricing:', error);
+        return [];
+      }
+
+      if (!items || items.length === 0) {
+        return [];
+      }
+
+      // Fetch related data separately
+      const productIds = items.map(item => item.product_id).filter(Boolean);
+      const variantIds = items.map(item => item.variant_id).filter(Boolean);
+
+      const [productsResult, variantsResult] = await Promise.all([
+        productIds.length > 0
+          ? supabase.from('lats_products').select('id, name').in('id', productIds)
+          : Promise.resolve({ data: [], error: null }),
+        variantIds.length > 0
+          ? supabase.from('lats_product_variants').select('id, name').in('id', variantIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      // Map data for easy lookup
+      const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
+      const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
+
+      return items.map((item: any) => ({
+        inventory_item_id: item.id,
+        product_name: item.product_id && productsMap.get(item.product_id)?.name || 'Unknown Product',
+        variant_name: item.variant_id && variantsMap.get(item.variant_id)?.name || undefined,
+        serial_number: item.serial_number || '',
+        imei: item.imei,
+        cost_price: item.cost_price || 0,
+        selling_price: item.selling_price,
+        location: item.location
+      }));
+    } catch (error) {
+      console.error('Error in getReceivedItemsForPricing:', error);
+      return [];
+    }
+  }
+
+  // Update prices for received items and mark them as available
+  static async updateItemsPrices(
+    pricedItems: Array<{
+      inventory_item_id: string;
+      selling_price: number;
+    }>,
+    userId: string
+  ): Promise<{ success: boolean; message: string; updatedItems: number }> {
+    try {
+      let updatedCount = 0;
+
+      for (const item of pricedItems) {
+        const { error } = await supabase
+          .from('inventory_items')
+          .update({
+            selling_price: item.selling_price,
+            status: 'available', // Change status from 'pending_pricing' to 'available'
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', item.inventory_item_id);
+
+        if (error) {
+          console.error(`Error updating item ${item.inventory_item_id}:`, error);
+          continue;
+        }
+
+        updatedCount++;
+      }
+
+      if (updatedCount === 0) {
+        return {
+          success: false,
+          message: 'Failed to update any items',
+          updatedItems: 0
+        };
+      }
+
+      // Emit event to refresh inventory
+      window.dispatchEvent(new CustomEvent('inventory-updated'));
+
+      return {
+        success: true,
+        message: `Successfully updated ${updatedCount} item(s) with prices`,
+        updatedItems: updatedCount
+      };
+    } catch (error) {
+      console.error('Error in updateItemsPrices:', error);
+      return {
+        success: false,
+        message: `Failed to update prices: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        updatedItems: 0
+      };
+    }
+  }
+
+  // Check if purchase order has items pending pricing
+  static async hasPendingPricingItems(purchaseOrderId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_items')
+        .select('id')
+        .eq('purchase_order_id', purchaseOrderId)
+        .eq('status', 'pending_pricing')
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking pending pricing items:', error);
+        return false;
+      }
+
+      return (data && data.length > 0) || false;
+    } catch (error) {
+      console.error('Error in hasPendingPricingItems:', error);
+      return false;
     }
   }
 

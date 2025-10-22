@@ -1,0 +1,37 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="growthCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#growthCircle)"/>
+  
+  <!-- Circle with D and growth elements -->
+  <g>
+    <!-- Main circle -->
+    <circle cx="100" cy="100" r="50" fill="white"/>
+    
+    <!-- D -->
+    <path d="M 78 78 L 78 122 L 102 122 C 115 122 125 112 125 100 C 125 88 115 78 102 78 Z" 
+          fill="url(#growthCircle)"/>
+    
+    <!-- Growth bars outside -->
+    <rect x="132" y="105" width="7" height="15" rx="2" fill="#10b981" opacity="0.6"/>
+    <rect x="141" y="98" width="7" height="22" rx="2" fill="#10b981" opacity="0.8"/>
+    <rect x="150" y="88" width="7" height="32" rx="2" fill="#10b981"/>
+    
+    <!-- Trend line -->
+    <path d="M 133 110 L 143 100 L 153 88" 
+          stroke="#fbbf24" 
+          stroke-width="2.5" 
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"/>
+    
+    <!-- Sparkle/star -->
+    <path d="M 158 78 L 160 83 L 165 85 L 160 87 L 158 92 L 156 87 L 151 85 L 156 83 Z" fill="#fbbf24"/>
+  </g>
+</svg>
+

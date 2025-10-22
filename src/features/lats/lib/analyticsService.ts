@@ -222,7 +222,10 @@ export class AnalyticsService {
       if (error) throw error;
 
       const totalTransactions = sales?.length || 0;
-      const totalRevenue = sales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+      const totalRevenue = sales?.reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0) || 0;
       const averageOrderValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
 
       // Calculate growth rate (simplified - compare current month vs previous month)
@@ -232,11 +235,17 @@ export class AnalyticsService {
 
       const currentMonthSales = sales?.filter(sale => 
         new Date(sale.created_at) >= currentMonth
-      ).reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+      ).reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0) || 0;
 
       const previousMonthSales = sales?.filter(sale => 
         new Date(sale.created_at) >= previousMonth && new Date(sale.created_at) < currentMonth
-      ).reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+      ).reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0) || 0;
 
       const growthRate = previousMonthSales > 0 
         ? ((currentMonthSales - previousMonthSales) / previousMonthSales) * 100 
@@ -300,8 +309,10 @@ export class AnalyticsService {
       ).length || 0;
 
       // Calculate average customer value
-      const totalSpent = customers?.reduce((sum, customer) => 
-        sum + (customer.total_spent || 0), 0) || 0;
+      const totalSpent = customers?.reduce((sum, customer) => {
+        const amount = typeof customer.total_spent === 'number' ? customer.total_spent : parseFloat(customer.total_spent) || 0;
+        return sum + amount;
+      }, 0) || 0;
       const averageCustomerValue = totalCustomers > 0 ? totalSpent / totalCustomers : 0;
 
       // Calculate customer growth (simplified)

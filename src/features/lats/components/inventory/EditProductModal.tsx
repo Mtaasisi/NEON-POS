@@ -205,14 +205,43 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
   // Show loading state if required data is not available
   if (isLoading || !product) {
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <div className="flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <span className="ml-2">Loading product data...</span>
+      <>
+        {/* Backdrop - respects sidebar and topbar */}
+        <div 
+          className="fixed bg-black/50 backdrop-blur-sm"
+          onClick={onClose}
+          style={{
+            left: 'var(--sidebar-width, 0px)',
+            top: 'var(--topbar-height, 64px)',
+            right: 0,
+            bottom: 0,
+            zIndex: 35
+          }}
+        />
+        
+        {/* Modal Container */}
+        <div 
+          className="fixed flex items-center justify-center"
+          style={{
+            left: 'var(--sidebar-width, 0px)',
+            top: 'var(--topbar-height, 64px)',
+            right: 0,
+            bottom: 0,
+            zIndex: 50,
+            pointerEvents: 'none'
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+            style={{ pointerEvents: 'auto' }}
+          >
+            <div className="flex items-center justify-center">
+              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <span className="ml-2">Loading product data...</span>
+            </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -318,10 +347,37 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
   };
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center ${isOpen ? '' : 'hidden'}`}>
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
-      <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-        <GlassCard className="p-6">
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black/50 backdrop-blur-sm"
+        onClick={handleClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
+        <div 
+          className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+          style={{ pointerEvents: 'auto' }}
+        >
+          <GlassCard className="p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center space-x-3">
               <Package className="w-6 h-6 text-blue-600" />
@@ -613,11 +669,12 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
             </div>
           </form>
         </GlassCard>
+        </div>
       </div>
       
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />
-    </div>
+    </>
   );
 };
 

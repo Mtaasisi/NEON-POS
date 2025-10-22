@@ -1,0 +1,37 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad15" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ec4899;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#db2777;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#grad15)"/>
+  
+  <!-- Calculator/Accounting -->
+  <g>
+    <!-- Calculator body -->
+    <rect x="70" y="60" width="60" height="80" rx="6" fill="white"/>
+    
+    <!-- Display screen -->
+    <rect x="77" y="68" width="46" height="18" rx="3" fill="#ec4899" opacity="0.2"/>
+    <text x="100" y="81" font-family="monospace" font-size="12" font-weight="bold" fill="#ec4899" text-anchor="middle">123</text>
+    
+    <!-- Button grid -->
+    <circle cx="82" cy="100" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="95" cy="100" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="108" cy="100" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="118" cy="100" r="4" fill="#ec4899" opacity="0.4"/>
+    
+    <circle cx="82" cy="112" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="95" cy="112" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="108" cy="112" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="118" cy="112" r="4" fill="#ec4899" opacity="0.4"/>
+    
+    <circle cx="82" cy="124" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="95" cy="124" r="4" fill="#ec4899" opacity="0.4"/>
+    <circle cx="108" cy="124" r="4" fill="#10b981" opacity="0.6"/>
+    <rect x="114" y="118" width="8" height="12" rx="2" fill="#10b981" opacity="0.6"/>
+  </g>
+</svg>
+

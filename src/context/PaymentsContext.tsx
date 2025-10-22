@@ -70,7 +70,7 @@ export const PaymentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError || !user) {
-        console.warn('User not authenticated, skipping payment fetch');
+        console.debug('User not authenticated, skipping payment fetch');
         setPayments([]);
         setLoading(false);
         return;

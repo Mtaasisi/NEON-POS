@@ -1,0 +1,33 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad13" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#grad13)"/>
+  
+  <!-- Mobile phone with POS interface -->
+  <g>
+    <!-- Phone body -->
+    <rect x="75" y="55" width="50" height="90" rx="8" fill="white"/>
+    
+    <!-- Screen content -->
+    <rect x="80" y="65" width="40" height="50" rx="3" fill="#10b981" opacity="0.15"/>
+    
+    <!-- App icons/interface -->
+    <rect x="85" y="70" width="10" height="10" rx="2" fill="#10b981" opacity="0.5"/>
+    <rect x="100" y="70" width="10" height="10" rx="2" fill="#10b981" opacity="0.5"/>
+    
+    <!-- Display amount -->
+    <text x="100" y="98" font-family="monospace" font-size="12" font-weight="bold" fill="#10b981" text-anchor="middle">$99</text>
+    
+    <!-- Pay button -->
+    <rect x="85" y="105" width="30" height="8" rx="4" fill="#10b981"/>
+    
+    <!-- Home button -->
+    <circle cx="100" cy="135" r="4" fill="#10b981" opacity="0.3"/>
+  </g>
+</svg>
+

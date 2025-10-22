@@ -9,7 +9,6 @@ import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import StatusBadge from '../../shared/components/ui/StatusBadge';
 import DeviceRepairDetailModal from '../components/DeviceRepairDetailModal';
-import DiagnosticTemplateManagerModal from '../components/DiagnosticTemplateManagerModal';
 import CBMCalculatorModal from '../../calculator/components/CBMCalculatorModal';
 import { 
   Plus, 
@@ -74,9 +73,6 @@ const DevicesPage: React.FC = () => {
   const [showDeviceEditModal, setShowDeviceEditModal] = useState(false);
   const [selectedDeviceForDetail, setSelectedDeviceForDetail] = useState<string | null>(null);
   const [selectedDeviceForEdit, setSelectedDeviceForEdit] = useState<Device | null>(null);
-  
-  // Template manager modal state
-  const [showTemplateManagerModal, setShowTemplateManagerModal] = useState(false);
   
   // CBM Calculator modal state
   const [showCbmCalculator, setShowCbmCalculator] = useState(false);
@@ -812,12 +808,6 @@ const DevicesPage: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Diagnostic Template Manager Modal */}
-      <DiagnosticTemplateManagerModal
-        isOpen={showTemplateManagerModal}
-        onClose={() => setShowTemplateManagerModal(false)}
-      />
 
       {/* CBM Calculator Modal */}
       <CBMCalculatorModal

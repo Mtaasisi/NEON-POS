@@ -28,16 +28,19 @@ import {
   Package,
   ShoppingCart,
   Calendar,
-  Briefcase,
   UserCheck,
   Clock,
-  Shield, 
-  Wrench,
   Star,
-  Phone,
   ArrowRightLeft,
   Bell,
-  Warehouse
+  Warehouse,
+  Truck,
+  DollarSign,
+  History,
+  Repeat,
+  Wrench,
+  ClipboardList,
+  MessageSquare
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
@@ -78,9 +81,22 @@ const AppLayout: React.FC = () => {
     const saved = localStorage.getItem('navReadItems');
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
+  const [isMobile, setIsMobile] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Update mobile state on window resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Check if we're on the POS page
   const isOnPOSPage = location.pathname === '/pos';
@@ -224,7 +240,7 @@ const AppLayout: React.FC = () => {
     }
 
     const items = [
-      // Main Dashboard
+      // Dashboard
       {
         path: '/dashboard',
         label: 'Dashboard',
@@ -233,7 +249,23 @@ const AppLayout: React.FC = () => {
         count: activityCounts.activeDevices
       },
 
-      // Core Operations
+      // Sales & POS
+      {
+        path: '/pos',
+        label: 'POS System',
+        icon: <ShoppingCart size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'customer-care'],
+        count: 0
+      },
+      {
+        path: '/lats/trade-in/management',
+        label: 'Trade-in',
+        icon: <Repeat size={20} strokeWidth={1.5} />,
+        roles: ['admin'],
+        count: 0
+      },
+
+      // Operations
       {
         path: '/devices',
         label: 'Devices',
@@ -249,13 +281,6 @@ const AppLayout: React.FC = () => {
         count: activityCounts.newCustomers
       },
       {
-        path: '/pos',
-        label: 'POS System',
-        icon: <ShoppingCart size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'customer-care'],
-        count: 0
-      },
-      {
         path: '/appointments',
         label: 'Appointments',
         icon: <Calendar size={20} strokeWidth={1.5} />,
@@ -269,15 +294,8 @@ const AppLayout: React.FC = () => {
         roles: ['admin', 'customer-care', 'technician'],
         count: 0
       },
-      {
-        path: '/my-attendance',
-        label: 'My Attendance',
-        icon: <Clock size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'manager', 'cashier', 'customer-care', 'technician', 'inventory-manager'],
-        count: 0
-      },
 
-      // Inventory & Stock
+      // Inventory Management
       {
         path: '/lats/unified-inventory',
         label: 'Inventory',
@@ -288,14 +306,14 @@ const AppLayout: React.FC = () => {
       {
         path: '/lats/spare-parts',
         label: 'Spare Parts',
-        icon: <Settings size={20} strokeWidth={1.5} />,
+        icon: <Wrench size={20} strokeWidth={1.5} />,
         roles: ['admin', 'technician'],
         count: 0
       },
       {
-        path: '/lats/purchase-orders',
-        label: 'Purchase Orders',
-        icon: <ShoppingCart size={20} strokeWidth={1.5} />,
+        path: '/lats/storage-rooms',
+        label: 'Storage Rooms',
+        icon: <Warehouse size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
@@ -306,33 +324,31 @@ const AppLayout: React.FC = () => {
         roles: ['admin'],
         count: 0
       },
+
+      // Orders & Purchasing
       {
-        path: '/lats/storage-rooms',
-        label: 'Storage Rooms',
-        icon: <Warehouse size={20} strokeWidth={1.5} />,
+        path: '/lats/purchase-orders',
+        label: 'Purchase Orders',
+        icon: <ClipboardList size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },
-
-      // People Management
       {
-        path: '/employees',
-        label: 'Employees',
-        icon: <UserCheck size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'manager'],
+        path: '/special-orders',
+        label: 'Special Orders',
+        icon: <Truck size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'sales', 'manager', 'customer-care'],
+        count: 0
+      },
+      {
+        path: '/installments',
+        label: 'Installment Plans',
+        icon: <DollarSign size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'sales', 'manager', 'customer-care'],
         count: 0
       },
 
-      // Diagnostics
-      {
-        path: '/diagnostics',
-        label: 'Diagnostics',
-        icon: <Stethoscope size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'customer-care', 'technician'],
-        count: 0
-      },
-
-      // Business & Finance
+      // Finance & Reports
       {
         path: '/lats/sales-reports',
         label: 'Sales Reports',
@@ -355,6 +371,22 @@ const AppLayout: React.FC = () => {
         count: 0
       },
 
+      // People Management
+      {
+        path: '/employees',
+        label: 'Employees',
+        icon: <UserCheck size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'manager'],
+        count: 0
+      },
+      {
+        path: '/my-attendance',
+        label: 'My Attendance',
+        icon: <Clock size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'manager', 'cashier', 'customer-care', 'technician', 'inventory-manager'],
+        count: 0
+      },
+
       // Communication
       {
         path: '/lats/whatsapp-chat',
@@ -366,7 +398,7 @@ const AppLayout: React.FC = () => {
       {
         path: '/sms',
         label: 'SMS',
-        icon: <Phone size={20} strokeWidth={1.5} />,
+        icon: <MessageSquare size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care'],
         count: 0
       }
@@ -390,7 +422,14 @@ const AppLayout: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'transparent' }}>
+    <div 
+      className="min-h-screen" 
+      style={{ 
+        backgroundColor: 'transparent',
+        '--sidebar-width': isMobile ? '0px' : (isNavCollapsed ? '88px' : '288px'),
+        '--topbar-height': '64px'
+      } as React.CSSProperties}
+    >
       <TopBar 
         onMenuToggle={() => setIsMenuOpen(!isMenuOpen)}
         isMenuOpen={isMenuOpen}

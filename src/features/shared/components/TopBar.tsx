@@ -281,7 +281,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     if (currentUser.role === 'customer-care') {
       actions.push(
         { label: 'Add Device', icon: <Smartphone size={16} />, action: () => navigate('/devices/new') },
-        { label: 'New Diagnostic', icon: <Stethoscope size={16} />, action: () => navigate('/diagnostics/new') },
         { label: 'Add Customer', icon: <Users size={16} />, action: () => navigate('/customers') }
       );
     }
@@ -303,10 +302,10 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
       <div className={`topbar ${isDark ? 'bg-slate-900/90' : 'bg-white/80'} backdrop-blur-xl ${isDark ? 'border-slate-700/50' : 'border-white/30'} border-b shadow-lg`}>
         <div className="flex items-center justify-between px-4 py-3">
           {/* Left Section - Menu Toggle & Back Button */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <button
               onClick={onMenuToggle}
-              className={`p-2 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60' : 'bg-white/30 hover:bg-white/50'} transition-all duration-300 backdrop-blur-sm md:hidden ${isDark ? 'border-slate-600' : 'border-white/30'} border shadow-sm`}
+              className={`p-2.5 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60' : 'bg-white/30 hover:bg-white/50'} transition-all duration-300 backdrop-blur-sm md:hidden ${isDark ? 'border-slate-600' : 'border-white/30'} border shadow-sm`}
             >
               {isMenuOpen ? <X size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} /> : <Menu size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} />}
             </button>
@@ -314,65 +313,62 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             {/* Back Button */}
             <button
               onClick={handleBackClick}
-              className={`p-3 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60' : 'bg-white/30 hover:bg-white/50'} transition-all duration-300 backdrop-blur-sm ${isDark ? 'border-slate-600' : 'border-white/30'} border shadow-sm`}
+              className={`p-2.5 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60' : 'bg-white/30 hover:bg-white/50'} transition-all duration-300 backdrop-blur-sm ${isDark ? 'border-slate-600' : 'border-white/30'} border shadow-sm`}
               title={previousPage ? "Go Back" : "Go to Dashboard"}
             >
               <ArrowLeft size={18} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
             </button>
           </div>
 
-          {/* Center Section - Search */}
-          <div className="hidden md:flex items-center gap-3 flex-1 max-w-md mx-4">
+          {/* Center Section - Search & Action Buttons */}
+          <div className="hidden md:flex items-center gap-3 flex-1 max-w-4xl mx-4">
+            {/* Search Button */}
             <button
               onClick={() => openSearch()}
-              className={`flex-1 flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 ${
+              className={`p-2.5 rounded-lg transition-all duration-200 ${
                 isDark 
                   ? 'bg-slate-800/60 hover:bg-slate-700/60 text-gray-300 border border-slate-700' 
                   : 'bg-white/60 hover:bg-white/80 text-gray-700 border border-gray-200'
-              } cursor-pointer backdrop-blur-sm`}
+              } cursor-pointer backdrop-blur-sm shadow-sm hover:shadow-md`}
+              title="Search (⌘K)"
             >
-              <Search size={18} className="text-gray-400" />
-              <span className="text-sm text-gray-500">Search devices, customers, products...</span>
-              <div className={`ml-auto hidden lg:flex items-center gap-1 px-2 py-1 rounded ${isDark ? 'bg-slate-700/70 text-gray-400' : 'bg-gray-100 text-gray-500'} text-xs`}>
-                <span>⌘K</span>
-              </div>
-            </button>
-          </div>
-
-          {/* Right Section - Action Buttons Group */}
-          <div className="flex items-center gap-2">
-            {/* Quick Expense Button - Admins only */}
-            {currentUser?.role === 'admin' && (
-              <button
-                onClick={() => setShowQuickExpense(true)}
-                className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-                title="Quick Expense (⚡ Fast Entry)"
-              >
-                <DollarSign size={18} />
-                <span className="hidden lg:inline font-medium">Expense</span>
-              </button>
-            )}
-
-            {/* Quick Reminder Button - All roles */}
-            <button
-              onClick={() => setShowQuickReminder(true)}
-              className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-              title="Quick Reminder (⚡ Fast Entry)"
-            >
-              <Bell size={18} />
-              <span className="hidden lg:inline font-medium">Reminder</span>
+              <Search size={20} />
             </button>
 
-            {/* Create Dropdown - Role-based */}
-            {currentUser?.role !== 'technician' && (
-              <div className="relative" ref={createDropdownRef}>
+            {/* Action Buttons Group */}
+            <div className="flex items-center gap-3">
+              {/* Quick Expense Button - Admins only */}
+              {currentUser?.role === 'admin' && (
                 <button
-                  onClick={() => setShowCreateDropdown(!showCreateDropdown)}
-                  className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                  onClick={() => setShowQuickExpense(true)}
+                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                  title="Quick Expense (⚡ Fast Entry)"
                 >
-                  <span className="font-medium">Create</span>
-                  <ChevronDown size={18} className={`transition-transform duration-200 ${showCreateDropdown ? 'rotate-180' : ''}`} />
+                  <DollarSign size={18} />
+                  <span className="hidden lg:inline font-medium">Expense</span>
                 </button>
+              )}
+
+              {/* Quick Reminder Button - All roles */}
+              <button
+                onClick={() => setShowQuickReminder(true)}
+                className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                title="Quick Reminder (⚡ Fast Entry)"
+              >
+                <Bell size={18} />
+                <span className="hidden lg:inline font-medium">Reminder</span>
+              </button>
+
+              {/* Create Dropdown - Role-based */}
+              {currentUser?.role !== 'technician' && (
+                <div className="relative" ref={createDropdownRef}>
+                  <button
+                    onClick={() => setShowCreateDropdown(!showCreateDropdown)}
+                    className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                  >
+                    <span className="font-medium">Create</span>
+                    <ChevronDown size={18} className={`transition-transform duration-200 ${showCreateDropdown ? 'rotate-180' : ''}`} />
+                  </button>
               
               {/* Create Dropdown Menu - Image Style */}
               {showCreateDropdown && (
@@ -426,23 +422,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                       <div className="flex-1 text-left">
                         <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Add Customer</p>
                         <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Register new customer</p>
-                      </div>
-                    </button>
-                    
-                    {/* Diagnostic Request */}
-                    <button
-                      onClick={() => {
-                        navigate('/diagnostics/new');
-                        setShowCreateDropdown(false);
-                      }}
-                      className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-green-900/30' : 'hover:bg-green-50'} transition-colors group`}
-                    >
-                      <div className="p-2 rounded-lg bg-green-500 text-white">
-                        <Stethoscope size={20} />
-                      </div>
-                      <div className="flex-1 text-left">
-                        <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Diagnostic Request</p>
-                        <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Create device analysis</p>
                       </div>
                     </button>
                     
@@ -508,6 +487,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               )}
             </div>
           )}
+          </div>
           </div>
 
           {/* Technician Quick Actions */}
@@ -647,26 +627,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
           {/* Right Section - Status & Actions */}
           <div className="flex items-center gap-3">
-            {/* Date & Time Display */}
-            <div className="hidden lg:flex flex-col items-end mr-2">
-              <div className={`text-xs font-semibold ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                {currentTime.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-              </div>
-              <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                {currentTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
 
             {/* Activity Pills - Real Counts Only */}
-            <div className="hidden lg:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-4">
               {activityCounts.activeDevices > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-blue-100 text-blue-700 backdrop-blur-sm border border-blue-200 shadow-sm">
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-blue-100 text-blue-700 backdrop-blur-sm border border-blue-200 shadow-sm">
                   <Smartphone size={14} />
                   <span className="text-xs font-semibold">{formatNumber(activityCounts.activeDevices)}</span>
                 </div>
               )}
               {activityCounts.overdueDevices > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-red-100 text-red-700 backdrop-blur-sm border border-red-200 shadow-sm">
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-100 text-red-700 backdrop-blur-sm border border-red-200 shadow-sm">
                   <Clock size={14} />
                   <span className="text-xs font-semibold">{formatNumber(activityCounts.overdueDevices)}</span>
                 </div>
@@ -674,7 +645,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               
               {/* Show customer count only for non-technicians */}
               {currentUser?.role !== 'technician' && activityCounts.newCustomers > 0 && (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-green-100 text-green-700 backdrop-blur-sm border border-green-200 shadow-sm">
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-100 text-green-700 backdrop-blur-sm border border-green-200 shadow-sm">
                   <Users size={14} />
                   <span className="text-xs font-semibold">{formatNumber(activityCounts.newCustomers)}</span>
                 </div>
@@ -689,7 +660,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             {/* Fullscreen Toggle */}
             <button
               onClick={toggleFullscreen}
-              className={`p-2 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/30 hover:bg-white/50 border-white/30'} transition-all duration-300 backdrop-blur-sm border shadow-sm active:scale-95`}
+              className={`p-2.5 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/30 hover:bg-white/50 border-white/30'} transition-all duration-300 backdrop-blur-sm border shadow-sm active:scale-95`}
               title={isFullscreen ? "Exit Fullscreen (ESC)" : "Enter Fullscreen"}
             >
               {isFullscreen ? (
@@ -703,7 +674,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             <div className="relative" ref={notificationsRef}>
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className={`p-2 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/30 hover:bg-white/50 border-white/30'} transition-all duration-300 backdrop-blur-sm border relative shadow-sm`}
+                className={`p-2.5 rounded-lg ${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/30 hover:bg-white/50 border-white/30'} transition-all duration-300 backdrop-blur-sm border relative shadow-sm`}
               >
                 <Bell size={20} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
                 {unreadNotifications.length > 0 && (
@@ -851,21 +822,21 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
       {/* Mobile Search Bar & Create Button */}
       <div className={`md:hidden px-4 py-3 ${isDark ? 'bg-slate-900/40' : 'bg-white/20'} backdrop-blur-sm ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-b`}>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 justify-end">
           <button
             onClick={() => openSearch()}
-            className={`flex-1 flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200 ${
+            className={`p-2.5 rounded-lg transition-all duration-200 ${
               isDark 
-                ? 'bg-slate-800/60 text-gray-300 border border-slate-700' 
-                : 'bg-white/60 text-gray-700 border border-gray-200'
-            } cursor-pointer backdrop-blur-sm`}
+                ? 'bg-slate-800/60 hover:bg-slate-700/60 text-gray-300 border border-slate-700' 
+                : 'bg-white/60 hover:bg-white/80 text-gray-700 border border-gray-200'
+            } cursor-pointer backdrop-blur-sm shadow-sm hover:shadow-md`}
+            title="Search"
           >
-            <Search size={18} className="text-gray-400" />
-            <span className="text-sm text-gray-500">Search...</span>
+            <Search size={20} />
           </button>
           <button
             onClick={() => setShowCreateDropdown(!showCreateDropdown)}
-            className="p-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 shadow-sm"
+            className="p-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
           >
             <Plus size={20} />
           </button>
@@ -921,22 +892,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                 <div className="flex-1 text-left">
                   <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Add Customer</p>
                   <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Register new customer</p>
-                </div>
-              </button>
-              
-              <button
-                onClick={() => {
-                  navigate('/diagnostics/new');
-                  setShowCreateDropdown(false);
-                }}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg ${isDark ? 'hover:bg-green-900/30' : 'hover:bg-green-50'} transition-colors`}
-              >
-                <div className="p-2 rounded-lg bg-green-500 text-white">
-                  <Stethoscope size={20} />
-                </div>
-                <div className="flex-1 text-left">
-                  <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Diagnostic Request</p>
-                  <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Create device analysis</p>
                 </div>
               </button>
               

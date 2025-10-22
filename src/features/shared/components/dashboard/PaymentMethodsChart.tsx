@@ -55,7 +55,22 @@ export const PaymentMethodsChart: React.FC<PaymentMethodsChartProps> = ({ classN
       let totalAmt = 0;
       
       (sales || []).forEach((sale) => {
-        const method = sale.payment_method || 'Unknown';
+        // Handle payment_method which can be a string or JSONB object
+        let method = 'Unknown';
+        
+        if (sale.payment_method) {
+          if (typeof sale.payment_method === 'string') {
+            method = sale.payment_method;
+          } else if (typeof sale.payment_method === 'object') {
+            // payment_method is stored as JSONB object, extract the method name
+            method = sale.payment_method.method || 
+                     sale.payment_method.name || 
+                     sale.payment_method.type ||
+                     Object.keys(sale.payment_method)[0] || 
+                     'Unknown';
+          }
+        }
+        
         const amount = typeof sale.total_amount === 'string' 
           ? parseFloat(sale.total_amount) 
           : sale.total_amount || 0;
@@ -85,12 +100,16 @@ export const PaymentMethodsChart: React.FC<PaymentMethodsChartProps> = ({ classN
       };
       
       // Convert to array format for chart
-      const chartData: PaymentData[] = Array.from(methodMap.entries()).map(([name, data]) => ({
-        name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        value: data.total,
-        count: data.count,
-        color: colorMap[name.toLowerCase()] || '#6b7280'
-      }));
+      const chartData: PaymentData[] = Array.from(methodMap.entries()).map(([name, data]) => {
+        // Ensure name is a string
+        const nameStr = String(name || 'Unknown');
+        return {
+          name: nameStr.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+          value: data.total,
+          count: data.count,
+          color: colorMap[nameStr.toLowerCase()] || '#6b7280'
+        };
+      });
       
       setPaymentData(chartData);
       setTotalTransactions(totalTx);
@@ -146,7 +165,7 @@ export const PaymentMethodsChart: React.FC<PaymentMethodsChartProps> = ({ classN
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -171,7 +190,7 @@ export const PaymentMethodsChart: React.FC<PaymentMethodsChartProps> = ({ classN
       ) : (
         <>
           {/* Chart */}
-          <div className="h-56 -mx-2">
+          <div className="flex-grow -mx-2 min-h-48">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie

@@ -260,8 +260,36 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl max-h-[95vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col">
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black/50"
+        onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
+        <div 
+          className="w-full max-w-5xl max-h-[95vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+          style={{ pointerEvents: 'auto' }}
+        >
         {/* Header */}
         <div className="flex-shrink-0 p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">

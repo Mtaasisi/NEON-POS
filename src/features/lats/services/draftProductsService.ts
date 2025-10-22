@@ -71,13 +71,10 @@ class DraftProductsService {
    */
   async getShipmentCargoItems(shippingId: string): Promise<ShippingCargoItem[]> {
     try {
-      const { data, error } = await supabase
+      // FIXED: Fetch cargo items without PostgREST syntax
+      const { data: cargoItems, error } = await supabase
         .from('lats_shipping_cargo_items')
-        .select(`
-          *,
-          product:lats_products!product_id(*),
-          purchase_order_item:lats_purchase_order_items!purchase_order_item_id(*)
-        `)
+        .select('*')
         .eq('shipping_id', shippingId)
         .order('created_at', { ascending: true });
 
@@ -86,7 +83,33 @@ class DraftProductsService {
         throw error;
       }
 
-      return data || [];
+      if (!cargoItems || cargoItems.length === 0) {
+        return [];
+      }
+
+      // Fetch related data separately
+      const productIds = cargoItems.map(item => item.product_id).filter(Boolean);
+      const poItemIds = cargoItems.map(item => item.purchase_order_item_id).filter(Boolean);
+
+      const [productsResult, poItemsResult] = await Promise.all([
+        productIds.length > 0 
+          ? supabase.from('lats_products').select('*').in('id', productIds)
+          : Promise.resolve({ data: [], error: null }),
+        poItemIds.length > 0
+          ? supabase.from('lats_purchase_order_items').select('*').in('id', poItemIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      // Map data for easy lookup
+      const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
+      const poItemsMap = new Map(poItemsResult.data?.map(item => [item.id, item]) || []);
+
+      // Combine data
+      return cargoItems.map(item => ({
+        ...item,
+        product: item.product_id ? productsMap.get(item.product_id) : null,
+        purchase_order_item: item.purchase_order_item_id ? poItemsMap.get(item.purchase_order_item_id) : null
+      }));
     } catch (error) {
       console.error('❌ [DraftProductsService] Unexpected error:', error);
       throw error;
@@ -101,18 +124,33 @@ class DraftProductsService {
       // Get cargo items
       const cargoItems = await this.getShipmentCargoItems(shippingId);
       
-      // Get validation records
+      // Get validation records - Fixed: Removed problematic PostgREST relationship syntax
       const { data: validations, error: validationError } = await supabase
         .from('lats_product_validation')
-        .select(`
-          *,
-          product:lats_products!product_id(*)
-        `)
+        .select('*')
         .eq('shipping_id', shippingId);
 
       if (validationError) {
         console.error('❌ [DraftProductsService] Error fetching validations:', validationError);
         throw validationError;
+      }
+
+      // Fetch related products separately if needed
+      if (validations && validations.length > 0) {
+        const productIds = validations.map(v => v.product_id).filter(Boolean);
+        if (productIds.length > 0) {
+          const { data: products } = await supabase
+            .from('lats_products')
+            .select('*')
+            .in('id', productIds);
+          
+          const productsMap = new Map(products?.map(p => [p.id, p]) || []);
+          validations.forEach((v: any) => {
+            if (v.product_id) {
+              v.product = productsMap.get(v.product_id);
+            }
+          });
+        }
       }
 
       // Check if shipment is ready for inventory
@@ -329,37 +367,69 @@ class DraftProductsService {
         }
       }
       
-      // Now try the join query - include cargo item fields (quantity, cost_price) from PO
-      const { data, error } = await supabase
+      // FIXED: Fetch cargo items without problematic PostgREST syntax
+      const { data: cargoData, error: cargoError } = await supabase
         .from('lats_shipping_cargo_items')
-        .select(`
-          id,
-          quantity,
-          cost_price,
-          description,
-          notes,
-          purchase_order_item_id,
-          product:lats_products!product_id(
-            *,
-            category:lats_categories!category_id(*),
-            supplier:lats_suppliers!supplier_id(*),
-            variants:lats_product_variants!product_id(*)
-          ),
-          purchase_order_item:lats_purchase_order_items!purchase_order_item_id(
-            *,
-            purchase_order:lats_purchase_orders!purchase_order_id(
-              currency,
-              exchange_rate,
-              base_currency
-            )
-          )
-        `)
+        .select('id, quantity, cost_price, description, notes, purchase_order_item_id, product_id, shipping_id')
         .eq('shipping_id', shippingId);
 
-      if (error) {
-        console.error('❌ [DraftProductsService] Error fetching draft products:', error);
-        throw error;
+      if (cargoError) {
+        console.error('❌ [DraftProductsService] Error fetching cargo items:', cargoError);
+        throw cargoError;
       }
+
+      // Fetch related data separately to avoid 400 errors
+      const productIds = cargoData?.map(item => item.product_id).filter(Boolean) || [];
+      const poItemIds = cargoData?.map(item => item.purchase_order_item_id).filter(Boolean) || [];
+
+      const [productsResult, variantsResult, poItemsResult] = await Promise.all([
+        // Fetch products
+        productIds.length > 0 
+          ? supabase.from('lats_products').select('*').in('id', productIds)
+          : Promise.resolve({ data: [], error: null }),
+        // Fetch variants
+        productIds.length > 0
+          ? supabase.from('lats_product_variants').select('*').in('product_id', productIds)
+          : Promise.resolve({ data: [], error: null }),
+        // Fetch PO items
+        poItemIds.length > 0
+          ? supabase.from('lats_purchase_order_items').select('*').in('id', poItemIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      // Get unique purchase order IDs from PO items
+      const poIds = poItemsResult.data?.map(item => item.purchase_order_id).filter(Boolean) || [];
+      const poResult = poIds.length > 0
+        ? await supabase.from('lats_purchase_orders').select('id, currency, exchange_rate, base_currency').in('id', poIds)
+        : { data: [], error: null };
+
+      // Map data for easy lookup
+      const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
+      const variantsMap = new Map<string, any[]>();
+      variantsResult.data?.forEach(v => {
+        const variants = variantsMap.get(v.product_id) || [];
+        variants.push(v);
+        variantsMap.set(v.product_id, variants);
+      });
+      const poItemsMap = new Map(poItemsResult.data?.map(item => [item.id, item]) || []);
+      const posMap = new Map(poResult.data?.map(po => [po.id, po]) || []);
+
+      // Combine data
+      const data = cargoData?.map(item => ({
+        ...item,
+        product: item.product_id ? {
+          ...productsMap.get(item.product_id),
+          variants: variantsMap.get(item.product_id) || []
+        } : null,
+        purchase_order_item: item.purchase_order_item_id ? {
+          ...poItemsMap.get(item.purchase_order_item_id),
+          purchase_order: poItemsMap.get(item.purchase_order_item_id)?.purchase_order_id
+            ? posMap.get(poItemsMap.get(item.purchase_order_item_id)?.purchase_order_id)
+            : null
+        } : null
+      })) || [];
+
+      const error = null;
 
       console.log('📦 [DraftProductsService] Raw cargo items data (with join):', data);
       

@@ -14,42 +14,63 @@ interface ModalProps {
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'lg', maxHeight, actions }) => {
   if (!isOpen) return null;
   return createPortal(
-    <div
-      className="modal-backdrop"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 99999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0,0,0,0.4)',
-        backdropFilter: 'blur(2px)'
-      }}
-    >
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
       <div
-        className="modal-content"
+        className="modal-backdrop"
+        onClick={onClose}
         style={{
-          background: '#fff',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 12px 48px 0 rgba(0,0,0,0.18)',
-          width: '100%',
-          maxWidth: maxWidth === 'sm' ? 400 : 
-                    maxWidth === 'md' ? 600 : 
-                    maxWidth === 'lg' ? 780 : 
-                    maxWidth === 'xl' ? 1024 : 
-                    maxWidth === '2xl' ? 1280 : 
-                    maxWidth === 'full' ? '95vw' : 780,
-          maxHeight: maxHeight || '90vh',
-          borderRadius: 15,
+          position: 'fixed',
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35,
+          background: 'rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(2px)'
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div
+        style={{
+          position: 'fixed',
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
           display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          margin: '0 1rem',
-          padding: 1,
-          position: 'relative',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none'
         }}
       >
+        <div
+          className="modal-content"
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: '#fff',
+            border: '1px solid #e5e7eb',
+            boxShadow: '0 12px 48px 0 rgba(0,0,0,0.18)',
+            width: '100%',
+            maxWidth: maxWidth === 'sm' ? 400 : 
+                      maxWidth === 'md' ? 600 : 
+                      maxWidth === 'lg' ? 780 : 
+                      maxWidth === 'xl' ? 1024 : 
+                      maxWidth === '2xl' ? 1280 : 
+                      maxWidth === 'full' ? '95vw' : 780,
+            maxHeight: maxHeight || '90vh',
+            borderRadius: 15,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            margin: '0 1rem',
+            padding: 1,
+            position: 'relative',
+            pointerEvents: 'auto'
+          }}
+        >
         {title && <div className="font-bold text-xl mb-4 text-gray-900" style={{paddingTop: 32, paddingRight: 32, paddingBottom: 0, paddingLeft: 32}}>{title}</div>}
         <div
           style={{
@@ -87,8 +108,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidt
         >
           ×
         </button>
+        </div>
       </div>
-    </div>,
+    </>,
     document.body
   );
 };

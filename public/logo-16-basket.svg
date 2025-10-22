@@ -1,0 +1,37 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad16" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#14b8a6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0d9488;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#grad16)"/>
+  
+  <!-- Shopping basket -->
+  <g>
+    <!-- Basket handles -->
+    <path d="M 70 80 C 70 65 85 55 100 55 C 115 55 130 65 130 80" 
+          stroke="white" 
+          stroke-width="8" 
+          fill="none"
+          stroke-linecap="round"/>
+    
+    <!-- Basket body -->
+    <path d="M 60 80 L 70 130 L 130 130 L 140 80 Z" fill="white"/>
+    
+    <!-- Basket weave pattern -->
+    <line x1="75" y1="90" x2="78" y2="110" stroke="#14b8a6" stroke-width="2"/>
+    <line x1="85" y1="90" x2="88" y2="110" stroke="#14b8a6" stroke-width="2"/>
+    <line x1="95" y1="90" x2="98" y2="110" stroke="#14b8a6" stroke-width="2"/>
+    <line x1="105" y1="90" x2="108" y2="110" stroke="#14b8a6" stroke-width="2"/>
+    <line x1="115" y1="90" x2="118" y2="110" stroke="#14b8a6" stroke-width="2"/>
+    <line x1="125" y1="90" x2="128" y2="110" stroke="#14b8a6" stroke-width="2"/>
+    
+    <!-- Items in basket -->
+    <circle cx="85" cy="100" r="8" fill="#14b8a6" opacity="0.3"/>
+    <circle cx="100" cy="95" r="8" fill="#14b8a6" opacity="0.3"/>
+    <circle cx="115" cy="100" r="8" fill="#14b8a6" opacity="0.3"/>
+  </g>
+</svg>
+

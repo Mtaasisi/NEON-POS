@@ -1,0 +1,29 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad11" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#grad11)"/>
+  
+  <!-- Digital Wallet/Payment -->
+  <g>
+    <!-- Wallet body -->
+    <rect x="60" y="75" width="80" height="60" rx="8" fill="white"/>
+    
+    <!-- Card slot opening -->
+    <rect x="60" y="82" width="80" height="8" fill="#f59e0b" opacity="0.3"/>
+    
+    <!-- Cards inside -->
+    <rect x="68" y="95" width="50" height="8" rx="2" fill="#f59e0b" opacity="0.4"/>
+    <rect x="68" y="107" width="45" height="8" rx="2" fill="#10b981" opacity="0.4"/>
+    <rect x="68" y="119" width="48" height="8" rx="2" fill="#3b82f6" opacity="0.4"/>
+    
+    <!-- Dollar sign -->
+    <circle cx="120" cy="115" r="12" fill="#f59e0b"/>
+    <text x="120" y="122" font-family="Arial" font-size="16" font-weight="bold" fill="white" text-anchor="middle">$</text>
+  </g>
+</svg>
+

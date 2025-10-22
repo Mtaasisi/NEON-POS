@@ -153,7 +153,8 @@ export interface PurchaseOrder {
   id: string;
   orderNumber: string;
   supplierId: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'sent' | 'confirmed' | 'shipped' | 'partial_received' | 'received' | 'completed' | 'cancelled';
+  // Option B Workflow: Draft → Sent → Partial_Received → Received → Completed
+  status: 'draft' | 'sent' | 'partial_received' | 'received' | 'completed' | 'cancelled';
   orderDate: string;
   expectedDeliveryDate?: string;
   receivedDate?: string;

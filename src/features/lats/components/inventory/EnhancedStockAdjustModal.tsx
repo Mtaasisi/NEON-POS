@@ -211,10 +211,38 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
   if (!isOpen || !product) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="relative max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <GlassCard className="w-full">
-          <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
+        <div 
+          className="relative max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+          style={{ pointerEvents: 'auto' }}
+        >
+          <GlassCard className="w-full">
+            <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-lats-glass-border">
               <div>
@@ -562,8 +590,9 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
             </div>
           </form>
         </GlassCard>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

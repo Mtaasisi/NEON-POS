@@ -208,6 +208,10 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
       // Auto-generate reference if not provided
       const reference = formData.reference_number || `EXP-${Date.now()}`;
 
+      // Check if user is admin
+      const isAdmin = currentUser?.role === 'admin';
+      const status = isAdmin ? 'approved' : 'pending';
+
       // Insert expense
       const { error } = await supabase
         .from('account_transactions')
@@ -219,13 +223,16 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
             ? `${formData.category}: ${formData.description}` 
             : formData.description,
           reference_number: reference,
+          status: status,
           metadata: {
             category: formData.category || 'Other',
             vendor_name: formData.vendor_name || null,
             expense_date: new Date().toISOString().split('T')[0],
             created_via: 'quick_expense',
             user_role: currentUser?.role,
-            daily_sales_at_time: isCustomerCare ? dailySalesAmount : null
+            daily_sales_at_time: isCustomerCare ? dailySalesAmount : null,
+            approval_status: status,
+            requires_approval: !isAdmin
           },
           created_by: currentUser?.id
         });
@@ -235,9 +242,15 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
       // Get account name for notification
       const account = paymentAccounts.find(a => a.id === formData.account_id);
       
-      toast.success(`Expense recorded! ${account?.name || 'Account'} balance updated.`, {
-        duration: 3000
-      });
+      if (isAdmin) {
+        toast.success(`Expense recorded! ${account?.name || 'Account'} balance updated.`, {
+          duration: 3000
+        });
+      } else {
+        toast.success(`Expense submitted for admin approval! Pending review.`, {
+          duration: 3000
+        });
+      }
 
       // Reset form
       setFormData({

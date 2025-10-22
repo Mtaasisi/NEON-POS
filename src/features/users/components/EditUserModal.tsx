@@ -8,10 +8,11 @@ import GlassInput from '../../shared/components/ui/GlassInput';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { 
   User, Mail, Phone, Shield, X, Save, UserCog, ToggleLeft, ToggleRight,
-  Eye, EyeOff, Key, Lock, CheckSquare, Building2, MapPin
+  Eye, EyeOff, Key, Lock, CheckSquare, Building2, MapPin, CheckCircle, AlertCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getAllBranches, getUserBranchAssignments } from '../../../lib/userBranchApi';
+import { ALL_PERMISSIONS, ROLE_DEFAULT_PERMISSIONS } from './CreateUserModal';
 
 // Validation schema for editing
 const editUserSchema = z.object({
@@ -74,6 +75,8 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   const [branches, setBranches] = useState<any[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [userBranchAssignments, setUserBranchAssignments] = useState<string[]>([]);
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [customPermissions, setCustomPermissions] = useState(false);
 
   const {
     control,
@@ -171,11 +174,46 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     }
   };
 
+  // Toggle permission selection
+  const togglePermission = (permissionId: string) => {
+    const currentPermissions = watchedValues.permissions || [];
+    if (currentPermissions.includes(permissionId)) {
+      setValue('permissions', currentPermissions.filter(id => id !== permissionId), { shouldDirty: true });
+    } else {
+      setValue('permissions', [...currentPermissions, permissionId], { shouldDirty: true });
+    }
+  };
+
+  // Select all permissions in a category
+  const toggleCategoryPermissions = (categoryPermissions: string[]) => {
+    const currentPermissions = watchedValues.permissions || [];
+    const allSelected = categoryPermissions.every(p => currentPermissions.includes(p));
+    
+    if (allSelected) {
+      // Deselect all in category
+      setValue('permissions', currentPermissions.filter(p => !categoryPermissions.includes(p)), { shouldDirty: true });
+    } else {
+      // Select all in category
+      const newPermissions = [...new Set([...currentPermissions, ...categoryPermissions])];
+      setValue('permissions', newPermissions, { shouldDirty: true });
+    }
+  };
+
+  // Check if permission is selected
+  const isPermissionSelected = (permissionId: string) => {
+    return (watchedValues.permissions || []).includes(permissionId);
+  };
+
+  // Check if all category permissions are selected
+  const isCategoryFullySelected = (categoryPermissions: string[]) => {
+    return categoryPermissions.every(p => isPermissionSelected(p));
+  };
+
   // Role options
   const roleOptions = [
     { value: 'admin', label: 'Administrator', description: 'Full system access' },
     { value: 'manager', label: 'Manager', description: 'Department management' },
-    { value: 'technician', label: 'Technician', description: 'Device diagnostics' },
+    { value: 'technician', label: 'Technician', description: 'Device repairs' },
     { value: 'customer-care', label: 'Customer Care', description: 'Customer support' },
     { value: 'user', label: 'User', description: 'Basic access' }
   ];
@@ -200,7 +238,6 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     { value: 'reports', label: 'Reports & Analytics', description: 'View reports' },
     { value: 'employees', label: 'Employee Management', description: 'Manage employees' },
     { value: 'devices', label: 'Device Management', description: 'Manage devices' },
-    { value: 'diagnostics', label: 'Device Diagnostics', description: 'Run diagnostics' },
     { value: 'spare-parts', label: 'Spare Parts', description: 'Manage spare parts' },
     { value: 'appointments', label: 'Appointments', description: 'Manage appointments' },
     { value: 'basic', label: 'Basic Access', description: 'Limited access' }
@@ -460,6 +497,160 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
                 <p className="text-sm text-blue-800">
                   <strong>Role Description:</strong> {getRoleDescription(watchedValues.role)}
                 </p>
+              </div>
+            )}
+          </div>
+
+          {/* Permissions Management */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                <Lock size={20} />
+                Permissions & Access Control
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowPermissions(!showPermissions)}
+                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {showPermissions ? 'Hide' : 'Show'} Permissions
+              </button>
+            </div>
+
+            {/* Custom Permissions Toggle */}
+            <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg border border-amber-200">
+              <div className="flex-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={customPermissions}
+                    onChange={(e) => {
+                      setCustomPermissions(e.target.checked);
+                      if (!e.target.checked && watchedValues.role) {
+                        // Reset to role defaults
+                        const defaultPerms = ROLE_DEFAULT_PERMISSIONS[watchedValues.role] || [];
+                        setValue('permissions', defaultPerms, { shouldDirty: true });
+                      }
+                    }}
+                    className="w-4 h-4 text-amber-600 bg-gray-100 border-gray-300 rounded focus:ring-amber-500"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-gray-900">
+                      Custom Permissions
+                    </span>
+                    <p className="text-xs text-gray-600">
+                      Override role defaults with custom permissions
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {/* Permissions Summary */}
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    Selected Permissions: {(watchedValues.permissions || []).length}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {customPermissions ? 'Custom permissions configured' : `Using ${watchedValues.role} role defaults`}
+                  </p>
+                </div>
+                {isPermissionSelected('all') && (
+                  <div className="flex items-center gap-1 text-green-600">
+                    <CheckCircle size={16} />
+                    <span className="text-sm font-medium">Full Access</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Detailed Permissions (collapsible) */}
+            {showPermissions && (
+              <div className="space-y-4 border-2 border-gray-200 rounded-lg p-4 max-h-96 overflow-y-auto">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-sm font-semibold text-gray-700">Configure Permissions</h4>
+                  {!isPermissionSelected('all') && (
+                    <button
+                      type="button"
+                      onClick={() => setValue('permissions', ['all'], { shouldDirty: true })}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Grant Full Access
+                    </button>
+                  )}
+                </div>
+
+                {/* Disable all if 'all' permission is selected */}
+                {isPermissionSelected('all') ? (
+                  <div className="p-6 bg-green-50 rounded-lg border border-green-200 text-center">
+                    <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" />
+                    <p className="text-sm font-medium text-green-900">Full Access Granted</p>
+                    <p className="text-xs text-green-700 mt-1">
+                      This user has complete access to all system features
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const defaultPerms = ROLE_DEFAULT_PERMISSIONS[watchedValues.role] || [];
+                        setValue('permissions', defaultPerms, { shouldDirty: true });
+                      }}
+                      className="mt-3 text-xs text-green-700 hover:text-green-800 font-medium underline"
+                    >
+                      Revoke Full Access
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {Object.entries(ALL_PERMISSIONS).map(([categoryKey, category]) => {
+                      const categoryPermIds = category.permissions.map(p => p.id);
+                      const isFullySelected = isCategoryFullySelected(categoryPermIds);
+                      
+                      return (
+                        <div key={categoryKey} className="border border-gray-200 rounded-lg p-3">
+                          {/* Category Header */}
+                          <div className="flex items-center justify-between mb-2">
+                            <label className="flex items-center gap-2 cursor-pointer flex-1">
+                              <input
+                                type="checkbox"
+                                checked={isFullySelected}
+                                onChange={() => toggleCategoryPermissions(categoryPermIds)}
+                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span className="font-medium text-sm text-gray-900">{category.label}</span>
+                            </label>
+                            <span className="text-xs text-gray-500">
+                              {categoryPermIds.filter(p => isPermissionSelected(p)).length}/{categoryPermIds.length}
+                            </span>
+                          </div>
+
+                          {/* Individual Permissions */}
+                          <div className="ml-6 space-y-2">
+                            {category.permissions.map((permission) => (
+                              <label
+                                key={permission.id}
+                                className="flex items-start gap-2 cursor-pointer p-2 rounded hover:bg-gray-50 transition-colors"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isPermissionSelected(permission.id)}
+                                  onChange={() => togglePermission(permission.id)}
+                                  disabled={permission.id === 'all' && watchedValues.role !== 'admin'}
+                                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 mt-0.5"
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium text-gray-800">{permission.name}</div>
+                                  <div className="text-xs text-gray-500">{permission.description}</div>
+                                </div>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

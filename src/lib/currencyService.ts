@@ -93,7 +93,7 @@ class CurrencyService {
 
     try {
       // Get currencies from all payment-related tables
-      const [paymentsResult, poPaymentsResult, accountsResult] = await Promise.allSettled([
+      const [paymentsResult, poPaymentsResult] = await Promise.allSettled([
         // From customer payments
         supabase
           .from('customer_payments')
@@ -104,13 +104,9 @@ class CurrencyService {
         supabase
           .from('purchase_order_payments')
           .select('currency')
-          .not('currency', 'is', null),
-        
-        // From finance accounts
-        supabase
-          .from('finance_accounts')
-          .select('currency')
           .not('currency', 'is', null)
+        
+        // Note: finance_accounts table doesn't have a currency column, so we skip it
       ]);
 
       const currencies = new Set<string>();
@@ -126,13 +122,6 @@ class CurrencyService {
       if (poPaymentsResult.status === 'fulfilled' && poPaymentsResult.value.data) {
         poPaymentsResult.value.data.forEach((payment: any) => {
           if (payment.currency) currencies.add(payment.currency);
-        });
-      }
-      
-      // Process finance accounts
-      if (accountsResult.status === 'fulfilled' && accountsResult.value.data) {
-        accountsResult.value.data.forEach((account: any) => {
-          if (account.currency) currencies.add(account.currency);
         });
       }
 

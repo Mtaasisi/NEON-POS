@@ -383,31 +383,39 @@ class LatsAnalyticsService {
         .lt('created_at', previousPeriodEnd.toISOString())
         .eq('status', 'completed');
       
-      const previousRevenue = previousSales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+      const previousRevenue = previousSales?.reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0) || 0;
       const revenueGrowth = previousRevenue > 0 ? ((currentRevenue - previousRevenue) / previousRevenue * 100) : 0;
 
       // Calculate real profit margins from sales data
-      const { data: salesWithCosts } = await supabase
+      // Fetch sales first
+      const { data: salesForProfit } = await supabase
         .from('lats_sales')
-        .select(`
-          total_amount,
-          lats_sale_items (
-            total_price,
-            lats_products (cost_price),
-            lats_product_variants (cost_price)
-          )
-        `)
+        .select('id, total_amount')
         .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString())
         .eq('status', 'completed');
       
       let currentProfit = 0;
-      salesWithCosts?.forEach(sale => {
-        sale.lats_sale_items?.forEach(item => {
-          const costPrice = item.lats_products?.cost_price || item.lats_product_variants?.cost_price || 0;
+      
+      // Fetch sale items separately to avoid nested relationship issues
+      if (salesForProfit && salesForProfit.length > 0) {
+        const saleIds = salesForProfit.map(s => s.id);
+        
+        const { data: saleItems } = await supabase
+          .from('lats_sale_items')
+          .select('id, quantity, total_price, product_id, variant_id, cost_price')
+          .in('sale_id', saleIds);
+        
+        // Use cost_price directly from sale_items if available
+        saleItems?.forEach((item: any) => {
+          const costPrice = item.cost_price || 0;
           const sellingPrice = item.total_price || 0;
-          currentProfit += sellingPrice - costPrice;
+          const quantity = item.quantity || 1;
+          currentProfit += sellingPrice - (costPrice * quantity);
         });
-      });
+      }
       
       const previousProfit = previousRevenue * 0.3; // Simplified for now
       const profitGrowth = previousProfit > 0 ? ((currentProfit - previousProfit) / previousProfit * 100) : 0;

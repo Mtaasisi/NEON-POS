@@ -891,7 +891,7 @@ const supabaseProvider = {
       
       // Fetch suppliers separately (Neon doesn't support nested joins)
       const suppliersMap = new Map();
-      const supplierIds = [...new Set(purchaseOrders?.map((po: any) => po.supplier_id).filter(Boolean) || [])];
+      const supplierIds = [...new Set((purchaseOrders || []).map((po: any) => po.supplier_id).filter(Boolean))];
       
       if (supplierIds.length > 0) {
         const { data: suppliers, error: suppliersError } = await supabase
@@ -1004,8 +1004,8 @@ const supabaseProvider = {
       }
 
       // Fetch products and variants separately
-      const productIds = [...new Set(items?.map((item: any) => item.product_id).filter(Boolean) || [])];
-      const variantIds = [...new Set(items?.map((item: any) => item.variant_id).filter(Boolean) || [])];
+      const productIds = [...new Set((items || []).map((item: any) => item.product_id).filter(Boolean))];
+      const variantIds = [...new Set((items || []).map((item: any) => item.variant_id).filter(Boolean))];
 
       let productsMap = new Map();
       let variantsMap = new Map();
@@ -1067,25 +1067,31 @@ const supabaseProvider = {
           createdAt: supplier.created_at,
           updatedAt: supplier.updated_at
         } : null,
-        items: items?.map((item: any) => ({
-          id: item.id,
-          purchaseOrderId: item.purchase_order_id,
-          productId: item.product_id,
-          variantId: item.variant_id,
-          quantity: item.quantity_ordered || 0,
-          quantityOrdered: item.quantity_ordered || 0,
-          receivedQuantity: item.quantity_received || 0,
-          costPrice: item.unit_cost || 0,
-          unitCost: item.unit_cost || 0,
-          totalPrice: item.subtotal || 0,
-          subtotal: item.subtotal || 0,
-          status: item.status || 'pending',
-          notes: item.notes,
-          createdAt: item.created_at,
-          updatedAt: item.updated_at,
-          product: productsMap.get(item.product_id),
-          variant: variantsMap.get(item.variant_id)
-        })) || []
+        items: items?.map((item: any) => {
+          const quantityOrdered = item.quantity_ordered || 0;
+          const unitCost = item.unit_cost || 0;
+          const totalCost = quantityOrdered * unitCost; // Calculate total since it's not in DB
+          
+          return {
+            id: item.id,
+            purchaseOrderId: item.purchase_order_id,
+            productId: item.product_id,
+            variantId: item.variant_id,
+            quantity: quantityOrdered,
+            quantityOrdered: quantityOrdered,
+            receivedQuantity: item.quantity_received || 0,
+            costPrice: unitCost,
+            unitCost: unitCost,
+            totalPrice: totalCost,
+            subtotal: totalCost,
+            status: item.status || 'pending',
+            notes: item.notes,
+            createdAt: item.created_at,
+            updatedAt: item.updated_at,
+            product: productsMap.get(item.product_id),
+            variant: variantsMap.get(item.variant_id)
+          };
+        }) || []
       };
       
       // Debug mapped order in getPurchaseOrder
@@ -1144,7 +1150,7 @@ const supabaseProvider = {
         quantity_ordered: item.quantity,
         quantity_received: 0,
         unit_cost: item.costPrice,
-        subtotal: item.quantity * item.costPrice // Calculate subtotal (required by database)
+        subtotal: item.quantity * item.costPrice
       }));
 
       const { data: insertedItems, error: itemsError } = await supabase

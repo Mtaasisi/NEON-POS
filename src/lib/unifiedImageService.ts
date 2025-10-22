@@ -38,6 +38,60 @@ export class UnifiedImageService {
   private static readonly MAX_FILES_PER_PRODUCT = 5;
 
   /**
+   * Convert PNG with transparent background to white background
+   */
+  private static async convertPngToWhiteBackground(file: File): Promise<File> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          // Create canvas with image dimensions
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Failed to get canvas context'));
+            return;
+          }
+          
+          // Fill with white background
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw the image on top of white background
+          ctx.drawImage(img, 0, 0);
+          
+          // Convert canvas to blob
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error('Failed to convert canvas to blob'));
+              return;
+            }
+            
+            // Create a new file from the blob
+            const newFile = new File([blob], file.name, {
+              type: 'image/png',
+              lastModified: Date.now()
+            });
+            
+            resolve(newFile);
+          }, 'image/png', 0.95);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  }
+
+  /**
    * Upload a single image - Simple one-step process
    */
   static async uploadImage(
@@ -47,8 +101,21 @@ export class UnifiedImageService {
     isPrimary: boolean = false
   ): Promise<UploadResult> {
     try {
-      // 1. Validate file
-      const validation = this.validateFile(file);
+      // Convert PNG to white background if needed
+      let processedFile = file;
+      if (file.type === 'image/png') {
+        console.log('🎨 Converting PNG transparent background to white...');
+        try {
+          processedFile = await this.convertPngToWhiteBackground(file);
+          console.log('✅ PNG background converted to white successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to convert PNG background, using original file:', error);
+          // Continue with original file if conversion fails
+        }
+      }
+
+      // 1. Validate file (use processedFile for validation)
+      const validation = this.validateFile(processedFile);
       if (!validation.valid) {
         return { success: false, error: validation.error };
       }
@@ -69,7 +136,7 @@ export class UnifiedImageService {
       let imageUrl: string;
       if (import.meta.env.DEV) {
         // Development: Use base64 for immediate preview
-        imageUrl = await this.fileToBase64(file);
+        imageUrl = await this.fileToBase64(processedFile);
         
         // Check if base64 URL is too large and compress if needed
         if (imageUrl.length > 5000) {
@@ -84,14 +151,14 @@ export class UnifiedImageService {
         try {
           const { data, error } = await supabase.storage
             .from('product-images')
-            .upload(fileName, file);
+            .upload(fileName, processedFile);
 
           if (error) throw error;
           imageUrl = `${supabase.storage.from('product-images').getPublicUrl(fileName).data.publicUrl}`;
         } catch (storageError) {
           console.error('Storage upload failed, falling back to base64:', storageError);
           // Fallback to base64 if storage fails
-          imageUrl = await this.fileToBase64(file);
+          imageUrl = await this.fileToBase64(processedFile);
         }
       }
 
@@ -106,7 +173,7 @@ export class UnifiedImageService {
           url: imageUrl,
           thumbnailUrl: imageUrl,
           fileName: file.name,
-          fileSize: file.size,
+          fileSize: processedFile.size,
           isPrimary: isPrimary,
           uploadedAt: new Date().toISOString()
         };
@@ -118,9 +185,9 @@ export class UnifiedImageService {
           .insert({
             product_id: productId,
             image_url: imageUrl,
-            thumbnail_url: imageUrl, // Same URL for now
+            thumbnail_url: imageUrl, // User will upload their own thumbnail
             file_name: file.name,
-            file_size: file.size,
+            file_size: processedFile.size,
             is_primary: isPrimary,
             uploaded_by: userId
           })
@@ -133,8 +200,8 @@ export class UnifiedImageService {
           id: dbData.id,
           url: dbData.image_url,
           thumbnailUrl: dbData.thumbnail_url,
-          fileName: dbData.file_name,
-          fileSize: dbData.file_size,
+          fileName: file.name,
+          fileSize: processedFile.size,
           isPrimary: dbData.is_primary,
           uploadedAt: dbData.created_at
         };
@@ -281,6 +348,81 @@ export class UnifiedImageService {
   }
 
   /**
+   * Upload a separate thumbnail for an existing image
+   */
+  static async uploadThumbnail(
+    thumbnailFile: File,
+    imageId: string,
+    userId: string
+  ): Promise<{ success: boolean; thumbnailUrl?: string; error?: string }> {
+    try {
+      // Convert PNG to white background if needed
+      let processedFile = thumbnailFile;
+      if (thumbnailFile.type === 'image/png') {
+        console.log('🎨 Converting thumbnail PNG transparent background to white...');
+        try {
+          processedFile = await this.convertPngToWhiteBackground(thumbnailFile);
+          console.log('✅ Thumbnail PNG background converted to white successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to convert thumbnail PNG background, using original file:', error);
+          // Continue with original file if conversion fails
+        }
+      }
+
+      // 1. Validate file (use processedFile for validation)
+      const validation = this.validateFile(processedFile);
+      if (!validation.valid) {
+        return { success: false, error: validation.error };
+      }
+
+      // 2. Generate safe filename for thumbnail
+      const timestamp = Date.now();
+      const randomId = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
+      const extension = thumbnailFile.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `thumb_${timestamp}_${randomId}.${extension}`;
+
+      // 3. Upload thumbnail to storage
+      let thumbnailUrl: string;
+      if (import.meta.env.DEV) {
+        // Development: Use base64 for immediate preview
+        thumbnailUrl = await this.fileToBase64(processedFile);
+        console.log('🛠️ Development mode: Using base64 thumbnail');
+      } else {
+        // Production: Upload to Supabase storage
+        try {
+          const { data, error } = await supabase.storage
+            .from('product-images')
+            .upload(`thumbnails/${fileName}`, processedFile);
+
+          if (error) throw error;
+          thumbnailUrl = `${supabase.storage.from('product-images').getPublicUrl(`thumbnails/${fileName}`).data.publicUrl}`;
+        } catch (storageError) {
+          console.error('Thumbnail storage upload failed, falling back to base64:', storageError);
+          thumbnailUrl = await this.fileToBase64(processedFile);
+        }
+      }
+
+      // 4. Update database with thumbnail URL
+      const { error: updateError } = await supabase
+        .from('product_images')
+        .update({ thumbnail_url: thumbnailUrl })
+        .eq('id', imageId);
+
+      if (updateError) throw updateError;
+
+      console.log('✅ Thumbnail uploaded successfully for image:', imageId);
+      return { success: true, thumbnailUrl };
+
+    } catch (error) {
+      console.error('Upload thumbnail failed:', error);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Thumbnail upload failed' 
+      };
+    }
+  }
+
+  /**
    * Validate file
    */
   private static validateFile(file: File): { valid: boolean; error?: string } {
@@ -340,8 +482,21 @@ export class UnifiedImageService {
     isPrimary: boolean = false
   ): Promise<{ success: boolean; image?: VariantImage; error?: string }> {
     try {
-      // 1. Validate file
-      const validation = this.validateFile(file);
+      // Convert PNG to white background if needed
+      let processedFile = file;
+      if (file.type === 'image/png') {
+        console.log('🎨 Converting variant PNG transparent background to white...');
+        try {
+          processedFile = await this.convertPngToWhiteBackground(file);
+          console.log('✅ Variant PNG background converted to white successfully');
+        } catch (error) {
+          console.warn('⚠️ Failed to convert variant PNG background, using original file:', error);
+          // Continue with original file if conversion fails
+        }
+      }
+
+      // 1. Validate file (use processedFile for validation)
+      const validation = this.validateFile(processedFile);
       if (!validation.valid) {
         return { success: false, error: validation.error };
       }
@@ -353,7 +508,7 @@ export class UnifiedImageService {
       }
 
       // 3. Convert to base64 for storage
-      const base64Data = await this.fileToBase64(file);
+      const base64Data = await this.fileToBase64(processedFile);
       
       // 4. Store in database
       const { data, error } = await supabase
@@ -362,8 +517,8 @@ export class UnifiedImageService {
           variant_id: variantId,
           image_url: base64Data,
           file_name: file.name,
-          file_size: file.size,
-          mime_type: file.type,
+          file_size: processedFile.size,
+          mime_type: processedFile.type,
           is_primary: isPrimary,
           uploaded_by: userId
         })

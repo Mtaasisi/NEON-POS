@@ -468,11 +468,8 @@ const UnifiedInventoryPage: React.FC = () => {
   const filteredProducts = useMemo(() => {
     let filtered = products;
 
-    // Exclude sample products (products with 'sample', 'test', or 'dummy' in the name)
-    filtered = filtered.filter(product => {
-      const name = product.name.toLowerCase();
-      return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
-    });
+    // Note: Showing ALL products including test/sample products as per user preference
+    // Previously filtered out: products with 'sample', 'test', or 'dummy' in the name
 
     // Apply search filter with enhanced variant search
     if (searchQuery) {

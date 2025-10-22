@@ -27,7 +27,8 @@ import { productCacheService } from '../../../lib/productCacheService';
 import ProductInformationForm from '../components/product/ProductInformationForm';
 import ProductVariantsSection from '../components/product/ProductVariantsSection';
 import StorageLocationForm from '../components/product/StorageLocationForm';
-import ProductSuccessModal from '../components/product/ProductSuccessModal';
+import { useSuccessModal } from '../../../hooks/useSuccessModal';
+import SuccessModal from '../../../components/ui/SuccessModal';
 
 // Import ProductVariant type
 interface ProductVariant {
@@ -179,7 +180,7 @@ const AddProductPageOptimized: React.FC = () => {
   const [draftSaveTimer, setDraftSaveTimer] = useState<NodeJS.Timeout | null>(null);
 
   // Success modal state
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const successModal = useSuccessModal();
   const [createdProductId, setCreatedProductId] = useState<string>('');
   const [createdProductName, setCreatedProductName] = useState<string>('');
 
@@ -195,119 +196,7 @@ const AddProductPageOptimized: React.FC = () => {
   // Draft storage key
   const DRAFT_KEY = `product_draft_${currentUser?.id || 'anonymous'}`;
 
-  // Success modal action handlers
-  const handleViewProduct = () => {
-    setShowSuccessModal(false);
-    navigate(`/lats/products/${createdProductId}`);
-  };
-
-  const handleEditProduct = () => {
-    setShowSuccessModal(false);
-    navigate(`/lats/products/${createdProductId}/edit`);
-  };
-
-  const handleDuplicateProduct = () => {
-    setShowSuccessModal(false);
-    
-    // Use utility function to duplicate product
-    const { productData: duplicatedFormData, variants: duplicatedVariants } = duplicateProduct(formData, variants);
-    
-    setFormData(duplicatedFormData);
-    setVariants(duplicatedVariants);
-    setUseVariants(useVariants);
-    navigate('/lats/add-product');
-  };
-
-  const handleCreateAnother = () => {
-    setShowSuccessModal(false);
-    // Reset form completely
-    const newSku = generateAutoSKU();
-    setFormData({
-      name: '',
-      sku: newSku,
-      categoryId: '',
-  
-      condition: 'new' as 'new' | 'used' | 'refurbished',
-      description: '',
-      specification: '',
-      price: 0,
-      costPrice: 0,
-      stockQuantity: 0,
-      minStockLevel: 2,
-      storageRoomId: '',
-      shelfId: '',
-      metadata: {},
-      variants: []
-    });
-    // Reset to one default variant
-    setVariants([{
-      name: 'Variant 1',
-      sku: `${newSku}-V01`,
-      costPrice: 0,
-      price: 0,
-      stockQuantity: 0,
-      minStockLevel: 2,
-      attributes: {}
-    }]);
-    setUseVariants(true);
-    setShowVariants(true);
-    navigate('/lats/add-product');
-  };
-
-  const handleCopyProductLink = async () => {
-    try {
-      const productUrl = `${window.location.origin}/lats/products/${createdProductId}`;
-      await navigator.clipboard.writeText(productUrl);
-      toast.success('Product link copied to clipboard!');
-    } catch (error) {
-      toast.error('Failed to copy link');
-    }
-  };
-
-  const handleDownloadDetails = () => {
-    // Generate comprehensive product report
-    const productReport = generateProductReport(formData, variants);
-    
-    const blob = new Blob([productReport], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${createdProductName.replace(/[^a-zA-Z0-9]/g, '_')}_report.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('Product report downloaded!');
-  };
-
-  const handleShareProduct = async () => {
-    try {
-      const productUrl = `${window.location.origin}/lats/products/${createdProductId}`;
-      const shareData = {
-        title: `Product: ${createdProductName}`,
-        text: `Check out this product: ${createdProductName}`,
-        url: productUrl
-      };
-
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        // Fallback to copying link
-        await navigator.clipboard.writeText(productUrl);
-        toast.success('Product link copied to clipboard!');
-      }
-    } catch (error) {
-      toast.error('Failed to share product');
-    }
-  };
-
-  const handleGoToInventory = async () => {
-    setShowSuccessModal(false);
-    // Ensure products are fresh before navigating
-    productCacheService.clearProducts();
-    await loadProducts(null, true);
-    navigate('/lats/unified-inventory');
-  };
+  // Success modal action handlers removed - now handled inline in successModal.show()
 
   // Auto-save draft
   const saveDraft = useCallback(() => {
@@ -821,8 +710,51 @@ const AddProductPageOptimized: React.FC = () => {
       await loadProducts(null, true); // Force reload, bypass cache
       console.log('✅ Products reloaded successfully');
       
-      // Show success modal instead of navigating away
-      setShowSuccessModal(true);
+      // Show success modal with action buttons
+      successModal.show(`Product "${formData.name}" has been created successfully!`, {
+        title: 'Product Created',
+        actionButtons: [
+          {
+            label: 'View Product',
+            onClick: () => {
+              productCacheService.clearProducts();
+              loadProducts(null, true);
+              navigate(`/lats/products/${createdProductId}`);
+            },
+            variant: 'primary'
+          },
+          {
+            label: 'Edit Product',
+            onClick: () => navigate(`/lats/products/${createdProductId}/edit`),
+            variant: 'secondary'
+          },
+          {
+            label: 'Create Another',
+            onClick: () => {
+              const newSku = generateAutoSKU();
+              setFormData({
+                name: '',
+                sku: newSku,
+                categoryId: '',
+                condition: 'new' as 'new' | 'used' | 'refurbished',
+                description: '',
+                specification: '',
+                price: 0,
+                costPrice: 0,
+                stockQuantity: 0,
+                minStockLevel: 2,
+                storageRoomId: '',
+                shelfId: '',
+                metadata: {},
+                variants: [],
+              });
+              setVariants([]);
+              setShowPreview(false);
+            },
+            variant: 'secondary'
+          }
+        ]
+      });
       
     } catch (error) {
       console.error('Error creating product:', error);
@@ -1697,21 +1629,8 @@ const AddProductPageOptimized: React.FC = () => {
         </div>
       )}
 
-      {/* Product Success Modal */}
-      <ProductSuccessModal
-        isOpen={showSuccessModal}
-        onClose={() => setShowSuccessModal(false)}
-        productId={createdProductId}
-        productName={createdProductName}
-        onViewProduct={handleViewProduct}
-        onEditProduct={handleEditProduct}
-        onDuplicateProduct={handleDuplicateProduct}
-        onCreateAnother={handleCreateAnother}
-        onCopyProductLink={handleCopyProductLink}
-        onDownloadDetails={handleDownloadDetails}
-        onShareProduct={handleShareProduct}
-        onGoToInventory={handleGoToInventory}
-      />
+      {/* Success Modal */}
+      <SuccessModal {...successModal.props} />
     </div>
   );
 };

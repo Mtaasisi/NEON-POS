@@ -1,5 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient';
-import { 
+import type { 
   Notification, 
   NotificationType, 
   NotificationCategory, 
@@ -147,26 +147,6 @@ export class NotificationService {
       message,
       priority,
       metadata
-    );
-  }
-
-  // Create diagnostic notification
-  static async createDiagnosticNotification(
-    userId: string,
-    diagnosticId: string,
-    type: NotificationType,
-    title: string,
-    message: string,
-    priority: NotificationPriority = 'normal'
-  ): Promise<Notification | null> {
-    return this.createNotification(
-      userId,
-      type,
-      'diagnostics',
-      title,
-      message,
-      priority,
-      { diagnosticId }
     );
   }
 

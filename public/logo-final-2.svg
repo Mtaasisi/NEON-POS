@@ -1,0 +1,20 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="f2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#f2)"/>
+  
+  <!-- D with single bar accent -->
+  <g>
+    <circle cx="100" cy="100" r="45" fill="white"/>
+    <path d="M 83 82 L 83 118 L 106 118 C 118 118 127 109 127 100 C 127 91 118 82 106 82 Z" 
+          fill="url(#f2)"/>
+    <!-- Single vertical bar accent -->
+    <rect x="135" y="95" width="4" height="20" rx="2" fill="white" opacity="0.9"/>
+  </g>
+</svg>
+

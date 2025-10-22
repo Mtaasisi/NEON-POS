@@ -127,7 +127,7 @@ const DynamicDeliveryCalculator: React.FC<DynamicDeliveryCalculatorProps> = ({
         </div>
 
         {/* Area Selection */}
-        {deliverySettings.enable_delivery_areas && deliverySettings.delivery_areas.length > 0 && (
+        {deliverySettings.enable_delivery_areas && deliverySettings.delivery_areas && deliverySettings.delivery_areas.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Delivery Area
@@ -140,7 +140,7 @@ const DynamicDeliveryCalculator: React.FC<DynamicDeliveryCalculatorProps> = ({
               <option value="">Select area</option>
               {deliverySettings.delivery_areas.map((area) => (
                 <option key={area} value={area}>
-                  {area} ({deliverySettings.area_delivery_fees[area] || deliverySettings.default_delivery_fee} TZS)
+                  {area} ({deliverySettings.area_delivery_fees?.[area] || deliverySettings.default_delivery_fee} TZS)
                 </option>
               ))}
             </select>

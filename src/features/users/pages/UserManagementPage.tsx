@@ -110,15 +110,15 @@ const UserManagementPage: React.FC = () => {
         {
           id: 'technician',
           name: 'Technician',
-          description: 'Device diagnostics and repair',
-          permissions: ['devices', 'diagnostics', 'spare-parts'],
+          description: 'Device repair',
+          permissions: ['devices', 'spare-parts'],
           userCount: rolesMap.get('technician') || 0
         },
         {
           id: 'customer-care',
           name: 'Customer Care',
           description: 'Customer support and service',
-          permissions: ['customers', 'diagnostics', 'appointments'],
+          permissions: ['customers', 'appointments'],
           userCount: rolesMap.get('customer-care') || 0
         },
         {

@@ -1,0 +1,21 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="modernDGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="200" height="200" rx="44" fill="url(#modernDGrad)"/>
+  
+  <!-- Modern D with negative space -->
+  <g>
+    <!-- Outer D -->
+    <path d="M 55 50 L 55 150 L 110 150 C 138 150 155 133 155 100 C 155 67 138 50 110 50 Z" fill="white"/>
+    
+    <!-- Inner cutout -->
+    <path d="M 75 70 L 110 70 C 127 70 140 83 140 100 C 140 117 127 130 110 130 L 75 130 Z" fill="url(#modernDGrad)"/>
+  </g>
+</svg>
+

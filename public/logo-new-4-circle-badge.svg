@@ -1,0 +1,31 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="badge1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+    
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="5" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="200" height="200" rx="44" fill="url(#badge1)"/>
+  
+  <!-- Premium circle badge with shadow -->
+  <g filter="url(#shadow)">
+    <!-- Outer ring -->
+    <circle cx="100" cy="100" r="54" fill="none" stroke="white" stroke-width="2" opacity="0.3"/>
+    
+    <!-- Main circle -->
+    <circle cx="100" cy="100" r="48" fill="white"/>
+    
+    <!-- Clean D inside -->
+    <path d="M 82 76 L 82 124 L 108 124 C 124 124 136 112 136 100 C 136 88 124 76 108 76 Z" 
+          fill="url(#badge1)"/>
+    
+    <!-- Small accent -->
+    <circle cx="118" cy="83" r="3" fill="#fbbf24"/>
+  </g>
+</svg>

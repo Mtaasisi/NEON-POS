@@ -27,8 +27,9 @@ import AddSupplierModal from '../components/purchase-order/AddSupplierModal';
 import AddProductModal from '../components/purchase-order/AddProductModal';
 import PurchaseCartItem from '../components/purchase-order/PurchaseCartItem';
 import ProductDetailModal from '../components/purchase-order/ProductDetailModal';
-import PurchaseOrderSuccessModal from '../components/purchase-order/PurchaseOrderSuccessModal';
 import OrderManagementModal from '../components/purchase-order/OrderManagementModal';
+import { useSuccessModal } from '../../../hooks/useSuccessModal';
+import SuccessModal from '../../../components/ui/SuccessModal';
 
 import { toast } from 'react-hot-toast';
 
@@ -194,14 +195,21 @@ const POcreate: React.FC = () => {
   const { currentUser } = useAuth();
   const { confirm, alert } = useDialog();
   const { playClickSound } = usePOSClickSounds();
+  const successModal = useSuccessModal();
   
-  // Get edit parameter from URL (memoized to prevent re-renders)
+  // Get edit and duplicate parameters from URL (memoized to prevent re-renders)
   const editOrderId = useMemo(() => {
     const urlParams = new URLSearchParams(window.location.search);
     return urlParams.get('edit');
   }, []);
   
+  const duplicateOrderId = useMemo(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('duplicate');
+  }, []);
+  
   const isEditMode = useMemo(() => !!editOrderId, [editOrderId]);
+  const isDuplicateMode = useMemo(() => !!duplicateOrderId, [duplicateOrderId]);
   
   // Database state management
   const { 
@@ -239,11 +247,8 @@ const POcreate: React.FC = () => {
       return [];
     }
 
-    // Filter out sample products first
-    const filteredDbProducts = dbProducts.filter(product => {
-      const name = product.name.toLowerCase();
-      return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
-    });
+    // Note: Showing ALL products including test/sample products as per user preference
+    const filteredDbProducts = dbProducts;
     
     
     const transformedProducts = filteredDbProducts.map(product => {
@@ -510,6 +515,97 @@ const POcreate: React.FC = () => {
     }
   }, [editOrderId, suppliers.length, loadPurchaseOrderForEdit]);
 
+  // Load purchase order for duplication - similar to edit but generates new order
+  const loadPurchaseOrderForDuplication = useCallback(async (orderId: string) => {
+    setIsLoadingEditData(true);
+    setEditError('');
+    
+    try {
+      console.log('📋 Loading purchase order for duplication:', orderId);
+      const response = await getPurchaseOrder(orderId);
+      
+      if (response.ok && response.data) {
+        const order = response.data;
+        console.log('✅ Purchase order loaded for duplication:', order);
+        
+        // Set supplier
+        if (order.supplierId) {
+          const supplier = suppliers.find((s: Supplier) => s.id === order.supplierId);
+          if (supplier) {
+            setSelectedSupplier(supplier);
+          }
+        }
+        
+        // Set cart items from order items
+        if (order.items && order.items.length > 0) {
+          const cartItems = order.items.map((item: any) => ({
+            id: `${item.productId}-${item.variantId}`,
+            productId: item.productId,
+            variantId: item.variantId,
+            name: item.product?.name || 'Unknown Product',
+            variantName: item.variant?.name || 'Default Variant',
+            sku: item.variant?.sku || 'N/A',
+            costPrice: item.costPrice || 0,
+            quantity: item.quantity || 1,
+            totalPrice: (item.costPrice || 0) * (item.quantity || 1),
+            currentStock: item.variant?.stockQuantity || 0,
+            category: item.product?.categoryName || 'Unknown Category',
+            images: item.product?.images || []
+          }));
+          
+          setPurchaseCartItems(cartItems);
+        }
+        
+        // Set other order details (but don't copy order number or status)
+        if (order.expectedDelivery) {
+          setExpectedDelivery(order.expectedDelivery);
+          setShippingInfo(prev => ({
+            ...prev,
+            expectedDelivery: order.expectedDelivery
+          }));
+        }
+        
+        if (order.notes) {
+          setPurchaseOrderNotes(order.notes + ' (Duplicated)');
+        }
+        
+        if (order.paymentTerms) {
+          setPaymentTerms(order.paymentTerms);
+        }
+        
+        if (order.currency) {
+          const currency = SUPPORTED_CURRENCIES.find(c => c.code === order.currency);
+          if (currency) {
+            setSelectedCurrency(currency);
+          }
+        }
+        
+        // Always set status to draft for duplicated orders
+        setPurchaseOrderStatus('draft');
+        
+        toast.success(`Purchase order duplicated successfully - Review and save`);
+      } else {
+        const errorMsg = response.message || 'Failed to load purchase order for duplication';
+        setEditError(errorMsg);
+        toast.error(errorMsg);
+      }
+    } catch (error) {
+      const errorMsg = 'Error loading purchase order for duplication';
+      console.error('Error loading purchase order:', error);
+      setEditError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsLoadingEditData(false);
+    }
+  }, [getPurchaseOrder, suppliers]);
+
+  // Load purchase order for duplication when duplicateOrderId is available
+  useEffect(() => {
+    if (duplicateOrderId && suppliers.length > 0) {
+      loadPurchaseOrderForDuplication(duplicateOrderId);
+    }
+  }, [duplicateOrderId, suppliers.length, loadPurchaseOrderForDuplication]);
+
   // Local state for purchase order
   const [purchaseCartItems, setPurchaseCartItems] = useState<PurchaseCartItem[]>([]);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
@@ -563,7 +659,6 @@ const POcreate: React.FC = () => {
   const [showSupplierDetailsModal, setShowSupplierDetailsModal] = useState(false);
   const [selectedProductForModal, setSelectedProductForModal] = useState<any>(null);
   const [isCreatingPO, setIsCreatingPO] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showShippingModal, setShowShippingModal] = useState(false);
   const [showShippingConfigModal, setShowShippingConfigModal] = useState(false);
   const [createdPurchaseOrder, setCreatedPurchaseOrder] = useState<any>(null);
@@ -982,11 +1077,35 @@ const POcreate: React.FC = () => {
       const result = await createPurchaseOrder(purchaseOrderData);
       
       if (result.ok) {
-        toast.success(`Purchase Order ${orderNumber} ${isEditMode ? 'updated' : 'created'} successfully!`);
-        
-        // Store the created purchase order and show success modal
+        // Store the created purchase order
         setCreatedPurchaseOrder(result.data);
-        setShowSuccessModal(true);
+        
+        // Show success modal with action buttons
+        successModal.show(
+          `Purchase Order ${orderNumber} has been ${isEditMode && !isDuplicateMode ? 'updated' : 'created'} successfully!`,
+          {
+            title: `PO ${isEditMode && !isDuplicateMode ? 'Updated' : 'Created'}`,
+            actionButtons: [
+              {
+                label: 'View Order',
+                onClick: () => navigate(`/lats/purchase-orders/${result.data.id}`),
+                variant: 'primary'
+              },
+              {
+                label: 'Edit Order',
+                onClick: () => navigate(`/lats/purchase-orders/${result.data.id}/edit`),
+                variant: 'secondary'
+              },
+              {
+                label: 'Create Another',
+                onClick: () => {
+                  // Form is already cleared below
+                },
+                variant: 'secondary'
+              }
+            ]
+          }
+        );
         
         // Clear form data
         setPurchaseCartItems([]);
@@ -1104,13 +1223,25 @@ const POcreate: React.FC = () => {
                 )}
                 
                 {/* Edit Mode Success State */}
-                {isEditMode && !isLoadingEditData && !editError && (
+                {isEditMode && !isDuplicateMode && !isLoadingEditData && !editError && (
                   <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
                     <div className="flex items-center gap-3">
                       <CheckCircle className="w-5 h-5 text-green-600" />
                       <div>
                         <span className="text-green-800 font-medium">Purchase order loaded for editing</span>
                         <p className="text-sm text-green-700 mt-1">You can add more items, modify quantities, or change details below</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {isDuplicateMode && !isLoadingEditData && !editError && (
+                  <div className="p-4 bg-purple-50 border border-purple-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-purple-600" />
+                      <div>
+                        <span className="text-purple-800 font-medium">Purchase order duplicated successfully</span>
+                        <p className="text-sm text-purple-700 mt-1">Review the order details and click "Create PO" to save as a new purchase order</p>
                       </div>
                     </div>
                   </div>
@@ -1298,11 +1429,11 @@ const POcreate: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-xl font-semibold text-gray-800">
-                    {isEditMode ? 'Edit Purchase Order' : 'Purchase Cart'}
+                    {isEditMode ? 'Edit Purchase Order' : isDuplicateMode ? 'Duplicate Purchase Order' : 'Purchase Cart'}
                   </h2>
                   <p className="text-sm text-gray-600">
-                    {purchaseCartItems.length} items {isEditMode ? 'in order' : 'to purchase'}
-                    {isEditMode && (
+                    {purchaseCartItems.length} items {isEditMode || isDuplicateMode ? 'in order' : 'to purchase'}
+                    {(isEditMode || isDuplicateMode) && (
                       <span className="block text-xs text-blue-600 mt-1">
                         💡 You can add more items using the search above
                       </span>
@@ -1534,7 +1665,7 @@ const POcreate: React.FC = () => {
                       className="w-full h-16 bg-gradient-to-r from-orange-500 to-amber-600 text-white text-lg font-bold"
                       disabled={!selectedSupplier || purchaseCartItems.length === 0 || isCreatingPO}
                     >
-                      {isCreatingPO ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update PO' : 'Create PO')}
+                      {isCreatingPO ? (isEditMode && !isDuplicateMode ? 'Updating...' : 'Creating...') : (isEditMode && !isDuplicateMode ? 'Update PO' : 'Create PO')}
                     </GlassButton>
                   </div>
                 </>
@@ -1702,90 +1833,8 @@ const POcreate: React.FC = () => {
         />
       )}
 
-      {/* Purchase Order Success Modal */}
-      {showSuccessModal && createdPurchaseOrder && (
-        <PurchaseOrderSuccessModal
-          isOpen={showSuccessModal}
-          onClose={() => setShowSuccessModal(false)}
-          purchaseOrder={createdPurchaseOrder}
-          onViewOrder={() => {
-            setShowSuccessModal(false);
-            navigate(`/lats/purchase-orders/${createdPurchaseOrder.id}`);
-          }}
-          onEditOrder={() => {
-            setShowSuccessModal(false);
-            navigate(`/lats/purchase-orders/${createdPurchaseOrder.id}/edit`);
-          }}
-          onPrintOrder={async () => {
-            // Implement print functionality
-            const printWindow = window.open('', '_blank');
-            if (printWindow) {
-              const printContent = await generatePrintContent(createdPurchaseOrder);
-              printWindow.document.write(printContent);
-              printWindow.document.close();
-              printWindow.print();
-            }
-          }}
-          onSendToSupplier={() => {
-            // Implement send to supplier functionality
-            if (createdPurchaseOrder.supplier?.email) {
-              const subject = `Purchase Order ${createdPurchaseOrder.orderNumber}`;
-              const body = `Please find attached the purchase order details.`;
-              const mailtoLink = `mailto:${createdPurchaseOrder.supplier.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-              window.open(mailtoLink);
-            } else {
-              toast.error('Supplier email not available');
-            }
-          }}
-          onDownloadPDF={() => {
-            // Implement PDF download functionality
-            try {
-              const pdfContent = generatePDFContent(createdPurchaseOrder);
-              const blob = new Blob([pdfContent], { type: 'application/pdf' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = `Purchase_Order_${createdPurchaseOrder.orderNumber}_${new Date().toISOString().split('T')[0]}.pdf`;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              URL.revokeObjectURL(url);
-              toast.success('PDF downloaded successfully');
-            } catch (error) {
-              console.error('Error generating PDF:', error);
-              toast.error('Failed to generate PDF');
-            }
-          }}
-          onCopyOrderNumber={() => {
-            navigator.clipboard.writeText(createdPurchaseOrder.orderNumber);
-            toast.success('Order number copied to clipboard!');
-          }}
-          onShareOrder={() => {
-            // Implement share functionality
-            if (navigator.share) {
-              navigator.share({
-                title: `Purchase Order ${createdPurchaseOrder.orderNumber}`,
-                text: `Purchase Order ${createdPurchaseOrder.orderNumber} - ${createdPurchaseOrder.supplier?.name}`,
-                url: window.location.origin + `/lats/purchase-orders/${createdPurchaseOrder.id}`
-              });
-            } else {
-              // Fallback: Copy to clipboard
-              const shareUrl = `${window.location.origin}/lats/purchase-orders/${createdPurchaseOrder.id}`;
-              navigator.clipboard.writeText(shareUrl).then(() => {
-                toast.success('Order link copied to clipboard');
-              });
-            }
-          }}
-          onGoToOrders={() => {
-            setShowSuccessModal(false);
-            navigate('/lats/purchase-orders');
-          }}
-          onCreateAnother={() => {
-            setShowSuccessModal(false);
-            // Form is already cleared, user can create another PO
-          }}
-        />
-      )}
+      {/* Success Modal */}
+      <SuccessModal {...successModal.props} />
 
       {/* Order Management Modal */}
       <OrderManagementModal

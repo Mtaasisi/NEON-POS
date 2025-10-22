@@ -148,10 +148,10 @@ class AppointmentService {
       if (appointmentData.technician_id) {
         const { data: technician } = await supabase
           .from('employees')
-          .select('name')
+          .select('full_name')
           .eq('id', appointmentData.technician_id)
           .single();
-        technician_name = technician?.name;
+        technician_name = technician?.full_name;
       }
 
       // Get location name if location_id is provided
@@ -201,10 +201,10 @@ class AppointmentService {
       if (updateData.technician_id) {
         const { data: technician } = await supabase
           .from('employees')
-          .select('name')
+          .select('full_name')
           .eq('id', updateData.technician_id)
           .single();
-        technician_name = technician?.name;
+        technician_name = technician?.full_name;
       }
 
       // Get location name if location_id is provided

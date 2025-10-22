@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Award, TrendingUp, ExternalLink } from 'lucide-react';
-import { useAuth } from '../../../../context/AuthContext';
+import { Users, Award, ExternalLink } from 'lucide-react';
+import { useDateRange } from '../../../../context/DateRangeContext';
 import { supabase } from '../../../../lib/supabaseClient';
 import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
 
@@ -19,38 +19,28 @@ interface StaffMember {
 
 export const StaffPerformanceWidget: React.FC<StaffPerformanceWidgetProps> = ({ className }) => {
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { dateRange, getDateRangeForQuery } = useDateRange();
   const [topStaff, setTopStaff] = useState<StaffMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalStaff, setTotalStaff] = useState(0);
 
   useEffect(() => {
     loadStaffPerformance();
-  }, []);
+  }, [dateRange]); // Reload when date range changes
 
   const loadStaffPerformance = async () => {
     try {
       setIsLoading(true);
       const currentBranchId = getCurrentBranchId();
+      const { startDate, endDate } = getDateRangeForQuery();
       
-      // Get last 7 days
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      
-      // Query sales with user info
+      // Query sales (Neon compatible approach)
+      // ✅ FIXED: Use sold_by instead of user_id (correct field name)
       let query = supabase
         .from('lats_sales')
-        .select(`
-          id,
-          total_amount,
-          user_id,
-          users:users!user_id (
-            id,
-            email,
-            full_name
-          )
-        `)
-        .gte('created_at', weekAgo.toISOString());
+        .select('id, total_amount, sold_by, created_at, branch_id')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate);
       
       if (currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
@@ -60,18 +50,102 @@ export const StaffPerformanceWidget: React.FC<StaffPerformanceWidgetProps> = ({ 
       
       if (error) throw error;
       
+      if (!sales || sales.length === 0) {
+        setTopStaff([]);
+        setTotalStaff(0);
+        return;
+      }
+      
+      // Fetch user info separately (try both users and employees tables)
+      const soldByValues = [...new Set(sales.map((s: any) => s.sold_by).filter(Boolean))] as string[];
+      
+      let usersMap = new Map();
+      if (soldByValues.length > 0) {
+        // Separate UUIDs from emails
+        const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        const userIds = soldByValues.filter(id => isValidUUID(id));
+        const emails = soldByValues.filter(id => !isValidUUID(id));
+        
+        // Query by IDs if we have valid UUIDs
+        if (userIds.length > 0) {
+          // First try users table
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, email, full_name')
+            .in('id', userIds);
+          
+          if (!usersError && users) {
+            users.forEach((user: any) => {
+              usersMap.set(user.id, user);
+            });
+          }
+          
+          // Also try employees table for those not found in users
+          // ✅ Note: employees table uses 'full_name' column
+          const { data: employees, error: employeesError } = await supabase
+            .from('employees')
+            .select('id, email, full_name')
+            .in('id', userIds);
+          
+          if (!employeesError && employees) {
+            employees.forEach((emp: any) => {
+              if (!usersMap.has(emp.id)) {
+                usersMap.set(emp.id, emp); // Use employee data directly
+              }
+            });
+          }
+        }
+        
+        // Query by emails if we have email addresses
+        if (emails.length > 0) {
+          // Try users table by email
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, email, full_name')
+            .in('email', emails);
+          
+          if (!usersError && users) {
+            users.forEach((user: any) => {
+              usersMap.set(user.email, user);
+            });
+          }
+          
+          // Also try employees table by email
+          // ✅ Note: employees table uses 'full_name' column
+          const { data: employees, error: employeesError } = await supabase
+            .from('employees')
+            .select('id, email, full_name')
+            .in('email', emails);
+          
+          if (!employeesError && employees) {
+            employees.forEach((emp: any) => {
+              if (!usersMap.has(emp.email)) {
+                usersMap.set(emp.email, emp); // Use employee data directly
+              }
+            });
+          }
+        }
+      }
+      
       // Aggregate by user
       const userMap = new Map<string, { sales: number; count: number; name: string }>();
       
       (sales || []).forEach((sale: any) => {
-        const userId = sale.user_id;
+        const userId = sale.sold_by;  // ✅ Use sold_by instead of user_id
         if (!userId) return;
         
         const amount = typeof sale.total_amount === 'string' 
           ? parseFloat(sale.total_amount) 
           : sale.total_amount || 0;
         
-        const userName = sale.users?.full_name || sale.users?.email || 'Unknown User';
+        const user = usersMap.get(userId);
+        // Try multiple name fields to get the best available name
+        // Note: Both users and employees tables use 'full_name' column
+        const userName = user?.full_name || 
+                        user?.name ||
+                        user?.email?.split('@')[0] ||
+                        user?.email || 
+                        `Staff #${userId.substring(0, 8)}`;
         
         if (userMap.has(userId)) {
           const existing = userMap.get(userId)!;
@@ -150,7 +224,10 @@ export const StaffPerformanceWidget: React.FC<StaffPerformanceWidgetProps> = ({ 
           <div>
             <h3 className="text-base font-semibold text-gray-900">Staff Performance</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              {totalStaff} active members
+              {totalStaff} active members · {dateRange.preset === '7days' ? 'Last 7 days' : 
+                dateRange.preset === '1month' ? 'Last month' : 
+                dateRange.preset === '3months' ? 'Last 3 months' : 
+                dateRange.preset === '6months' ? 'Last 6 months' : 'Custom range'}
             </p>
           </div>
         </div>

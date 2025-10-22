@@ -198,7 +198,10 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                 .eq('customer_id', customer.id)
                 .eq('branch_id', currentBranchId);
 
-              const totalSpent = sales?.reduce((sum: number, sale: any) => sum + (sale.total_amount || 0), 0) || 0;
+              const totalSpent = sales?.reduce((sum: number, sale: any) => {
+                const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+                return sum + amount;
+              }, 0) || 0;
               const loyaltyPoints = customer.loyalty_points || 0;
               
               // Determine loyalty tier

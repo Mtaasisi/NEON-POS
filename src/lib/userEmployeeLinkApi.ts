@@ -144,7 +144,7 @@ export async function linkUserToEmployeeByEmail(email: string): Promise<boolean>
     // Get user
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name')
+      .select('id, email, full_name')
       .ilike('email', email)
       .single();
 
@@ -184,7 +184,7 @@ export async function linkUserToEmployeeByEmail(email: string): Promise<boolean>
 
     if (updateError) throw updateError;
 
-    toast.success(`Linked ${user.first_name} ${user.last_name} to employee record`);
+    toast.success(`Linked ${user.full_name} to employee record`);
     return true;
   } catch (error: any) {
     console.error('Error linking user to employee:', error);
@@ -201,7 +201,7 @@ export async function linkUserToEmployee(userId: string, employeeId: string): Pr
     // Verify user exists
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name')
+      .select('id, email, full_name')
       .eq('id', userId)
       .single();
 
@@ -213,7 +213,7 @@ export async function linkUserToEmployee(userId: string, employeeId: string): Pr
     // Verify employee exists
     const { data: employee, error: empError } = await supabase
       .from('employees')
-      .select('id, email, user_id, first_name, last_name')
+      .select('id, email, user_id, full_name')
       .eq('id', employeeId)
       .single();
 
@@ -236,7 +236,7 @@ export async function linkUserToEmployee(userId: string, employeeId: string): Pr
 
     if (updateError) throw updateError;
 
-    toast.success(`Linked ${user.first_name} ${user.last_name} to ${employee.first_name} ${employee.last_name}`);
+    toast.success(`Linked ${user.full_name} to ${employee.full_name}`);
     return true;
   } catch (error: any) {
     console.error('Error linking user to employee:', error);
@@ -282,7 +282,7 @@ export async function createEmployeeForUser(
     // Get user details
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, phone')
+      .select('id, email, full_name, phone')
       .eq('id', userId)
       .single();
 
@@ -304,10 +304,15 @@ export async function createEmployeeForUser(
     }
 
     // Create employee
+    // Split full_name into first and last name if needed
+    const nameParts = (user.full_name || 'Unknown User').split(' ');
+    const firstName = nameParts[0] || 'Unknown';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+    
     const employee = await employeeService.createEmployee({
       userId: user.id,
-      firstName: user.first_name || 'Unknown',
-      lastName: user.last_name || 'User',
+      firstName,
+      lastName,
       email: user.email,
       phone: user.phone || '',
       position: employeeData.position,
@@ -410,8 +415,7 @@ export async function getAllUserEmployeeLinks(): Promise<UserEmployeeLink[]> {
       .select(`
         id,
         user_id,
-        first_name,
-        last_name,
+        name,
         email,
         position,
         department,
@@ -419,8 +423,7 @@ export async function getAllUserEmployeeLinks(): Promise<UserEmployeeLink[]> {
         users:user_id (
           id,
           email,
-          first_name,
-          last_name,
+          full_name,
           role
         )
       `)
@@ -431,10 +434,10 @@ export async function getAllUserEmployeeLinks(): Promise<UserEmployeeLink[]> {
     const links: UserEmployeeLink[] = (data || []).map((item: any) => ({
       userId: item.user_id,
       employeeId: item.id,
-      userName: item.users ? `${item.users.first_name} ${item.users.last_name}` : 'Unknown',
+      userName: item.users?.full_name || 'Unknown',
       userEmail: item.users?.email || '',
       userRole: item.users?.role || '',
-      employeeName: `${item.first_name} ${item.last_name}`,
+      employeeName: item.name || 'Unknown',
       employeeEmail: item.email,
       employeePosition: item.position,
       employeeDepartment: item.department,
@@ -459,7 +462,7 @@ export async function getUnlinkedUsers(): Promise<any[]> {
   try {
     const { data: users, error: usersError } = await supabase
       .from('users')
-      .select('id, email, first_name, last_name, role, is_active')
+      .select('id, email, full_name, role, is_active')
       .eq('is_active', true);
 
     if (usersError) throw usersError;
@@ -495,9 +498,9 @@ export async function getUnlinkedEmployees(): Promise<any[]> {
   try {
     const { data, error } = await supabase
       .from('employees')
-      .select('id, email, first_name, last_name, position, department, status')
+      .select('id, email, full_name, position, is_active')
       .is('user_id', null)
-      .eq('status', 'active');
+      .eq('is_active', true);
 
     if (error) throw error;
 

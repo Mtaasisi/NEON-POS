@@ -18,10 +18,13 @@ import { useInventoryStore } from '../stores/useInventoryStore';
 import AddSupplierModal from '../components/purchase-order/AddSupplierModal';
 import { Supplier } from '../types/inventory';
 import { SUPPORTED_CURRENCIES } from '../lib/purchaseOrderUtils';
+import { useSuccessModal } from '../../../hooks/useSuccessModal';
+import SuccessModal from '../../../components/ui/SuccessModal';
 
 const SuppliersManagementPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const successModal = useSuccessModal();
 
   // Inventory store for suppliers
   const {
@@ -583,12 +586,29 @@ const SuppliersManagementPage: React.FC = () => {
           isOpen={showAddSupplierModal}
           onClose={() => setShowAddSupplierModal(false)}
           onSupplierCreated={(newSupplier) => {
-            toast.success('Supplier created successfully');
             setShowAddSupplierModal(false);
             loadSuppliers();
+            successModal.show(`Supplier "${newSupplier.name}" has been added successfully!`, {
+              title: 'Supplier Added',
+              actionButtons: [
+                {
+                  label: 'View Suppliers',
+                  onClick: () => {},
+                  variant: 'primary'
+                },
+                {
+                  label: 'Add Another',
+                  onClick: () => setShowAddSupplierModal(true),
+                  variant: 'secondary'
+                }
+              ]
+            });
           }}
         />
       )}
+
+      {/* Success Modal */}
+      <SuccessModal {...successModal.props} />
     </div>
   );
 };

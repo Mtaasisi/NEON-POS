@@ -138,7 +138,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ className }) => {
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -161,7 +161,7 @@ export const SalesChart: React.FC<SalesChartProps> = ({ className }) => {
       </div>
 
       {/* Chart */}
-      <div className="h-48 -mx-2 -mb-2">
+      <div className="flex-grow -mx-2 -mb-2 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={salesData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
             <defs>

@@ -1,0 +1,30 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cartCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f59e0b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d97706;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#cartCircle)"/>
+  
+  <!-- Circle with D and shopping cart -->
+  <g>
+    <!-- Main circle -->
+    <circle cx="100" cy="100" r="50" fill="white"/>
+    
+    <!-- D -->
+    <path d="M 78 78 L 78 122 L 102 122 C 115 122 125 112 125 100 C 125 88 115 78 102 78 Z" 
+          fill="url(#cartCircle)"/>
+    
+    <!-- Mini shopping cart on top right -->
+    <rect x="132" y="83" width="20" height="16" rx="2" fill="#10b981"/>
+    <circle cx="138" cy="102" r="2.5" fill="#10b981"/>
+    <circle cx="146" cy="102" r="2.5" fill="#10b981"/>
+    <path d="M 128 83 L 132 75 L 156 75" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    
+    <!-- Checkmark in cart -->
+    <path d="M 137 88 L 140 91 L 146 85" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+</svg>
+

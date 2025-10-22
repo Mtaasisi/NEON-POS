@@ -52,16 +52,10 @@ class DevicePriceHistoryService {
     try {
       console.log('📊 [DevicePriceHistoryService] Fetching price history for device:', deviceId);
       
+      // FIXED: Remove PostgREST relationship syntax
       let query = supabase
         .from('device_price_history')
-        .select(`
-          *,
-          user:auth_users!device_price_history_updated_by_fkey(
-            id,
-            email,
-            raw_user_meta_data
-          )
-        `)
+        .select('*')
         .eq('device_id', deviceId)
         .order('created_at', { ascending: false });
 
@@ -90,20 +84,33 @@ class DevicePriceHistoryService {
         query = query.range(filters.offset, filters.offset + (filters.limit || 50) - 1);
       }
 
-      const { data, error } = await query;
+      const { data: entries, error } = await query;
 
       if (error) {
         console.error('❌ [DevicePriceHistoryService] Error fetching price history:', error);
         throw error;
       }
 
+      if (!entries || entries.length === 0) {
+        return [];
+      }
+
+      // Fetch user data separately
+      const userIds = [...new Set(entries.map(e => e.updated_by).filter(Boolean))];
+      const usersResult = userIds.length > 0
+        ? await supabase.from('users').select('id, email, full_name').in('id', userIds)
+        : { data: [], error: null };
+
+      const usersMap = new Map(usersResult.data?.map(u => [u.id, u]) || []);
+
       // Transform the data to include user names
-      const transformedData: DevicePriceHistoryEntry[] = data.map(entry => ({
-        ...entry,
-        user_name: entry.user?.raw_user_meta_data?.name || 
-                  entry.user?.email || 
-                  'Unknown User'
-      }));
+      const transformedData: DevicePriceHistoryEntry[] = entries.map(entry => {
+        const user = usersMap.get(entry.updated_by);
+        return {
+          ...entry,
+          user_name: user?.full_name || user?.email || 'Unknown User'
+        };
+      });
 
       console.log('✅ [DevicePriceHistoryService] Found', transformedData.length, 'price history entries');
       return transformedData;

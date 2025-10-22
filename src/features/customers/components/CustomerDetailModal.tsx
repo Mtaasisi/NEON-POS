@@ -219,9 +219,36 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
               .select('id, name, sku, attributes')
               .in('id', variantIds);
             
+            // Fetch serial numbers for these sales
+            const { data: serialLinks } = await supabase
+              .from('sale_inventory_items')
+              .select('sale_id, inventory_item_id')
+              .in('sale_id', saleIds);
+            
+            let serialNumbersByProductVariant: Record<string, any[]> = {};
+            if (serialLinks && serialLinks.length > 0) {
+              const inventoryItemIds = serialLinks.map(link => link.inventory_item_id);
+              const { data: inventoryItems } = await supabase
+                .from('inventory_items')
+                .select('*')
+                .in('id', inventoryItemIds);
+              
+              if (inventoryItems) {
+                // Group by product_id and variant_id for easy lookup
+                inventoryItems.forEach(item => {
+                  const key = `${item.product_id}_${item.variant_id || 'null'}`;
+                  if (!serialNumbersByProductVariant[key]) {
+                    serialNumbersByProductVariant[key] = [];
+                  }
+                  serialNumbersByProductVariant[key].push(item);
+                });
+              }
+            }
+            
             // Combine the data
             const allItems = saleItemsData.map((item: any) => {
               const sale = finalPosData.find(s => s.id === item.sale_id);
+              const serialKey = `${item.product_id}_${item.variant_id || 'null'}`;
               return {
                 ...item,
                 saleNumber: sale?.sale_number,
@@ -229,7 +256,8 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 paymentMethod: sale?.payment_method,
                 saleStatus: sale?.status,
                 product: productsData?.find(p => p.id === item.product_id),
-                variant: variantsData?.find(v => v.id === item.variant_id)
+                variant: variantsData?.find(v => v.id === item.variant_id),
+                serialNumbers: serialNumbersByProductVariant[serialKey] || []
               };
             });
             

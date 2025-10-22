@@ -270,12 +270,11 @@ class CustomerLoyaltyService {
 
         console.log(`📦 Fetching batch ${batch + 1}/${totalBatches} (customers ${from + 1}-${to + 1})`);
 
+        // Fixed: Remove PostgREST relationship syntax to avoid 400 errors
         let query = supabase
           .from('customers')
           .select(`
-            id, name, email, phone, gender, city, birth_month, birth_day, total_returns, profile_image, created_at, updated_at, whatsapp, notes, is_active, loyalty_level, color_tag, referred_by, total_spent, points, last_visit, created_by, referral_source, initial_notes, referrals, customer_tag,
-            customer_payments(*),
-            devices(*)
+            id, name, email, phone, gender, city, birth_month, birth_day, total_returns, profile_image, created_at, updated_at, whatsapp, notes, is_active, loyalty_level, color_tag, referred_by, total_spent, points, last_visit, created_by, referral_source, initial_notes, referrals, customer_tag
           `)
           .order('created_at', { ascending: false })
           .range(from, to);
@@ -299,8 +298,44 @@ class CustomerLoyaltyService {
           continue;
         }
 
-        if (batchCustomers) {
-          allCustomers.push(...batchCustomers);
+        if (batchCustomers && batchCustomers.length > 0) {
+          // Fetch related data separately to avoid 400 errors
+          const customerIds = batchCustomers.map(c => c.id);
+          
+          // Fetch customer payments
+          const { data: payments } = await supabase
+            .from('customer_payments')
+            .select('customer_id, payment_date')
+            .in('customer_id', customerIds)
+            .order('payment_date', { ascending: false });
+          
+          // Fetch devices
+          const { data: devices } = await supabase
+            .from('devices')
+            .select('customer_id, created_at')
+            .in('customer_id', customerIds);
+          
+          // Group payments and devices by customer_id
+          const paymentsMap = new Map();
+          payments?.forEach(p => {
+            if (!paymentsMap.has(p.customer_id)) paymentsMap.set(p.customer_id, []);
+            paymentsMap.get(p.customer_id).push(p);
+          });
+          
+          const devicesMap = new Map();
+          devices?.forEach(d => {
+            if (!devicesMap.has(d.customer_id)) devicesMap.set(d.customer_id, []);
+            devicesMap.get(d.customer_id).push(d);
+          });
+          
+          // Attach related data to customers
+          const customersWithRelations = batchCustomers.map(customer => ({
+            ...customer,
+            customer_payments: paymentsMap.get(customer.id) || [],
+            devices: devicesMap.get(customer.id) || []
+          }));
+          
+          allCustomers.push(...customersWithRelations);
         }
       }
 

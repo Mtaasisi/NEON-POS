@@ -95,18 +95,6 @@ export const useQuickActions = () => {
       category: 'action',
       requiresPermission: 'customer'
     },
-    { 
-      id: 'request-diagnostics', 
-      name: 'Request Diagnostics', 
-      description: 'Submit devices for diagnostic testing', 
-      icon: 'Stethoscope', 
-      path: '/diagnostics/new', 
-      color: 'bg-purple-500 hover:bg-purple-600', 
-      isEnabled: true, 
-      order: 2, 
-      category: 'action',
-      requiresPermission: 'customer'
-    },
 
     { 
       id: 'customer-hub', 

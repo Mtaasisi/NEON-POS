@@ -1,0 +1,16 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="minimalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0ea5e9;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0284c7;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Clean rounded square -->
+  <rect width="200" height="200" rx="44" fill="url(#minimalGrad)"/>
+  
+  <!-- Ultra minimal D - just the essentials -->
+  <path d="M 60 60 L 60 140 L 105 140 C 128 140 145 123 145 100 C 145 77 128 60 105 60 Z M 75 75 L 105 75 C 119 75 130 86 130 100 C 130 114 119 125 105 125 L 75 125 Z" 
+        fill="white"/>
+</svg>
+

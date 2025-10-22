@@ -112,7 +112,10 @@ const CustomerAnalyticsModal: React.FC<CustomerAnalyticsModalProps> = ({
         });
         
         const visits = daySales.length;
-        const averageSpend = visits > 0 ? daySales.reduce((sum, sale) => sum + sale.total_amount, 0) / visits : 0;
+        const averageSpend = visits > 0 ? daySales.reduce((sum, sale) => {
+          const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+          return sum + amount;
+        }, 0) / visits : 0;
         
         return { day, visits, averageSpend };
       });
@@ -134,7 +137,10 @@ const CustomerAnalyticsModal: React.FC<CustomerAnalyticsModalProps> = ({
       })).sort((a, b) => b.count - a.count);
 
       // Calculate lifetime value and other metrics
-      const lifetimeValue = (customerSales || []).reduce((sum, sale) => sum + sale.total_amount, 0);
+      const lifetimeValue = (customerSales || []).reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0);
       const totalOrders = (customerSales || []).length;
       const averageOrderValue = totalOrders > 0 ? lifetimeValue / totalOrders : 0;
       

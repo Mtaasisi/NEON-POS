@@ -592,7 +592,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
           label: 'Edit',
           icon: <Edit className="w-4 h-4" />,
           color: 'bg-purple-600 hover:bg-purple-700',
-          onClick: () => window.open(`/lats/purchase-orders/create?edit=${order.id}`, '_blank')
+          onClick: () => window.open(`/lats/purchase-order/create?edit=${order.id}`, '_blank')
         });
         actions.push({
           type: 'approve',
@@ -660,7 +660,7 @@ const OrderCard: React.FC<OrderCardProps> = ({
           label: 'Modify',
           icon: <Edit className="w-4 h-4" />,
           color: 'bg-purple-600 hover:bg-purple-700',
-          onClick: () => window.open(`/lats/purchase-orders/create?edit=${order.id}`, '_blank')
+          onClick: () => window.open(`/lats/purchase-order/create?edit=${order.id}`, '_blank')
         });
         actions.push({
           type: 'cancel',

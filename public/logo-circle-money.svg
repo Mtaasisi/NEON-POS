@@ -1,0 +1,31 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="moneyCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#moneyCircle)"/>
+  
+  <!-- Circle with D and dollar sign -->
+  <g>
+    <!-- Main circle -->
+    <circle cx="100" cy="100" r="50" fill="white"/>
+    
+    <!-- D -->
+    <path d="M 75 78 L 75 122 L 100 122 C 113 122 123 112 123 100 C 123 88 113 78 100 78 Z" 
+          fill="url(#moneyCircle)"/>
+    
+    <!-- Dollar sign inside D -->
+    <text x="93" y="108" font-family="Arial" font-size="24" font-weight="bold" fill="white" text-anchor="middle">$</text>
+    
+    <!-- Small coins around circle -->
+    <circle cx="140" cy="85" r="10" fill="#fbbf24"/>
+    <text x="140" y="89" font-family="Arial" font-size="10" font-weight="bold" fill="white" text-anchor="middle">$</text>
+    
+    <circle cx="145" cy="115" r="8" fill="#fbbf24" opacity="0.8"/>
+    <text x="145" y="119" font-family="Arial" font-size="8" font-weight="bold" fill="white" text-anchor="middle">$</text>
+  </g>
+</svg>
+

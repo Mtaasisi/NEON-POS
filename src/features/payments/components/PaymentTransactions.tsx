@@ -597,7 +597,7 @@ Date: ${new Date(payment.created_at || payment.date).toLocaleDateString()}`;
 
         if (!remainingPayments || remainingPayments.length === 0) {
           const purchaseOrderUpdatePromise = supabase
-            .from('purchase_orders')
+            .from('lats_purchase_orders')
             .update({
               status: 'approved',
               updated_at: new Date().toISOString()
@@ -1230,14 +1230,14 @@ Date: ${new Date(payment.created_at || payment.date).toLocaleDateString()}`;
                         {(payment.status || payment.payment_status) === 'pending' && (
                           <button
                             onClick={() => {
-                              handleAcceptTransaction(payment);
+                              handleApprovePayment(payment);
                               closeDropdown();
                             }}
                             className="flex items-center w-full px-4 py-2 text-sm text-green-700 hover:bg-green-50"
                             disabled={isLoading}
                           >
                             <Check className="w-4 h-4 mr-3" />
-                            Accept Transaction
+                            Approve Payment
                           </button>
                         )}
                         

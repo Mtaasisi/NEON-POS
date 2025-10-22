@@ -239,16 +239,25 @@ export class QualityCheckService {
         };
       }
 
+      // Fixed: Removed problematic PostgREST relationship syntax
       const { data, error } = await supabase
         .from('purchase_order_quality_checks')
-        .select(`
-          *,
-          template:quality_check_templates(*)
-        `)
+        .select('*')
         .eq('id', id)
         .single();
 
       if (error) throw error;
+
+      // Fetch related template separately
+      let template = null;
+      if (data.template_id) {
+        const { data: templateData } = await supabase
+          .from('quality_check_templates')
+          .select('*')
+          .eq('id', data.template_id)
+          .single();
+        template = templateData;
+      }
 
       return {
         success: true,
@@ -264,14 +273,14 @@ export class QualityCheckService {
           signature: data.signature,
           createdAt: data.created_at,
           updatedAt: data.updated_at,
-          template: data.template ? {
-            id: data.template.id,
-            name: data.template.name,
-            description: data.template.description,
-            category: data.template.category,
-            isActive: data.template.is_active,
-            createdAt: data.template.created_at,
-            updatedAt: data.template.updated_at
+          template: template ? {
+            id: template.id,
+            name: template.name,
+            description: template.description,
+            category: template.category,
+            isActive: template.is_active,
+            createdAt: template.created_at,
+            updatedAt: template.updated_at
           } : undefined
         }
       };
@@ -286,16 +295,32 @@ export class QualityCheckService {
 
   static async getQualityChecksByPO(purchaseOrderId: string): Promise<{ success: boolean; data?: PurchaseOrderQualityCheck[]; message?: string }> {
     try {
+      // Fixed: Removed problematic PostgREST relationship syntax
       const { data, error } = await supabase
         .from('purchase_order_quality_checks')
-        .select(`
-          *,
-          template:quality_check_templates(*)
-        `)
+        .select('*')
         .eq('purchase_order_id', purchaseOrderId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
+      // Fetch related templates separately
+      if (data && data.length > 0) {
+        const templateIds = data.map(check => check.template_id).filter(Boolean);
+        if (templateIds.length > 0) {
+          const { data: templates } = await supabase
+            .from('quality_check_templates')
+            .select('*')
+            .in('id', templateIds);
+          
+          const templatesMap = new Map(templates?.map(t => [t.id, t]) || []);
+          data.forEach((check: any) => {
+            if (check.template_id) {
+              check.template = templatesMap.get(check.template_id);
+            }
+          });
+        }
+      }
 
       return {
         success: true,
@@ -429,7 +454,7 @@ export class QualityCheckService {
         try {
           const { data: poItems, error: poItemsError } = await supabase
             .from('lats_purchase_order_items')
-            .select('id, product_id, variant_id, quantity_ordered, quantity_received')
+            .select('id, product_id, variant_id, quantity, received_quantity')
             .in('id', poItemIds);
           
           if (poItemsError) {
@@ -553,8 +578,8 @@ export class QualityCheckService {
             id: poItem.id,
             productId: poItem.product_id,
             variantId: poItem.variant_id,
-            quantityOrdered: poItem.quantity_ordered,
-            quantityReceived: poItem.quantity_received,
+            quantityOrdered: poItem.quantity,
+            quantityReceived: poItem.received_quantity,
             product: product ? {
               name: product.name,
               sku: product.sku

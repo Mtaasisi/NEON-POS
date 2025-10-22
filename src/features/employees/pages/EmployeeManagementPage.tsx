@@ -16,6 +16,8 @@ import {
 import { toast } from 'react-hot-toast';
 import { employeeService } from '../../../services/employeeService';
 import { supabase } from '../../../lib/supabaseClient';
+import { useSuccessModal } from '../../../hooks/useSuccessModal';
+import SuccessModal from '../../../components/ui/SuccessModal';
 
 interface Employee {
   id: string;
@@ -60,6 +62,7 @@ const EmployeeManagementPage: React.FC = () => {
   const { currentBranch } = useBranch();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const successModal = useSuccessModal();
   
   // State Management
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -182,16 +185,33 @@ const EmployeeManagementPage: React.FC = () => {
   // Handlers
   const handleSaveEmployee = async (employeeData: Partial<Employee>) => {
     try {
-      if (editingEmployee) {
+      const isEditing = !!editingEmployee;
+      if (isEditing) {
         await employeeService.updateEmployee(editingEmployee.id, employeeData);
-        toast.success('Employee updated successfully');
       } else {
         await employeeService.createEmployee(employeeData);
-        toast.success('Employee added successfully');
       }
       await loadData();
       setShowCreateEmployee(false);
       setEditingEmployee(undefined);
+      
+      // Show success modal
+      const employeeName = `${employeeData.firstName} ${employeeData.lastName}`;
+      successModal.show(`Employee "${employeeName}" has been ${isEditing ? 'updated' : 'added'} successfully!`, {
+        title: `Employee ${isEditing ? 'Updated' : 'Added'}`,
+        actionButtons: [
+          {
+            label: 'View Employees',
+            onClick: () => {},
+            variant: 'primary'
+          },
+          {
+            label: 'Add Another',
+            onClick: () => setShowCreateEmployee(true),
+            variant: 'secondary'
+          }
+        ]
+      });
     } catch (error) {
       console.error('Failed to save employee:', error);
       toast.error('Failed to save employee');
@@ -201,9 +221,15 @@ const EmployeeManagementPage: React.FC = () => {
   const handleDeleteEmployee = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this employee?')) {
       try {
+        const employee = employees.find(e => e.id === id);
         await employeeService.deleteEmployee(id);
-        toast.success('Employee deleted successfully');
         await loadData();
+        
+        // Show success modal
+        successModal.show(`Employee "${employee?.firstName} ${employee?.lastName}" has been deleted successfully!`, {
+          title: 'Employee Deleted',
+          autoCloseDelay: 2000
+        });
       } catch (error) {
         console.error('Failed to delete employee:', error);
         toast.error('Failed to delete employee');
@@ -793,6 +819,9 @@ const EmployeeManagementPage: React.FC = () => {
         onClose={() => setShowAttendanceModal(false)}
         onSave={handleSaveAttendance}
       />
+
+      {/* Success Modal */}
+      <SuccessModal {...successModal.props} />
     </div>
   );
 };

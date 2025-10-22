@@ -50,6 +50,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useCustomers } from '../../../context/CustomersContext';
 import { useAuth } from '../../../context/AuthContext';
+import { useBranch } from '../../../context/BranchContext';
 import { rbacManager, type UserRole } from '../lib/rbac';
 // import { useInventoryAlertPreferences } from '../../../../hooks/useInventoryAlertPreferences';
 // import { applyInventoryAlertsMigration } from '../../../../utils/applyInventoryAlertsMigration';
@@ -67,6 +68,12 @@ import CustomerEditModal from '../components/pos/CustomerEditModal';
 import CustomerDetailModal from '../../../features/customers/components/CustomerDetailModal';
 import SalesAnalyticsModal from '../components/pos/SalesAnalyticsModal';
 import ZenoPayPaymentModal from '../components/pos/ZenoPayPaymentModal';
+import POSInstallmentModal from '../components/pos/POSInstallmentModal';
+import TradeInContractModal from '../components/pos/TradeInContractModal';
+import TradeInPricingModal from '../components/pos/TradeInPricingModal';
+
+// Lazy load TradeInCalculator to avoid circular dependency issues with getAllSpareParts
+const TradeInCalculator = React.lazy(() => import('../components/pos/TradeInCalculator'));
 import PaymentTrackingModal from '../components/pos/PaymentTrackingModal';
 import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
 import { supabase } from '../../../lib/supabaseClient';
@@ -100,6 +107,7 @@ import SuccessModal from '../../../components/ui/SuccessModal';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../components/ui/SuccessModalIcons';
 import ShareReceiptModal from '../../../components/ui/ShareReceiptModal';
+import SerialNumberSelector from '../components/pos/SerialNumberSelector';
 import { 
   useDynamicPricingSettings,
   useGeneralSettings,
@@ -223,7 +231,10 @@ const POSPageOptimized: React.FC = () => {
       const sessionSales = dbSales.filter(sale => 
         sale.created_at && sale.created_at >= sessionStartTime
       );
-      const total = sessionSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+      const total = sessionSales.reduce((sum, sale) => {
+        const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+        return sum + amount;
+      }, 0);
       return total;
     }
     
@@ -236,7 +247,10 @@ const POSPageOptimized: React.FC = () => {
         : new Date(sale.created_at).toISOString();
       return createdDate.startsWith(today);
     });
-    const total = todaySales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const total = todaySales.reduce((sum, sale) => {
+      const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+      return sum + amount;
+    }, 0);
 
     return total;
   }, [dbSales, sessionStartTime]);
@@ -253,6 +267,9 @@ const POSPageOptimized: React.FC = () => {
 
   // Get authenticated user
   const { currentUser } = useAuth();
+  
+  // Get current branch
+  const { currentBranch } = useBranch();
   
   // Success modal for sale completion
   const successModal = useSuccessModal();
@@ -326,11 +343,8 @@ const POSPageOptimized: React.FC = () => {
       return [];
     }
 
-    // Filter out sample products first
-    const filteredDbProducts = dbProducts.filter(product => {
-      const name = product.name.toLowerCase();
-      return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
-    });
+    // Note: Showing ALL products including test/sample products as per user preference
+    const filteredDbProducts = dbProducts;
     
     // DON'T WAIT FOR CATEGORIES - Show products immediately!
     // If no categories loaded yet, return products without category info
@@ -541,6 +555,10 @@ const POSPageOptimized: React.FC = () => {
   const [customerNotes, setCustomerNotes] = useState<{[key: string]: string}>({});
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [selectedCustomerForDetails, setSelectedCustomerForDetails] = useState<any>(null);
+  
+  // Serial number selection state
+  const [showSerialNumberSelector, setShowSerialNumberSelector] = useState(false);
+  const [serialNumberProduct, setSerialNumberProduct] = useState<{productId: string; productName: string; variantId?: string; quantity: number; cartItemId: string} | null>(null);
   const [showLoyaltyPoints, setShowLoyaltyPoints] = useState(false);
   const [pointsToAdd, setPointsToAdd] = useState('');
   const [pointsReason, setPointsReason] = useState('');
@@ -550,6 +568,15 @@ const POSPageOptimized: React.FC = () => {
 
   // Payment processing
   const [showZenoPayPayment, setShowZenoPayPayment] = useState(false);
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
+
+  // Trade-In state
+  const [showTradeInCalculator, setShowTradeInCalculator] = useState(false);
+  const [showTradeInContract, setShowTradeInContract] = useState(false);
+  const [showTradeInPricing, setShowTradeInPricing] = useState(false);
+  const [tradeInData, setTradeInData] = useState<any>(null);
+  const [tradeInTransaction, setTradeInTransaction] = useState<any>(null);
+  const [tradeInDiscount, setTradeInDiscount] = useState(0);
 
   // Payment tracking
   const [showPaymentTracking, setShowPaymentTracking] = useState(false);
@@ -1139,11 +1166,38 @@ const POSPageOptimized: React.FC = () => {
               if (createError.code === '42P01' || createError.code === '42703' || 
                   createError.message?.includes('400') || createError.message?.includes('Bad Request')) {
                 console.warn('⚠️ Cannot create session (table not ready) - using fallback');
+                // Fallback to current time
+                setSessionStartTime(new Date().toISOString());
+              } else if (createError.code === '23505') {
+                // Duplicate key error - session already exists, fetch it
+                console.log('ℹ️ Session already exists, fetching existing session...');
+                try {
+                  const { data: existingSession, error: fetchError } = await supabase
+                    .from('daily_opening_sessions')
+                    .select('id, date, opened_at, opened_by')
+                    .eq('date', today)
+                    .eq('is_active', true)
+                    .maybeSingle();
+                  
+                  if (fetchError) {
+                    console.error('❌ Error fetching existing session:', fetchError);
+                    setSessionStartTime(new Date().toISOString());
+                  } else if (existingSession) {
+                    console.log('✅ Using existing session:', existingSession);
+                    setSessionStartTime(existingSession.opened_at);
+                  } else {
+                    // Shouldn't happen but fallback anyway
+                    setSessionStartTime(new Date().toISOString());
+                  }
+                } catch (err) {
+                  console.error('❌ Error fetching existing session:', err);
+                  setSessionStartTime(new Date().toISOString());
+                }
               } else {
                 console.error('❌ Error creating session:', createError);
+                // Fallback to current time
+                setSessionStartTime(new Date().toISOString());
               }
-              // Fallback to current time
-              setSessionStartTime(new Date().toISOString());
             } else if (newSession) {
               console.log('✅ New session created:', newSession);
               setSessionStartTime(newSession.opened_at);
@@ -1247,6 +1301,46 @@ const POSPageOptimized: React.FC = () => {
   }, [showReceiptHistory, dbSales]);
 
   // Cart functionality with error handling (optimized with useCallback)
+  // Check if product has serial numbers and open selector
+  const checkAndOpenSerialNumberSelector = useCallback(async (cartItem: any, productId: string, variantId?: string) => {
+    try {
+      // Optimized: Open modal immediately and let it handle the loading
+      // This prevents double-querying and makes the UI feel instant
+      setSerialNumberProduct({
+        productId: productId,
+        productName: cartItem.productName,
+        variantId: variantId,
+        quantity: cartItem.quantity,
+        cartItemId: cartItem.id
+      });
+      setShowSerialNumberSelector(true);
+      
+      // The modal will check if items exist and show "No items available" if needed
+    } catch (error) {
+      console.warn('Could not open serial number selector:', error);
+    }
+  }, []);
+
+  // Handle serial number selection
+  const handleSerialNumbersSelected = useCallback((selectedItems: any[]) => {
+    if (!serialNumberProduct) return;
+
+    // Update cart item with selected serial numbers (append to existing ones)
+    setCartItems(prev => prev.map(item => {
+      if (item.id === serialNumberProduct.cartItemId) {
+        const existingSerials = item.selectedSerialNumbers || [];
+        const newSerials = [...existingSerials, ...selectedItems];
+        return { ...item, selectedSerialNumbers: newSerials };
+      }
+      return item;
+    }));
+
+    console.log('✅ Serial numbers selected for cart item:', serialNumberProduct.cartItemId, selectedItems);
+    toast.success(`${selectedItems.length} device(s) selected`);
+    setShowSerialNumberSelector(false);
+    setSerialNumberProduct(null);
+  }, [serialNumberProduct]);
+
   const addToCart = useCallback((product: any, variant?: any, quantity: number = 1) => {
     try {
       // Check permissions
@@ -1323,6 +1417,15 @@ const POSPageOptimized: React.FC = () => {
             : item
         ));
         toast.success(`${product.name} quantity updated to ${newQuantity}`);
+        
+        // Check if we need to select more serial numbers
+        const currentSerialCount = existingItem.selectedSerialNumbers?.length || 0;
+        if (currentSerialCount < newQuantity) {
+          // Need to select more serial numbers - only for the additional quantity
+          const additionalQuantity = newQuantity - currentSerialCount;
+          const updatedItem = { ...existingItem, quantity: additionalQuantity }; // Temporarily set quantity to only the additional items needed
+          checkAndOpenSerialNumberSelector(updatedItem, product.id, variant?.id);
+        }
       } else {
         const newItem = {
           id: `${product.id}-${variant?.id || 'default'}-${Date.now()}`,
@@ -1335,12 +1438,17 @@ const POSPageOptimized: React.FC = () => {
           unitPrice: price,
           totalPrice: price * quantity,
           availableQuantity: availableStock,
-          image: product.thumbnail_url || product.image
+          image: product.thumbnail_url || product.image,
+          selectedSerialNumbers: [] // Initialize empty serial numbers array
         };
         
         console.log('✅ Adding to cart:', newItem);
         
         setCartItems(prev => [...prev, newItem]);
+        
+        // Check if product has serial numbers and open selector
+        checkAndOpenSerialNumberSelector(newItem, product.id, variant?.id);
+        
         toast.success(`${quantity}x ${product.name} added to cart`);
       }
     } catch (error) {
@@ -1438,7 +1546,7 @@ const POSPageOptimized: React.FC = () => {
   // Customer functionality - functions already defined above
 
   // Payment processing with error handling
-  const handleProcessPayment = () => {
+  const handleProcessPayment = async () => {
     try {
       // Check permissions
       if (!canSell || !canCreateSales) {
@@ -1499,6 +1607,54 @@ const POSPageOptimized: React.FC = () => {
         // Don't return, just show warning
       }
 
+      // Validate IMEI/Serial Numbers are selected for items that require them
+      const itemsRequiringSerialNumbers = await Promise.all(
+        cartItems.map(async (item) => {
+          try {
+            // Check if this product has items with serial numbers/IMEI
+            let query = supabase
+              .from('inventory_items')
+              .select('id, serial_number, imei, mac_address')
+              .eq('product_id', item.productId)
+              .eq('status', 'available');
+            
+            if (item.variantId) {
+              query = query.eq('variant_id', item.variantId);
+            }
+            
+            const { data: serialItems } = await query.limit(1);
+            
+            if (serialItems && serialItems.length > 0) {
+              const hasTrackingInfo = serialItems.some(si => 
+                si.serial_number || si.imei || si.mac_address
+              );
+              
+              if (hasTrackingInfo) {
+                return {
+                  item,
+                  requiresSerial: true,
+                  hasSelected: item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0
+                };
+              }
+            }
+            return null;
+          } catch (error) {
+            console.warn('Error checking serial numbers for item:', item, error);
+            return null;
+          }
+        })
+      );
+
+      const itemsMissingSerials = itemsRequiringSerialNumbers
+        .filter(result => result !== null && result.requiresSerial && !result.hasSelected);
+
+      if (itemsMissingSerials.length > 0) {
+        const itemNames = itemsMissingSerials.map(result => result!.item.productName).join(', ');
+        toast.error(`Please select IMEI/Serial numbers for: ${itemNames}`);
+        console.error('❌ Missing IMEI/Serial numbers for items:', itemsMissingSerials);
+        return;
+      }
+
       // Check for daily closure
       if (isDailyClosed) {
         setShowPostClosureWarning(true);
@@ -1524,6 +1680,139 @@ const POSPageOptimized: React.FC = () => {
     } catch (error) {
       console.error('Error refreshing data:', error);
       toast.error('Failed to refresh some data');
+    }
+  };
+
+  // Trade-In handlers
+  const handleShowTradeInModal = () => {
+    if (cartItems.length === 0) {
+      toast.error('Add items to cart first');
+      return;
+    }
+    if (!selectedCustomer) {
+      toast.error('Please select a customer first');
+      return;
+    }
+    setShowTradeInCalculator(true);
+  };
+
+  const handleTradeInComplete = async (data: any) => {
+    console.log('✅ handleTradeInComplete called with data:', data);
+    setTradeInData(data);
+    
+    // Apply trade-in value as discount
+    setTradeInDiscount(data.final_trade_in_value);
+    console.log('💰 Trade-in discount set:', data.final_trade_in_value);
+    
+    // Create transaction
+    try {
+      console.log('📝 Creating trade-in transaction...');
+      const { createTradeInTransaction } = await import('../lib/tradeInApi');
+      
+      // Get product and variant from cart (first item if multiple)
+      const firstCartItem = cartItems[0];
+      const newProductId = firstCartItem?.product_id || null;
+      const newVariantId = firstCartItem?.variant_id || null;
+      
+      console.log('🛒 Cart item for trade-in:', {
+        product_id: newProductId,
+        variant_id: newVariantId,
+        product_name: firstCartItem?.name,
+      });
+      
+      const result = await createTradeInTransaction({
+        customer_id: selectedCustomer?.id || '',
+        device_name: data.trade_in_details.device_name,
+        device_model: data.trade_in_details.device_model,
+        device_imei: data.trade_in_details.device_imei,
+        base_trade_in_price: data.trade_in_details.base_price,
+        condition_rating: data.trade_in_details.condition_rating,
+        condition_description: data.trade_in_details.condition_description,
+        damage_items: data.trade_in_details.damage_items,
+        new_product_id: newProductId,
+        new_variant_id: newVariantId,
+        new_device_price: finalAmount,
+        customer_payment_amount: data.customer_payment_amount,
+      });
+
+      if (result.success && result.data) {
+        console.log('✅ Trade-in transaction created successfully:', result.data);
+        setTradeInTransaction(result.data);
+        setShowTradeInCalculator(false);
+        toast.success(`Trade-in added: ${data.trade_in_details.device_name} for ${data.final_trade_in_value.toLocaleString()} TZS`);
+        
+        // Show contract modal
+        console.log('📄 Opening contract modal...');
+        setShowTradeInContract(true);
+      } else {
+        console.error('❌ Failed to create trade-in transaction:', result.error);
+        toast.error(result.error || 'Failed to create trade-in transaction');
+      }
+    } catch (error) {
+      console.error('❌ Error creating trade-in transaction:', error);
+      toast.error('Failed to create trade-in transaction');
+    }
+  };
+
+  const handleContractSigned = () => {
+    toast.success('Contract signed successfully!');
+    setShowTradeInContract(false);
+    // Contract is now linked to the trade-in transaction
+    // Continue with normal sale process - open payment modal
+    console.log('✅ Contract signed, proceeding to payment...');
+    
+    // Open payment modal to complete the sale as normal
+    setTimeout(() => {
+      setShowPaymentModal(true);
+    }, 300);
+  };
+
+  const handleTradeInPricingConfirm = async (pricingData: any) => {
+    if (!tradeInTransaction) {
+      toast.error('No trade-in transaction found');
+      return;
+    }
+
+    try {
+      console.log('📦 Adding traded-in device to inventory with pricing...', pricingData);
+      const { addTradeInDeviceToInventory, getOrCreateTradeInCategory } = await import('../lib/tradeInInventoryService');
+      
+      // Get or create "Trade-In Items" category
+      const categoryId = await getOrCreateTradeInCategory();
+      
+      const inventoryResult = await addTradeInDeviceToInventory({
+        transaction: tradeInTransaction,
+        categoryId: categoryId,
+        locationId: null,
+        needsRepair: tradeInTransaction.needs_repair || false,
+        resalePrice: pricingData.selling_price, // Use the confirmed selling price
+      });
+      
+      if (inventoryResult.success) {
+        console.log('✅ Trade-in device added to inventory:', inventoryResult.data);
+        toast.success('✅ Trade-in device added to inventory with pricing!');
+        
+        // Close modal
+        setShowTradeInPricing(false);
+        
+        // Clear trade-in data after successful inventory addition
+        setTradeInTransaction(null);
+        setTradeInData(null);
+        setTradeInDiscount(0);
+        
+        // Clear cart and customer now that trade-in process is complete
+        setTimeout(() => {
+          clearCart();
+          setSelectedCustomer(null);
+          console.log('🎉 POS: Cart cleared after trade-in pricing completed');
+        }, 150);
+      } else {
+        console.error('❌ Failed to add trade-in to inventory:', inventoryResult.error);
+        toast.error('Failed to add trade-in to inventory: ' + inventoryResult.error);
+      }
+    } catch (error) {
+      console.error('❌ Error adding trade-in to inventory:', error);
+      toast.error('Failed to add trade-in to inventory');
     }
   };
 
@@ -1736,10 +2025,10 @@ const POSPageOptimized: React.FC = () => {
         <PaymentsPopupModal
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
-          amount={finalAmount}
+          amount={tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount}
           customerId={selectedCustomer?.id}
           customerName={selectedCustomer?.name || 'Walk-in Customer'}
-          description={`POS Sale - ${cartItems.length} items`}
+          description={`POS Sale - ${cartItems.length} items${tradeInDiscount > 0 ? ` (Trade-In: -${format.money(tradeInDiscount)})` : ''}`}
           onPaymentComplete={async (payments, totalPaid) => {
             try {
               // Validate payment data before processing
@@ -1757,15 +2046,20 @@ const POSPageOptimized: React.FC = () => {
                 }))
               });
 
-              // Validate totalPaid to ensure it matches the final amount
-              const validatedTotalPaid = totalPaid || finalAmount;
+              // Calculate expected payment amount (after trade-in discount if applicable)
+              const expectedAmount = tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount;
               
-              // Validate that totalPaid matches finalAmount (with tolerance for rounding)
-              if (Math.abs(validatedTotalPaid - finalAmount) > 1) {
+              // Validate totalPaid to ensure it matches the expected amount
+              const validatedTotalPaid = totalPaid || expectedAmount;
+              
+              // Validate that totalPaid matches expectedAmount (with tolerance for rounding)
+              if (Math.abs(validatedTotalPaid - expectedAmount) > 1) {
                 console.warn('⚠️ Payment amount mismatch:', {
                   totalPaid: validatedTotalPaid,
+                  expectedAmount: expectedAmount,
                   finalAmount: finalAmount,
-                  difference: Math.abs(validatedTotalPaid - finalAmount)
+                  tradeInDiscount: tradeInDiscount,
+                  difference: Math.abs(validatedTotalPaid - expectedAmount)
                 });
               }
 
@@ -1786,7 +2080,8 @@ const POSPageOptimized: React.FC = () => {
                   unitPrice: item.unitPrice,
                   totalPrice: item.totalPrice,
                   costPrice: 0,
-                  profit: 0
+                  profit: 0,
+                  selectedSerialNumbers: item.selectedSerialNumbers || [] // Pass serial numbers
                 })),
                 subtotal: totalAmount,
                 tax: taxAmount,
@@ -1832,7 +2127,8 @@ const POSPageOptimized: React.FC = () => {
                     variantName: item.variantName,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
-                    totalPrice: item.totalPrice
+                    totalPrice: item.totalPrice,
+                    serialNumbers: item.selectedSerialNumbers || [] // Include serial numbers
                   })),
                   customer: selectedCustomer ? {
                     name: selectedCustomer.name,
@@ -2101,6 +2397,8 @@ const POSPageOptimized: React.FC = () => {
               setShowDiscountModal(false);
             }}
             onProcessPayment={handleProcessPayment}
+            onShowInstallmentModal={() => setShowInstallmentModal(true)}
+            onShowTradeInModal={handleShowTradeInModal}
             onShowDiscountModal={() => setShowDiscountModal(true)}
             onClearDiscount={() => {
               setManualDiscount(0);
@@ -2231,6 +2529,13 @@ const POSPageOptimized: React.FC = () => {
             const result = await saleProcessingService.processSale(saleData);
             
             if (result.success) {
+              // Show pricing modal for trade-in device if there's a trade-in transaction
+              if (tradeInTransaction) {
+                console.log('📋 Opening pricing modal for trade-in device (ZenoPay)...');
+                // Don't clear trade-in data yet - wait for pricing confirmation
+                setShowTradeInPricing(true);
+              }
+              
               // Prepare receipt data
               const receiptData = {
                 id: result.sale?.id || '',
@@ -2314,6 +2619,62 @@ const POSPageOptimized: React.FC = () => {
         customer={selectedCustomer}
       />
 
+      {/* Installment Plan Modal */}
+      {showInstallmentModal && selectedCustomer && (
+        <POSInstallmentModal
+          isOpen={showInstallmentModal}
+          onClose={() => setShowInstallmentModal(false)}
+          onSuccess={async () => {
+            // Show pricing modal for trade-in device if there's a trade-in transaction
+            if (tradeInTransaction) {
+              console.log('📋 Opening pricing modal for trade-in device (Installment)...');
+              // Don't clear trade-in data yet - wait for pricing confirmation
+              setShowTradeInPricing(true);
+            }
+            
+            setShowInstallmentModal(false);
+            clearCart();
+            toast.success('✅ Sale completed with installment plan!');
+          }}
+          cartItems={cartItems}
+          cartTotal={finalAmount}
+          customer={selectedCustomer}
+          currentUser={currentUser}
+        />
+      )}
+
+      {/* Trade-In Calculator Modal */}
+      {showTradeInCalculator && (
+        <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div></div>}>
+          <TradeInCalculator
+            isOpen={showTradeInCalculator}
+            onClose={() => setShowTradeInCalculator(false)}
+            newDevicePrice={finalAmount}
+            onTradeInComplete={handleTradeInComplete}
+          />
+        </React.Suspense>
+      )}
+
+      {/* Trade-In Contract Modal */}
+      {tradeInTransaction && (
+        <TradeInContractModal
+          isOpen={showTradeInContract}
+          transaction={tradeInTransaction}
+          onClose={() => setShowTradeInContract(false)}
+          onContractSigned={handleContractSigned}
+        />
+      )}
+
+      {/* Trade-In Pricing Modal */}
+      {tradeInTransaction && (
+        <TradeInPricingModal
+          isOpen={showTradeInPricing}
+          transaction={tradeInTransaction}
+          onClose={() => setShowTradeInPricing(false)}
+          onConfirm={handleTradeInPricingConfirm}
+        />
+      )}
+
       <PaymentTrackingModal
         isOpen={showPaymentTracking}
         onClose={() => setShowPaymentTracking(false)}
@@ -2323,10 +2684,10 @@ const POSPageOptimized: React.FC = () => {
       <PaymentsPopupModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
-        amount={finalAmount}
+        amount={tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount}
         customerId={selectedCustomer?.id}
         customerName={selectedCustomer?.name || 'Walk-in Customer'}
-        description={`POS Sale - ${cartItems.length} items`}
+        description={`POS Sale - ${cartItems.length} items${tradeInDiscount > 0 ? ` (Trade-In: -${format.money(tradeInDiscount)})` : ''}`}
         onPaymentComplete={async (payments, totalPaid) => {
           try {
             // Validate payment data before processing
@@ -2344,16 +2705,30 @@ const POSPageOptimized: React.FC = () => {
               }))
             });
 
-            // Validate totalPaid to ensure it matches the final amount
-            const validatedTotalPaid = totalPaid || finalAmount;
+            // Calculate expected payment amount (after trade-in discount if applicable)
+            const expectedAmount = tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount;
             
-            // Validate that totalPaid matches finalAmount (with tolerance for rounding)
-            if (Math.abs(validatedTotalPaid - finalAmount) > 1) {
+            // Validate totalPaid to ensure it matches the expected amount
+            const validatedTotalPaid = totalPaid || expectedAmount;
+            
+            // Validate that totalPaid matches expectedAmount (with tolerance for rounding)
+            if (Math.abs(validatedTotalPaid - expectedAmount) > 1) {
               console.warn('⚠️ Payment amount mismatch:', {
                 totalPaid: validatedTotalPaid,
+                expectedAmount: expectedAmount,
                 finalAmount: finalAmount,
-                difference: Math.abs(validatedTotalPaid - finalAmount)
+                tradeInDiscount: tradeInDiscount,
+                difference: Math.abs(validatedTotalPaid - expectedAmount)
               });
+            }
+
+            // Prepare sale notes including trade-in information if applicable
+            let saleNotes = payments.map((p: any) => p.notes).filter(Boolean).join('; ');
+            
+            // Add trade-in information to sale notes
+            if (tradeInTransaction && tradeInData) {
+              const tradeInNote = `Trade-In: ${tradeInTransaction.device_name} ${tradeInTransaction.device_model} (IMEI: ${tradeInTransaction.device_imei || 'N/A'}) - Trade-In Value: ${format.money(tradeInData.final_trade_in_value)} - Customer Payment: ${format.money(tradeInData.customer_payment_amount)} - Transaction ID: ${tradeInTransaction.id}`;
+              saleNotes = saleNotes ? `${saleNotes}; ${tradeInNote}` : tradeInNote;
             }
 
             // Prepare sale data for database with multiple payments
@@ -2373,13 +2748,20 @@ const POSPageOptimized: React.FC = () => {
                 unitPrice: item.unitPrice, // Fixed: was item.price
                 totalPrice: item.totalPrice,
                 costPrice: 0, // Will be calculated by service
-                profit: 0 // Will be calculated by service
+                profit: 0, // Will be calculated by service
+                // Add selected serial numbers if available
+                ...(item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0 && {
+                  serialNumbers: item.selectedSerialNumbers
+                })
               })),
               subtotal: totalAmount,
               tax: taxAmount,
               discount: manualDiscount,
               discountType: discountType,
               discountValue: parseFloat(discountValue) || 0,
+              // Include trade-in discount if applicable
+              tradeInDiscount: tradeInDiscount || 0,
+              tradeInTransactionId: tradeInTransaction?.id || null,
               total: finalAmount,
               // Payment method structure expected by sale processing service
               paymentMethod: {
@@ -2393,14 +2775,24 @@ const POSPageOptimized: React.FC = () => {
                     notes: payment.notes,
                     timestamp: payment.timestamp
                   })),
-                  totalPaid: validatedTotalPaid
+                  totalPaid: validatedTotalPaid,
+                  // Include trade-in details in payment details
+                  ...(tradeInTransaction && {
+                    tradeIn: {
+                      transactionId: tradeInTransaction.id,
+                      deviceName: tradeInTransaction.device_name,
+                      deviceModel: tradeInTransaction.device_model,
+                      deviceImei: tradeInTransaction.device_imei,
+                      tradeInValue: tradeInData?.final_trade_in_value || 0
+                    }
+                  })
                 },
                 amount: validatedTotalPaid // Fix: Use validated totalPaid instead of potentially 0
               },
               paymentStatus: 'completed' as const,
               soldBy: cashierName || 'POS User',
               soldAt: new Date().toISOString(),
-              notes: payments.map((p: any) => p.notes).filter(Boolean).join('; ') || undefined
+              notes: saleNotes || undefined
             };
 
             // Process the sale using the service
@@ -2409,6 +2801,13 @@ const POSPageOptimized: React.FC = () => {
             if (result.success) {
               const displayAmount = totalPaid || finalAmount;
               const saleNumber = result.sale?.saleNumber;
+              
+              // Show pricing modal for trade-in device if there's a trade-in transaction
+              if (tradeInTransaction) {
+                console.log('📋 Opening pricing modal for trade-in device...');
+                // Don't clear trade-in data yet - wait for pricing confirmation
+                setShowTradeInPricing(true);
+              }
               
               // Prepare receipt data BEFORE clearing anything
               const receiptData = {
@@ -2430,6 +2829,16 @@ const POSPageOptimized: React.FC = () => {
                 subtotal: totalAmount,
                 tax: taxAmount,
                 discount: manualDiscount,
+                // Include trade-in discount on receipt
+                tradeInDiscount: tradeInDiscount || 0,
+                tradeInDetails: tradeInTransaction ? {
+                  deviceName: tradeInTransaction.device_name,
+                  deviceModel: tradeInTransaction.device_model,
+                  deviceImei: tradeInTransaction.device_imei,
+                  tradeInValue: tradeInData?.final_trade_in_value || 0,
+                  conditionRating: tradeInTransaction.condition_rating,
+                  transactionId: tradeInTransaction.id
+                } : null,
                 total: finalAmount,
                 paymentMethod: {
                   name: payments.length === 1 ? payments[0].paymentMethod : 'Multiple Payments',
@@ -2482,11 +2891,16 @@ const POSPageOptimized: React.FC = () => {
               }, 100);
               
               // Clear cart and customer AFTER showing modal (delayed)
-              setTimeout(() => {
-                clearCart();
-                setSelectedCustomer(null);
-                console.log('🎉 POS: Cart cleared after modal shown');
-              }, 150);
+              // Skip clearing if there's a trade-in transaction (will clear after pricing is set)
+              if (!tradeInTransaction) {
+                setTimeout(() => {
+                  clearCart();
+                  setSelectedCustomer(null);
+                  console.log('🎉 POS: Cart cleared after modal shown');
+                }, 150);
+              } else {
+                console.log('📋 Trade-in active - cart will clear after pricing is set');
+              }
             } else {
               console.error('Sale processing failed:', result.error);
               throw new Error(result.error || 'Failed to process sale');
@@ -3110,6 +3524,32 @@ const POSPageOptimized: React.FC = () => {
 
       {/* Success Modal for Sale Completion */}
       <SuccessModal {...successModal.props} />
+
+      {/* Serial Number Selector Modal */}
+      {serialNumberProduct && (
+        <SerialNumberSelector
+          isOpen={showSerialNumberSelector}
+          onClose={() => {
+            setShowSerialNumberSelector(false);
+            setSerialNumberProduct(null);
+          }}
+          productId={serialNumberProduct.productId}
+          productName={serialNumberProduct.productName}
+          variantId={serialNumberProduct.variantId}
+          quantity={serialNumberProduct.quantity}
+          onItemsSelected={handleSerialNumbersSelected}
+          branchId={currentBranch?.id}
+          excludeItemIds={
+            // Collect all already-selected item IDs from cart for this product
+            cartItems
+              .filter(item => 
+                item.productId === serialNumberProduct.productId && 
+                (!serialNumberProduct.variantId || item.variantId === serialNumberProduct.variantId)
+              )
+              .flatMap(item => item.selectedSerialNumbers?.map((sn: any) => sn.id) || [])
+          }
+        />
+      )}
 
       {/* Share Receipt Modal */}
       <ShareReceiptModal

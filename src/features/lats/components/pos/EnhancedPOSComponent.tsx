@@ -10,6 +10,7 @@ import VariantProductSearch from './VariantProductSearch';
 import VariantCartItem from './VariantCartItem';
 import ZenoPayPaymentButton from './ZenoPayPaymentButton';
 import CustomerSelectionModal from './CustomerSelectionModal';
+import POSInstallmentModal from './POSInstallmentModal';
 import { format } from '../../lib/format';
 import { ProductSearchResult, ProductSearchVariant, CartItem, Sale } from '../../types/pos';
 import { Customer } from '../../../customers/types';
@@ -81,6 +82,7 @@ const EnhancedPOSComponent: React.FC = () => {
   const [customerEmail, setCustomerEmail] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerSelection, setShowCustomerSelection] = useState(false);
+  const [showInstallmentModal, setShowInstallmentModal] = useState(false);
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(false);
 
@@ -785,6 +787,18 @@ const EnhancedPOSComponent: React.FC = () => {
                 size="lg"
               />
 
+              {/* Installment Plan Button */}
+              <GlassButton
+                onClick={() => setShowInstallmentModal(true)}
+                className="w-full flex items-center justify-center gap-2 py-3"
+                disabled={cartItems.length === 0 || !selectedCustomer}
+                variant="gradient"
+                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Create installment plan"}
+              >
+                <CreditCard className="w-5 h-5" />
+                Installment Plan - {format.money(cartTotals.total)}
+              </GlassButton>
+
               {/* Regular Process Sale Button */}
               <GlassButton
                 onClick={handleProcessSale}
@@ -807,6 +821,23 @@ const EnhancedPOSComponent: React.FC = () => {
           onCustomerSelect={handleCustomerSelect}
           selectedCustomer={selectedCustomer}
         />
+
+        {/* Installment Plan Modal */}
+        {showInstallmentModal && selectedCustomer && (
+          <POSInstallmentModal
+            isOpen={showInstallmentModal}
+            onClose={() => setShowInstallmentModal(false)}
+            onSuccess={() => {
+              setShowInstallmentModal(false);
+              handleClearCart();
+              toast.success('Sale completed with installment plan!');
+            }}
+            cartItems={cartItems}
+            cartTotal={cartTotals.total}
+            customer={selectedCustomer}
+            currentUser={currentUser}
+          />
+        )}
       </div>
     </div>
   );

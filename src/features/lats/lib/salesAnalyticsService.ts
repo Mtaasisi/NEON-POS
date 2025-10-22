@@ -301,7 +301,10 @@ class SalesAnalyticsService {
   }
 
   private calculateMetrics(sales: any[], dailySales: any[]) {
-    const totalSales = sales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
+    const totalSales = sales.reduce((sum, sale) => {
+      const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+      return sum + amount;
+    }, 0);
     const totalTransactions = sales.length;
     const averageTransaction = totalTransactions > 0 ? totalSales / totalTransactions : 0;
     

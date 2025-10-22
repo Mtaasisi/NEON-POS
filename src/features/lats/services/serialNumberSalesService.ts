@@ -175,12 +175,10 @@ class SerialNumberSalesService {
    */
   async getSaleItems(saleId: string): Promise<InventoryItem[]> {
     try {
-      const { data, error } = await supabase
+      // Fixed: Fetch sale items without PostgREST relationship syntax
+      const { data: saleItems, error } = await supabase
         .from('sale_inventory_items')
-        .select(`
-          *,
-          inventory_item:inventory_items(*)
-        `)
+        .select('*, inventory_item_id')
         .eq('sale_id', saleId);
 
       if (error) {
@@ -188,7 +186,21 @@ class SerialNumberSalesService {
         return [];
       }
 
-      return data?.map(item => item.inventory_item).filter(Boolean) || [];
+      // Fetch inventory items separately
+      const inventoryItemIds = saleItems?.map(item => item.inventory_item_id).filter(Boolean) || [];
+      if (inventoryItemIds.length === 0) return [];
+
+      const { data: inventoryItems, error: itemsError } = await supabase
+        .from('inventory_items')
+        .select('*')
+        .in('id', inventoryItemIds);
+
+      if (itemsError) {
+        console.error('Error getting inventory items:', itemsError);
+        return [];
+      }
+
+      return inventoryItems || [];
     } catch (error) {
       console.error('Error getting sale items:', error);
       return [];
@@ -207,14 +219,10 @@ class SerialNumberSalesService {
     }>;
   }> {
     try {
-      const { data, error } = await supabase
+      // Fixed: Fetch data without PostgREST relationship syntax
+      const { data: saleItems, error } = await supabase
         .from('sale_inventory_items')
-        .select(`
-          sale_id,
-          created_at,
-          inventory_item:inventory_items(*),
-          sale:lats_sales(total_amount, created_at)
-        `)
+        .select('sale_id, created_at, inventory_item_id')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false });
 
@@ -223,25 +231,52 @@ class SerialNumberSalesService {
         return { sales: [] };
       }
 
+      // Get unique sale IDs and inventory item IDs
+      const saleIds = [...new Set(saleItems?.map(item => item.sale_id).filter(Boolean))];
+      const inventoryItemIds = [...new Set(saleItems?.map(item => item.inventory_item_id).filter(Boolean))];
+
+      if (saleIds.length === 0) return { sales: [] };
+
+      // Fetch sales and inventory items separately
+      const [salesResult, inventoryResult] = await Promise.all([
+        supabase.from('lats_sales').select('id, total_amount, created_at').in('id', saleIds),
+        inventoryItemIds.length > 0 
+          ? supabase.from('inventory_items').select('*').in('id', inventoryItemIds)
+          : Promise.resolve({ data: [], error: null })
+      ]);
+
+      if (salesResult.error) {
+        console.error('Error getting sales:', salesResult.error);
+        return { sales: [] };
+      }
+
+      // Create maps for easy lookup
+      const salesMap = new Map(salesResult.data?.map(s => [s.id, s]) || []);
+      const inventoryMap = new Map(inventoryResult.data?.map(i => [i.id, i]) || []);
+
       // Group by sale
-      const salesMap = new Map();
+      const salesGroupMap = new Map();
       
-      data?.forEach(item => {
+      saleItems?.forEach(item => {
         const saleId = item.sale_id;
-        if (!salesMap.has(saleId)) {
-          salesMap.set(saleId, {
+        const sale = salesMap.get(saleId);
+        
+        if (!salesGroupMap.has(saleId)) {
+          salesGroupMap.set(saleId, {
             sale_id: saleId,
-            sale_date: item.sale?.created_at || item.created_at,
-            total_amount: item.sale?.total_amount || 0,
+            sale_date: sale?.created_at || item.created_at,
+            total_amount: sale?.total_amount || 0,
             items: []
           });
         }
-        if (item.inventory_item) {
-          salesMap.get(saleId).items.push(item.inventory_item);
+        
+        const inventoryItem = inventoryMap.get(item.inventory_item_id);
+        if (inventoryItem) {
+          salesGroupMap.get(saleId).items.push(inventoryItem);
         }
       });
 
-      return { sales: Array.from(salesMap.values()) };
+      return { sales: Array.from(salesGroupMap.values()) };
     } catch (error) {
       console.error('Error getting customer serial history:', error);
       return { sales: [] };

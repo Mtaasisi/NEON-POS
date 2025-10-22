@@ -50,7 +50,7 @@ export const PurchaseOrderChart: React.FC<PurchaseOrderChartProps> = ({ classNam
         
         // Query purchase orders for this day
         let query = supabase
-          .from('purchase_orders')
+          .from('lats_purchase_orders')
           .select('id, status')
           .gte('created_at', startOfDay.toISOString())
           .lte('created_at', endOfDay.toISOString());
@@ -141,7 +141,7 @@ export const PurchaseOrderChart: React.FC<PurchaseOrderChartProps> = ({ classNam
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -172,7 +172,7 @@ export const PurchaseOrderChart: React.FC<PurchaseOrderChartProps> = ({ classNam
       ) : (
         <>
           {/* Chart */}
-          <div className="h-56 -mx-2">
+          <div className="flex-grow -mx-2 min-h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={poData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />

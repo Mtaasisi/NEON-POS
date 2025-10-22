@@ -82,8 +82,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.5)',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(0, 0, 0, 0.4)',
         animation: 'fadeIn 0.2s ease-out',
       }}
       onClick={onClose}
@@ -101,11 +100,11 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
         @keyframes slideUp {
           from {
             opacity: 0;
-            transform: translateY(20px) scale(0.95);
+            transform: translateY(20px);
           }
           to {
             opacity: 1;
-            transform: translateY(0) scale(1);
+            transform: translateY(0);
           }
         }
 
@@ -115,7 +114,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
             opacity: 0;
           }
           50% {
-            transform: scale(1.2);
+            transform: scale(1.1);
           }
           100% {
             transform: scale(1);
@@ -137,13 +136,12 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
         className="success-modal-content"
         style={{
           background: '#fff',
-          borderRadius: 16,
-          padding: '40px 32px 32px',
-          maxWidth: 440,
+          borderRadius: 12,
+          padding: '24px',
+          maxWidth: 400,
           width: '90%',
-          textAlign: 'center',
           position: 'relative',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+          border: '1px solid #e5e7eb',
           animation: 'slideUp 0.3s ease-out',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -156,24 +154,30 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
               position: 'absolute',
               top: 12,
               right: 12,
-              background: 'transparent',
+              background: '#ef4444',
               border: 'none',
               cursor: 'pointer',
-              padding: 8,
+              width: 28,
+              height: 28,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: 8,
-              transition: 'background 0.2s',
+              borderRadius: '50%',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 6px rgba(239, 68, 68, 0.3)',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f3f4f6';
+              e.currentTarget.style.background = '#dc2626';
+              e.currentTarget.style.transform = 'scale(1.1)';
+              e.currentTarget.style.boxShadow = '0 3px 8px rgba(220, 38, 38, 0.4)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.background = '#ef4444';
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 2px 6px rgba(239, 68, 68, 0.3)';
             }}
           >
-            <X size={20} color="#6b7280" />
+            <X size={14} color="#fff" strokeWidth={2.5} />
           </button>
         )}
 
@@ -182,24 +186,24 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
           style={{
             display: 'flex',
             justifyContent: 'center',
-            marginBottom: 24,
-            animation: 'checkmark 0.5s ease-out',
+            marginBottom: 16,
           }}
         >
           {icon || (
             <div
               style={{
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                borderRadius: '50%',
-                width: 80,
-                height: 80,
+                background: '#10b981',
+                borderRadius: 8,
+                width: 40,
+                height: 40,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(16, 185, 129, 0.3)',
+                flexShrink: 0,
+                animation: 'checkmark 0.4s ease-out',
               }}
             >
-              <CheckCircle size={48} color="white" strokeWidth={2.5} />
+              <CheckCircle size={24} color="white" strokeWidth={2} />
             </div>
           )}
         </div>
@@ -207,11 +211,12 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
         {/* Title */}
         <h2
           style={{
-            fontSize: 28,
-            fontWeight: 700,
+            fontSize: 18,
+            fontWeight: 600,
             color: '#111827',
+            margin: 0,
             marginBottom: 12,
-            lineHeight: 1.2,
+            textAlign: 'center',
           }}
         >
           {title}
@@ -220,10 +225,11 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
         {/* Message */}
         <p
           style={{
-            fontSize: 16,
+            fontSize: 14,
             color: '#6b7280',
-            lineHeight: 1.6,
-            marginBottom: actionButtons && actionButtons.length > 0 ? 32 : 0,
+            lineHeight: 1.5,
+            marginBottom: actionButtons && actionButtons.length > 0 ? 20 : 0,
+            textAlign: 'center',
           }}
         >
           {message}
@@ -234,9 +240,8 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
           <div
             style={{
               display: 'flex',
-              gap: 12,
+              gap: 8,
               justifyContent: 'center',
-              flexWrap: 'wrap',
             }}
           >
             {actionButtons.map((button, index) => (
@@ -247,39 +252,36 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
                   onClose();
                 }}
                 style={{
-                  padding: '12px 24px',
+                  padding: '10px 24px',
                   borderRadius: 10,
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: 600,
                   cursor: 'pointer',
                   border: 'none',
-                  transition: 'all 0.2s',
-                  background:
-                    button.variant === 'secondary'
-                      ? '#f3f4f6'
-                      : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  color: button.variant === 'secondary' ? '#374151' : '#fff',
-                  boxShadow:
-                    button.variant === 'secondary'
-                      ? 'none'
-                      : '0 4px 12px rgba(16, 185, 129, 0.3)',
+                  background: button.variant === 'secondary' 
+                    ? '#f3f4f6' 
+                    : '#10b981',
+                  color: button.variant === 'secondary' ? '#1f2937' : '#fff',
+                  transition: 'all 0.2s ease',
+                  minWidth: 100,
+                  letterSpacing: '0.01em',
                 }}
                 onMouseEnter={(e) => {
                   if (button.variant === 'secondary') {
                     e.currentTarget.style.background = '#e5e7eb';
+                    e.currentTarget.style.transform = 'scale(1.02)';
                   } else {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow =
-                      '0 6px 16px rgba(16, 185, 129, 0.4)';
+                    e.currentTarget.style.background = '#059669';
+                    e.currentTarget.style.transform = 'scale(1.02)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (button.variant === 'secondary') {
                     e.currentTarget.style.background = '#f3f4f6';
+                    e.currentTarget.style.transform = 'scale(1)';
                   } else {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow =
-                      '0 4px 12px rgba(16, 185, 129, 0.3)';
+                    e.currentTarget.style.background = '#10b981';
+                    e.currentTarget.style.transform = 'scale(1)';
                   }
                 }}
               >
@@ -289,16 +291,17 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
           </div>
         )}
 
-        {/* Auto-close progress indicator */}
+        {/* Auto-close indicator */}
         {autoCloseDelay > 0 && (
           <div
             style={{
-              marginTop: 24,
-              fontSize: 13,
+              marginTop: 16,
+              fontSize: 12,
               color: '#9ca3af',
+              textAlign: 'right',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              justifyContent: 'flex-end',
               gap: 6,
             }}
           >
@@ -311,7 +314,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
                 animation: 'pulse 1.5s ease-in-out infinite',
               }}
             />
-            Auto-closing in {Math.ceil(autoCloseDelay / 1000)}s
+            Closes in {Math.ceil(autoCloseDelay / 1000)}s
           </div>
         )}
       </div>

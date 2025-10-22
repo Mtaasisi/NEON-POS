@@ -139,7 +139,7 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -161,7 +161,7 @@ export const AppointmentsTrendChart: React.FC<AppointmentsTrendChartProps> = ({ 
       </div>
 
       {/* Chart */}
-      <div className="h-48 -mx-2 mb-4">
+      <div className="flex-grow -mx-2 mb-4 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={appointmentData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />

@@ -7,7 +7,7 @@ import {
   Clock,
   MoreVertical 
 } from 'lucide-react';
-import { Notification } from '../types';
+import type { Notification } from '../types';
 import { notificationHelpers } from '../utils/notificationHelpers';
 
 interface NotificationCardProps {

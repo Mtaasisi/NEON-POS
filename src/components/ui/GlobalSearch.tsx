@@ -143,13 +143,26 @@ export const GlobalSearch: React.FC<GlobalSearchProps> = ({ isOpen, onClose }) =
 
   if (!isOpen) return null;
 
+  // Calculate dynamic positioning based on sidebar
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const sidebarWidth = isMobile ? 0 : 288; // Default sidebar width
+  const topBarHeight = 80;
+
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4 pt-[20vh]"
+      className="fixed z-[99999] flex items-start justify-center"
+      style={{
+        left: `${sidebarWidth}px`,
+        top: `${topBarHeight}px`,
+        width: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
+        height: `calc(100vh - ${topBarHeight}px)`,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(8px)',
+      }}
       onClick={handleBackdropClick}
     >
       <div
-        className="bg-white rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden"
+        className="bg-white rounded-lg shadow-2xl w-full max-w-2xl overflow-hidden mt-12"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}

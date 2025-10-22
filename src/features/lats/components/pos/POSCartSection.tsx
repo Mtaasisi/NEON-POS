@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3 } from 'lucide-react';
+import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantCartItem from './VariantCartItem';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
@@ -34,6 +34,8 @@ interface POSCartSectionProps {
   onRemoveCartItem: (itemId: string) => void;
   onApplyDiscount: (discountType: 'percentage' | 'fixed', value: number) => void;
   onProcessPayment: () => void;
+  onShowInstallmentModal?: () => void;
+  onShowTradeInModal?: () => void;
   onShowDiscountModal: () => void;
   onClearDiscount: () => void;
   dynamicPricingEnabled?: boolean;
@@ -57,6 +59,8 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   onRemoveCartItem,
   onApplyDiscount,
   onProcessPayment,
+  onShowInstallmentModal,
+  onShowTradeInModal,
   onShowDiscountModal,
   onClearDiscount,
   dynamicPricingEnabled = false,
@@ -298,6 +302,38 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                   <span className="font-medium">Please select a customer to proceed</span>
                 </div>
               </div>
+            )}
+
+            {/* Installment Plan Button */}
+            {onShowInstallmentModal && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  onShowInstallmentModal();
+                }}
+                disabled={cartItems.length === 0 || !selectedCustomer}
+                className="w-full bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Create installment plan"}
+              >
+                <CreditCard className="w-5 h-5" />
+                Installment Plan
+              </button>
+            )}
+
+            {/* Trade-In Button */}
+            {onShowTradeInModal && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  onShowTradeInModal();
+                }}
+                disabled={cartItems.length === 0 || !selectedCustomer}
+                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Add trade-in device"}
+              >
+                <Repeat className="w-5 h-5" />
+                Add Trade-In
+              </button>
             )}
 
             {/* Process Payment Button */}

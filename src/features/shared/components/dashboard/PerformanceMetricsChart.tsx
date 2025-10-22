@@ -157,7 +157,7 @@ export const PerformanceMetricsChart: React.FC<PerformanceMetricsChartProps> = (
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -178,7 +178,7 @@ export const PerformanceMetricsChart: React.FC<PerformanceMetricsChartProps> = (
       </div>
 
       {/* Chart */}
-      <div className="h-52 -mx-2">
+      <div className="flex-grow -mx-2 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={metricsData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />

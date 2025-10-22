@@ -10,6 +10,7 @@ A modern, full-featured Point of Sale (POS) system built with React, TypeScript,
 - **Purchase Orders**: Create and manage purchase orders with supplier integration
 - **Financial Management**: Daily sales closures, payment tracking, and account management
 - **User Management**: Role-based access control and user authentication
+- **Multi-Branch Support**: Branch filtering for dashboard analytics (admin-only)
 - **Reporting**: Comprehensive sales reports and analytics
 - **Mobile Support**: Built with Capacitor for cross-platform deployment
 

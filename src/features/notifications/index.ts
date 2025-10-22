@@ -1,16 +1,25 @@
-// Pages
-export { default as NotificationsPage } from './pages/NotificationsPage';
-export { default as NotificationSettingsPage } from './pages/NotificationSettingsPage';
-
 // Components
 export { default as NotificationCard } from './components/NotificationCard';
-export { default as NotificationFilters } from './components/NotificationFilters';
+export { default as NotificationFiltersComponent } from './components/NotificationFilters';
 
 // Hooks
 export { useNotifications } from './hooks/useNotifications';
 
-// Types
-export * from './types';
+// Types - Export explicitly to avoid naming conflicts
+export type {
+  Notification,
+  NotificationGroup,
+  NotificationSettings,
+  NotificationStats,
+  NotificationFilters,
+  NotificationAction,
+  NotificationTemplate,
+  NotificationType,
+  NotificationPriority,
+  NotificationStatus,
+  NotificationCategory
+} from './types';
 
 // Utils
 export { notificationHelpers } from './utils/notificationHelpers';
+export { NotificationService } from './utils/notificationService';

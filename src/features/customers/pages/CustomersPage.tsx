@@ -34,6 +34,8 @@ import BirthdayMessageSender from '../components/BirthdayMessageSender';
 import BirthdayCalendar from '../components/BirthdayCalendar';
 import BirthdayRewards from '../components/BirthdayRewards';
 import { createAppointment, updateAppointment, CreateAppointmentData, UpdateAppointmentData, Appointment } from '../../../lib/customerApi/appointments';
+import { useSuccessModal } from '../../../hooks/useSuccessModal';
+import SuccessModal from '../../../components/ui/SuccessModal';
 
 // Helper to escape CSV fields
 function escapeCSVField(field: any) {
@@ -66,6 +68,7 @@ const CustomersPage = () => {
   const [searchParams] = useSearchParams();
   const { markCustomerAsRead } = useCustomers();
   const { summary, loading: financialLoading } = useFinancialData();
+  const successModal = useSuccessModal();
   // Restore preferences from localStorage
   const prefs = getInitialPrefs();
   const [searchQuery, setSearchQuery] = useState(prefs.searchQuery ?? '');
@@ -2368,9 +2371,27 @@ const CustomersPage = () => {
           setTotalCount(prev => prev + 1);
           
           setShowAddCustomerModal(false);
-          setSelectedCustomer(customer);
-          setShowCustomerDetailModal(true);
           markCustomerAsRead(customer.id);
+          
+          // Show success modal with actions
+          successModal.show(`Customer "${customer.name}" has been added successfully!`, {
+            title: 'Customer Added',
+            actionButtons: [
+              {
+                label: 'View Details',
+                onClick: () => {
+                  setSelectedCustomer(customer);
+                  setShowCustomerDetailModal(true);
+                },
+                variant: 'primary'
+              },
+              {
+                label: 'Add Another',
+                onClick: () => setShowAddCustomerModal(true),
+                variant: 'secondary'
+              }
+            ]
+          });
         }}
       />
 
@@ -2627,6 +2648,9 @@ const CustomersPage = () => {
           }}
         />
       )}
+
+      {/* Success Modal */}
+      <SuccessModal {...successModal.props} />
     </div>
   );
 };

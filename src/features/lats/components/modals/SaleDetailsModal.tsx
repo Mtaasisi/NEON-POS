@@ -65,6 +65,7 @@ interface SaleItem {
   cost_price?: number;
   profit?: number;
   notes?: string;
+  serial_numbers?: any[]; // Serial numbers sold with this item
   lats_products?: {
     id: string;
     name: string;
@@ -266,28 +267,61 @@ const SaleDetailsModal: React.FC<SaleDetailsModalProps> = ({ isOpen, onClose, sa
         }
       }
 
+      // Step 4.5: Fetch serial numbers for this sale
+      const { data: serialNumberLinks, error: serialError } = await supabase
+        .from('sale_inventory_items')
+        .select('inventory_item_id, sale_id')
+        .eq('sale_id', saleId);
+
+      let serialNumbersData = {};
+      if (!serialError && serialNumberLinks && serialNumberLinks.length > 0) {
+        const inventoryItemIds = serialNumberLinks.map(link => link.inventory_item_id);
+        const { data: inventoryItems, error: inventoryError } = await supabase
+          .from('inventory_items')
+          .select('*')
+          .in('id', inventoryItemIds);
+
+        if (!inventoryError && inventoryItems) {
+          // Group serial numbers by product_id and variant_id
+          inventoryItems.forEach(item => {
+            const key = `${item.product_id}_${item.variant_id || 'null'}`;
+            if (!serialNumbersData[key]) {
+              serialNumbersData[key] = [];
+            }
+            serialNumbersData[key].push(item);
+          });
+          console.log('✅ Serial numbers loaded:', serialNumbersData);
+        }
+      }
+
       // Step 5: Combine all data into the expected format
       const combinedSaleData = {
         ...saleData,
         customers: customerData,
-        lats_sale_items: saleItems?.map(item => ({
-          ...item,
-          lats_products: item.product_id ? {
-            ...productsData[item.product_id],
-            lats_categories: productsData[item.product_id]?.category_id ? 
-              categoriesData[productsData[item.product_id].category_id] : null
-          } : null,
-          lats_product_variants: item.variant_id ? {
-            ...variantsData[item.variant_id],
-            lats_products: variantsData[item.variant_id] ? {
-              id: variantsData[item.variant_id].product_id,
-              name: productsData[variantsData[item.variant_id].product_id]?.name,
-              description: productsData[variantsData[item.variant_id].product_id]?.description,
-              sku: variantsData[item.variant_id].sku,
-              barcode: variantsData[item.variant_id].barcode
+        lats_sale_items: saleItems?.map(item => {
+          const serialKey = `${item.product_id}_${item.variant_id || 'null'}`;
+          const itemSerialNumbers = serialNumbersData[serialKey] || [];
+          
+          return {
+            ...item,
+            serial_numbers: itemSerialNumbers, // Add serial numbers here
+            lats_products: item.product_id ? {
+              ...productsData[item.product_id],
+              lats_categories: productsData[item.product_id]?.category_id ? 
+                categoriesData[productsData[item.product_id].category_id] : null
+            } : null,
+            lats_product_variants: item.variant_id ? {
+              ...variantsData[item.variant_id],
+              lats_products: variantsData[item.variant_id] ? {
+                id: variantsData[item.variant_id].product_id,
+                name: productsData[variantsData[item.variant_id].product_id]?.name,
+                description: productsData[variantsData[item.variant_id].product_id]?.description,
+                sku: variantsData[item.variant_id].sku,
+                barcode: variantsData[item.variant_id].barcode
+              } : null
             } : null
-          } : null
-        })) || []
+          };
+        }) || []
       };
 
       // Calculate subtotal from sale items if not provided
@@ -877,6 +911,27 @@ const SaleDetailsModal: React.FC<SaleDetailsModalProps> = ({ isOpen, onClose, sa
                                 )}
                                 {item.notes && (
                                   <p className="text-sm text-gray-500 italic">Note: {item.notes}</p>
+                                )}
+                                {/* Serial Numbers */}
+                                {item.serial_numbers && item.serial_numbers.length > 0 && (
+                                  <div className="mt-2 space-y-1">
+                                    {item.serial_numbers.map((serial, idx) => (
+                                      <div key={idx} className="flex items-start gap-2 text-xs bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                                        <div className="flex-1">
+                                          <span className="font-semibold text-blue-900">S/N: {serial.serial_number}</span>
+                                          {serial.imei && (
+                                            <span className="ml-2 text-blue-700">• IMEI: {serial.imei}</span>
+                                          )}
+                                          {serial.mac_address && (
+                                            <span className="ml-2 text-blue-700">• MAC: {serial.mac_address}</span>
+                                          )}
+                                          {serial.location && (
+                                            <span className="ml-2 text-gray-600">• From: {serial.location}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </td>

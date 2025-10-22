@@ -378,8 +378,8 @@ export const createStockTransfer = async (
       throw new Error(`Failed to reserve stock: ${reserveError.message}`);
     }
 
-    // Create the transfer
-    const { data, error } = await supabase
+    // Create the transfer - FIXED: Remove PostgREST relationship syntax
+    const { data: newTransfer, error } = await supabase
       .from('branch_transfers')
       .insert({
         from_branch_id: transfer.from_branch_id,
@@ -394,19 +394,7 @@ export const createStockTransfer = async (
         requested_at: new Date().toISOString(),
         metadata: {}
       })
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(id, name, code, city, is_active),
-        to_branch:store_locations!to_branch_id(id, name, code, city, is_active),
-        variant:lats_product_variants!entity_id(
-          id,
-          variant_name,
-          sku,
-          quantity,
-          reserved_quantity,
-          product:lats_products!product_id(id, name, sku)
-        )
-      `)
+      .select('*')
       .single();
 
     if (error) {
@@ -418,6 +406,34 @@ export const createStockTransfer = async (
       });
       throw error;
     }
+
+    // Fetch related data separately
+    const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', newTransfer.from_branch_id).single(),
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', newTransfer.to_branch_id).single(),
+      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', newTransfer.entity_id).single()
+    ]);
+
+    // Fetch product for variant
+    let product = null;
+    if (variantResult.data?.product_id) {
+      const { data: productData } = await supabase
+        .from('lats_products')
+        .select('id, name, sku')
+        .eq('id', variantResult.data.product_id)
+        .single();
+      product = productData;
+    }
+
+    const data = {
+      ...newTransfer,
+      from_branch: fromBranchResult.data,
+      to_branch: toBranchResult.data,
+      variant: variantResult.data ? {
+        ...variantResult.data,
+        product
+      } : null
+    };
 
     console.log('✅ Transfer created with stock reserved:', data);
     
@@ -469,8 +485,8 @@ export const approveStockTransfer = async (
     //   throw new Error('You cannot approve your own transfer request');
     // }
 
-    // Update transfer status
-    const { data, error } = await supabase
+    // Update transfer status - FIXED: Remove PostgREST relationship syntax
+    const { data: updatedTransfer, error } = await supabase
       .from('branch_transfers')
       .update({
         status: 'approved',
@@ -478,25 +494,41 @@ export const approveStockTransfer = async (
         approved_at: new Date().toISOString()
       })
       .eq('id', transferId)
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(id, name, code, city, is_active),
-        to_branch:store_locations!to_branch_id(id, name, code, city, is_active),
-        variant:lats_product_variants!entity_id(
-          id,
-          variant_name,
-          sku,
-          quantity,
-          reserved_quantity,
-          product:lats_products!product_id(id, name, sku)
-        )
-      `)
+      .select('*')
       .single();
 
     if (error) {
       console.error('❌ Error approving transfer:', error);
       throw error;
     }
+
+    // Fetch related data separately
+    const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
+      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+    ]);
+
+    // Fetch product for variant
+    let product = null;
+    if (variantResult.data?.product_id) {
+      const { data: productData } = await supabase
+        .from('lats_products')
+        .select('id, name, sku')
+        .eq('id', variantResult.data.product_id)
+        .single();
+      product = productData;
+    }
+
+    const data = {
+      ...updatedTransfer,
+      from_branch: fromBranchResult.data,
+      to_branch: toBranchResult.data,
+      variant: variantResult.data ? {
+        ...variantResult.data,
+        product
+      } : null
+    };
 
     console.log('✅ Transfer approved:', data);
     return data;
@@ -539,8 +571,8 @@ export const rejectStockTransfer = async (
       p_quantity: transfer.quantity
     });
 
-    // Update transfer with separate rejection reason
-    const { data, error } = await supabase
+    // Update transfer with separate rejection reason - FIXED: Remove PostgREST relationship syntax
+    const { data: updatedTransfer, error } = await supabase
       .from('branch_transfers')
       .update({
         status: 'rejected',
@@ -549,25 +581,41 @@ export const rejectStockTransfer = async (
         rejection_reason: reason || null // Separate field, doesn't overwrite notes
       })
       .eq('id', transferId)
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(id, name, code, city, is_active),
-        to_branch:store_locations!to_branch_id(id, name, code, city, is_active),
-        variant:lats_product_variants!entity_id(
-          id,
-          variant_name,
-          sku,
-          quantity,
-          reserved_quantity,
-          product:lats_products!product_id(id, name, sku)
-        )
-      `)
+      .select('*')
       .single();
 
     if (error) {
       console.error('❌ Error rejecting transfer:', error);
       throw error;
     }
+
+    // Fetch related data separately
+    const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
+      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+    ]);
+
+    // Fetch product for variant
+    let product = null;
+    if (variantResult.data?.product_id) {
+      const { data: productData } = await supabase
+        .from('lats_products')
+        .select('id, name, sku')
+        .eq('id', variantResult.data.product_id)
+        .single();
+      product = productData;
+    }
+
+    const data = {
+      ...updatedTransfer,
+      from_branch: fromBranchResult.data,
+      to_branch: toBranchResult.data,
+      variant: variantResult.data ? {
+        ...variantResult.data,
+        product
+      } : null
+    };
 
     console.log('✅ Transfer rejected and stock released:', data);
     
@@ -613,31 +661,48 @@ export const markTransferInTransit = async (
       );
     }
 
-    const { data, error } = await supabase
+    // FIXED: Remove PostgREST relationship syntax
+    const { data: updatedTransfer, error } = await supabase
       .from('branch_transfers')
       .update({
         status: 'in_transit'
       })
       .eq('id', transferId)
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(id, name, code, city, is_active),
-        to_branch:store_locations!to_branch_id(id, name, code, city, is_active),
-        variant:lats_product_variants!entity_id(
-          id,
-          variant_name,
-          sku,
-          quantity,
-          reserved_quantity,
-          product:lats_products!product_id(id, name, sku)
-        )
-      `)
+      .select('*')
       .single();
 
     if (error) {
       console.error('❌ Error marking transfer in transit:', error);
       throw error;
     }
+
+    // Fetch related data separately
+    const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
+      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+    ]);
+
+    // Fetch product for variant
+    let product = null;
+    if (variantResult.data?.product_id) {
+      const { data: productData } = await supabase
+        .from('lats_products')
+        .select('id, name, sku')
+        .eq('id', variantResult.data.product_id)
+        .single();
+      product = productData;
+    }
+
+    const data = {
+      ...updatedTransfer,
+      from_branch: fromBranchResult.data,
+      to_branch: toBranchResult.data,
+      variant: variantResult.data ? {
+        ...variantResult.data,
+        product
+      } : null
+    };
 
     console.log('✅ Transfer marked in transit:', data);
     return data;
@@ -697,22 +762,10 @@ export const completeStockTransfer = async (
 
     console.log('✅ Transfer completed successfully:', result);
 
-    // Fetch the updated transfer with all details
-    const { data: transfer, error: fetchError } = await supabase
+    // Fetch the updated transfer - FIXED: Remove PostgREST relationship syntax
+    const { data: updatedTransfer, error: fetchError } = await supabase
       .from('branch_transfers')
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(id, name, code, city, is_active),
-        to_branch:store_locations!to_branch_id(id, name, code, city, is_active),
-        variant:lats_product_variants!entity_id(
-          id,
-          variant_name,
-          sku,
-          quantity,
-          reserved_quantity,
-          product:lats_products!product_id(id, name, sku)
-        )
-      `)
+      .select('*')
       .eq('id', transferId)
       .single();
 
@@ -720,6 +773,34 @@ export const completeStockTransfer = async (
       console.error('❌ Error fetching updated transfer:', fetchError);
       throw fetchError;
     }
+
+    // Fetch related data separately
+    const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
+      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+    ]);
+
+    // Fetch product for variant
+    let product = null;
+    if (variantResult.data?.product_id) {
+      const { data: productData } = await supabase
+        .from('lats_products')
+        .select('id, name, sku')
+        .eq('id', variantResult.data.product_id)
+        .single();
+      product = productData;
+    }
+
+    const transfer = {
+      ...updatedTransfer,
+      from_branch: fromBranchResult.data,
+      to_branch: toBranchResult.data,
+      variant: variantResult.data ? {
+        ...variantResult.data,
+        product
+      } : null
+    };
 
     console.log('✅ Transfer completed with full details:', transfer);
     
@@ -797,32 +878,49 @@ export const cancelStockTransfer = async (
       });
     }
 
-    const { data, error } = await supabase
+    // FIXED: Remove PostgREST relationship syntax
+    const { data: updatedTransfer, error } = await supabase
       .from('branch_transfers')
       .update({
         status: 'cancelled',
         rejection_reason: reason || null
       })
       .eq('id', transferId)
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(id, name, code, city, is_active),
-        to_branch:store_locations!to_branch_id(id, name, code, city, is_active),
-        variant:lats_product_variants!entity_id(
-          id,
-          variant_name,
-          sku,
-          quantity,
-          reserved_quantity,
-          product:lats_products!product_id(id, name, sku)
-        )
-      `)
+      .select('*')
       .single();
 
     if (error) {
       console.error('❌ Error cancelling transfer:', error);
       throw error;
     }
+
+    // Fetch related data separately
+    const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
+      supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
+      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+    ]);
+
+    // Fetch product for variant
+    let product = null;
+    if (variantResult.data?.product_id) {
+      const { data: productData } = await supabase
+        .from('lats_products')
+        .select('id, name, sku')
+        .eq('id', variantResult.data.product_id)
+        .single();
+      product = productData;
+    }
+
+    const data = {
+      ...updatedTransfer,
+      from_branch: fromBranchResult.data,
+      to_branch: toBranchResult.data,
+      variant: variantResult.data ? {
+        ...variantResult.data,
+        product
+      } : null
+    };
 
     console.log('✅ Transfer cancelled and stock released:', data);
     
@@ -924,13 +1022,10 @@ export const getVariantTransferHistory = async (
   variantId: string
 ): Promise<StockTransfer[]> => {
   try {
-    const { data, error } = await supabase
+    // FIXED: Remove PostgREST relationship syntax
+    const { data: transfers, error } = await supabase
       .from('branch_transfers')
-      .select(`
-        *,
-        from_branch:store_locations!from_branch_id(id, name, code, city),
-        to_branch:store_locations!to_branch_id(id, name, code, city)
-      `)
+      .select('*')
       .eq('entity_id', variantId)
       .order('created_at', { ascending: false });
 
@@ -939,7 +1034,21 @@ export const getVariantTransferHistory = async (
       throw error;
     }
 
-    return data || [];
+    if (!transfers || transfers.length === 0) return [];
+
+    // Fetch related branches
+    const branchIds = [...new Set([...transfers.map(t => t.from_branch_id), ...transfers.map(t => t.to_branch_id)].filter(Boolean))];
+    const branchesResult = branchIds.length > 0
+      ? await supabase.from('store_locations').select('id, name, code, city').in('id', branchIds)
+      : { data: [], error: null };
+
+    const branchesMap = new Map(branchesResult.data?.map(b => [b.id, b]) || []);
+
+    return transfers.map(transfer => ({
+      ...transfer,
+      from_branch: branchesMap.get(transfer.from_branch_id),
+      to_branch: branchesMap.get(transfer.to_branch_id)
+    }));
   } catch (error) {
     console.error('❌ Failed to get transfer history:', error);
     return [];

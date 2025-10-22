@@ -334,6 +334,28 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
 
   // Handle make payment
   const handleMakePayment = (order: PurchaseOrder) => {
+    // Validate order has an amount to pay
+    const totalAmount = order.totalAmount || 0;
+    const totalPaid = order.totalPaid || 0;
+    const remainingAmount = totalAmount - totalPaid;
+    
+    if (totalAmount === 0) {
+      toast.error('Cannot make payment: Purchase order has no total amount');
+      return;
+    }
+    
+    if (remainingAmount <= 0) {
+      toast.error(`Purchase order is fully paid. Total: ${totalAmount.toLocaleString()}, Paid: ${totalPaid.toLocaleString()}`);
+      return;
+    }
+    
+    console.log('💳 Opening payment modal for order:', {
+      orderNumber: order.orderNumber,
+      totalAmount,
+      totalPaid,
+      remainingAmount
+    });
+    
     setSelectedOrder(order);
     setShowPaymentModal(true);
   };

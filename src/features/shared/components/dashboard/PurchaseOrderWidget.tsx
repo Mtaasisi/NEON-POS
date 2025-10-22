@@ -45,24 +45,20 @@ export const PurchaseOrderWidget: React.FC<PurchaseOrderWidgetProps> = ({ classN
       
       console.log('📊 PurchaseOrderWidget: Loading data...', { currentBranchId });
       
-      // Query purchase orders - ALWAYS show all orders for dashboard overview
-      // Branch filtering can be done on the detailed PO page
-      const query = supabase
+      // Query purchase orders with branch filtering
+      // FIXED: Query without PostgREST syntax
+      let query = supabase
         .from('lats_purchase_orders')
-        .select(`
-          id,
-          po_number,
-          status,
-          total_amount,
-          created_at,
-          supplier_id,
-          lats_suppliers:lats_suppliers!supplier_id(name)
-        `)
+        .select('id, po_number, status, total_amount, created_at, supplier_id')
         .order('created_at', { ascending: false });
       
-      // Note: Removed branch filtering to show all POs in dashboard
-      // This gives a complete overview regardless of selected branch
-      console.log('📂 Loading all purchase orders for dashboard overview');
+      // Apply branch filter if branch is selected
+      if (currentBranchId) {
+        query = query.eq('branch_id', currentBranchId);
+        console.log('🏢 Filtering purchase orders by branch:', currentBranchId);
+      } else {
+        console.log('📂 Loading all purchase orders (no branch selected)');
+      }
       
       const { data: orders, error } = await query.limit(50);
 
@@ -74,6 +70,15 @@ export const PurchaseOrderWidget: React.FC<PurchaseOrderWidgetProps> = ({ classN
       console.log('✅ Loaded purchase orders:', orders?.length || 0);
 
       const allOrders = orders || [];
+
+      // FIXED: Fetch supplier data separately
+      const supplierIds = allOrders.map((o: any) => o.supplier_id).filter(Boolean);
+      const { data: suppliers } = supplierIds.length > 0
+        ? await supabase.from('lats_suppliers').select('id, name').in('id', supplierIds)
+        : { data: [] };
+      
+      // Map suppliers for easy lookup
+      const suppliersMap = new Map(suppliers?.map(s => [s.id, s]) || []);
       
       // Calculate metrics
       const pending = allOrders.filter((o: any) => 
@@ -88,7 +93,7 @@ export const PurchaseOrderWidget: React.FC<PurchaseOrderWidgetProps> = ({ classN
       const recentOrders = allOrders.slice(0, 4).map((order: any) => ({
         id: order.id,
         orderNumber: order.po_number || 'N/A',
-        supplier: order.lats_suppliers?.name || 'Unknown Supplier',
+        supplier: order.supplier_id && suppliersMap.get(order.supplier_id)?.name || 'Unknown Supplier',
         status: order.status,
         totalAmount: order.total_amount || 0,
         createdAt: order.created_at

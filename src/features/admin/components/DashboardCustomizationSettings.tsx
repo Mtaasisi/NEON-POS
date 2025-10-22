@@ -125,12 +125,6 @@ interface DashboardSettings {
     smsLogs: boolean;
     smsSettings: boolean;
     
-    // Diagnostic & Repair Features
-    diagnostics: boolean;
-    newDiagnostic: boolean;
-    diagnosticReports: boolean;
-    diagnosticTemplates: boolean;
-    
     // Import/Export & Data Management
     excelImport: boolean;
     excelTemplates: boolean;
@@ -217,12 +211,6 @@ const DashboardCustomizationSettings: React.FC = () => {
       bulkSms: true,
       smsLogs: true,
       smsSettings: true,
-      
-      // Diagnostic & Repair Features
-      diagnostics: true,
-      newDiagnostic: true,
-      diagnosticReports: true,
-      diagnosticTemplates: true,
       
       // Import/Export & Data Management
       excelImport: true,
@@ -356,12 +344,6 @@ const DashboardCustomizationSettings: React.FC = () => {
         smsLogs: true,
         smsSettings: true,
         
-        // Diagnostic & Repair Features
-        diagnostics: true,
-        newDiagnostic: true,
-        diagnosticReports: true,
-        diagnosticTemplates: true,
-        
         // Import/Export & Data Management
         excelImport: true,
         excelTemplates: true,
@@ -485,12 +467,6 @@ const DashboardCustomizationSettings: React.FC = () => {
     { key: 'bulkSms' as const, label: 'Bulk SMS', icon: MessageSquare, description: 'Mass messaging' },
     { key: 'smsLogs' as const, label: 'SMS Logs', icon: MessageSquare, description: 'Message history' },
     { key: 'smsSettings' as const, label: 'SMS Settings', icon: Settings, description: 'SMS configuration' },
-    
-    // Diagnostic & Repair Features
-    { key: 'diagnostics' as const, label: 'Diagnostics', icon: Wrench, description: 'Device diagnostics' },
-    { key: 'newDiagnostic' as const, label: 'New Diagnostic', icon: Plus, description: 'Create diagnostic request' },
-    { key: 'diagnosticReports' as const, label: 'Diagnostic Reports', icon: BarChart3, description: 'Diagnostic analytics' },
-    { key: 'diagnosticTemplates' as const, label: 'Diagnostic Templates', icon: FileText, description: 'Template management' },
     
     // Import/Export & Data Management
     { key: 'excelImport' as const, label: 'Excel Import', icon: Upload, description: 'Data import' },

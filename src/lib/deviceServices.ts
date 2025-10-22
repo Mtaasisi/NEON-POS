@@ -98,6 +98,7 @@ export const deviceServices = {
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
       
+      // Fetch devices without problematic PostgREST relationship syntax
       let query = supabase
         .from('devices')
         .select(`
@@ -112,12 +113,7 @@ export const deviceServices = {
           estimated_hours,
           expected_return_date,
           created_at,
-          updated_at,
-          customers(*),
-          device_checklists(*),
-          device_remarks(*),
-          device_transitions(*),
-          device_ratings(*)
+          updated_at
         `)
         .order('created_at', { ascending: false });
       
@@ -132,6 +128,9 @@ export const deviceServices = {
         throw new Error(`Failed to fetch devices: ${error.message}`);
       }
       console.log('📱 Database query successful, devices found:', devices?.length || 0);
+      
+      // Note: Related data (remarks, transitions, ratings) can be fetched separately when needed
+      // This prevents 400 errors from malformed PostgREST relationship queries
       return devices?.map(toCamelCase) || [];
     } catch (error) {
       console.error('❌ Network error in getAllDevices:', error);
@@ -142,6 +141,7 @@ export const deviceServices = {
   // Get device by ID with related data
   async getDeviceById(id: string) {
     try {
+      // Fetch device without problematic PostgREST relationship syntax
       const { data: device, error } = await supabase
         .from('devices')
         .select(`
@@ -156,18 +156,16 @@ export const deviceServices = {
           estimated_hours,
           expected_return_date,
           created_at,
-          updated_at,
-          customers(*),
-          device_checklists(*),
-          device_remarks(*),
-          device_transitions(*),
-          device_ratings(*)
+          updated_at
         `)
         .eq('id', id)
         .single();
       if (error) {
         throw new Error(`Failed to fetch device: ${error.message}`);
       }
+      
+      // Note: Related data (remarks, transitions, ratings, checklists) can be fetched 
+      // separately when needed to avoid 400 errors from malformed queries
       return toCamelCase(device);
     } catch (error) {
       throw new Error('Network error: Unable to connect to database');
@@ -390,12 +388,22 @@ export const deviceServices = {
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
       
+      // Fixed: Removed problematic PostgREST relationship syntax
       let deviceQuery = supabase
         .from('devices')
         .select(`
-          *,
-          diagnosis_required,
-          customers(*)
+          id,
+          customer_id,
+          brand,
+          model,
+          serial_number,
+          issue_description,
+          status,
+          assigned_to,
+          estimated_hours,
+          expected_return_date,
+          created_at,
+          updated_at
         `)
         .or(`brand.ilike.%${query}%,model.ilike.%${query}%,serial_number.ilike.%${query}%,id.ilike.%${query}%`)
         .order('created_at', { ascending: false });
@@ -424,15 +432,22 @@ export const deviceServices = {
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
       
+      // Fixed: Removed problematic PostgREST relationship syntax
       let query = supabase
         .from('devices')
         .select(`
-          *,
-          device_checklists(*),
-          device_remarks(*),
-          device_transitions(*),
-          device_ratings(*),
-          customers(*)
+          id,
+          customer_id,
+          brand,
+          model,
+          serial_number,
+          issue_description,
+          status,
+          assigned_to,
+          estimated_hours,
+          expected_return_date,
+          created_at,
+          updated_at
         `)
         .eq('status', status)
         .order('created_at', { ascending: false });
@@ -463,15 +478,22 @@ export const deviceServices = {
       // 🔒 Get current branch for isolation
       const currentBranchId = localStorage.getItem('current_branch_id');
       
+      // Fixed: Removed problematic PostgREST relationship syntax
       let query = supabase
         .from('devices')
         .select(`
-          *,
-          device_checklists(*),
-          device_remarks(*),
-          device_transitions(*),
-          device_ratings(*),
-          customers(*)
+          id,
+          customer_id,
+          brand,
+          model,
+          serial_number,
+          issue_description,
+          status,
+          assigned_to,
+          estimated_hours,
+          expected_return_date,
+          created_at,
+          updated_at
         `)
         .eq('assigned_to', technicianId)
         .order('created_at', { ascending: false });
@@ -505,15 +527,22 @@ export const deviceServices = {
         // 🔒 Get current branch for isolation
         const currentBranchId = localStorage.getItem('current_branch_id');
         
+        // Fixed: Removed problematic PostgREST relationship syntax
         let query = supabase
           .from('devices')
           .select(`
-            *,
-            device_checklists(*),
-            device_remarks(*),
-            device_transitions(*),
-            device_ratings(*),
-            customers(*)
+            id,
+            customer_id,
+            brand,
+            model,
+            serial_number,
+            issue_description,
+            status,
+            assigned_to,
+            estimated_hours,
+            expected_return_date,
+            created_at,
+            updated_at
           `)
           .eq('customer_id', customerId)
           .order('created_at', { ascending: false });
@@ -764,6 +793,7 @@ export const deviceServices = {
   // Assign technician to device
   async assignTechnicianToDevice(deviceId: string, technicianId: string) {
     try {
+      // Fixed: Removed problematic PostgREST relationship syntax
       const { data, error } = await supabase
         .from('devices')
         .update({ 
@@ -772,12 +802,18 @@ export const deviceServices = {
         })
         .eq('id', deviceId)
         .select(`
-          *,
-          device_checklists(*),
-          device_remarks(*),
-          device_transitions(*),
-          device_ratings(*),
-          customers(*)
+          id,
+          customer_id,
+          brand,
+          model,
+          serial_number,
+          issue_description,
+          status,
+          assigned_to,
+          estimated_hours,
+          expected_return_date,
+          created_at,
+          updated_at
         `)
         .single();
       if (error) {
@@ -869,19 +905,13 @@ export const deviceServices = {
     }
   },
 
-  // Get receipt by ID
+  // FIXED: Get receipt by ID - removed PostgREST syntax
   async getReceipt(receiptId: string) {
     try {
-      const { data, error } = await supabase
+      // Fetch receipt first
+      const { data: receipt, error } = await supabase
         .from('receipts')
-        .select(`
-          *,
-          devices(*),
-          customers(*),
-          customer_payments(*),
-          auth_users!receipts_technician_id_fkey(*),
-          auth_users!receipts_generated_by_fkey(*)
-        `)
+        .select('*')
         .eq('id', receiptId)
         .single();
 
@@ -889,24 +919,44 @@ export const deviceServices = {
         console.error('Error fetching receipt:', error);
         throw new Error(`Failed to fetch receipt: ${error.message}`);
       }
-      return toCamelCase(data);
+
+      if (!receipt) {
+        throw new Error('Receipt not found');
+      }
+
+      // Fetch related data separately
+      const [deviceResult, customerResult, paymentsResult] = await Promise.all([
+        receipt.device_id 
+          ? supabase.from('devices').select('*').eq('id', receipt.device_id).single()
+          : Promise.resolve({ data: null, error: null }),
+        receipt.customer_id
+          ? supabase.from('customers').select('*').eq('id', receipt.customer_id).single()
+          : Promise.resolve({ data: null, error: null }),
+        supabase.from('customer_payments').select('*').eq('receipt_id', receiptId)
+      ]);
+
+      // Combine data
+      const combinedData = {
+        ...receipt,
+        devices: deviceResult.data,
+        customers: customerResult.data,
+        customer_payments: paymentsResult.data || []
+      };
+
+      return toCamelCase(combinedData);
     } catch (error) {
       console.error('Network error fetching receipt:', error);
       throw new Error('Network error: Unable to connect to database');
     }
   },
 
-  // Get receipts for a device
+  // FIXED: Get receipts for a device - removed PostgREST syntax
   async getDeviceReceipts(deviceId: string) {
     try {
-      const { data, error } = await supabase
+      // Fetch receipts first
+      const { data: receipts, error } = await supabase
         .from('receipts')
-        .select(`
-          *,
-          customers(*),
-          customer_payments(*),
-          auth_users!receipts_technician_id_fkey(*)
-        `)
+        .select('*')
         .eq('device_id', deviceId)
         .order('receipt_date', { ascending: false });
 
@@ -914,7 +964,39 @@ export const deviceServices = {
         console.error('Error fetching device receipts:', error);
         throw new Error(`Failed to fetch device receipts: ${error.message}`);
       }
-      return toCamelCase(data || []);
+
+      if (!receipts || receipts.length === 0) {
+        return [];
+      }
+
+      // Fetch related data separately
+      const customerIds = receipts.map(r => r.customer_id).filter(Boolean);
+      const receiptIds = receipts.map(r => r.id);
+
+      const [customersResult, paymentsResult] = await Promise.all([
+        customerIds.length > 0
+          ? supabase.from('customers').select('*').in('id', customerIds)
+          : Promise.resolve({ data: [], error: null }),
+        supabase.from('customer_payments').select('*').in('receipt_id', receiptIds)
+      ]);
+
+      // Map data for easy lookup
+      const customersMap = new Map(customersResult.data?.map(c => [c.id, c]) || []);
+      const paymentsMap = new Map<string, any[]>();
+      paymentsResult.data?.forEach(p => {
+        const payments = paymentsMap.get(p.receipt_id) || [];
+        payments.push(p);
+        paymentsMap.set(p.receipt_id, payments);
+      });
+
+      // Combine data
+      const combinedData = receipts.map(receipt => ({
+        ...receipt,
+        customers: receipt.customer_id ? customersMap.get(receipt.customer_id) : null,
+        customer_payments: paymentsMap.get(receipt.id) || []
+      }));
+
+      return toCamelCase(combinedData);
     } catch (error) {
       console.error('Network error fetching device receipts:', error);
       throw new Error('Network error: Unable to connect to database');

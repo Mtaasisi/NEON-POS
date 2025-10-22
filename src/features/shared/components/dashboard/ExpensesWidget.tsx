@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Receipt, TrendingDown, Plus, ExternalLink, DollarSign } from 'lucide-react';
+import { Receipt, TrendingDown, Plus, ExternalLink, DollarSign, Check, X } from 'lucide-react';
 import { useAuth } from '../../../../context/AuthContext';
 import { supabase } from '../../../../lib/supabaseClient';
 import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
+import toast from 'react-hot-toast';
 
 interface ExpensesWidgetProps {
   className?: string;
@@ -18,9 +19,11 @@ interface ExpenseMetrics {
     amount: number;
     category: string;
     time: string;
+    status: string;
   }>;
   topCategory: string;
   topCategoryAmount: number;
+  pendingCount: number;
 }
 
 export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => {
@@ -31,13 +34,60 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
     monthExpenses: 0,
     recentExpenses: [],
     topCategory: '',
-    topCategoryAmount: 0
+    topCategoryAmount: 0,
+    pendingCount: 0
   });
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadExpensesData();
   }, []);
+
+  // Handle approve expense
+  const handleApproveExpense = async (expenseId: string) => {
+    try {
+      const { error } = await supabase
+        .from('account_transactions')
+        .update({
+          status: 'approved',
+          metadata: supabase.raw(`metadata || '{"approval_status": "approved", "approved_by": "${currentUser?.id}", "approved_at": "${new Date().toISOString()}"}'::jsonb`)
+        })
+        .eq('id', expenseId);
+
+      if (error) throw error;
+
+      toast.success('Expense approved!');
+      
+      // Reload data
+      loadExpensesData();
+    } catch (error) {
+      console.error('Error approving expense:', error);
+      toast.error('Failed to approve expense');
+    }
+  };
+
+  // Handle reject expense
+  const handleRejectExpense = async (expenseId: string) => {
+    try {
+      const { error } = await supabase
+        .from('account_transactions')
+        .update({
+          status: 'rejected',
+          metadata: supabase.raw(`metadata || '{"approval_status": "rejected", "rejected_by": "${currentUser?.id}", "rejected_at": "${new Date().toISOString()}"}'::jsonb`)
+        })
+        .eq('id', expenseId);
+
+      if (error) throw error;
+
+      toast.success('Expense rejected');
+      
+      // Reload data
+      loadExpensesData();
+    } catch (error) {
+      console.error('Error rejecting expense:', error);
+      toast.error('Failed to reject expense');
+    }
+  };
 
   const loadExpensesData = async () => {
     try {
@@ -46,57 +96,80 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
       
       const now = new Date();
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       
-      // Query today's expenses
-      let todayQuery = supabase
-        .from('expenses')
+      // Fetch all expense transactions from account_transactions (same as ExpenseManagement component)
+      const { data: allTransactions, error: fetchError } = await supabase
+        .from('account_transactions')
         .select('*')
-        .gte('date', today.toISOString())
-        .order('date', { ascending: false });
-      
-      if (currentBranchId) {
-        todayQuery = todayQuery.eq('branch_id', currentBranchId);
+        .eq('transaction_type', 'expense')
+        .order('created_at', { ascending: false });
+
+      if (fetchError) {
+        console.error('Error fetching expense transactions:', fetchError);
+        setMetrics({
+          todayExpenses: 0,
+          monthExpenses: 0,
+          recentExpenses: [],
+          topCategory: '',
+          topCategoryAmount: 0,
+          pendingCount: 0
+        });
+        return;
       }
+
+      // Don't filter by branch_id since expenses don't have branch_id set
+      // Only show approved expenses (or all for admins)
+      const isAdmin = currentUser?.role === 'admin';
       
-      const { data: todayExpenses, error: todayError } = await todayQuery;
+      // Count pending expenses for admins
+      const pendingCount = isAdmin 
+        ? (allTransactions || []).filter(t => {
+            const status = t.status || t.metadata?.approval_status || 'approved';
+            return status === 'pending';
+          }).length
+        : 0;
       
-      if (todayError && todayError.code !== 'PGRST116') {
-        console.error('Error fetching today expenses:', todayError);
-      }
+      const transactions = (allTransactions || []).filter(t => {
+        const status = t.status || t.metadata?.approval_status || 'approved';
+        return isAdmin || status === 'approved';
+      });
       
-      // Query month's expenses
-      let monthQuery = supabase
-        .from('expenses')
-        .select('*')
-        .gte('date', monthStart.toISOString());
-      
-      if (currentBranchId) {
-        monthQuery = monthQuery.eq('branch_id', currentBranchId);
-      }
-      
-      const { data: monthExpenses, error: monthError } = await monthQuery;
-      
-      if (monthError && monthError.code !== 'PGRST116') {
-        console.error('Error fetching month expenses:', monthError);
-      }
-      
-      // Calculate metrics
-      const todayTotal = (todayExpenses || []).reduce((sum, exp) => {
-        const amount = typeof exp.amount === 'string' ? parseFloat(exp.amount) : exp.amount;
-        return sum + (isNaN(amount) ? 0 : amount);
+      console.log('💸 ExpensesWidget - Total transactions found:', transactions.length);
+      console.log('💸 ExpensesWidget - Pending expenses:', pendingCount);
+
+      // Filter today's expenses
+      const todayExpenses = transactions.filter(t => {
+        const transactionDate = new Date(t.created_at);
+        return transactionDate >= today && transactionDate < tomorrow;
+      });
+
+      // Filter this month's expenses
+      const monthExpenses = transactions.filter(t => {
+        const transactionDate = new Date(t.created_at);
+        return transactionDate >= monthStart;
+      });
+
+      // Calculate totals (amounts are stored as positive values)
+      const todayTotal = todayExpenses.reduce((sum, exp) => {
+        const amount = parseFloat(exp.amount) || 0;
+        return sum + amount;
       }, 0);
       
-      const monthTotal = (monthExpenses || []).reduce((sum, exp) => {
-        const amount = typeof exp.amount === 'string' ? parseFloat(exp.amount) : exp.amount;
-        return sum + (isNaN(amount) ? 0 : amount);
+      const monthTotal = monthExpenses.reduce((sum, exp) => {
+        const amount = parseFloat(exp.amount) || 0;
+        return sum + amount;
       }, 0);
-      
-      // Get top category
+
+      // Get top category from this month's expenses
       const categoryMap = new Map<string, number>();
-      (monthExpenses || []).forEach(exp => {
-        const category = exp.category || 'Other';
-        const amount = typeof exp.amount === 'string' ? parseFloat(exp.amount) : exp.amount || 0;
+      monthExpenses.forEach(exp => {
+        // Category is stored in metadata
+        const category = exp.metadata?.category || 'Other';
+        const amount = parseFloat(exp.amount) || 0;
         categoryMap.set(category, (categoryMap.get(category) || 0) + amount);
       });
       
@@ -108,29 +181,66 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
           topCategory = category;
         }
       });
+
+      // Get recent expenses (last 30 days)
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      // Get recent expenses
-      const recentExpenses = (todayExpenses || []).slice(0, 5).map(exp => ({
+      const recentExpensesData = transactions
+        .filter(t => new Date(t.created_at) >= thirtyDaysAgo)
+        .sort((a, b) => {
+          // For admins: prioritize pending expenses to show first
+          if (isAdmin) {
+            const aStatus = a.status || a.metadata?.approval_status || 'approved';
+            const bStatus = b.status || b.metadata?.approval_status || 'approved';
+            if (aStatus === 'pending' && bStatus !== 'pending') return -1;
+            if (aStatus !== 'pending' && bStatus === 'pending') return 1;
+          }
+          // Then sort by date (newest first)
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        })
+        .slice(0, 5);
+
+      const recentExpenses = recentExpensesData.map(exp => ({
         id: exp.id,
         description: exp.description || 'No description',
-        amount: typeof exp.amount === 'string' ? parseFloat(exp.amount) : exp.amount || 0,
-        category: exp.category || 'Other',
-        time: new Date(exp.date).toLocaleTimeString('en-US', { 
+        amount: parseFloat(exp.amount) || 0,
+        category: exp.metadata?.category || 'Other',
+        status: exp.status || exp.metadata?.approval_status || 'approved',
+        time: new Date(exp.created_at).toLocaleString('en-US', { 
+          month: 'short',
+          day: 'numeric',
           hour: '2-digit', 
           minute: '2-digit' 
         })
       }));
-      
+
+      console.log('💸 ExpensesWidget - Calculated metrics:', {
+        todayTotal,
+        monthTotal,
+        recentExpensesCount: recentExpenses.length,
+        topCategory,
+        topCategoryAmount
+      });
+
       setMetrics({
         todayExpenses: todayTotal,
         monthExpenses: monthTotal,
         recentExpenses,
         topCategory,
-        topCategoryAmount
+        topCategoryAmount,
+        pendingCount
       });
       
     } catch (error) {
       console.error('Error loading expenses data:', error);
+      setMetrics({
+        todayExpenses: 0,
+        monthExpenses: 0,
+        recentExpenses: [],
+        topCategory: '',
+        topCategoryAmount: 0
+      });
     } finally {
       setIsLoading(false);
     }
@@ -165,7 +275,14 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
             <Receipt className="w-5 h-5 text-red-600" />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Expenses</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-semibold text-gray-900">Expenses</h3>
+              {currentUser?.role === 'admin' && metrics.pendingCount > 0 && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                  {metrics.pendingCount} pending
+                </span>
+              )}
+            </div>
             <p className="text-xs text-gray-400 mt-0.5">Track your spending</p>
           </div>
         </div>
@@ -204,46 +321,87 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
 
       {/* Top Category */}
       {metrics.topCategory && (
-        <div className="mb-6 p-4 rounded-lg bg-gradient-to-br from-red-50 to-orange-50">
-          <p className="text-xs text-gray-600 mb-1">Top Expense Category</p>
-          <p className="text-sm font-semibold text-gray-900">{metrics.topCategory}</p>
-          <p className="text-lg font-bold text-red-600 mt-1">
-            {formatCurrency(metrics.topCategoryAmount)}
-          </p>
+        <div className="mb-4 p-3 rounded-lg bg-gradient-to-br from-red-50 to-orange-50">
+          <p className="text-xs text-gray-500 mb-0.5">Top Category</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-gray-900">{metrics.topCategory}</p>
+            <p className="text-base font-bold text-red-600">
+              {formatCurrency(metrics.topCategoryAmount)}
+            </p>
+          </div>
         </div>
       )}
 
       {/* Recent Expenses */}
-      <div className="space-y-3 flex-grow max-h-48 overflow-y-auto mb-6">
+      <div className="space-y-3 flex-grow max-h-48 overflow-y-auto mb-6 pr-2">
         {metrics.recentExpenses.length > 0 ? (
           <>
-            <h4 className="text-xs text-gray-400 mb-3">Recent Expenses</h4>
-            {metrics.recentExpenses.map((expense) => (
-              <div 
-                key={expense.id} 
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {expense.description}
-                  </p>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-xs text-gray-500">{expense.category}</span>
-                    <span className="text-xs text-gray-400">• {expense.time}</span>
+            <h4 className="text-xs text-gray-400 mb-3">Recent Expenses (Last 30 Days)</h4>
+            {metrics.recentExpenses.map((expense) => {
+              const statusConfig = {
+                pending: { bg: 'bg-yellow-50', border: 'border-yellow-200', badge: 'bg-yellow-100 text-yellow-800' },
+                approved: { bg: 'bg-gray-50', border: 'border-gray-200', badge: 'bg-green-100 text-green-800' },
+                rejected: { bg: 'bg-red-50', border: 'border-red-200', badge: 'bg-red-100 text-red-800' }
+              };
+              const style = statusConfig[expense.status as keyof typeof statusConfig] || statusConfig.approved;
+              
+              return (
+                <div 
+                  key={expense.id} 
+                  className={`p-3 ${style.bg} border ${style.border} rounded-lg hover:opacity-90 transition-all`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {expense.description}
+                        </p>
+                        {expense.status !== 'approved' && (
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${style.badge}`}>
+                            {expense.status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">{expense.category}</span>
+                        <span className="text-xs text-gray-400">• {expense.time}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-red-600">
+                        -{formatCurrency(expense.amount)}
+                      </span>
+                      {currentUser?.role === 'admin' && expense.status === 'pending' && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleApproveExpense(expense.id)}
+                            className="p-1 rounded bg-green-600 hover:bg-green-700 text-white transition-colors"
+                            title="Approve"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleRejectExpense(expense.id)}
+                            className="p-1 rounded bg-red-600 hover:bg-red-700 text-white transition-colors"
+                            title="Reject"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <span className="text-sm font-semibold text-red-600 ml-2">
-                  -{formatCurrency(expense.amount)}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </>
         ) : (
           <div className="text-center py-12">
             <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
               <Receipt className="w-6 h-6 text-gray-400" />
             </div>
-            <p className="text-sm text-gray-500">No expenses today</p>
+            <p className="text-sm text-gray-500">No recent expenses</p>
+            <p className="text-xs text-gray-400 mt-1">Last 30 days</p>
           </div>
         )}
       </div>

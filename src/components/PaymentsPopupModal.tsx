@@ -69,14 +69,9 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           setDirectPaymentMethods(methods);
           setDirectLoading(false);
         }).catch(err => {
-          console.error('Failed to load payment methods:', err);
-          // Use fallback methods
-          setDirectPaymentMethods([
-            { id: 'cash-1', name: 'Cash', type: 'cash', balance: 0, currency: 'TZS', icon: 'Wallet', color: '#10B981', is_active: true, is_payment_method: true },
-            { id: 'mpesa-1', name: 'M-Pesa', type: 'mobile_money', balance: 0, currency: 'TZS', icon: 'Smartphone', color: '#8B5CF6', is_active: true, is_payment_method: true },
-            { id: 'airtel-1', name: 'Airtel Money', type: 'mobile_money', balance: 0, currency: 'TZS', icon: 'Smartphone', color: '#8B5CF6', is_active: true, is_payment_method: true },
-            { id: 'card-1', name: 'Card Payments', type: 'credit_card', balance: 0, currency: 'TZS', icon: 'CreditCard', color: '#EC4899', is_active: true, is_payment_method: true },
-          ]);
+          console.error('❌ Failed to load payment methods:', err);
+          toast.error('Failed to load payment methods. Please refresh the page.');
+          setDirectPaymentMethods([]);
           setDirectLoading(false);
         });
       });
@@ -139,9 +134,24 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
 
   // Auto-select the first available account for the selected payment method
   const getAutoSelectedAccount = (methodId: string) => {
+    // First try to find a finance account linked to this payment method
+    const linkedAccount = paymentAccounts.find(acc => acc.payment_method_id === methodId);
+    if (linkedAccount) {
+      return {
+        id: linkedAccount.id,
+        name: linkedAccount.name || linkedAccount.account_name,
+        payment_method_id: methodId
+      };
+    }
+    
+    // Fallback: use the payment method itself as the account
     const method = paymentMethods.find(m => m.id === methodId);
     if (!method) return null;
-    return method;
+    return {
+      id: method.id,
+      name: method.name,
+      payment_method_id: methodId
+    };
   };
 
   // Add payment entry in multiple mode
@@ -149,22 +159,48 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
     const method = paymentMethods.find(m => m.id === methodId);
     const account = getAutoSelectedAccount(methodId);
     
-    if (!method || !account) {
-      toast.error('Payment method or account not found');
+    if (!method) {
+      toast.error('Payment method not found');
       return;
     }
 
-    const amount = paymentAmount || parseFloat(customAmount) || remainingAmount;
+    if (!account || !account.id) {
+      toast.error('No payment account found for this method. Please set up a finance account first.');
+      return;
+    }
+
+    // Calculate amount with better NaN handling
+    let amount: number;
+    if (paymentAmount !== undefined && paymentAmount > 0) {
+      amount = paymentAmount;
+    } else if (customAmount && customAmount.trim() !== '') {
+      const parsed = parseFloat(customAmount);
+      if (isNaN(parsed)) {
+        toast.error('Please enter a valid number for amount');
+        return;
+      }
+      amount = parsed;
+    } else {
+      amount = remainingAmount;
+    }
     
-    if (amount <= 0) {
-      toast.error('Please enter a valid amount');
+    // Validate amount
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid amount greater than 0');
       return;
     }
 
     if (amount > remainingAmount) {
-      toast.error('Amount exceeds remaining balance');
+      toast.error(`Amount (${amount.toLocaleString()}) exceeds remaining balance (${remainingAmount.toLocaleString()})`);
       return;
     }
+
+    console.log('➕ Adding payment entry:', {
+      method: method.name,
+      amount: amount,
+      currency: selectedCurrency.code,
+      accountId: account.id
+    });
 
     const newEntry: PaymentEntry = {
       id: crypto.randomUUID(),
@@ -213,34 +249,111 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
     setIsProcessing(true);
     
     try {
+      // UUID validation helper
+      const isValidUUID = (uuid: string): boolean => {
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(uuid);
+      };
+
       if (isMultipleMode) {
-        // Process multiple payments
-        const paymentData = paymentEntries.map(entry => ({
-          amount: entry.amount,
-          currency: entry.currency,
-          paymentMethod: entry.method,
-          paymentMethodId: entry.methodId,
-          paymentAccountId: entry.accountId,
-          customerId: customerId,
-          customerName: customerName,
-          description: description,
-          timestamp: new Date().toISOString()
-        }));
+        // Validate all payment method IDs and account IDs are valid UUIDs
+        for (const entry of paymentEntries) {
+          if (!entry.accountId) {
+            toast.error(`Missing account ID for payment method: ${entry.method}. Please remove and re-add this payment.`);
+            setIsProcessing(false);
+            return;
+          }
+          if (!isValidUUID(entry.methodId)) {
+            toast.error(`Invalid payment method ID: ${entry.method}. Please refresh and try again.`);
+            setIsProcessing(false);
+            return;
+          }
+          if (!isValidUUID(entry.accountId)) {
+            toast.error(`Invalid account ID for: ${entry.method}. Please refresh and try again.`);
+            setIsProcessing(false);
+            return;
+          }
+        }
+
+        console.log('💰 Multiple payments data:', paymentEntries.map(entry => ({
+          method: entry.method,
+          methodId: entry.methodId,
+          accountId: entry.accountId,
+          amount: entry.amount
+        })));
+
+        // Process multiple payments - validate amounts before sending
+        const paymentData = paymentEntries.map(entry => {
+          const entryAmount = typeof entry.amount === 'number' ? entry.amount : parseFloat(String(entry.amount));
+          
+          if (isNaN(entryAmount) || entryAmount <= 0) {
+            throw new Error(`Invalid amount for payment method ${entry.method}: ${entry.amount}`);
+          }
+          
+          return {
+            amount: entryAmount,
+            currency: entry.currency || currency || 'TZS',
+            paymentMethod: entry.method,
+            paymentMethodId: entry.methodId,
+            paymentAccountId: entry.accountId,
+            customerId: customerId,
+            customerName: customerName,
+            description: description,
+            timestamp: new Date().toISOString()
+          };
+        });
         
+        console.log('📤 Sending payment data:', paymentData);
         await onPaymentComplete(paymentData, totalPaid);
       } else {
         // Process single payment
         const method = paymentMethods.find(m => m.id === selectedMethod);
         const account = getAutoSelectedAccount(selectedMethod);
         
-        if (!method || !account) {
-          toast.error('No compatible account found for this payment method');
+        if (!method) {
+          toast.error('Payment method not found');
+          setIsProcessing(false);
           return;
         }
 
+        if (!account || !account.id) {
+          toast.error('No payment account found for this method. Please set up a finance account first.');
+          setIsProcessing(false);
+          return;
+        }
+
+        // Validate UUIDs
+        if (!isValidUUID(method.id)) {
+          toast.error(`Invalid payment method ID. Please refresh and try again.`);
+          setIsProcessing(false);
+          return;
+        }
+        if (!isValidUUID(account.id)) {
+          toast.error(`Invalid account ID. Please refresh and try again.`);
+          setIsProcessing(false);
+          return;
+        }
+
+        // Validate amount before sending
+        const paymentAmount = typeof amount === 'number' ? amount : parseFloat(String(amount));
+        
+        if (isNaN(paymentAmount) || paymentAmount <= 0) {
+          toast.error(`Invalid payment amount: ${amount}. Please refresh and try again.`);
+          setIsProcessing(false);
+          return;
+        }
+
+        console.log('💳 Single payment data:', {
+          method: method.name,
+          methodId: method.id,
+          account: account.name,
+          accountId: account.id,
+          amount: paymentAmount
+        });
+
         const paymentData = [{
-          amount: amount,
-          currency: selectedCurrency.code,
+          amount: paymentAmount,
+          currency: currency || selectedCurrency.code,  // Use PO currency if provided
           paymentMethod: method.name,
           paymentMethodId: method.id,
           paymentAccountId: account.id,
@@ -250,8 +363,10 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           timestamp: new Date().toISOString()
         }];
 
+        console.log('📤 Sending single payment:', paymentData[0]);
+        
         // For single payment, totalPaid should equal the amount
-        const singlePaymentTotalPaid = amount;
+        const singlePaymentTotalPaid = paymentAmount;
         await onPaymentComplete(paymentData, singlePaymentTotalPaid);
       }
       

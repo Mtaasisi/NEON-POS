@@ -1,4 +1,4 @@
-import { 
+import type { 
   Notification, 
   NotificationType, 
   NotificationCategory, 
@@ -80,7 +80,6 @@ export const notificationHelpers = {
       inventory: 'Inventory',
       system: 'System',
       appointments: 'Appointments',
-      diagnostics: 'Diagnostics',
       loyalty: 'Loyalty',
       communications: 'Communications',
       backup: 'Backup',

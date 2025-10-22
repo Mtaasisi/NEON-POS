@@ -267,7 +267,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
         try {
           // Import product to database using Supabase
           const { data: importedProduct, error: importError } = await supabase
-            .from('products')
+            .from('lats_products')
             .insert([{
               name: product.name,
               sku: product.sku,

@@ -24,10 +24,15 @@ export interface CreateUserData {
   firstName: string;
   lastName: string;
   email: string;
+  username?: string;
   password: string;
   role: 'admin' | 'manager' | 'technician' | 'customer-care' | 'user';
   phone?: string;
   department?: string;
+  permissions?: string[];
+  accessAllBranches?: boolean;
+  assignedBranches?: string[];
+  customPermissions?: boolean;
 }
 
 export interface UpdateUserData {
@@ -95,8 +100,13 @@ export async function createUser(userData: CreateUserData): Promise<User> {
   try {
     const fullName = `${userData.firstName} ${userData.lastName}`;
     
-    // Set default permissions based on role
-    const permissions = getDefaultPermissions(userData.role);
+    // Use custom permissions if provided, otherwise use default permissions based on role
+    const permissions = userData.permissions && userData.permissions.length > 0
+      ? userData.permissions
+      : getDefaultPermissions(userData.role);
+
+    // Use provided username or generate from email
+    const username = userData.username || userData.email.split('@')[0];
 
     const { data, error } = await supabase
       .from('users')
@@ -105,7 +115,7 @@ export async function createUser(userData: CreateUserData): Promise<User> {
           email: userData.email,
           password: userData.password, // In production, this should be hashed
           full_name: fullName,
-          username: userData.email.split('@')[0], // Generate username from email
+          username: username,
           role: userData.role,
           phone: userData.phone || null,
           department: userData.department || null,
@@ -342,9 +352,9 @@ function getDefaultPermissions(role: string): string[] {
     case 'manager':
       return ['inventory', 'customers', 'reports', 'employees'];
     case 'technician':
-      return ['devices', 'diagnostics', 'spare-parts'];
+      return ['devices', 'spare-parts'];
     case 'customer-care':
-      return ['customers', 'diagnostics', 'appointments'];
+      return ['customers', 'appointments'];
     case 'user':
       return ['basic'];
     default:

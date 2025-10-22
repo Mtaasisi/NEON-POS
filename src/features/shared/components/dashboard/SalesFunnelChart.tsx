@@ -207,21 +207,23 @@ export const SalesFunnelChart: React.FC<SalesFunnelChartProps> = ({ className })
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-100">
+      <div className="grid grid-cols-3 gap-3 pt-4 border-gray-100">
         <div className="text-center">
-          <p className="text-xs text-gray-500 mb-1">Top Stage</p>
+          <p className="text-xs text-gray-500 mb-1">Leads</p>
           <p className="text-lg font-bold text-blue-600">{funnelData[0]?.value || 0}</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-1">Drop-off</p>
           <p className="text-lg font-bold text-amber-600">
-            {funnelData[0]?.value - funnelData[funnelData.length - 1]?.value || 0}
+            {/* Calculate drop-off as Leads - Completed (compare counts, not revenue) */}
+            {Math.max(0, (funnelData[0]?.value || 0) - (funnelData[3]?.value || 0))}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-gray-500 mb-1">Closed</p>
+          <p className="text-xs text-gray-500 mb-1">Revenue</p>
           <p className="text-lg font-bold text-green-600">
-            {funnelData[funnelData.length - 1]?.value || 0}
+            {/* Show revenue from the last stage */}
+            TSh {(funnelData[4]?.value || 0).toLocaleString()}
           </p>
         </div>
       </div>

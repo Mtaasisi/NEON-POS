@@ -5,8 +5,7 @@ import toast from 'react-hot-toast';
 
 interface Employee {
   id: string;
-  first_name: string;
-  last_name: string;
+  full_name: string; // employees table uses 'full_name' (migrated from 'name')
   position: string;
   status: string;
 }
@@ -38,8 +37,8 @@ const AttendanceManagementPage: React.FC = () => {
       const { data, error } = await supabase
         .from('employees')
         .select('*')
-        .eq('status', 'active')
-        .order('first_name');
+        .eq('is_active', true)
+        .order('full_name');
 
       if (error) throw error;
       setEmployees(data || []);
@@ -192,7 +191,7 @@ const AttendanceManagementPage: React.FC = () => {
               <option value="all">All Employees</option>
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
-                  {emp.first_name} {emp.last_name} - {emp.position}
+                  {emp.full_name} - {emp.position}
                 </option>
               ))}
             </select>
@@ -230,7 +229,7 @@ const AttendanceManagementPage: React.FC = () => {
               return (
                 <tr key={employee.id}>
                   <td className="sticky left-0 bg-white px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{employee.first_name} {employee.last_name}</div>
+                    <div className="text-sm font-medium text-gray-900">{employee.full_name}</div>
                     <div className="text-sm text-gray-500">{employee.position}</div>
                   </td>
                   {days.map((day) => {

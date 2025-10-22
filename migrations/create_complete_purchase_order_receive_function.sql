@@ -1,8 +1,9 @@
 -- =====================================================
 -- CREATE COMPLETE PURCHASE ORDER RECEIVE FUNCTION
 -- =====================================================
--- This function handles the complete receive process for purchase orders
--- It creates inventory items for all ordered items and updates the order status
+-- This function handles the receive process for purchase orders (both full and partial)
+-- It creates inventory items for remaining items and updates the order status automatically
+-- Option B Workflow: Supports incremental partial receives
 
 CREATE OR REPLACE FUNCTION complete_purchase_order_receive(
   purchase_order_id_param UUID,
@@ -21,6 +22,9 @@ DECLARE
   v_i INTEGER;
   v_total_items INTEGER := 0;
   v_total_ordered INTEGER := 0;
+  v_total_received INTEGER := 0;
+  v_all_received BOOLEAN;
+  v_new_status VARCHAR;
   v_result JSON;
 BEGIN
   -- Check if purchase order exists and is in correct status
@@ -122,20 +126,47 @@ BEGIN
           v_items_created := v_items_created + 1;
         END LOOP;
 
-        -- Update the purchase order item with received quantity
+        -- Update the purchase order item with received quantity (increment, not replace)
         UPDATE lats_purchase_order_items
         SET 
-          quantity_received = quantity_ordered,
+          quantity_received = COALESCE(quantity_received, 0) + v_quantity,
           updated_at = NOW()
         WHERE id = v_item_record.item_id;
       END IF;
     END LOOP;
 
-    -- Update purchase order status to 'received'
+    -- Check if all items are fully received
+    SELECT NOT EXISTS (
+      SELECT 1 
+      FROM lats_purchase_order_items 
+      WHERE purchase_order_id = purchase_order_id_param 
+      AND COALESCE(quantity_received, 0) < quantity_ordered
+    ) INTO v_all_received;
+    
+    -- Calculate total received for summary
+    SELECT COALESCE(SUM(quantity_received), 0)
+    INTO v_total_received
+    FROM lats_purchase_order_items
+    WHERE purchase_order_id = purchase_order_id_param;
+    
+    -- Calculate total ordered for summary
+    SELECT COALESCE(SUM(quantity_ordered), 0)
+    INTO v_total_ordered
+    FROM lats_purchase_order_items
+    WHERE purchase_order_id = purchase_order_id_param;
+    
+    -- Set appropriate status
+    IF v_all_received THEN
+      v_new_status := 'received';
+    ELSE
+      v_new_status := 'partial_received';
+    END IF;
+    
+    -- Update purchase order status
     UPDATE lats_purchase_orders
     SET 
-      status = 'received',
-      received_date = NOW(),
+      status = v_new_status,
+      received_date = CASE WHEN v_all_received THEN NOW() ELSE received_date END,
       updated_at = NOW()
     WHERE id = purchase_order_id_param;
 
@@ -150,18 +181,21 @@ BEGIN
       created_at
     ) VALUES (
       purchase_order_id_param,
-      'receive_complete',
+      CASE WHEN v_all_received THEN 'receive_complete' ELSE 'receive_partial' END,
       v_order_record.status,
-      'received',
+      v_new_status,
       user_id_param,
-      format('Complete receive: Created %s inventory items%s', 
+      format('%s: Created %s inventory items (%s/%s received)%s', 
+        CASE WHEN v_all_received THEN 'Complete receive' ELSE 'Partial receive' END,
         v_items_created,
+        v_total_received,
+        v_total_ordered,
         CASE WHEN receive_notes IS NOT NULL THEN ' - ' || receive_notes ELSE '' END
       ),
       NOW()
     );
 
-    -- Build success response
+    -- Build success response with complete summary
     v_result := json_build_object(
       'success', true,
       'message', format('Successfully received %s items from purchase order', v_items_created),
@@ -171,8 +205,18 @@ BEGIN
         'items_created', v_items_created,
         'total_items', v_total_items,
         'total_ordered', v_total_ordered,
+        'total_received', v_total_received,
+        'is_complete', v_all_received,
+        'new_status', v_new_status,
         'received_date', NOW(),
         'received_by', user_id_param
+      ),
+      'summary', json_build_object(
+        'total_ordered', v_total_ordered,
+        'total_received', v_total_received,
+        'percent_received', CASE WHEN v_total_ordered > 0 THEN ROUND((v_total_received::NUMERIC / v_total_ordered::NUMERIC) * 100) ELSE 0 END,
+        'is_complete', v_all_received,
+        'items_this_batch', v_items_created
       )
     );
 

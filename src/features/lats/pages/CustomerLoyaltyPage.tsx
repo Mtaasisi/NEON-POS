@@ -395,8 +395,14 @@ const CustomerLoyaltyPage: React.FC = () => {
   };
 
   const calculateCustomerAnalytics = (customerId: string, posSales: any[], spareUsage: any[]) => {
-    const totalPosSpent = posSales.reduce((sum, sale) => sum + (sale.total_amount || 0), 0);
-    const totalSpareSpent = spareUsage.reduce((sum, usage) => sum + (usage.lats_spare_parts?.selling_price || 0), 0);
+    const totalPosSpent = posSales.reduce((sum, sale) => {
+      const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+      return sum + amount;
+    }, 0);
+    const totalSpareSpent = spareUsage.reduce((sum, usage) => {
+      const price = typeof usage.lats_spare_parts?.selling_price === 'number' ? usage.lats_spare_parts.selling_price : parseFloat(usage.lats_spare_parts?.selling_price) || 0;
+      return sum + price;
+    }, 0);
     
     const totalSpent = totalPosSpent + totalSpareSpent;
     const orderCount = posSales.length;

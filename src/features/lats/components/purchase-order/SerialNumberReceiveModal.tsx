@@ -49,6 +49,7 @@ interface SerialNumberReceiveModalProps {
     serialNumbers?: SerialNumberData[];
   }>) => Promise<void>;
   isLoading?: boolean;
+  mode?: 'full' | 'partial'; // Receive mode from previous step
 }
 
 const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
@@ -56,7 +57,8 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
   onClose,
   purchaseOrder,
   onConfirm,
-  isLoading = false
+  isLoading = false,
+  mode = 'partial'
 }) => {
   const [receivedItems, setReceivedItems] = useState<Map<string, {
     quantity: number;
@@ -88,11 +90,15 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     if (isOpen) {
       const initialItems = new Map();
       purchaseOrder.items.forEach(item => {
-        const quantity = item.quantity - (item.receivedQuantity || 0);
+        const remainingQty = item.quantity - (item.receivedQuantity || 0);
+        
+        // For FULL mode: receive all remaining items
+        // For PARTIAL mode: start with 0, let user choose
+        const initialQuantity = mode === 'full' ? remainingQty : 0;
         
         // Auto-generate empty serial number rows for each quantity
         const serialNumbers: SerialNumberData[] = [];
-        for (let i = 0; i < quantity; i++) {
+        for (let i = 0; i < initialQuantity; i++) {
           const warrantyStart = new Date().toISOString().split('T')[0];
           const warrantyEndDate = new Date();
           warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
@@ -114,13 +120,13 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
         }
         
         initialItems.set(item.id, {
-          quantity,
+          quantity: initialQuantity,
           serialNumbers
         });
       });
       setReceivedItems(initialItems);
     }
-  }, [isOpen, purchaseOrder.items]);
+  }, [isOpen, purchaseOrder.items, mode]);
 
   const loadStorageRooms = async () => {
     try {
@@ -229,6 +235,51 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     });
   };
 
+  // Update quantity for partial receive mode - regenerate serial number fields
+  const updateReceivingQuantity = (itemId: string, newQuantity: number) => {
+    const item = purchaseOrder.items.find(i => i.id === itemId);
+    if (!item) return;
+
+    const remainingQty = item.quantity - (item.receivedQuantity || 0);
+    const validQuantity = Math.min(Math.max(0, newQuantity), remainingQty);
+
+    setReceivedItems(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(itemId) || { quantity: 0, serialNumbers: [] };
+      
+      // Generate serial number fields based on new quantity
+      const serialNumbers: SerialNumberData[] = [];
+      for (let i = 0; i < validQuantity; i++) {
+        const warrantyStart = new Date().toISOString().split('T')[0];
+        const warrantyEndDate = new Date();
+        warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
+        const warrantyEnd = warrantyEndDate.toISOString().split('T')[0];
+        
+        // Keep existing serial data if available, otherwise create new
+        const existingSerial = current.serialNumbers[i];
+        serialNumbers.push(existingSerial || {
+          serial_number: '',
+          imei: '',
+          mac_address: '',
+          barcode: '',
+          location: '',
+          warranty_start: warrantyStart,
+          warranty_end: warrantyEnd,
+          warranty_months: 12,
+          cost_price: item.cost_price,
+          selling_price: undefined,
+          notes: ''
+        });
+      }
+      
+      newMap.set(itemId, {
+        quantity: validQuantity,
+        serialNumbers
+      });
+      return newMap;
+    });
+  };
+
   const handleConfirm = async () => {
     try {
       // Validate all serial numbers are filled
@@ -282,7 +333,32 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black/50"
+        onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
       <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="p-6 border-b border-gray-200">
@@ -292,8 +368,14 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                 <PackageCheck className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-gray-900">Receive Stock with Serial Numbers</h3>
-                <p className="text-xs text-gray-500">Enter Serial Number or IMEI for each item</p>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {mode === 'full' ? 'Full Receive - Add Serial Numbers' : 'Partial Receive - Select Items & Add Serial Numbers'}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {mode === 'full' 
+                    ? 'Enter Serial Number or IMEI for all remaining items' 
+                    : 'Choose quantities and enter serial numbers for items you want to receive now'}
+                </p>
               </div>
             </div>
             <button
@@ -326,8 +408,11 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           <div className="space-y-8">
             {purchaseOrder.items.map((item) => {
               const itemData = receivedItems.get(item.id) || { quantity: 0, serialNumbers: [] };
+              const remainingQty = item.quantity - (item.receivedQuantity || 0);
               
-              if (itemData.quantity === 0) return null;
+              // For partial mode, show all items even if quantity is 0 (to allow selection)
+              // For full mode, only show items being received
+              if (mode === 'full' && itemData.quantity === 0) return null;
               
               // Get product name from different possible sources
               const productName = item.name || 
@@ -335,21 +420,52 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                                  (item.variant?.name ? ` - ${item.variant.name}` : '');
               
               return (
-                <div key={item.id} className="bg-gray-50 rounded-lg p-4 border-2 border-gray-200">
+                <div key={item.id} className={`rounded-lg p-4 border-2 ${
+                  itemData.quantity > 0 ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+                }`}>
                   {/* Product Header */}
                   <div className="mb-4 pb-3 border-b-2 border-gray-300">
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div className="flex-1">
                         <h4 className="text-lg font-bold text-gray-900">{productName}</h4>
                         <p className="text-sm text-gray-600 mt-1">
-                          Quantity: <span className="font-semibold text-gray-900">{itemData.quantity} pcs</span> • 
+                          {mode === 'partial' && (
+                            <>
+                              <span className="text-blue-700">Ordered: {item.quantity}</span> • 
+                              <span className="text-green-700">Already Received: {item.receivedQuantity || 0}</span> • 
+                              <span className="text-orange-700">Remaining: {remainingQty}</span> • 
+                            </>
+                          )}
                           Cost: <span className="font-semibold text-gray-900">${(item.cost_price || 0).toFixed(2)}</span>
                         </p>
                       </div>
+                      {mode === 'partial' && (
+                        <div className="ml-4">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            Receiving Now:
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max={remainingQty}
+                            value={itemData.quantity}
+                            onChange={(e) => updateReceivingQuantity(item.id, parseInt(e.target.value) || 0)}
+                            className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-500 text-center font-bold text-lg"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Max: {remainingQty}</p>
+                        </div>
+                      )}
+                      {mode === 'full' && (
+                        <div className="ml-4 px-4 py-2 bg-green-100 rounded-lg">
+                          <p className="text-xs text-gray-600">Receiving:</p>
+                          <p className="text-lg font-bold text-green-700">{itemData.quantity} pcs</p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Excel-like Table */}
+                  {/* Excel-like Table - Only show if items selected for partial mode */}
+                  {itemData.quantity > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                       <thead>
@@ -415,11 +531,20 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                       </tbody>
                     </table>
                   </div>
+                  ) : mode === 'partial' ? (
+                    <div className="mt-4 p-6 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 text-center">
+                      <Package className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                      <p className="text-gray-600 font-medium">Set quantity above to add serial numbers</p>
+                      <p className="text-xs text-gray-500 mt-1">Enter how many items you want to receive</p>
+                    </div>
+                  ) : null}
 
                   {/* Table Footer Info */}
-                  <div className="mt-3 text-xs text-gray-500 italic">
-                    * Serial Number / IMEI is required (enter either one)
-                  </div>
+                  {itemData.quantity > 0 && (
+                    <div className="mt-3 text-xs text-gray-500 italic">
+                      * Serial Number / IMEI is required (enter either one)
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -432,9 +557,28 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
+              className="px-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
             >
               Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                // Skip serial numbers - proceed with empty serial data but preserve quantities
+                const emptyItems = Array.from(purchaseOrder.items).map(item => {
+                  const itemData = receivedItems.get(item.id) || { quantity: 0, serialNumbers: [] };
+                  return {
+                    id: item.id,
+                    receivedQuantity: itemData.quantity, // Use the quantity from state (works for both full and partial)
+                    serialNumbers: []
+                  };
+                });
+                onConfirm(emptyItems);
+              }}
+              disabled={isLoading}
+              className="flex-1 px-4 py-3 border-2 border-blue-500 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100 transition-colors disabled:opacity-50"
+            >
+              Skip Serial Numbers →
             </button>
             <button
               type="button"
@@ -442,11 +586,11 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
               disabled={isLoading || getTotalReceivedItems() === 0}
               className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Processing...' : `Confirm Receive (${getTotalReceivedItems()} items)`}
+              {isLoading ? 'Processing...' : `Continue with Serials (${getTotalReceivedItems()} items)`}
             </button>
           </div>
           <p className="text-xs text-center text-gray-500 mt-3">
-            All items must have a Serial Number or IMEI before confirming
+            Serial numbers are optional - you can skip this step or add them for tracking
           </p>
         </div>
       </div>
@@ -583,7 +727,9 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           </div>
         </div>
       )}
-    </div>
+        </div>
+      </div>
+    </>
   );
 };
 

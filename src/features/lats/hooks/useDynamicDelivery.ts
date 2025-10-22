@@ -83,7 +83,7 @@ export const useDynamicDelivery = (deliverySettings: DeliverySettings) => {
 
     // Use area-based fee if available, otherwise use default
     let baseFee = deliverySettings.default_delivery_fee || 2000;
-    if (deliverySettings.enable_delivery_areas && selectedArea && deliverySettings.area_delivery_fees[selectedArea]) {
+    if (deliverySettings.enable_delivery_areas && selectedArea && deliverySettings.area_delivery_fees?.[selectedArea]) {
       baseFee = deliverySettings.area_delivery_fees[selectedArea];
     }
     let methodMultiplier = 1;

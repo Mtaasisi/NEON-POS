@@ -415,15 +415,14 @@ export async function getProducts(): Promise<LatsProduct[]> {
       }
     });
 
-    // Filter out sample products (products with 'sample', 'test', or 'dummy' in the name)
+    // Note: Showing ALL products including test/sample products as per user preference
     const products = uniqueProducts.filter(product => {
       // Skip null or invalid products
       if (!product || !product.name) {
         console.warn('⚠️ Skipping null or invalid product:', product);
         return false;
       }
-      const name = product.name.toLowerCase();
-      return !name.includes('sample') && !name.includes('test') && !name.includes('dummy');
+      return true; // Show all valid products
     });
 
     // Fetch categories and suppliers separately (Neon doesn't support PostgREST joins)

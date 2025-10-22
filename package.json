@@ -1,5 +1,5 @@
 {
-  "name": "lats-chance-pos",
+  "name": "dukani-pro",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -38,7 +38,8 @@
     "diagnose:product-deletion": "psql \"$DATABASE_URL\" -f diagnose-product-deletion.sql",
     "test:theme": "node theme-test.mjs",
     "test:theme:setup": "npx playwright install chromium && npm run test:theme",
-    "test:automation": "node test-automation-ui.mjs"
+    "test:automation": "node test-automation-ui.mjs",
+    "bg-removal": "python3 bg-removal-api.py"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.1.1",
@@ -51,6 +52,7 @@
     "dayjs": "^1.11.9",
     "dotenv": "^17.2.2",
     "fast-xml-parser": "^5.2.5",
+    "fuse.js": "^7.1.0",
     "html5-qrcode": "^2.3.8",
     "idb": "^7.1.1",
     "jspdf": "^2.5.1",
@@ -69,6 +71,7 @@
     "react-hot-toast": "^2.4.1",
     "react-icons": "^4.11.0",
     "react-router-dom": "^6.8.1",
+    "react-signature-canvas": "^1.1.0-alpha.2",
     "recharts": "^2.7.2",
     "sonner": "^2.0.7",
     "tailwind-merge": "^1.14.0",
@@ -82,6 +85,7 @@
   "devDependencies": {
     "@types/react": "^18.2.15",
     "@types/react-dom": "^18.2.7",
+    "@types/react-signature-canvas": "^1.0.7",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "@vitejs/plugin-react": "^4.0.3",

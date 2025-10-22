@@ -52,7 +52,10 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
 
         if (!salesError && sales && Array.isArray(sales)) {
           // Calculate basic sales metrics
-          const totalRevenue = sales.reduce((sum: number, sale: any) => sum + (sale.total_amount || 0), 0);
+          const totalRevenue = sales.reduce((sum: number, sale: any) => {
+            const amount = typeof sale.total_amount === 'number' ? sale.total_amount : parseFloat(sale.total_amount) || 0;
+            return sum + amount;
+          }, 0);
           const totalTransactions = sales.length;
           const averageOrderValue = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
           

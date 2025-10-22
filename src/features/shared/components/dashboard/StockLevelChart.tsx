@@ -172,7 +172,7 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
   console.log('📊 All items stock values:', stockData.map(item => ({ name: item.name, stock: item.stock, status: item.status })));
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -207,7 +207,7 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
       ) : (
         <>
           {/* Chart */}
-          <div className="h-64 -mx-2">
+          <div className="flex-grow -mx-2 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={stockData} layout="horizontal" margin={{ left: 0, right: 10 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />

@@ -53,8 +53,37 @@ const POSReceiptModal: React.FC<POSReceiptModalProps> = ({
   if (!isOpen || !receipt) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <GlassCard className="max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto">
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
+      <div 
+        className="fixed bg-black bg-opacity-50"
+        onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed flex items-center justify-center p-4"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
+      >
+        <GlassCard 
+          className="max-w-2xl w-full p-8 max-h-[90vh] overflow-y-auto"
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          style={{ pointerEvents: 'auto' }}
+        >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -284,7 +313,8 @@ const POSReceiptModal: React.FC<POSReceiptModalProps> = ({
           </button>
         </div>
       </GlassCard>
-    </div>
+        </div>
+    </>
   );
 };
 

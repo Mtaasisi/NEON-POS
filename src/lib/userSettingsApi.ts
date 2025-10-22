@@ -103,12 +103,6 @@ export interface UserSettings {
       smsLogs: boolean;
       smsSettings: boolean;
       
-      // Diagnostic & Repair Features
-      diagnostics: boolean;
-      newDiagnostic: boolean;
-      diagnosticReports: boolean;
-      diagnosticTemplates: boolean;
-      
       // Import/Export & Data Management
       excelImport: boolean;
       excelTemplates: boolean;
@@ -396,12 +390,6 @@ export const createDefaultUserSettings = async (userId: string): Promise<boolean
           bulkSms: true,
           smsLogs: true,
           smsSettings: true,
-          
-          // Diagnostic & Repair Features
-          diagnostics: true,
-          newDiagnostic: true,
-          diagnosticReports: true,
-          diagnosticTemplates: true,
           
           // Import/Export & Data Management
           excelImport: true,

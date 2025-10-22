@@ -46,15 +46,23 @@ export const SalesWidget: React.FC<SalesWidgetProps> = ({ className }) => {
       const currentBranchId = getCurrentBranchId();
       
       const now = new Date();
+      // Get today at midnight in local timezone
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      today.setHours(0, 0, 0, 0);
+      
+      // Get tomorrow to properly bound today's range
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
       const yesterday = new Date(today);
       yesterday.setDate(yesterday.getDate() - 1);
       
-      // Query today's sales
+      // Query today's sales (from midnight today to midnight tomorrow)
       let todayQuery = supabase
         .from('lats_sales')
         .select('id, total_amount, customer_name, created_at')
         .gte('created_at', today.toISOString())
+        .lt('created_at', tomorrow.toISOString())
         .order('created_at', { ascending: false });
       
       if (currentBranchId) {
@@ -65,10 +73,17 @@ export const SalesWidget: React.FC<SalesWidgetProps> = ({ className }) => {
       
       if (todayError) throw todayError;
       
+      console.log('📊 SalesWidget Debug:', {
+        todayDate: today.toISOString(),
+        todaySalesCount: todaySalesData?.length || 0,
+        sampleSale: todaySalesData?.[0],
+        currentBranch: currentBranchId
+      });
+      
       // Query yesterday's sales for comparison
       let yesterdayQuery = supabase
         .from('lats_sales')
-        .select('total_amount')
+        .select('total_amount, created_at')
         .gte('created_at', yesterday.toISOString())
         .lt('created_at', today.toISOString());
       
@@ -79,6 +94,12 @@ export const SalesWidget: React.FC<SalesWidgetProps> = ({ className }) => {
       const { data: yesterdaySalesData, error: yesterdayError } = await yesterdayQuery;
       
       if (yesterdayError) throw yesterdayError;
+      
+      console.log('📊 Yesterday Sales Debug:', {
+        yesterdayDate: yesterday.toISOString(),
+        yesterdaySalesCount: yesterdaySalesData?.length || 0,
+        sampleSale: yesterdaySalesData?.[0]
+      });
       
       // Calculate metrics
       const allTodaySales = todaySalesData || [];

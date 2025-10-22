@@ -1,0 +1,28 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="chartCircle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <rect width="200" height="200" rx="44" fill="url(#chartCircle)"/>
+  
+  <!-- Ultra minimal circle with D -->
+  <g>
+    <!-- Single clean circle -->
+    <circle cx="100" cy="100" r="46" fill="white"/>
+    
+    <!-- Clean D -->
+    <path d="M 82 80 L 82 120 L 105 120 C 118 120 128 110 128 100 C 128 90 118 80 105 80 Z" 
+          fill="url(#chartCircle)"/>
+    
+    <!-- Subtle growth bars (very minimal) -->
+    <rect x="90" y="106" width="4" height="9" rx="1" fill="white" opacity="0.9"/>
+    <rect x="97" y="102" width="4" height="13" rx="1" fill="white" opacity="0.9"/>
+    <rect x="104" y="97" width="4" height="18" rx="1" fill="white"/>
+    
+    <!-- Single small accent dot -->
+    <circle cx="138" cy="90" r="3" fill="#fbbf24" opacity="0.8"/>
+  </g>
+</svg>

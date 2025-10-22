@@ -145,7 +145,7 @@ class SalesPaymentTrackingService {
       // 🔒 Get current branch for isolation
       const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
       
-      // Build the query with proper joins
+      // Simplified query - fetch relationships separately
       let query = supabase
         .from('lats_sales')
         .select(`
@@ -163,32 +163,7 @@ class SalesPaymentTrackingService {
           updated_at,
           notes,
           branch_id,
-          customers(
-            id,
-            name,
-            phone,
-            email
-          ),
-          lats_sale_items(
-            id,
-            product_id,
-            variant_id,
-            quantity,
-            unit_price,
-            total_price,
-            cost_price,
-            profit,
-            lats_products(
-              id,
-              name,
-              sku
-            ),
-            lats_product_variants(
-              id,
-              name,
-              sku
-            )
-          )
+          customers(id, name, phone, email)
         `)
         .order('created_at', { ascending: false });
       

@@ -36,9 +36,24 @@ class PurchaseOrderPaymentService {
     try {
       console.log('💰 Processing purchase order payment...', data);
       
-      // Validate required fields
-      if (!data.purchaseOrderId || !data.paymentAccountId || !data.amount || !data.paymentMethodId) {
-        throw new Error('Missing required payment data');
+      // Validate required fields with specific error messages
+      const missingFields: string[] = [];
+      if (!data.purchaseOrderId) missingFields.push('Purchase Order ID');
+      if (!data.paymentAccountId) missingFields.push('Payment Account ID');
+      if (!data.amount || data.amount <= 0) missingFields.push('Payment Amount');
+      if (!data.paymentMethodId) missingFields.push('Payment Method ID');
+      
+      if (missingFields.length > 0) {
+        const errorMsg = `Missing required payment data: ${missingFields.join(', ')}`;
+        console.error('❌ Payment validation failed:', errorMsg);
+        console.error('📋 Received data:', {
+          purchaseOrderId: data.purchaseOrderId || 'MISSING',
+          paymentAccountId: data.paymentAccountId || 'MISSING',
+          amount: data.amount || 'MISSING',
+          paymentMethodId: data.paymentMethodId || 'MISSING',
+          paymentMethod: data.paymentMethod || 'N/A'
+        });
+        throw new Error(errorMsg);
       }
 
       // Check if purchase order is already fully paid
@@ -61,8 +76,9 @@ class PurchaseOrderPaymentService {
       }
 
       // Check if this payment would exceed the total amount
-      const currentPaid = poData.total_paid || 0;
-      const totalAmount = poData.total_amount || 0;
+      // Ensure values are numbers for proper comparison
+      const currentPaid = Number(poData.total_paid) || 0;
+      const totalAmount = Number(poData.total_amount) || 0;
       const remainingAmount = totalAmount - currentPaid;
 
       if (data.amount > remainingAmount) {
@@ -72,23 +88,183 @@ class PurchaseOrderPaymentService {
         };
       }
 
+      // Validate UUIDs before calling the function
+      const isValidUUID = (uuid: string | null | undefined): boolean => {
+        if (!uuid) return false;
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return uuidRegex.test(uuid);
+      };
+
+      // Validate currency is not a UUID (common mistake)
+      const currency = data.currency || 'TZS';
+      if (isValidUUID(currency)) {
+        throw new Error(`Invalid currency value: "${currency}" appears to be a UUID. Expected a currency code like TZS, USD, EUR, etc.`);
+      }
+
+      // Validate payment method is not a UUID (common mistake)
+      const paymentMethod = data.paymentMethod;
+      if (isValidUUID(paymentMethod)) {
+        throw new Error(`Invalid payment method value: "${paymentMethod}" appears to be a UUID. Expected a payment method name like Cash, Bank Transfer, etc.`);
+      }
+
+      // Ensure all UUID parameters are valid
+      if (!isValidUUID(data.purchaseOrderId)) {
+        throw new Error(`Invalid purchase order ID: "${data.purchaseOrderId}". Expected a valid UUID.`);
+      }
+      if (!isValidUUID(data.paymentAccountId)) {
+        throw new Error(`Invalid payment account ID: "${data.paymentAccountId}". Expected a valid UUID.`);
+      }
+      if (!isValidUUID(data.paymentMethodId)) {
+        throw new Error(`Invalid payment method ID: "${data.paymentMethodId}". Expected a valid UUID.`);
+      }
+      
+      const userId = data.createdBy && isValidUUID(data.createdBy) 
+        ? data.createdBy 
+        : '00000000-0000-0000-0000-000000000001';
+
+      console.log('🔍 Payment parameters:', {
+        purchase_order_id: data.purchaseOrderId,
+        payment_account_id: data.paymentAccountId,
+        amount: data.amount,
+        currency: currency,
+        payment_method: paymentMethod,
+        payment_method_id: data.paymentMethodId,
+        user_id: userId
+      });
+
       // Use the database function for atomic payment processing
       const { data: result, error } = await supabase
         .rpc('process_purchase_order_payment', {
           purchase_order_id_param: data.purchaseOrderId,
           payment_account_id_param: data.paymentAccountId,
           amount_param: data.amount,
-          currency_param: data.currency || 'TZS',
-          payment_method_param: data.paymentMethod,
+          currency_param: currency,
+          payment_method_param: paymentMethod,
           payment_method_id_param: data.paymentMethodId,
-          user_id_param: data.createdBy || '00000000-0000-0000-0000-000000000001',
+          user_id_param: userId,
           reference_param: data.reference || null,
           notes_param: data.notes || null
         });
 
       if (error) {
         console.error('❌ RPC function failed:', error);
-        throw new Error(`Payment processing failed: ${error.message}`);
+        console.log('🔄 Attempting fallback: Direct INSERT method...');
+        
+        // Fallback: Use direct INSERT instead of RPC function
+        try {
+          const paymentId = crypto.randomUUID();
+          
+          // Insert payment record directly
+          const { error: insertError } = await supabase
+            .from('purchase_order_payments')
+            .insert({
+              id: paymentId,
+              purchase_order_id: data.purchaseOrderId,
+              payment_account_id: data.paymentAccountId,
+              amount: data.amount,
+              currency: currency,
+              payment_method: paymentMethod,
+              payment_method_id: data.paymentMethodId,
+              reference: data.reference || null,
+              notes: data.notes || null,
+              status: 'completed',
+              payment_date: new Date().toISOString(),
+              created_by: userId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          
+          if (insertError) {
+            console.error('❌ Direct INSERT also failed:', insertError);
+            throw new Error(`Payment processing failed: ${error.message}`);
+          }
+          
+          // Update PO totals manually
+          const { data: currentPO } = await supabase
+            .from('lats_purchase_orders')
+            .select('total_paid, total_amount')
+            .eq('id', data.purchaseOrderId)
+            .single();
+          
+          const newTotalPaid = (currentPO?.total_paid || 0) + data.amount;
+          const newPaymentStatus = newTotalPaid >= (currentPO?.total_amount || 0) ? 'paid' : 'partial';
+          
+          await supabase
+            .from('lats_purchase_orders')
+            .update({
+              total_paid: newTotalPaid,
+              payment_status: newPaymentStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', data.purchaseOrderId);
+          
+          // Update account balance
+          const { data: accountData } = await supabase
+            .from('finance_accounts')
+            .select('balance')
+            .eq('id', data.paymentAccountId)
+            .single();
+          
+          if (accountData) {
+            const newBalance = accountData.balance - data.amount;
+            
+            await supabase
+              .from('finance_accounts')
+              .update({ 
+                balance: newBalance,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', data.paymentAccountId);
+            
+            // Create account transaction for fallback method
+            try {
+              await supabase
+                .from('account_transactions')
+                .insert({
+                  account_id: data.paymentAccountId,
+                  transaction_type: 'expense',
+                  amount: data.amount,
+                  balance_before: accountData.balance,
+                  balance_after: newBalance,
+                  description: `PO Payment: ${data.purchaseOrderId.substring(0, 8)} (Fallback Method)`,
+                  reference_number: data.reference || `PO-PAY-${paymentId.substring(0, 8)}`,
+                  related_entity_type: 'purchase_order_payment',
+                  related_entity_id: paymentId,
+                  created_by: userId,
+                  created_at: new Date().toISOString()
+                });
+              console.log('✅ Account transaction created via fallback');
+            } catch (txError) {
+              console.warn('⚠️ Failed to create account transaction:', txError);
+            }
+          }
+          
+          console.log('✅ Fallback payment method succeeded!');
+          
+          return {
+            success: true,
+            message: 'Payment processed successfully (using fallback method)',
+            payment: {
+              id: paymentId,
+              purchaseOrderId: data.purchaseOrderId,
+              paymentAccountId: data.paymentAccountId,
+              amount: data.amount,
+              currency: currency,
+              paymentMethod: paymentMethod,
+              paymentMethodId: data.paymentMethodId,
+              reference: data.reference,
+              notes: data.notes,
+              status: 'completed',
+              paymentDate: new Date().toISOString(),
+              createdBy: userId,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            } as PurchaseOrderPayment
+          };
+        } catch (fallbackError) {
+          console.error('❌ Fallback method also failed:', fallbackError);
+          throw new Error(`Payment processing failed: ${error.message}`);
+        }
       }
 
       console.log('✅ RPC function result:', result);

@@ -8,7 +8,6 @@ import {
 import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import PartsManagementModal from './PartsManagementModal';
-import DiagnosticChecklistModal from './DiagnosticChecklistModal';
 import SparePartsSelector from '../../repair/components/SparePartsSelector';
 // import RepairPartsModal from '../../repair/components/RepairPartsModal';
 import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
@@ -68,7 +67,6 @@ const RepairStatusGrid: React.FC<RepairStatusGridProps> = ({
   // Additional state variables that were declared after early returns
   const [showAddPart, setShowAddPart] = useState(false);
   const [editingPart, setEditingPart] = useState<RepairPart | null>(null);
-  const [showDiagnosticChecklist, setShowDiagnosticChecklist] = useState(false);
   const [showRepairPartsModal, setShowRepairPartsModal] = useState(false);
   const [showSparePartsSelector, setShowSparePartsSelector] = useState(false);
   
@@ -1129,7 +1127,7 @@ const RepairStatusGrid: React.FC<RepairStatusGridProps> = ({
         icon: <AlertTriangle className="w-6 h-6" />,
         color: 'bg-yellow-500',
         action: async () => {
-          setShowDiagnosticChecklist(true);
+          await handleStatusUpdate('diagnosis-started', 'Diagnostic process started');
         }
       });
       }
@@ -1660,20 +1658,6 @@ const RepairStatusGrid: React.FC<RepairStatusGridProps> = ({
           )}
         </div>
       )}
-
-      {/* Diagnostic Checklist Modal */}
-      <DiagnosticChecklistModal
-        isOpen={showDiagnosticChecklist}
-        onClose={() => setShowDiagnosticChecklist(false)}
-        deviceId={device.id}
-        deviceModel={device.model}
-        issueDescription={device.issueDescription}
-        onChecklistComplete={async (results: any) => {
-          // Update device status to diagnosis-started after checklist completion
-          await onStatusUpdate(device.id, 'diagnosis-started', 'Diagnostic checklist completed');
-          setShowDiagnosticChecklist(false);
-        }}
-      />
       
       {/* POS Payment Modal */}
       <PaymentsPopupModal

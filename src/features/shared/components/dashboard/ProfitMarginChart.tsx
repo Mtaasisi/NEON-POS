@@ -67,37 +67,6 @@ export const ProfitMarginChart: React.FC<ProfitMarginChartProps> = ({ className 
           console.error('Error fetching sales:', salesError);
         }
         
-        // Query sale items for costs
-        let itemsQuery = supabase
-          .from('lats_sale_items')
-          .select(`
-            id,
-            quantity,
-            price,
-            product_variant_id,
-            sale_id,
-            lats_sales:lats_sales!sale_id!inner (
-              id,
-              created_at,
-              branch_id
-            ),
-            lats_product_variants:lats_product_variants!product_variant_id (
-              cost_price
-            )
-          `)
-          .gte('lats_sales.created_at', startOfDay.toISOString())
-          .lte('lats_sales.created_at', endOfDay.toISOString());
-        
-        if (currentBranchId) {
-          itemsQuery = itemsQuery.eq('lats_sales.branch_id', currentBranchId);
-        }
-        
-        const { data: itemsData, error: itemsError } = await itemsQuery;
-        
-        if (itemsError) {
-          console.error('Error fetching items:', itemsError);
-        }
-        
         // Calculate revenue
         const dayRevenue = (salesData || []).reduce((sum, sale) => {
           const amount = typeof sale.total_amount === 'string' 
@@ -106,13 +75,49 @@ export const ProfitMarginChart: React.FC<ProfitMarginChartProps> = ({ className 
           return sum + amount;
         }, 0);
         
-        // Calculate cost
-        const dayCost = (itemsData || []).reduce((sum, item: any) => {
-          const costPrice = item.lats_product_variants?.cost_price || 0;
-          const quantity = item.quantity || 0;
-          const cost = typeof costPrice === 'string' ? parseFloat(costPrice) : costPrice;
-          return sum + (cost * quantity);
-        }, 0);
+        // Query sale items for costs - Neon compatible approach
+        let itemsQuery = supabase
+          .from('lats_sale_items')
+          .select('id, quantity, unit_price, variant_id, sale_id, created_at')
+          .gte('created_at', startOfDay.toISOString())
+          .lte('created_at', endOfDay.toISOString());
+        
+        if (currentBranchId) {
+          itemsQuery = itemsQuery.eq('branch_id', currentBranchId);
+        }
+        
+        const { data: itemsData, error: itemsError } = await itemsQuery;
+        
+        if (itemsError) {
+          console.error('Error fetching items:', itemsError);
+        }
+        
+        // Fetch cost prices for variants
+        let dayCost = 0;
+        if (itemsData && itemsData.length > 0) {
+          const variantIds = [...new Set(itemsData.map((item: any) => item.variant_id).filter(Boolean))];
+          
+          if (variantIds.length > 0) {
+            const { data: variants, error: variantsError } = await supabase
+              .from('lats_product_variants')
+              .select('id, cost_price')
+              .in('id', variantIds);
+            
+            if (!variantsError && variants) {
+              const variantsMap = new Map(variants.map((v: any) => [v.id, v]));
+              
+              dayCost = itemsData.reduce((sum, item: any) => {
+                const variant = variantsMap.get(item.variant_id);
+                const costPrice = variant?.cost_price || 0;
+                const quantity = item.quantity || 0;
+                const cost = typeof costPrice === 'string' ? parseFloat(costPrice) : costPrice;
+                return sum + (cost * quantity);
+              }, 0);
+            } else {
+              console.error('Error fetching variants:', variantsError);
+            }
+          }
+        }
         
         const dayProfit = dayRevenue - dayCost;
         const dayMargin = dayRevenue > 0 ? (dayProfit / dayRevenue) * 100 : 0;
@@ -191,7 +196,7 @@ export const ProfitMarginChart: React.FC<ProfitMarginChartProps> = ({ className 
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -214,7 +219,7 @@ export const ProfitMarginChart: React.FC<ProfitMarginChartProps> = ({ className 
       </div>
 
       {/* Chart */}
-      <div className="h-64 -mx-2">
+      <div className="flex-grow -mx-2 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={profitData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />

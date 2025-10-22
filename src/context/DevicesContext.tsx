@@ -617,6 +617,7 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
     
     // If not found in local state, fetch from database
     try {
+      // Fetch device data first (without problematic relationship syntax)
       const { data, error } = await supabase
         .from('devices')
         .select(`
@@ -636,10 +637,7 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
           warranty_end,
           warranty_status,
           repair_count,
-          last_return_date,
-          remarks:device_remarks(*),
-          transitions:device_transitions(*),
-          ratings:device_ratings(*)
+          last_return_date
         `)
         .eq('id', id)
         .single();
@@ -650,6 +648,25 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
       }
       
       if (data) {
+        // Fetch related data separately to avoid PostgREST syntax issues
+        const [remarksResult, transitionsResult, ratingsResult] = await Promise.all([
+          supabase
+            .from('device_remarks')
+            .select('*')
+            .eq('device_id', id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('device_transitions')
+            .select('*')
+            .eq('device_id', id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('device_ratings')
+            .select('*')
+            .eq('device_id', id)
+            .order('created_at', { ascending: false })
+        ]);
+        
         // Transform the data to match Device interface
         const transformedDevice = {
           ...data,
@@ -658,15 +675,15 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
           customerId: data.customer_id,
           assignedTo: data.assigned_to,
           expectedReturnDate: data.expected_return_date,
-          customerName: Array.isArray(data.customers) && data.customers.length > 0 ? data.customers[0]?.name || '' : '',
-          phoneNumber: Array.isArray(data.customers) && data.customers.length > 0 ? data.customers[0]?.phone || '' : '',
-          remarks: (data.remarks || []).map((remark: any) => ({
+          customerName: '',
+          phoneNumber: '',
+          remarks: (remarksResult.data || []).map((remark: any) => ({
             id: remark.id,
             content: remark.content,
             createdBy: remark.created_by,
             createdAt: remark.created_at
           })),
-          transitions: (data.transitions || []).map((transition: any) => ({
+          transitions: (transitionsResult.data || []).map((transition: any) => ({
             id: transition.id,
             fromStatus: transition.from_status,
             toStatus: transition.to_status,
@@ -674,11 +691,11 @@ export const DevicesProvider: React.FC<{ children: React.ReactNode }> = React.me
             timestamp: transition.created_at,
             signature: transition.signature || ''
           })),
-          ratings: (data.ratings || []).map((rating: any) => ({
+          ratings: (ratingsResult.data || []).map((rating: any) => ({
             id: rating.id,
             deviceId: rating.device_id,
             technicianId: rating.technician_id,
-            score: rating.score || 5, // Default to 5 if score column doesn't exist
+            score: rating.score || 5,
             comment: rating.comment,
             createdAt: rating.created_at
           })),

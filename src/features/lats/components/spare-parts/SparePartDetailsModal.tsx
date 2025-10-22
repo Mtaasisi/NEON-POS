@@ -408,18 +408,38 @@ const SparePartDetailsModal: React.FC<SparePartDetailsModalProps> = ({
   ));
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center p-2 sm:p-4 overflow-y-auto z-[9999]">
-      {/* Backdrop */}
+    <>
+      {/* Backdrop - respects sidebar and topbar */}
       <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="fixed bg-black/40 backdrop-blur-sm"
         onClick={onClose}
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 35
+        }}
       />
       
-      {/* Modal */}
+      {/* Modal Container */}
       <div 
-        className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col my-2 sm:my-4 z-[10000]"
-        onClick={(e) => e.stopPropagation()}
+        className="fixed flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+        style={{
+          left: 'var(--sidebar-width, 0px)',
+          top: 'var(--topbar-height, 64px)',
+          right: 0,
+          bottom: 0,
+          zIndex: 50,
+          pointerEvents: 'none'
+        }}
       >
+        {/* Modal */}
+        <div 
+          className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col my-2 sm:my-4"
+          onClick={(e) => e.stopPropagation()}
+          style={{ pointerEvents: 'auto' }}
+        >
         {/* Header */}
         <div className="flex items-center justify-between p-3 sm:p-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1232,6 +1252,8 @@ const SparePartDetailsModal: React.FC<SparePartDetailsModalProps> = ({
             </div>
           </div>
         </div>
+        </div>
+      </div>
       </div>
 
       {/* Usage Modal */}
@@ -1342,8 +1364,7 @@ const SparePartDetailsModal: React.FC<SparePartDetailsModalProps> = ({
           </div>
         </div>
       )}
-      </div>
-    </div>
+    </>
   );
 };
 

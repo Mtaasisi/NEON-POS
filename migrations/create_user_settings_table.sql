@@ -49,5 +49,13 @@ CREATE POLICY "Users can delete their own settings" ON user_settings
     FOR DELETE USING (true);
 
 -- Grant necessary permissions
-GRANT ALL ON user_settings TO authenticated;
-GRANT ALL ON user_settings TO service_role;
+-- Note: Only grant to roles if they exist
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        GRANT ALL ON user_settings TO authenticated;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+        GRANT ALL ON user_settings TO service_role;
+    END IF;
+END $$;

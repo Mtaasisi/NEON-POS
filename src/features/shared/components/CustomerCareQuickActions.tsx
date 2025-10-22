@@ -36,19 +36,6 @@ const CustomerCareQuickActions: React.FC<CustomerCareQuickActionsProps> = ({
         <span className="sm:hidden">Scan</span>
       </StandardButton>
       
-      <Link to="/diagnostics/new" className="flex-1 sm:flex-none min-w-[120px]">
-        <StandardButton
-          variant="success"
-          size="md"
-          icon={<Stethoscope size={16} />}
-          fullWidth
-          className="backdrop-blur-md border border-green-300/30"
-        >
-          <span className="hidden sm:inline">New Diagnostic</span>
-          <span className="sm:hidden">Diagnostic</span>
-        </StandardButton>
-      </Link>
-      
       <Link to="/lats/pos" className="flex-1 sm:flex-none min-w-[120px]">
         <StandardButton
           variant="warning"

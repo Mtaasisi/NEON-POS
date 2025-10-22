@@ -15,6 +15,7 @@ export interface SaleItem {
   totalPrice: number;
   costPrice: number;
   profit: number;
+  selectedSerialNumbers?: Array<{ id: string; serial_number: string; imei?: string; mac_address?: string }>;
 }
 
 export interface SaleData {
@@ -151,10 +152,11 @@ class SaleProcessingService {
       }
 
       // 4. Run post-sale operations in parallel (non-critical for transaction completion)
-      const [inventoryResult, receiptResult, customerResult] = await Promise.allSettled([
+      const [inventoryResult, receiptResult, customerResult, serialNumbersResult] = await Promise.allSettled([
         this.updateInventory(saleData.items),
         this.generateReceipt(saleResult.sale!),
-        this.updateCustomerStats(saleData)
+        this.updateCustomerStats(saleData),
+        this.linkSerialNumbers(saleResult.saleId!, saleData.items, saleData.customerId)
       ]);
 
       // Handle inventory update result
@@ -176,6 +178,13 @@ class SaleProcessingService {
         console.warn('⚠️ Customer stats update failed:', customerResult.reason);
       } else if (!customerResult.value.success) {
         console.warn('⚠️ Customer stats update failed:', customerResult.value.error);
+      }
+
+      // Handle serial numbers linking result
+      if (serialNumbersResult.status === 'rejected') {
+        console.warn('⚠️ Serial numbers linking failed:', serialNumbersResult.reason);
+      } else if (!serialNumbersResult.value.success) {
+        console.warn('⚠️ Serial numbers linking failed:', serialNumbersResult.value.error);
       }
 
       // 5. Send notifications asynchronously (don't wait for completion)
@@ -969,6 +978,74 @@ class SaleProcessingService {
     }
   }
 
+  // Link serial numbers to sale
+  private async linkSerialNumbers(
+    saleId: string,
+    items: SaleItem[],
+    customerId?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🔗 Linking serial numbers to sale...');
+
+      // Collect all inventory item IDs from items that have serial numbers
+      const inventoryItemIds: string[] = [];
+      
+      for (const item of items) {
+        if ((item as any).selectedSerialNumbers && Array.isArray((item as any).selectedSerialNumbers)) {
+          const serialNumbers = (item as any).selectedSerialNumbers;
+          for (const serial of serialNumbers) {
+            if (serial.id) {
+              inventoryItemIds.push(serial.id);
+            }
+          }
+        }
+      }
+
+      if (inventoryItemIds.length === 0) {
+        console.log('ℹ️ No serial numbers to link');
+        return { success: true };
+      }
+
+      console.log(`📦 Linking ${inventoryItemIds.length} serial numbers to sale ${saleId}`);
+
+      // Create sale_inventory_items entries
+      const saleInventoryItems = inventoryItemIds.map(itemId => ({
+        sale_id: saleId,
+        inventory_item_id: itemId,
+        customer_id: customerId || null
+      }));
+
+      const { error: linkError } = await supabase
+        .from('sale_inventory_items')
+        .insert(saleInventoryItems);
+
+      if (linkError) {
+        console.error('❌ Error linking serial numbers:', linkError);
+        return { success: false, error: linkError.message };
+      }
+
+      // Update inventory item status to 'sold'
+      const { error: updateError } = await supabase
+        .from('inventory_items')
+        .update({ status: 'sold' })
+        .in('id', inventoryItemIds);
+
+      if (updateError) {
+        console.error('❌ Error updating serial number status:', updateError);
+        return { success: false, error: updateError.message };
+      }
+
+      console.log('✅ Serial numbers linked successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('❌ Error in linkSerialNumbers:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
   // Generate receipt
   private async generateReceipt(sale: SaleData): Promise<{ success: boolean; error?: string }> {
     try {
@@ -1250,14 +1327,7 @@ ${footerMessage}`;
     try {
       const { data: sale, error } = await supabase
         .from('lats_sales')
-        .select(`
-          *,
-          lats_sale_items (
-            *,
-            lats_products (name),
-            lats_product_variants (name, sku)
-          )
-        `)
+        .select('*')
         .eq('id', saleId)
         .single();
 
@@ -1266,7 +1336,36 @@ ${footerMessage}`;
         return null;
       }
 
-      return sale;
+      // Fetch sale items separately to avoid nested relationship issues
+      const { data: saleItems } = await supabase
+        .from('lats_sale_items')
+        .select('*')
+        .eq('sale_id', saleId);
+
+      if (saleItems && saleItems.length > 0) {
+        // Fetch product and variant details
+        const productIds = [...new Set(saleItems.map(item => item.product_id).filter(Boolean))];
+        const variantIds = [...new Set(saleItems.map(item => item.variant_id).filter(Boolean))];
+
+        const [productsResult, variantsResult] = await Promise.all([
+          productIds.length > 0 ? supabase.from('lats_products').select('id, name').in('id', productIds) : { data: [] },
+          variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds) : { data: [] }
+        ]);
+
+        const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
+        const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
+
+        // Attach product and variant data to sale items
+        const enhancedItems = saleItems.map(item => ({
+          ...item,
+          lats_products: productsMap.get(item.product_id),
+          lats_product_variants: variantsMap.get(item.variant_id)
+        }));
+
+        return { ...sale, lats_sale_items: enhancedItems };
+      }
+
+      return { ...sale, lats_sale_items: [] };
     } catch (error) {
       console.error('❌ Error fetching sale:', error);
       return null;
@@ -1278,14 +1377,7 @@ ${footerMessage}`;
     try {
       const { data: sales, error } = await supabase
         .from('lats_sales')
-        .select(`
-          *,
-          lats_sale_items (
-            *,
-            lats_products (name),
-            lats_product_variants (name, sku)
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -1294,7 +1386,51 @@ ${footerMessage}`;
         return [];
       }
 
-      return sales || [];
+      if (!sales || sales.length === 0) {
+        return [];
+      }
+
+      // Fetch sale items separately for all sales
+      const saleIds = sales.map(s => s.id);
+      const { data: saleItems } = await supabase
+        .from('lats_sale_items')
+        .select('*')
+        .in('sale_id', saleIds);
+
+      if (saleItems && saleItems.length > 0) {
+        // Fetch product and variant details
+        const productIds = [...new Set(saleItems.map(item => item.product_id).filter(Boolean))];
+        const variantIds = [...new Set(saleItems.map(item => item.variant_id).filter(Boolean))];
+
+        const [productsResult, variantsResult] = await Promise.all([
+          productIds.length > 0 ? supabase.from('lats_products').select('id, name').in('id', productIds) : { data: [] },
+          variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds) : { data: [] }
+        ]);
+
+        const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
+        const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
+
+        // Group sale items by sale_id
+        const itemsBySaleId = new Map<string, any[]>();
+        saleItems.forEach(item => {
+          if (!itemsBySaleId.has(item.sale_id)) {
+            itemsBySaleId.set(item.sale_id, []);
+          }
+          itemsBySaleId.get(item.sale_id)!.push({
+            ...item,
+            lats_products: productsMap.get(item.product_id),
+            lats_product_variants: variantsMap.get(item.variant_id)
+          });
+        });
+
+        // Attach items to their respective sales
+        return sales.map(sale => ({
+          ...sale,
+          lats_sale_items: itemsBySaleId.get(sale.id) || []
+        }));
+      }
+
+      return sales.map(sale => ({ ...sale, lats_sale_items: [] }));
     } catch (error) {
       console.error('❌ Error fetching recent sales:', error);
       return [];

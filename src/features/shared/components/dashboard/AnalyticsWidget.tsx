@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, TrendingUp, TrendingDown, Target, Users, ExternalLink } from 'lucide-react';
 import { dashboardService } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
+import { useDateRange } from '../../../../context/DateRangeContext';
 
 interface AnalyticsWidgetProps {
   className?: string;
@@ -19,6 +20,7 @@ interface AnalyticsMetrics {
 export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { dateRange, getDateRangeForQuery } = useDateRange();
   const [metrics, setMetrics] = useState<AnalyticsMetrics>({
     revenueGrowth: 0,
     customerGrowth: 0,
@@ -30,12 +32,13 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
 
   useEffect(() => {
     loadAnalyticsData();
-  }, []);
+  }, [dateRange]); // Reload when date range changes
 
   const loadAnalyticsData = async () => {
     try {
       setIsLoading(true);
-      const stats = await dashboardService.getAnalyticsData(currentUser?.id || '');
+      const { startDate, endDate } = getDateRangeForQuery();
+      const stats = await dashboardService.getAnalyticsData(startDate, endDate);
       
       setMetrics({
         revenueGrowth: stats.revenueGrowth,

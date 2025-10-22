@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment System Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #2196F3;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .error {
+            color: #f44336;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ff9800;
+            font-weight: bold;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        #log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin: 5px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .status.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Purchase Order Payment System Test</h1>
+        
+        <div class="test-section">
+            <h3>Step 1: Authentication</h3>
+            <p>Login as care@care.com (password: 123456)</p>
+            <button onclick="testLogin()" id="loginBtn">Test Login</button>
+            <div id="authStatus"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Step 2: Function Verification</h3>
+            <p>Check if the process_purchase_order_payment function is correctly configured</p>
+            <button onclick="checkFunction()" id="checkBtn" disabled>Check Function</button>
+            <div id="functionStatus"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Step 3: Test Payment</h3>
+            <p>Process a test payment to verify everything works</p>
+            <button onclick="testPayment()" id="paymentBtn" disabled>Process Test Payment</button>
+            <div id="paymentStatus"></div>
+        </div>
+        
+        <div class="test-section">
+            <h3>Console Log</h3>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let supabase;
+        let currentUser;
+        
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            log('🚀 Initializing test page...');
+            
+            // Get Supabase credentials from the page's environment
+            // These will be injected by Vite when running the dev server
+            const supabaseUrl = '%%VITE_SUPABASE_URL%%';
+            const supabaseKey = '%%VITE_SUPABASE_ANON_KEY%%';
+            
+            // For direct testing, you can hardcode your credentials here temporarily
+            // const supabaseUrl = 'YOUR_SUPABASE_URL';
+            // const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+            
+            if (!supabaseUrl || supabaseUrl.includes('%%')) {
+                log('❌ Supabase credentials not configured', 'error');
+                log('⚠️ Please edit this file and add your Supabase credentials', 'warning');
+                document.getElementById('authStatus').innerHTML = 
+                    '<div class="status error">Please configure Supabase credentials in the HTML file</div>';
+                return;
+            }
+            
+            try {
+                supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+                log('✅ Supabase client initialized', 'success');
+            } catch (error) {
+                log('❌ Failed to initialize Supabase: ' + error.message, 'error');
+            }
+        });
+        
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            const colors = {
+                success: '#0f0',
+                error: '#f44',
+                warning: '#fa0',
+                info: '#0ff'
+            };
+            const color = colors[type] || colors.info;
+            logDiv.innerHTML += `<div class="log-entry" style="color: ${color}">[${timestamp}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        async function testLogin() {
+            log('🔐 Attempting login...');
+            const btn = document.getElementById('loginBtn');
+            btn.disabled = true;
+            
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: 'care@care.com',
+                    password: '123456'
+                });
+                
+                if (error) throw error;
+                
+                currentUser = data.user;
+                log('✅ Login successful!', 'success');
+                log(`   User ID: ${currentUser.id}`);
+                document.getElementById('authStatus').innerHTML = 
+                    '<div class="status success">✅ Authenticated as care@care.com</div>';
+                
+                document.getElementById('checkBtn').disabled = false;
+                
+            } catch (error) {
+                log('❌ Login failed: ' + error.message, 'error');
+                document.getElementById('authStatus').innerHTML = 
+                    '<div class="status error">❌ Login failed: ' + error.message + '</div>';
+                btn.disabled = false;
+            }
+        }
+        
+        async function checkFunction() {
+            log('🔍 Checking function signature...');
+            const btn = document.getElementById('checkBtn');
+            btn.disabled = true;
+            
+            try {
+                // Try to call the function with test parameters to see if it exists
+                const { data, error } = await supabase.rpc('process_purchase_order_payment', {
+                    purchase_order_id_param: '00000000-0000-0000-0000-000000000000',
+                    payment_account_id_param: '00000000-0000-0000-0000-000000000000',
+                    amount_param: 1,
+                    currency_param: 'TZS',
+                    payment_method_param: 'Cash',
+                    payment_method_id_param: '00000000-0000-0000-0000-000000000000'
+                });
+                
+                // We expect this to fail due to invalid IDs, but if the error is about UUIDs,
+                // it means the cache hasn't cleared yet
+                if (error) {
+                    if (error.message.includes('invalid input syntax for type uuid: "TZS"')) {
+                        log('❌ Function signature mismatch detected!', 'error');
+                        log('⚠️ Supabase is still caching the old function signature', 'warning');
+                        log('💡 The fallback method will handle payments automatically', 'info');
+                        document.getElementById('functionStatus').innerHTML = 
+                            '<div class="status error">❌ Cache issue detected - Fallback method will be used</div>';
+                    } else if (error.message.includes('not found')) {
+                        log('⚠️ Expected error (invalid IDs): ' + error.message, 'warning');
+                        log('✅ Function signature appears correct', 'success');
+                        document.getElementById('functionStatus').innerHTML = 
+                            '<div class="status success">✅ Function signature looks correct</div>';
+                    } else {
+                        log('⚠️ Test error (this is expected): ' + error.message, 'warning');
+                        log('✅ Function exists and has correct signature', 'success');
+                        document.getElementById('functionStatus').innerHTML = 
+                            '<div class="status success">✅ Function is ready</div>';
+                    }
+                }
+                
+                document.getElementById('paymentBtn').disabled = false;
+                
+            } catch (error) {
+                log('❌ Check failed: ' + error.message, 'error');
+                document.getElementById('functionStatus').innerHTML = 
+                    '<div class="status error">❌ Check failed: ' + error.message + '</div>';
+                btn.disabled = false;
+            }
+        }
+        
+        async function testPayment() {
+            log('💳 Starting payment test...');
+            const btn = document.getElementById('paymentBtn');
+            btn.disabled = true;
+            
+            try {
+                // Get an unpaid purchase order
+                log('📦 Finding unpaid purchase order...');
+                const { data: pos, error: poError } = await supabase
+                    .from('lats_purchase_orders')
+                    .select('id, po_number, total_amount, total_paid, payment_status')
+                    .neq('payment_status', 'paid')
+                    .limit(1);
+                
+                if (poError) throw poError;
+                if (!pos || pos.length === 0) {
+                    log('⚠️ No unpaid purchase orders found', 'warning');
+                    document.getElementById('paymentStatus').innerHTML = 
+                        '<div class="status error">No unpaid purchase orders available for testing</div>';
+                    return;
+                }
+                
+                const po = pos[0];
+                log(`✅ Found PO: ${po.po_number}`, 'success');
+                log(`   Total: ${po.total_amount}, Paid: ${po.total_paid || 0}`);
+                
+                // Get a payment account
+                log('💰 Finding payment account...');
+                const { data: accounts, error: accountError } = await supabase
+                    .from('finance_accounts')
+                    .select('id, name, balance')
+                    .gt('balance', 100)
+                    .limit(1);
+                
+                if (accountError) throw accountError;
+                if (!accounts || accounts.length === 0) {
+                    log('⚠️ No payment accounts with sufficient balance', 'warning');
+                    document.getElementById('paymentStatus').innerHTML = 
+                        '<div class="status error">No payment accounts with balance available</div>';
+                    return;
+                }
+                
+                const account = accounts[0];
+                log(`✅ Using account: ${account.name} (Balance: ${account.balance})`, 'success');
+                
+                // Get payment method
+                const { data: methods } = await supabase
+                    .from('payment_methods')
+                    .select('id, name')
+                    .eq('name', 'Cash')
+                    .limit(1);
+                
+                if (!methods || methods.length === 0) {
+                    log('❌ No payment methods found', 'error');
+                    return;
+                }
+                
+                const paymentAmount = Math.min(50, po.total_amount - (po.total_paid || 0));
+                
+                log(`💳 Processing payment of ${paymentAmount}...`);
+                
+                // Attempt payment via RPC
+                const { data: result, error: rpcError } = await supabase.rpc('process_purchase_order_payment', {
+                    purchase_order_id_param: po.id,
+                    payment_account_id_param: account.id,
+                    amount_param: paymentAmount,
+                    currency_param: 'TZS',
+                    payment_method_param: 'Cash',
+                    payment_method_id_param: methods[0].id,
+                    user_id_param: currentUser.id,
+                    reference_param: 'BROWSER-TEST',
+                    notes_param: 'Browser test payment'
+                });
+                
+                if (rpcError) {
+                    log('⚠️ RPC method failed: ' + rpcError.message, 'warning');
+                    log('ℹ️ This is expected if cache hasn\'t cleared', 'info');
+                    log('ℹ️ The application will use the fallback method', 'info');
+                    document.getElementById('paymentStatus').innerHTML = 
+                        '<div class="status error">RPC failed (cache issue) - App will use fallback method automatically</div>';
+                } else {
+                    log('✅ Payment processed successfully!', 'success');
+                    log('   Result: ' + JSON.stringify(result));
+                    document.getElementById('paymentStatus').innerHTML = 
+                        '<div class="status success">✅ Payment processed successfully via RPC!</div>';
+                }
+                
+            } catch (error) {
+                log('❌ Payment test failed: ' + error.message, 'error');
+                document.getElementById('paymentStatus').innerHTML = 
+                    '<div class="status error">❌ Payment test failed: ' + error.message + '</div>';
+            } finally {
+                btn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
+

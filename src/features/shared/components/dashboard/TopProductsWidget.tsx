@@ -37,46 +37,63 @@ export const TopProductsWidget: React.FC<TopProductsWidgetProps> = ({ className 
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
       
-      // Query sale items
-      let query = supabase
-        .from('lats_sale_items')
-        .select(`
-          id,
-          product_id,
-          product_variant_id,
-          quantity,
-          price,
-          sale_id,
-          lats_sales:lats_sales!sale_id!inner (
-            id,
-            created_at,
-            branch_id
-          ),
-          lats_products:lats_products!product_id (
-            id,
-            name,
-            category
-          )
-        `)
-        .gte('lats_sales.created_at', weekAgo.toISOString());
+      // Fetch sales first (Neon compatible approach)
+      let salesQuery = supabase
+        .from('lats_sales')
+        .select('id, created_at, branch_id')
+        .gte('created_at', weekAgo.toISOString());
       
       if (currentBranchId) {
-        query = query.eq('lats_sales.branch_id', currentBranchId);
+        salesQuery = salesQuery.eq('branch_id', currentBranchId);
       }
       
-      const { data: saleItems, error } = await query;
+      const { data: sales, error: salesError } = await salesQuery;
+      if (salesError) throw salesError;
       
-      if (error) throw error;
+      if (!sales || sales.length === 0) {
+        setTopProducts([]);
+        setTotalRevenue(0);
+        return;
+      }
+      
+      // Get sale IDs
+      const saleIds = sales.map((s: any) => s.id);
+      
+      // Query sale items
+      const { data: saleItems, error: itemsError } = await supabase
+        .from('lats_sale_items')
+        .select('id, product_id, variant_id, quantity, unit_price, sale_id')
+        .in('sale_id', saleIds);
+      
+      if (itemsError) throw itemsError;
+      
+      if (!saleItems || saleItems.length === 0) {
+        setTopProducts([]);
+        setTotalRevenue(0);
+        return;
+      }
+      
+      // Fetch product info
+      const productIds = [...new Set(saleItems.map((item: any) => item.product_id).filter(Boolean))];
+      const { data: products, error: productsError } = await supabase
+        .from('lats_products')
+        .select('id, name, category')
+        .in('id', productIds);
+      
+      if (productsError) throw productsError;
+      
+      const productsMap = new Map((products || []).map((p: any) => [p.id, p]));
       
       // Aggregate by product
       const productMap = new Map<string, TopProduct>();
       let total = 0;
       
       (saleItems || []).forEach((item: any) => {
-        if (!item.lats_products) return;
+        const product = productsMap.get(item.product_id);
+        if (!product) return;
         
         const productId = item.product_id;
-        const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
+        const price = typeof item.unit_price === 'string' ? parseFloat(item.unit_price) : item.unit_price;
         const quantity = item.quantity || 0;
         const revenue = (price || 0) * quantity;
         
@@ -89,10 +106,10 @@ export const TopProductsWidget: React.FC<TopProductsWidgetProps> = ({ className 
         } else {
           productMap.set(productId, {
             id: productId,
-            name: item.lats_products.name || 'Unknown Product',
+            name: product.name || 'Unknown Product',
             quantitySold: quantity,
             revenue: revenue,
-            category: item.lats_products.category || 'Uncategorized'
+            category: product.category || 'Uncategorized'
           });
         }
       });

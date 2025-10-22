@@ -23,6 +23,8 @@ import ProductInformationForm from '../components/product/ProductInformationForm
 import PricingAndStockForm from '../components/product/PricingAndStockForm';
 import ProductVariantsSection from '../components/product/ProductVariantsSection';
 import StorageLocationForm from '../components/product/StorageLocationForm';
+import { useSuccessModal } from '../../../hooks/useSuccessModal';
+import SuccessModal from '../../../components/ui/SuccessModal';
 
 // Import ProductVariant type
 interface ProductVariant {
@@ -99,6 +101,7 @@ const EditProductPageContent: React.FC = () => {
   console.log('🎬 [DEBUG] ========== EditProductPageContent RENDER ==========');
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
+  const successModal = useSuccessModal();
   
   console.log('🔍 [DEBUG] EditProductPage - Product ID from URL:', productId);
   console.log('🔍 [DEBUG] Product ID type:', typeof productId);
@@ -833,8 +836,23 @@ const EditProductPageContent: React.FC = () => {
 
       console.log('✅ [DEBUG] Product update completed successfully!');
       console.log('🚀 [DEBUG] ========== SUBMIT END (SUCCESS) ==========');
-      toast.success('Product updated successfully!');
-      navigate('/lats/unified-inventory');
+      
+      // Show success modal with action buttons
+      successModal.show(`Product "${formData.name}" has been updated successfully!`, {
+        title: 'Product Updated',
+        actionButtons: [
+          {
+            label: 'View Product',
+            onClick: () => navigate(`/lats/products/${productId}`),
+            variant: 'primary'
+          },
+          {
+            label: 'Back to Inventory',
+            onClick: () => navigate('/lats/unified-inventory'),
+            variant: 'secondary'
+          }
+        ]
+      });
       
     } catch (error) {
       console.error('❌ [DEBUG] ========== SUBMIT ERROR ==========');
@@ -1741,6 +1759,9 @@ const EditProductPageContent: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      <SuccessModal {...successModal.props} />
     </div>
   );
 };

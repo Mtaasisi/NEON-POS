@@ -95,36 +95,36 @@ const GlobalSearchPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50/30 via-white/50 to-purple-50/30">
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-xl border-b border-white/30 shadow-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+      <div className="bg-white/40 backdrop-blur-2xl border-b border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-5">
           <div className="flex items-center gap-4">
             <button
               onClick={() => navigate(-1)}
-              className="p-2 rounded-lg bg-white/30 hover:bg-white/50 transition-all duration-300 backdrop-blur-sm border border-white/30 shadow-sm"
+              className="p-3 rounded-xl bg-white/50 hover:bg-white/70 transition-all duration-300 backdrop-blur-xl border border-white/30 shadow-[0_4px_16px_0_rgba(31,38,135,0.1)] hover:shadow-[0_8px_24px_0_rgba(31,38,135,0.15)]"
             >
               <ArrowRight size={20} className="text-gray-700 rotate-180" />
             </button>
             
             <div className="flex-1 max-w-2xl">
-              <form onSubmit={handleSearch} className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <form onSubmit={handleSearch} className="relative group">
+                <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
                 <input
                   type="text"
-                  placeholder="Search devices, customers, products, sales..."
+                  placeholder="Search..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-12 py-3 rounded-lg bg-white/70 border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 backdrop-blur-sm font-medium text-gray-800 placeholder-gray-500 shadow-sm"
+                  className="w-full pl-14 pr-14 py-4 rounded-2xl bg-white/60 border border-white/30 focus:outline-none focus:bg-white/80 focus:border-blue-400/50 focus:shadow-[0_8px_32px_0_rgba(59,130,246,0.15)] backdrop-blur-xl text-gray-800 placeholder-gray-400 transition-all duration-300"
                   autoFocus
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={clearSearch}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                    className="absolute right-5 top-1/2 transform -translate-y-1/2 p-1.5 rounded-full bg-gray-100/80 hover:bg-gray-200/80 backdrop-blur-sm transition-all duration-200"
                   >
-                    <X size={16} className="text-gray-400" />
+                    <X size={16} className="text-gray-500" />
                   </button>
                 )}
               </form>
@@ -134,7 +134,7 @@ const GlobalSearchPage: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-8">
         {!searchQuery ? (
           <SearchHome 
             recentSearches={recentSearches}

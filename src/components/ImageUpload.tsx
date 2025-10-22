@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabaseClient';
 
 interface ImageUploadProps {
   productId: string;
-  userId: string;
+  userId: string | null;
   onUploadComplete?: (images: UploadedImage[]) => void;
   onUploadError?: (error: string) => void;
   maxFiles?: number;

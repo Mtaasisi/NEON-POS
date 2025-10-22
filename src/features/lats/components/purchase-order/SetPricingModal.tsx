@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, X, AlertCircle, TrendingUp, Calculator, Package } from 'lucide-react';
+import { DollarSign, X, AlertCircle, TrendingUp, Calculator, Package, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getLatsProvider } from '../../lib/data/provider';
+import { supabase } from '../../../../lib/supabaseClient';
 
 interface PurchaseOrderItem {
   id: string;
@@ -23,8 +24,17 @@ interface PurchaseOrderItem {
   };
 }
 
+interface AdditionalCost {
+  id: string;
+  category: string;
+  amount: number;
+  description: string;
+}
+
 interface PricingData {
   cost_price: number;
+  additional_costs: AdditionalCost[];
+  total_cost: number; // cost_price + sum of additional_costs
   selling_price: number;
   markup_percentage: number;
   profit_per_unit: number;
@@ -41,6 +51,17 @@ interface SetPricingModalProps {
   isLoading?: boolean;
 }
 
+const COST_CATEGORIES = [
+  'Shipping Cost',
+  'Customs Duty',
+  'Import Tax',
+  'Handling Fee',
+  'Insurance',
+  'Transportation',
+  'Packaging',
+  'Other'
+];
+
 const SetPricingModal: React.FC<SetPricingModalProps> = ({
   isOpen,
   onClose,
@@ -51,6 +72,7 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
   const [pricingData, setPricingData] = useState<Map<string, PricingData>>(new Map());
   const [productPrices, setProductPrices] = useState<Map<string, number>>(new Map());
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const dataProvider = getLatsProvider();
 
   // Helper function to format numbers with comma separators
@@ -111,16 +133,22 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
         const currentSellingPrice = productPrices.get(item.id) || 0;
         const defaultMarkup = 30; // 30% default markup
         
+        // Initialize with no additional costs
+        const additionalCosts: AdditionalCost[] = [];
+        const totalCost = costPrice; // Initially just the cost price
+        
         // Use current selling price if available, otherwise calculate with default markup
         const calculatedSellingPrice = currentSellingPrice > 0 
           ? currentSellingPrice 
-          : (costPrice * (1 + defaultMarkup / 100));
+          : (totalCost * (1 + defaultMarkup / 100));
         
-        const profit = calculatedSellingPrice - costPrice;
-        const markup = costPrice > 0 ? (profit / costPrice) * 100 : defaultMarkup;
+        const profit = calculatedSellingPrice - totalCost;
+        const markup = totalCost > 0 ? (profit / totalCost) * 100 : defaultMarkup;
         
         initialPricing.set(item.id, {
           cost_price: parseFloat(costPrice.toFixed(2)),
+          additional_costs: additionalCosts,
+          total_cost: parseFloat(totalCost.toFixed(2)),
           selling_price: parseFloat(calculatedSellingPrice.toFixed(2)),
           markup_percentage: parseFloat(markup.toFixed(2)),
           profit_per_unit: parseFloat(profit.toFixed(2))
@@ -137,9 +165,9 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
       const current = newMap.get(itemId);
       if (!current) return prev;
 
-      const costPrice = current.cost_price;
-      const profit = sellingPrice - costPrice;
-      const markup = costPrice > 0 ? (profit / costPrice) * 100 : 0;
+      const totalCost = current.total_cost;
+      const profit = sellingPrice - totalCost;
+      const markup = totalCost > 0 ? (profit / totalCost) * 100 : 0;
 
       newMap.set(itemId, {
         ...current,
@@ -157,9 +185,9 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
       const current = newMap.get(itemId);
       if (!current) return prev;
 
-      const costPrice = current.cost_price;
-      const sellingPrice = costPrice * (1 + markupPercentage / 100);
-      const profit = sellingPrice - costPrice;
+      const totalCost = current.total_cost;
+      const sellingPrice = totalCost * (1 + markupPercentage / 100);
+      const profit = sellingPrice - totalCost;
 
       newMap.set(itemId, {
         ...current,
@@ -175,9 +203,9 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
     setPricingData(prev => {
       const newMap = new Map(prev);
       newMap.forEach((data, itemId) => {
-        const costPrice = data.cost_price;
-        const sellingPrice = costPrice * (1 + markup / 100);
-        const profit = sellingPrice - costPrice;
+        const totalCost = data.total_cost;
+        const sellingPrice = totalCost * (1 + markup / 100);
+        const profit = sellingPrice - totalCost;
 
         newMap.set(itemId, {
           ...data,
@@ -189,6 +217,85 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
       return newMap;
     });
     toast.success(`Applied ${markup}% markup to all items`);
+  };
+
+  // Additional cost management functions
+  const addAdditionalCost = (itemId: string) => {
+    setPricingData(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(itemId);
+      if (!current) return prev;
+
+      const newCost: AdditionalCost = {
+        id: `cost-${Date.now()}-${Math.random()}`,
+        category: 'Shipping Cost',
+        amount: 0,
+        description: ''
+      };
+
+      const updatedCosts = [...current.additional_costs, newCost];
+      const totalAdditionalCost = updatedCosts.reduce((sum, cost) => sum + cost.amount, 0);
+      const totalCost = current.cost_price + totalAdditionalCost;
+      const profit = current.selling_price - totalCost;
+      const markup = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+
+      newMap.set(itemId, {
+        ...current,
+        additional_costs: updatedCosts,
+        total_cost: parseFloat(totalCost.toFixed(2)),
+        markup_percentage: parseFloat(markup.toFixed(2)),
+        profit_per_unit: parseFloat(profit.toFixed(2))
+      });
+      return newMap;
+    });
+  };
+
+  const removeAdditionalCost = (itemId: string, costId: string) => {
+    setPricingData(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(itemId);
+      if (!current) return prev;
+
+      const updatedCosts = current.additional_costs.filter(cost => cost.id !== costId);
+      const totalAdditionalCost = updatedCosts.reduce((sum, cost) => sum + cost.amount, 0);
+      const totalCost = current.cost_price + totalAdditionalCost;
+      const profit = current.selling_price - totalCost;
+      const markup = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+
+      newMap.set(itemId, {
+        ...current,
+        additional_costs: updatedCosts,
+        total_cost: parseFloat(totalCost.toFixed(2)),
+        markup_percentage: parseFloat(markup.toFixed(2)),
+        profit_per_unit: parseFloat(profit.toFixed(2))
+      });
+      return newMap;
+    });
+  };
+
+  const updateAdditionalCost = (itemId: string, costId: string, field: keyof AdditionalCost, value: string | number) => {
+    setPricingData(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(itemId);
+      if (!current) return prev;
+
+      const updatedCosts = current.additional_costs.map(cost => 
+        cost.id === costId ? { ...cost, [field]: value } : cost
+      );
+      const totalAdditionalCost = updatedCosts.reduce((sum, cost) => sum + cost.amount, 0);
+      const totalCost = current.cost_price + totalAdditionalCost;
+      const profit = current.selling_price - totalCost;
+      const markup = totalCost > 0 ? (profit / totalCost) * 100 : 0;
+
+      newMap.set(itemId, {
+        ...current,
+        additional_costs: updatedCosts,
+        total_cost: parseFloat(totalCost.toFixed(2)),
+        markup_percentage: parseFloat(markup.toFixed(2)),
+        profit_per_unit: parseFloat(profit.toFixed(2))
+      });
+      return newMap;
+    });
   };
 
   const handleConfirm = async () => {
@@ -203,6 +310,57 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
     }
 
     try {
+      // First, save all additional costs as expenses
+      const allCosts: Array<{item: PurchaseOrderItem; cost: AdditionalCost}> = [];
+      
+      purchaseOrder.items.forEach(item => {
+        const pricing = pricingData.get(item.id);
+        if (pricing && pricing.additional_costs.length > 0) {
+          pricing.additional_costs.forEach(cost => {
+            if (cost.amount > 0) {
+              allCosts.push({ item, cost });
+            }
+          });
+        }
+      });
+
+      // Create expense records
+      if (allCosts.length > 0) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id;
+
+        for (const { item, cost } of allCosts) {
+          const productName = item.product?.name || item.name || 'Unknown Product';
+          const quantityToReceive = item.quantity - (item.receivedQuantity || 0);
+          
+          try {
+            const { error: expenseError } = await supabase
+              .from('expenses')
+              .insert({
+                category: cost.category,
+                amount: cost.amount * quantityToReceive, // Total cost for all units
+                description: `${cost.description || cost.category} for ${productName} (${quantityToReceive} units) - PO ${purchaseOrder.id}`,
+                date: new Date().toISOString().split('T')[0],
+                created_by: userId,
+                purchase_order_id: purchaseOrder.id,
+                product_id: item.productId,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+
+            if (expenseError) {
+              console.error('Error creating expense record:', expenseError);
+            } else {
+              console.log(`✅ Expense recorded: ${cost.category} - ${cost.amount * quantityToReceive} TZS`);
+            }
+          } catch (error) {
+            console.error('Error saving expense:', error);
+          }
+        }
+
+        toast.success(`Recorded ${allCosts.length} expense entries`);
+      }
+
       await onConfirm(pricingData);
       toast.success(`Prices updated for ${productsWithPrices.length} products`);
       onClose();
@@ -213,6 +371,8 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
   };
 
   const getTotalStats = () => {
+    let totalBaseCost = 0;
+    let totalAdditionalCosts = 0;
     let totalCost = 0;
     let totalSelling = 0;
     let totalProfit = 0;
@@ -223,13 +383,18 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
       if (pricing && pricing.selling_price > 0) {
         const quantityToReceive = item.quantity - (item.receivedQuantity || 0);
         itemCount++;
-        totalCost += pricing.cost_price * quantityToReceive;
+        totalBaseCost += pricing.cost_price * quantityToReceive;
+        const itemAdditionalCost = pricing.additional_costs.reduce((sum, cost) => sum + cost.amount, 0);
+        totalAdditionalCosts += itemAdditionalCost * quantityToReceive;
+        totalCost += pricing.total_cost * quantityToReceive;
         totalSelling += pricing.selling_price * quantityToReceive;
         totalProfit += pricing.profit_per_unit * quantityToReceive;
       }
     });
 
     return {
+      totalBaseCost: totalBaseCost.toFixed(2),
+      totalAdditionalCosts: totalAdditionalCosts.toFixed(2),
       totalCost: totalCost.toFixed(2),
       totalSelling: totalSelling.toFixed(2),
       totalProfit: totalProfit.toFixed(2),
@@ -266,23 +431,32 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
           </div>
 
           {/* Stats Summary */}
-          <div className="bg-green-50 rounded-lg p-6 mb-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6 mb-6 border-2 border-green-200">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Cost</p>
-                <p className="text-2xl font-bold text-gray-900">{formatPrice(stats.totalCost)} TZS</p>
+                <p className="text-xs text-gray-600 mb-1">Base Cost</p>
+                <p className="text-xl font-bold text-gray-700">{formatPrice(stats.totalBaseCost)}</p>
+                <p className="text-xs text-gray-500">TZS</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Selling</p>
-                <p className="text-2xl font-bold text-green-600">{formatPrice(stats.totalSelling)} TZS</p>
+                <p className="text-xs text-orange-600 mb-1">+ Extra Costs</p>
+                <p className="text-xl font-bold text-orange-600">{formatPrice(stats.totalAdditionalCosts)}</p>
+                <p className="text-xs text-gray-500">TZS</p>
+              </div>
+              <div className="border-l-2 border-green-300 pl-4">
+                <p className="text-xs text-gray-600 mb-1">Total Cost</p>
+                <p className="text-xl font-bold text-gray-900">{formatPrice(stats.totalCost)}</p>
+                <p className="text-xs text-gray-500">TZS</p>
               </div>
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Profit</p>
-                <p className="text-2xl font-bold text-blue-600">{formatPrice(stats.totalProfit)} TZS</p>
+                <p className="text-xs text-gray-600 mb-1">Total Selling</p>
+                <p className="text-xl font-bold text-green-600">{formatPrice(stats.totalSelling)}</p>
+                <p className="text-xs text-gray-500">TZS</p>
               </div>
-              <div>
-                <p className="text-sm text-gray-600 mb-1">Avg Markup</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.averageMarkup}%</p>
+              <div className="bg-white rounded-lg p-2 shadow-sm">
+                <p className="text-xs text-gray-600 mb-1">Net Profit</p>
+                <p className="text-xl font-bold text-blue-600">{formatPrice(stats.totalProfit)}</p>
+                <p className="text-xs text-purple-600 font-semibold">{stats.averageMarkup}% markup</p>
               </div>
             </div>
 
@@ -365,11 +539,11 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                     </div>
 
                     {/* Pricing Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                       {/* Cost Price (Read-only - from PO) */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Cost Price (per unit)
+                          Base Cost (per unit)
                         </label>
                         <input
                           type="text"
@@ -378,6 +552,23 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                           className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none text-gray-900 bg-gray-50 cursor-not-allowed"
                           placeholder="0.00 TZS"
                         />
+                      </div>
+
+                      {/* Total Cost (with additional costs) */}
+                      <div>
+                        <label className="block text-sm font-medium text-orange-700 mb-2">
+                          Total Cost (per unit)
+                        </label>
+                        <input
+                          type="text"
+                          value={formatPrice(pricing.total_cost)}
+                          readOnly
+                          className="w-full px-4 py-3 border-2 border-orange-300 rounded-lg focus:outline-none text-gray-900 bg-orange-50 cursor-not-allowed font-bold"
+                          placeholder="0.00 TZS"
+                        />
+                        <p className="text-xs text-orange-600 mt-1">
+                          +{formatPrice(pricing.total_cost - pricing.cost_price)} extra
+                        </p>
                       </div>
 
                       {/* Selling Price */}
@@ -445,9 +636,86 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                         <>
                           <AlertCircle className="w-4 h-4 text-red-600" />
                           <span className="text-red-700">
-                            Warning: Selling price is below cost price!
+                            Warning: Selling price is below total cost!
                           </span>
                         </>
+                      )}
+                    </div>
+
+                    {/* Additional Costs Section */}
+                    <div className="mt-4 border-t-2 border-gray-200 pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Calculator className="w-4 h-4 text-orange-600" />
+                          <h5 className="font-semibold text-gray-900">Additional Costs (per unit)</h5>
+                          <span className="text-xs text-gray-500">Shipping, customs, etc.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            addAdditionalCost(item.id);
+                            setExpandedItems(prev => new Set(prev).add(item.id));
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs rounded-lg transition-colors"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Add Cost
+                        </button>
+                      </div>
+
+                      {pricing.additional_costs.length > 0 ? (
+                        <div className="space-y-2 bg-orange-50 rounded-lg p-3 border-2 border-orange-200">
+                          {pricing.additional_costs.map((cost) => (
+                            <div key={cost.id} className="flex items-center gap-2 bg-white rounded p-2 border border-orange-200">
+                              <select
+                                value={cost.category}
+                                onChange={(e) => updateAdditionalCost(item.id, cost.id, 'category', e.target.value)}
+                                className="flex-1 px-2 py-1.5 border-2 border-gray-300 rounded focus:outline-none focus:border-orange-500 text-sm"
+                              >
+                                {COST_CATEGORIES.map(cat => (
+                                  <option key={cat} value={cat}>{cat}</option>
+                                ))}
+                              </select>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={cost.amount}
+                                onChange={(e) => updateAdditionalCost(item.id, cost.id, 'amount', parseFloat(e.target.value) || 0)}
+                                placeholder="Amount"
+                                className="w-28 px-2 py-1.5 border-2 border-gray-300 rounded focus:outline-none focus:border-orange-500 text-sm font-semibold"
+                              />
+                              <input
+                                type="text"
+                                value={cost.description}
+                                onChange={(e) => updateAdditionalCost(item.id, cost.id, 'description', e.target.value)}
+                                placeholder="Description (optional)"
+                                className="flex-1 px-2 py-1.5 border-2 border-gray-300 rounded focus:outline-none focus:border-orange-500 text-sm"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeAdditionalCost(item.id, cost.id)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="Remove cost"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                          <div className="mt-2 pt-2 border-t border-orange-300 flex justify-between items-center text-sm">
+                            <span className="text-gray-700 font-medium">Total Extra Cost (per unit):</span>
+                            <span className="text-orange-700 font-bold">
+                              {formatPrice(pricing.additional_costs.reduce((sum, c) => sum + c.amount, 0))} TZS
+                            </span>
+                          </div>
+                          <p className="text-xs text-orange-600 italic mt-1">
+                            * For {quantityToReceive} units: {formatPrice(pricing.additional_costs.reduce((sum, c) => sum + c.amount, 0) * quantityToReceive)} TZS total
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-3 text-sm text-gray-500 bg-gray-50 rounded border-2 border-dashed border-gray-300">
+                          No additional costs. Click "Add Cost" to include shipping, customs, etc.
+                        </div>
                       )}
                     </div>
                   </div>

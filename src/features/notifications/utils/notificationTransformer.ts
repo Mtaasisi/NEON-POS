@@ -3,7 +3,7 @@
  * Converts between database snake_case and TypeScript camelCase
  */
 
-import { Notification } from '../types';
+import type { Notification } from '../types';
 
 /**
  * Transform database notification to TypeScript format

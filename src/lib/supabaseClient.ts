@@ -6,6 +6,15 @@ import { neon, neonConfig } from '@neondatabase/serverless';
 // ✅ Properly suppress browser warnings (we understand the security implications)
 neonConfig.disableWarningInBrowsers = true;
 
+// ✅ Configure WebSocket for browser environment to avoid CORS issues
+// The HTTP API doesn't support CORS, so we need to use WebSocket
+if (typeof WebSocket !== 'undefined') {
+  neonConfig.webSocketConstructor = WebSocket;
+  neonConfig.useSecureWebSocket = true;
+  neonConfig.pipelineTLS = false;
+  neonConfig.pipelineConnect = false;
+}
+
 // Database URL - Load from environment variable (REQUIRED)
 // Priority: VITE_DATABASE_URL (frontend accessible) > DATABASE_URL (fallback)
 const DATABASE_URL = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE_URL;
@@ -25,20 +34,43 @@ const sql = neon(DATABASE_URL, {
     cache: 'no-store',
   },
   fullResults: true,
-  // Add connection pooling configuration
-  poolQueryViaFetch: true, // Use fetch for better connection pooling
+  // Use WebSocket instead of fetch to avoid CORS issues in browser
+  poolQueryViaFetch: false,
 });
 
 console.log('✅ Neon SQL client created successfully');
 console.log('ℹ️ Note: Transient 400 errors from Neon are automatically retried - no action needed');
 
+// Helper function to check if error is a network error
+const isNetworkError = (error: any): boolean => {
+  const errorMessage = error?.message?.toLowerCase() || '';
+  const errorName = error?.name?.toLowerCase() || '';
+  
+  return (
+    // Network errors
+    errorMessage.includes('network') ||
+    errorMessage.includes('err_network_changed') ||
+    errorMessage.includes('err_name_not_resolved') ||
+    errorMessage.includes('err_internet_disconnected') ||
+    errorMessage.includes('err_connection_closed') ||
+    errorMessage.includes('err_connection_refused') ||
+    errorMessage.includes('err_connection_reset') ||
+    errorMessage.includes('failed to fetch') ||
+    errorMessage.includes('network request failed') ||
+    errorName.includes('networkerror') ||
+    errorName.includes('typeerror') && errorMessage.includes('fetch')
+  );
+};
+
 // Helper function to execute SQL queries with the Neon serverless client
 const executeSql = async (query: string, params: any[] = [], suppressLogs: boolean = false, retryCount: number = 0): Promise<any> => {
-  const MAX_RETRIES = 3; // Retry up to 3 times for 400 errors (increased from 2)
-  const RETRY_DELAY = 150; // Wait 150ms before retry (increased from 100ms)
+  const MAX_RETRIES = 5; // Increased for network errors
+  const RETRY_DELAY = 500; // Increased base delay for network errors
+  const MAX_NETWORK_RETRIES = 3; // Separate limit for network errors
+  const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
   
   // Only log queries when suppressLogs is false (reduced noise)
-  if (!suppressLogs && process.env.NODE_ENV === 'development' && retryCount === 0) {
+  if (!suppressLogs && isDevelopment && retryCount === 0) {
     console.log('🔍 [SQL]', query.substring(0, 100) + '...');
   }
   
@@ -61,7 +93,8 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
     }
     
     // Reduced logging - only in dev mode and when not suppressed
-    if (!suppressLogs && process.env.NODE_ENV === 'development') {
+    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+    if (!suppressLogs && isDevelopment) {
       if (retryCount > 0) {
         console.log(`✅ [SQL OK after ${retryCount} retries]`, Array.isArray(result) ? `${result.length} rows` : 'Success');
       } else {
@@ -72,24 +105,45 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
     // Neon returns an array of rows by default
     return result;
   } catch (error: any) {
-    // Check if this is a transient 400 error that we should retry
+    // Check error types
     const is400Error = error.message?.includes('400') || error.status === 400 || error.statusCode === 400;
-    const shouldRetry = is400Error && retryCount < MAX_RETRIES;
+    const isNetwork = isNetworkError(error);
+    
+    // Determine if we should retry
+    const shouldRetry = (
+      (is400Error && retryCount < MAX_RETRIES) ||
+      (isNetwork && retryCount < MAX_NETWORK_RETRIES)
+    );
     
     if (shouldRetry) {
-      // Silent retry - don't log transient errors that will be retried
-      // Only log if this is the last retry attempt
-      if (!suppressLogs && process.env.NODE_ENV === 'development' && retryCount >= MAX_RETRIES - 1) {
-        console.warn(`⚠️ Persistent 400 error after ${retryCount + 1} attempts, final retry...`);
+      // Log network errors more prominently
+      if (isNetwork && !suppressLogs) {
+        console.warn(`🌐 Network error detected (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES}): ${error.message || 'Connection issue'}`);
+        console.warn('💡 Tip: Check your internet connection. Retrying...');
       }
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1))); // Exponential backoff
+      
+      // Silent retry for 400 errors - don't log transient errors that will be retried
+      // Only log if this is the last retry attempt
+      const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+      if (!suppressLogs && isDevelopment && is400Error) {
+        // Always log 400 errors with the query to help debug
+        console.warn(`⚠️ 400 error (attempt ${retryCount + 1}/${MAX_RETRIES}):`, error.message);
+        console.warn('📝 Query causing 400 error:', query.substring(0, 300));
+      }
+      
+      // Longer delay for network errors
+      const delay = isNetwork ? RETRY_DELAY * 2 : RETRY_DELAY;
+      await new Promise(resolve => setTimeout(resolve, delay * (retryCount + 1))); // Exponential backoff
       return executeSql(query, params, suppressLogs, retryCount + 1);
     }
     
     // Only log significant errors, not every failure
     if (!suppressLogs) {
-      // For 400 errors that exceeded retry attempts, log differently
-      if (is400Error) {
+      if (isNetwork) {
+        console.error('❌ Network connection failed after', MAX_NETWORK_RETRIES, 'retries');
+        console.error('📡 Please check your internet connection and try again');
+        console.error('Error details:', error.message);
+      } else if (is400Error) {
         console.error('❌ Persistent 400 error after', MAX_RETRIES, 'retries:', error.message);
       } else {
         console.error('❌ SQL Error:', error.message);
@@ -169,10 +223,12 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           if (closeParenIdx !== -1) {
             const columnsStr = fields.substring(openParenIdx + 1, closeParenIdx);
             // Extract only top-level column names (ignore nested relationships)
-            const columns = columnsStr.split(',').map(c => c.trim()).filter(c => {
-              // Only keep simple column names, skip nested relationships
-              return !c.includes(':') && !c.includes('(');
-            });
+            const columns = columnsStr.split(',')
+              .map(c => c.trim())
+              .filter(c => {
+                // Only keep simple column names, skip nested relationships and empty/undefined values
+                return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
+              });
             
             relationships.push({ alias, table, foreignKey, columns });
             
@@ -193,10 +249,12 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           if (closeParenIdx !== -1) {
             const columnsStr = fields.substring(openParenIdx + 1, closeParenIdx);
             // Extract only top-level column names (ignore nested relationships)
-            const columns = columnsStr.split(',').map(c => c.trim()).filter(c => {
-              // Only keep simple column names, skip nested relationships
-              return !c.includes(':') && !c.includes('(');
-            });
+            const columns = columnsStr.split(',')
+              .map(c => c.trim())
+              .filter(c => {
+                // Only keep simple column names, skip nested relationships and empty/undefined values
+                return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
+              });
             
             relationships.push({ alias, table, foreignKey, columns });
             
@@ -219,12 +277,12 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         .replace(/^\s*,/, '')
         .trim();
       
-      // Build JOIN clauses
+      // Build JOIN clauses with additional validation
       this.joins = relationships.map(rel => ({
         table: rel.table,
         alias: rel.alias,
         on: rel.foreignKey,
-        columns: rel.columns.filter(c => c.length > 0) // Filter out empty strings
+        columns: rel.columns.filter(c => c && typeof c === 'string' && c.length > 0 && c !== 'undefined') // Filter out empty/undefined/null values
       }));
       
       // Build SELECT fields
@@ -238,8 +296,11 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       
       // Add relationship fields with JSON aggregation
       for (const join of this.joins) {
-        if (join.columns.length > 0) {
-          const jsonFields = join.columns.map(c => `'${c}', ${join.alias}.${c}`).join(', ');
+        // Validate columns before building JSON
+        const validColumns = join.columns.filter(c => c && typeof c === 'string' && c.length > 0 && c !== 'undefined');
+        
+        if (validColumns.length > 0) {
+          const jsonFields = validColumns.map(c => `'${c}', ${join.alias}.${c}`).join(', ');
           this.selectFields += `, json_build_object(${jsonFields}) as ${join.alias}`;
         } else {
           // If no columns specified, select all from joined table
@@ -357,7 +418,8 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
   }
 
   private formatValue(value: any): string {
-    if (value === null) return 'NULL';
+    // Handle null and undefined - both should be NULL in SQL
+    if (value === null || value === undefined) return 'NULL';
     if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
     if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
     if (value instanceof Date) return `'${value.toISOString()}'`;
@@ -394,7 +456,17 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
     
     // Add JOIN clauses
     for (const join of this.joins) {
-      query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.${join.on} = ${join.alias}.id`;
+      // Determine if foreign key is on main table or joined table
+      // If foreign key matches pattern "{alias}_id", it's on main table
+      // Otherwise, it's on the joined table (reverse join)
+      const expectedForeignKeyOnMain = `${join.alias}_id`;
+      if (join.on === expectedForeignKeyOnMain) {
+        // Standard join: main_table.alias_id = joined_table.id
+        query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.${join.on} = ${join.alias}.id`;
+      } else {
+        // Reverse join: main_table.id = joined_table.foreign_key
+        query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.id = ${join.alias}.${join.on}`;
+      }
     }
     
     if (this.whereConditions.length > 0) {
@@ -449,20 +521,27 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           return { data: [], error: null };
         }
         
-        // Get columns from the first object
-        const columns = Object.keys(values[0]).join(', ');
+        // Filter out undefined values from the first object to get valid columns
+        const firstRowFiltered = Object.fromEntries(
+          Object.entries(values[0]).filter(([_, v]) => v !== undefined)
+        );
+        const columns = Object.keys(firstRowFiltered).join(', ');
         
         // Build VALUES clause for multiple rows
         const allPlaceholders = values.map(row => {
-          const rowValues = Object.values(row).map(v => this.formatValue(v)).join(', ');
+          // Filter out undefined values for each row
+          const filteredRow = Object.fromEntries(
+            Object.entries(row).filter(([_, v]) => v !== undefined)
+          );
+          const rowValues = Object.values(filteredRow).map(v => this.formatValue(v)).join(', ');
           return `(${rowValues})`;
         }).join(', ');
         
         // Determine conflict columns
-        const conflictClause = options?.onConflict || Object.keys(values[0]).join(',');
+        const conflictClause = options?.onConflict || Object.keys(firstRowFiltered).join(',');
         
         // Build update clause for conflict resolution
-        const updateClauses = Object.keys(values[0])
+        const updateClauses = Object.keys(firstRowFiltered)
           .map(key => `${key} = EXCLUDED.${key}`)
           .join(', ');
         
@@ -470,14 +549,18 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       } 
       // Handle single object upsert
       else {
-        const columns = Object.keys(values).join(', ');
-        const placeholders = Object.values(values).map(v => this.formatValue(v)).join(', ');
+        // Filter out undefined values - only upsert defined fields
+        const filteredValues = Object.fromEntries(
+          Object.entries(values).filter(([_, v]) => v !== undefined)
+        );
+        const columns = Object.keys(filteredValues).join(', ');
+        const placeholders = Object.values(filteredValues).map(v => this.formatValue(v)).join(', ');
         
         // Determine conflict columns
-        const conflictClause = options?.onConflict || Object.keys(values)[0];
+        const conflictClause = options?.onConflict || Object.keys(filteredValues)[0];
         
         // Build update clause for conflict resolution
-        const updateClauses = Object.entries(values)
+        const updateClauses = Object.entries(filteredValues)
           .map(([key, value]) => `${key} = ${this.formatValue(value)}`)
           .join(', ');
         
@@ -494,12 +577,19 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           return { data: [], error: null };
         }
         
-        // Get columns from the first object
-        const columns = Object.keys(values[0]).join(', ');
+        // Filter out undefined values from the first object to get valid columns
+        const firstRowFiltered = Object.fromEntries(
+          Object.entries(values[0]).filter(([_, v]) => v !== undefined)
+        );
+        const columns = Object.keys(firstRowFiltered).join(', ');
         
         // Build VALUES clause for multiple rows
         const allPlaceholders = values.map(row => {
-          const rowValues = Object.values(row).map(v => this.formatValue(v)).join(', ');
+          // Filter out undefined values for each row
+          const filteredRow = Object.fromEntries(
+            Object.entries(row).filter(([_, v]) => v !== undefined)
+          );
+          const rowValues = Object.values(filteredRow).map(v => this.formatValue(v)).join(', ');
           return `(${rowValues})`;
         }).join(', ');
         
@@ -507,15 +597,21 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       } 
       // Handle single object insert
       else {
-        const columns = Object.keys(values).join(', ');
-        const placeholders = Object.values(values).map(v => this.formatValue(v)).join(', ');
+        // Filter out undefined values - only insert defined fields
+        const filteredValues = Object.fromEntries(
+          Object.entries(values).filter(([_, v]) => v !== undefined)
+        );
+        const columns = Object.keys(filteredValues).join(', ');
+        const placeholders = Object.values(filteredValues).map(v => this.formatValue(v)).join(', ');
         query = `INSERT INTO ${this.tableName} (${columns}) VALUES (${placeholders}) RETURNING *`;
       }
     } 
     // Check if this is an UPDATE operation
     else if ((this as any).isUpdate) {
       const values = (this as any).updateData;
+      // Filter out undefined values - only update defined fields
       const setClauses = Object.entries(values)
+        .filter(([_, value]) => value !== undefined)
         .map(([key, value]) => `${key} = ${this.formatValue(value)}`)
         .join(', ');
       
@@ -542,10 +638,17 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       query = this.buildQuery();
     }
     
-    try {
-      // Execute using Neon serverless client with new API
-      // Pass suppressErrors flag to reduce noise for expected errors
-      const rawData = await executeSql(query, [], this.suppressErrors);
+  try {
+    // ✅ ENHANCED DEBUG: Always log SQL queries that might fail with 400
+    // This helps us identify the exact problematic query
+    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+    if (!this.suppressErrors && isDevelopment) {
+      console.log('🔍 [SQL Query]:', query.substring(0, 300) + (query.length > 300 ? '...' : ''));
+    }
+    
+    // Execute using Neon serverless client with new API
+    // Pass suppressErrors flag to reduce noise for expected errors
+    const rawData = await executeSql(query, [], this.suppressErrors);
       
       // Extract rows from Neon fullResults format {fields, rows, command, ...}
       // Neon with fullResults: true returns an object, not an array
@@ -584,9 +687,21 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         error.message?.includes('column') ||
         error.code === '42703';
       
+      // ✅ ENHANCED: Log 400 errors with the exact SQL query for debugging
+      const is400Error = error.message?.includes('400') || error.status === 400 || error.statusCode === 400;
+      const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+      
       // Minimal logging - only unexpected errors in development mode
-      if (!this.suppressErrors && !isExpectedError && process.env.NODE_ENV === 'development') {
+      if (!this.suppressErrors && !isExpectedError && isDevelopment) {
         console.error(`❌ Query failed on '${this.tableName}':`, error.message);
+        
+        // If it's a 400 error, log the full query to help debug
+        if (is400Error) {
+          console.error('🔍 Failing SQL Query:', query);
+          console.error('🔍 Error Code:', error.code);
+          console.error('🔍 Error Details:', error);
+          console.error('🔍 Full Error Object:', JSON.stringify(error, null, 2));
+        }
       }
       
       return { data: null, error: { message: error.message, code: error.code || '400' }, count: null };
@@ -944,17 +1059,33 @@ const mockChannel = () => ({
 // RPC implementation for stored procedures
 const rpcCall = async (fn: string, params?: any) => {
   try {
+    // Helper function to detect UUID format
+    const isUUID = (str: string): boolean => {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      return uuidRegex.test(str);
+    };
+    
     const paramsList = params ? Object.entries(params).map(([key, value]) => {
-      if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
       if (value === null) return 'NULL';
       if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
+      if (typeof value === 'number') return String(value);
+      if (typeof value === 'string') {
+        const escapedValue = value.replace(/'/g, "''");
+        // Check if this looks like a UUID parameter (by name or value format)
+        if (key.includes('_id') || key.includes('_param') || isUUID(value)) {
+          // Cast to UUID for parameters that look like UUIDs
+          return `'${escapedValue}'::uuid`;
+        }
+        // Regular text parameter
+        return `'${escapedValue}'::text`;
+      }
       return String(value);
     }).join(', ') : '';
     
     const query = `SELECT * FROM ${fn}(${paramsList})`;
     // Execute using Neon serverless client with new API
-    // Suppress logs for RPC calls as they're often optional/expected to fail
-    const rawData = await executeSql(query, [], true);
+    // Don't suppress logs for RPC calls - we want to see errors
+    const rawData = await executeSql(query, [], false);
     
     // Extract rows from Neon fullResults format
     let data: any;
@@ -968,7 +1099,9 @@ const rpcCall = async (fn: string, params?: any) => {
     
     return { data, error: null };
   } catch (error: any) {
-    // Function not found is expected - don't log it
+    // Log RPC errors for debugging
+    console.error(`❌ RPC Error calling ${fn}:`, error.message);
+    console.error('   Params:', params);
     return { data: null, error: { message: error.message, code: error.code || '400' } };
   }
 };
@@ -1008,6 +1141,7 @@ export async function retryWithBackoff<T>(
       // Don't retry on certain errors
       if (error && typeof error === 'object') {
         const errorMessage = (error as any).message || '';
+        
         // Don't retry on auth errors or client errors
         if (
           errorMessage.includes('401') ||
@@ -1017,21 +1151,33 @@ export async function retryWithBackoff<T>(
         ) {
           throw error;
         }
+        
+        // Check if it's a network error - use longer delays
+        const isNetwork = isNetworkError(error);
+        if (isNetwork && attempt < maxRetries - 1) {
+          console.warn(`🌐 Network error in retryWithBackoff (attempt ${attempt + 1}/${maxRetries})`);
+        }
       }
       
       // If this was the last attempt, throw the error
       if (attempt === maxRetries - 1) {
+        console.error(`❌ All retry attempts exhausted (${maxRetries})`);
         throw lastError;
       }
       
+      // Check if it's a network error for longer delays
+      const isNetwork = isNetworkError(lastError);
+      const effectiveDelay = isNetwork ? baseDelay * 2 : baseDelay;
+      
       // Calculate exponential backoff delay
-      const delay = baseDelay * Math.pow(2, attempt);
+      const delay = effectiveDelay * Math.pow(2, attempt);
       const jitter = Math.random() * 0.3 * delay; // Add 0-30% jitter
       
-      console.log(`Retry attempt ${attempt + 1}/${maxRetries} after ${Math.round(delay + jitter)}ms`);
+      const totalDelay = Math.round(delay + jitter);
+      console.log(`🔄 Retry attempt ${attempt + 1}/${maxRetries} after ${totalDelay}ms`);
       
       // Wait before retrying
-      await new Promise(resolve => setTimeout(resolve, delay + jitter));
+      await new Promise(resolve => setTimeout(resolve, totalDelay));
     }
   }
   

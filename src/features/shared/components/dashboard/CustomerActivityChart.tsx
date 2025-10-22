@@ -134,7 +134,7 @@ export const CustomerActivityChart: React.FC<CustomerActivityChartProps> = ({ cl
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -155,7 +155,7 @@ export const CustomerActivityChart: React.FC<CustomerActivityChartProps> = ({ cl
       </div>
 
       {/* Chart */}
-      <div className="h-48 -mx-2">
+      <div className="flex-grow -mx-2 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={activityData}>
             <defs>

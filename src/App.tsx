@@ -3,6 +3,7 @@ import React, { useEffect, useState, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { BranchProvider } from './context/BranchContext';
+import { DateRangeProvider } from './context/DateRangeContext';
 import { DevicesProvider, useDevices } from './context/DevicesContext';
 import { CustomersProvider, useCustomers } from './context/CustomersContext';
 import { UserGoalsProvider } from './context/UserGoalsContext';
@@ -73,6 +74,7 @@ import { SuppliersProvider } from './context/SuppliersContext';
 import { WhatsAppProvider } from './context/WhatsAppContext';
 const SMSControlCenterPage = lazy(() => import('./features/sms/pages/SMSControlCenterPage'));
 const EnhancedPaymentManagementPage = lazy(() => import('./features/payments/pages/EnhancedPaymentManagementPage'));
+const ExpensesPage = lazy(() => import('./features/payments/pages/ExpensesPage'));
 const EmployeeManagementPage = lazy(() => import('./features/employees/pages/EmployeeManagementPage'));
 const EmployeeAttendancePage = lazy(() => import('./features/employees/pages/EmployeeAttendancePage'));
 const AttendanceManagementPage = lazy(() => import('./features/employees/pages/AttendanceManagementPage'));
@@ -84,6 +86,10 @@ const RemindersPage = lazy(() => import('./features/reminders/pages/RemindersPag
 const GlobalSearchPage = lazy(() => import('./features/shared/pages/GlobalSearchPage'));
 const ProductAdGeneratorPage = lazy(() => import('./features/shared/pages/ProductAdGeneratorPage'));
 
+// Special Orders and Installments
+const SpecialOrdersPage = lazy(() => import('./features/special-orders/pages/SpecialOrdersPage'));
+const InstallmentsPage = lazy(() => import('./features/installments/pages/InstallmentsPage'));
+
 const CategoryManagementPage = lazy(() => import('./features/settings/pages/CategoryManagementPage'));
 const StoreLocationManagementPage = lazy(() => import('./features/settings/pages/StoreLocationManagementPage'));
 const DatabaseSetupPage = lazy(() => import('./features/admin/pages/DatabaseSetupPage'));
@@ -92,15 +98,23 @@ const ExcelImportPage = lazy(() => import('./features/reports/pages/ExcelImportP
 const ExcelTemplateDownloadPage = lazy(() => import('./features/lats/pages/ExcelTemplateDownloadPage'));
 const ProductExportPage = lazy(() => import('./features/lats/pages/ProductExportPage'));
 
-const UnifiedDiagnosticManagementPage = lazy(() => import('./features/diagnostics/pages/UnifiedDiagnosticManagementPage'));
+
+// Test Pages
+const TestImageUpload = lazy(() => import('./pages/TestImageUpload'));
+const BackgroundRemovalPage = lazy(() => import('./pages/BackgroundRemovalPage'));
 
 const LATSDashboardPage = lazy(() => import('./features/lats/pages/LATSDashboardPage'));
 const SerialNumberManagerPage = lazy(() => import('./features/lats/pages/SerialNumberManagerPage'));
 const PurchaseOrdersPage = lazy(() => import('./features/lats/pages/PurchaseOrdersPage'));
 const POcreate = lazy(() => import('./features/lats/pages/POcreate'));
 const PurchaseOrderDetailPage = lazy(() => import('./features/lats/pages/PurchaseOrderDetailPage'));
+const TestSetPricingModal = lazy(() => import('./features/lats/pages/TestSetPricingModal'));
 const InventorySparePartsPage = lazy(() => import('./features/lats/pages/InventorySparePartsPage'));
 const StockTransferPage = lazy(() => import('./features/lats/pages/StockTransferPage'));
+
+// Trade-In Module Pages
+const TradeInManagementPage = lazy(() => import('./features/lats/pages/TradeInManagementPage'));
+const TradeInTestPage = lazy(() => import('./features/lats/pages/TradeInTestPage'));
 
 const SalesReportsPage = lazy(() => import('./features/lats/pages/SalesReportsPage'));
 const CustomerLoyaltyPage = lazy(() => import('./features/lats/pages/CustomerLoyaltyPage'));
@@ -126,9 +140,7 @@ const WhatsAppConnectionManager = lazy(() => import('./features/lats/pages/Whats
 const WhatsAppChatPage = lazy(() => import('./features/lats/pages/WhatsAppChatPage'));
 const BluetoothPrinterPage = lazy(() => import('./pages/BluetoothPrinterPage'));
 
-// Previously unlinked pages - now added for testing
-const TechnicianDashboardPage = lazy(() => import('./features/shared/pages/TechnicianDashboardPage'));
-const CustomerCareDashboardPage = lazy(() => import('./features/shared/pages/CustomerCareDashboardPage'));
+// Dashboard page - unified for all roles
 const DashboardPage = lazy(() => import('./features/shared/pages/DashboardPage'));
 const BulkSMSPage = lazy(() => import('./features/sms/pages/BulkSMSPage'));
 const SMSLogsPage = lazy(() => import('./features/sms/pages/SMSLogsPage'));
@@ -443,7 +455,13 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
         for (const action of actions) {
           try {
             if (action.type === 'submitData') {
-              await fetch('/api/endpoint', { method: 'POST', body: JSON.stringify(action.payload) });
+              // Skip this action if backend API is not available
+              try {
+                await fetch('/api/endpoint', { method: 'POST', body: JSON.stringify(action.payload) });
+              } catch (apiError) {
+                console.warn('API endpoint not available, skipping submitData action');
+                continue;
+              }
             } else if (action.type === 'createCustomerFromSearch') {
               await customersContext.addCustomer(action.payload);
             } else if (action.type === 'adjustPoints') {
@@ -535,20 +553,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
               </Suspense>
             </RoleProtectedRoute>
           } />
-          <Route path="/dashboard/technician" element={
-            <RoleProtectedRoute allowedRoles={['admin', 'technician']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <TechnicianDashboardPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
-          <Route path="/dashboard/customer-care" element={
-            <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
-              <Suspense fallback={<DynamicPageLoader />}>
-                <CustomerCareDashboardPage />
-              </Suspense>
-            </RoleProtectedRoute>
-          } />
+          {/* Old role-specific dashboard routes removed - now using unified dashboard at /dashboard */}
 
           {/* Product Ad Generator */}
           <Route path="/ad-generator" element={
@@ -693,11 +698,18 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           {/* Payment Management - Single consolidated page */}
           <Route path="/payments" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedPaymentManagementPage /></Suspense></RoleProtectedRoute>} />
           
+          {/* Expenses Management */}
+          <Route path="/expenses" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><ExpensesPage /></Suspense></RoleProtectedRoute>} />
+          
           {/* Appointment Management Routes */}
           <Route path="/appointments" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care', 'technician']}><Suspense fallback={<DynamicPageLoader />}><UnifiedAppointmentPage /></Suspense></RoleProtectedRoute>} />
           
           {/* Reminders Routes */}
           <Route path="/reminders" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care', 'technician']}><Suspense fallback={<DynamicPageLoader />}><RemindersPage /></Suspense></RoleProtectedRoute>} />
+          
+          {/* Special Orders & Installments Routes */}
+          <Route path="/special-orders" element={<RoleProtectedRoute allowedRoles={['admin', 'sales', 'manager', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SpecialOrdersPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/installments" element={<RoleProtectedRoute allowedRoles={['admin', 'sales', 'manager', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><InstallmentsPage /></Suspense></RoleProtectedRoute>} />
           
           
           {/* Employee Management Routes */}
@@ -711,17 +723,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* Calendar View Routes */}
 
-          
-          {/* Diagnostics Routes - Admin and Customer Care only */}
-          <Route path="/diagnostics" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/new" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/new-request" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/my-requests" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/assigned" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/reports" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/templates" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/device/:requestId/:deviceId" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/diagnostics/grouped/:requestId/:deviceName/:model" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><UnifiedDiagnosticManagementPage /></Suspense></RoleProtectedRoute>} />
           
           {/* LATS Module Routes */}
           <Route path="/lats" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><LATSDashboardPage /></Suspense></RoleProtectedRoute>} />
@@ -792,6 +793,10 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           <Route path="/lats/purchase-order/create" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><POcreate /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/purchase-orders/:id" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrderDetailPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/purchase-orders/:id/edit" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrderDetailPage editMode={true} /></Suspense></RoleProtectedRoute>} />
+          
+          {/* Test Modals */}
+          <Route path="/test/set-pricing-modal" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><TestSetPricingModal /></Suspense></RoleProtectedRoute>} />
+          
           <Route path="/lats/purchase-orders/shipped-items" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><ShippedItemsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/purchase-orders/suppliers" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><SuppliersManagementPage /></Suspense></RoleProtectedRoute>} />
           
@@ -808,6 +813,9 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </UrlValidatedRoute>
           } />
           
+          {/* Trade-In Module Routes */}
+          <Route path="/lats/trade-in/management" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><TradeInManagementPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/lats/trade-in/create" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><TradeInTestPage /></Suspense></RoleProtectedRoute>} />
 
         {/* WhatsApp Module Routes */}
         <Route path="/lats/whatsapp-chat" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppChatPage /></Suspense></RoleProtectedRoute>} />
@@ -825,6 +833,19 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
         </Route>
 
         {/* Full-page routes (outside AppLayout) */}
+        
+        {/* Test Pages */}
+        <Route path="/test-image-upload" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <TestImageUpload />
+          </Suspense>
+        } />
+        
+        <Route path="/background-removal" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <BackgroundRemovalPage />
+          </Suspense>
+        } />
         
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
@@ -978,37 +999,39 @@ function App() {
           <AuthProvider>
             <GlobalSearchProvider>
               <BranchProvider>
-                <ErrorProvider>
-                  {/* <RepairProvider> */}
-                  <DevicesProvider>
-                  <CustomersProvider>
-                    <UserGoalsProvider>
-                      <PaymentsProvider>
-                        <PaymentMethodsProvider>
-                          <LoadingProvider>
-                          <GeneralSettingsProvider>
-                              <SuppliersProvider>
-                                <WhatsAppProvider>
-                                <POSSettingsDatabaseSetup>
-                                  <AppContent 
-                                    isOnline={isOnline} 
-                                    isSyncing={isSyncing} 
-                                  />
-                                  <LoadingProgressWrapper />
-                                  <BackgroundDataLoader />
-                                  <ErrorManager />
-                                </POSSettingsDatabaseSetup>
-                              </WhatsAppProvider>
-                            </SuppliersProvider>
-                        </GeneralSettingsProvider>
-                        </LoadingProvider>
-                      </PaymentMethodsProvider>
-                    </PaymentsProvider>
-                  </UserGoalsProvider>
-                </CustomersProvider>
-                </DevicesProvider>
-                {/* </RepairProvider> */}
-                </ErrorProvider>
+                <DateRangeProvider>
+                  <ErrorProvider>
+                    {/* <RepairProvider> */}
+                    <DevicesProvider>
+                    <CustomersProvider>
+                      <UserGoalsProvider>
+                        <PaymentsProvider>
+                          <PaymentMethodsProvider>
+                            <LoadingProvider>
+                            <GeneralSettingsProvider>
+                                <SuppliersProvider>
+                                  <WhatsAppProvider>
+                                  <POSSettingsDatabaseSetup>
+                                    <AppContent 
+                                      isOnline={isOnline} 
+                                      isSyncing={isSyncing} 
+                                    />
+                                    <LoadingProgressWrapper />
+                                    <BackgroundDataLoader />
+                                    <ErrorManager />
+                                  </POSSettingsDatabaseSetup>
+                                </WhatsAppProvider>
+                              </SuppliersProvider>
+                          </GeneralSettingsProvider>
+                          </LoadingProvider>
+                        </PaymentMethodsProvider>
+                      </PaymentsProvider>
+                    </UserGoalsProvider>
+                  </CustomersProvider>
+                  </DevicesProvider>
+                  {/* </RepairProvider> */}
+                  </ErrorProvider>
+                </DateRangeProvider>
               </BranchProvider>
             </GlobalSearchProvider>
           </AuthProvider>

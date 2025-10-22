@@ -9,7 +9,6 @@ export { ReminderWidget } from './ReminderWidget';
 export { SystemHealthWidget } from './SystemHealthWidget';
 export { ActivityFeedWidget } from './ActivityFeedWidget';
 export { CustomerInsightsWidget } from './CustomerInsightsWidget';
-export { QuickSearchWidget } from './QuickSearchWidget';
 export { PurchaseOrderWidget } from './PurchaseOrderWidget';
 export { ChatWidget } from './ChatWidget';
 export { SalesWidget } from './SalesWidget';

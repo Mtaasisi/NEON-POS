@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { loadUserSettings } from '../lib/userSettingsApi';
+import { 
+  getRoleWidgetPermissions, 
+  getRoleQuickActionPermissions,
+  isWidgetAllowedForRole,
+  isQuickActionAllowedForRole
+} from '../config/roleBasedWidgets';
 
 export interface DashboardSettings {
   quickActions: {
@@ -27,12 +33,6 @@ export interface DashboardSettings {
     bulkSms: boolean;
     smsLogs: boolean;
     smsSettings: boolean;
-    
-    // Diagnostic & Repair Features
-    diagnostics: boolean;
-    newDiagnostic: boolean;
-    diagnosticReports: boolean;
-    diagnosticTemplates: boolean;
     
     // Import/Export & Data Management
     excelImport: boolean;
@@ -117,12 +117,6 @@ const defaultDashboardSettings: DashboardSettings = {
     smsLogs: true,
     smsSettings: true,
     
-    // Diagnostic & Repair Features
-    diagnostics: true,
-    newDiagnostic: true,
-    diagnosticReports: true,
-    diagnosticTemplates: true,
-    
     // Import/Export & Data Management
     excelImport: true,
     excelTemplates: true,
@@ -199,26 +193,89 @@ export function useDashboardSettings() {
       setLoading(true);
       const userSettings = await loadUserSettings(currentUser.id);
       
+      // Get role-based default settings
+      const roleWidgetPermissions = getRoleWidgetPermissions(currentUser.role);
+      const roleQuickActionPermissions = getRoleQuickActionPermissions(currentUser.role);
+      
+      // Merge role permissions with user settings
+      const roleBasedDefaults: DashboardSettings = {
+        quickActions: {
+          ...defaultDashboardSettings.quickActions,
+          ...roleQuickActionPermissions,
+        },
+        widgets: {
+          ...defaultDashboardSettings.widgets,
+          ...roleWidgetPermissions,
+        },
+      };
+      
       if (userSettings?.dashboard) {
-        setDashboardSettings(userSettings.dashboard);
+        // Merge user settings with role-based permissions
+        // User settings can only disable widgets that are allowed by role
+        const mergedSettings: DashboardSettings = {
+          quickActions: Object.keys(roleBasedDefaults.quickActions).reduce((acc, key) => {
+            const actionKey = key as keyof DashboardSettings['quickActions'];
+            // Widget is enabled only if role allows it AND user hasn't disabled it
+            acc[actionKey] = roleBasedDefaults.quickActions[actionKey] && 
+                            (userSettings.dashboard.quickActions[actionKey] ?? true);
+            return acc;
+          }, {} as DashboardSettings['quickActions']),
+          widgets: Object.keys(roleBasedDefaults.widgets).reduce((acc, key) => {
+            const widgetKey = key as keyof DashboardSettings['widgets'];
+            // Widget is enabled only if role allows it AND user hasn't disabled it
+            acc[widgetKey] = roleBasedDefaults.widgets[widgetKey] && 
+                            (userSettings.dashboard.widgets[widgetKey] ?? true);
+            return acc;
+          }, {} as DashboardSettings['widgets']),
+        };
+        setDashboardSettings(mergedSettings);
       } else {
-        // Use default settings if no custom settings exist
-        setDashboardSettings(defaultDashboardSettings);
+        // Use role-based default settings if no custom settings exist
+        setDashboardSettings(roleBasedDefaults);
       }
     } catch (error) {
       console.error('Error loading dashboard settings:', error);
-      // Fall back to default settings on error
-      setDashboardSettings(defaultDashboardSettings);
+      // Fall back to role-based default settings on error
+      if (currentUser?.role) {
+        const roleWidgetPermissions = getRoleWidgetPermissions(currentUser.role);
+        const roleQuickActionPermissions = getRoleQuickActionPermissions(currentUser.role);
+        setDashboardSettings({
+          quickActions: {
+            ...defaultDashboardSettings.quickActions,
+            ...roleQuickActionPermissions,
+          },
+          widgets: {
+            ...defaultDashboardSettings.widgets,
+            ...roleWidgetPermissions,
+          },
+        });
+      } else {
+        setDashboardSettings(defaultDashboardSettings);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const isQuickActionEnabled = (action: keyof DashboardSettings['quickActions']): boolean => {
+    // Check role-based permissions first
+    if (!currentUser?.role) return false;
+    
+    const roleAllowed = isQuickActionAllowedForRole(action, currentUser.role);
+    if (!roleAllowed) return false;
+    
+    // Then check user's custom settings
     return dashboardSettings.quickActions[action];
   };
 
   const isWidgetEnabled = (widget: keyof DashboardSettings['widgets']): boolean => {
+    // Check role-based permissions first
+    if (!currentUser?.role) return false;
+    
+    const roleAllowed = isWidgetAllowedForRole(widget, currentUser.role);
+    if (!roleAllowed) return false;
+    
+    // Then check user's custom settings
     return dashboardSettings.widgets[widget];
   };
 

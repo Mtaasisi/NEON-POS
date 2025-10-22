@@ -18,32 +18,31 @@
   display: none; /* WebKit */
 }
 
-/* Custom POS Products Scrollbar - Visible and Smooth */
+/* Custom POS Products Scrollbar - Minimal and Smooth */
 .pos-products-scroll {
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
+  scrollbar-color: #e5e7eb transparent;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
 }
 
 .pos-products-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 .pos-products-scroll::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
+  background: transparent;
 }
 
 .pos-products-scroll::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: #e5e7eb;
+  border-radius: 10px;
   transition: background 0.2s;
 }
 
 .pos-products-scroll::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #d1d5db;
 }
 
 /* Custom CSS Variables */
@@ -384,29 +383,52 @@ html.font-large {
   box-sizing: border-box;
 }
 
+/* ===== GLOBAL MINIMAL SCROLLBAR STYLES ===== */
+/* Apply minimal scrollbar to all scrollable elements */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
 /* Modal Scrolling Improvements */
 .modal-scrollable {
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #d1d5db #f3f4f6;
 }
 
 .modal-scrollable::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 .modal-scrollable::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 3px;
+  background: transparent;
 }
 
 .modal-scrollable::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
+  background: #e5e7eb;
+  border-radius: 10px;
 }
 
 .modal-scrollable::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #d1d5db;
 }
 
 /* Ensure modals work well on mobile */
@@ -579,6 +601,12 @@ code {
   50% { opacity: 1; }
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+  20%, 40%, 60%, 80% { transform: translateX(10px); }
+}
+
 /* Animation Classes */
 .animate-fade-in {
   animation: fade-in 0.6s ease-out;
@@ -608,6 +636,10 @@ code {
   animation: highlight-pulse 4s ease-in-out infinite;
 }
 
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
 /* Hide scrollbars for horizontal swipe */
 .scrollbar-hide {
   -ms-overflow-style: none;  /* Internet Explorer 10+ */
@@ -617,97 +649,45 @@ code {
   display: none;  /* Safari and Chrome */
 }
 
-/* Glassy Sidebar Scrollbar - Light Mode */
+/* Minimal Sidebar Scrollbar */
 .sidebar-scrollbar::-webkit-scrollbar {
-  width: 8px;
+  width: 4px;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  margin: 10px 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.3) 0%,
-    rgba(255, 255, 255, 0.15) 50%,
-    rgba(99, 102, 241, 0.3) 100%
-  );
-  backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 
-    0 2px 8px rgba(99, 102, 241, 0.1),
-    inset 0 1px 1px rgba(255, 255, 255, 0.5);
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #e5e7eb;
+  border-radius: 10px;
+  transition: background 0.2s;
 }
 
 .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.4) 0%,
-    rgba(99, 102, 241, 0.5) 50%,
-    rgba(59, 130, 246, 0.6) 100%
-  );
-  box-shadow: 
-    0 4px 16px rgba(99, 102, 241, 0.3),
-    inset 0 1px 2px rgba(255, 255, 255, 0.6),
-    0 0 20px rgba(99, 102, 241, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: scaleY(1.02);
+  background: #d1d5db;
 }
 
 /* Firefox scrollbar styles for sidebar */
 .sidebar-scrollbar {
   scrollbar-width: thin;
-  scrollbar-color: rgba(99, 102, 241, 0.3) rgba(255, 255, 255, 0.05);
+  scrollbar-color: #e5e7eb transparent;
 }
 
-/* Glassy Sidebar Scrollbar - Dark Mode */
-.theme-dark .sidebar-scrollbar::-webkit-scrollbar-track,
-.theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(99, 102, 241, 0.1);
-}
-
+/* Dark Mode - Slightly lighter for visibility */
 .theme-dark .sidebar-scrollbar::-webkit-scrollbar-thumb,
 .theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-thumb {
-  background: linear-gradient(
-    180deg,
-    rgba(99, 102, 241, 0.4) 0%,
-    rgba(59, 130, 246, 0.3) 50%,
-    rgba(79, 70, 229, 0.4) 100%
-  );
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(99, 102, 241, 0.3);
-  box-shadow: 
-    0 2px 8px rgba(99, 102, 241, 0.2),
-    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  background: rgba(148, 163, 184, 0.3);
 }
 
 .theme-dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover,
 .theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(
-    180deg,
-    rgba(99, 102, 241, 0.7) 0%,
-    rgba(59, 130, 246, 0.6) 50%,
-    rgba(79, 70, 229, 0.7) 100%
-  );
-  box-shadow: 
-    0 4px 20px rgba(99, 102, 241, 0.5),
-    inset 0 1px 2px rgba(255, 255, 255, 0.2),
-    0 0 24px rgba(99, 102, 241, 0.4);
-  border-color: rgba(99, 102, 241, 0.5);
+  background: rgba(148, 163, 184, 0.5);
 }
 
 .theme-dark .sidebar-scrollbar,
 .theme-dark-cards .sidebar-scrollbar {
-  scrollbar-color: rgba(99, 102, 241, 0.4) rgba(15, 23, 42, 0.4);
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
 }
 
 /* Glassy Assign Button Styles */
@@ -1036,55 +1016,116 @@ body {
 /* ===== RESPONSIVE SCALING FOR DIFFERENT SCREEN RESOLUTIONS ===== */
 
 /* Scale for 2048x1536 screens to match 3024x1964 appearance */
+/* BUT ONLY for POS pages, not for login/auth pages */
 @media (min-width: 2000px) and (max-width: 2100px) and (min-height: 1500px) and (max-height: 1600px) {
-  html {
-    /* Scale ratio: 3024/2048 ≈ 1.476 */
-    font-size: 147.6%; /* Scale up base font size */
-  }
-  
-  body {
+  /* Only apply scaling to POS pages */
+  body.pos-page {
     zoom: 1.476; /* Scale entire body */
     transform-origin: top left;
   }
   
   /* Alternative: use transform scale if zoom doesn't work */
-  #root {
+  #root.pos-page {
     transform: scale(1.476);
     transform-origin: top left;
     width: calc(100% / 1.476);
     height: calc(100% / 1.476);
   }
+  
+  /* Prevent scaling on login and auth pages */
+  body.login-page,
+  body.auth-page,
+  .login-page,
+  .auth-page {
+    zoom: 1 !important;
+    transform: none !important;
+  }
+  
+  .login-page #root,
+  .auth-page #root {
+    transform: none !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
 }
 
 /* Medium resolution tablets and displays (2048x1536) */
 @media (min-width: 2000px) and (max-width: 2100px) {
-  /* Scale up UI elements proportionally */
+  /* Scale up UI elements proportionally - BUT ONLY for POS pages */
   .pos-container,
   .pos-page,
   [class*="POS"] {
     font-size: 1.4em;
   }
   
-  /* Scale buttons and inputs */
-  button, .btn {
+  /* Scale buttons and inputs - BUT NOT on login/auth pages */
+  .pos-page button, 
+  .pos-page .btn,
+  .pos-container button,
+  .pos-container .btn {
     font-size: 1.4em;
     padding: calc(0.5rem * 1.4) calc(1rem * 1.4);
   }
   
-  input, select, textarea {
+  .pos-page input, 
+  .pos-page select, 
+  .pos-page textarea,
+  .pos-container input,
+  .pos-container select,
+  .pos-container textarea {
     font-size: 1.4em;
     padding: calc(0.75rem * 1.4) calc(1rem * 1.4);
   }
   
-  /* Scale cards and containers */
-  .card, [class*="card"] {
+  /* Scale cards and containers - BUT NOT on login/auth pages */
+  .pos-page .card, 
+  .pos-page [class*="card"],
+  .pos-container .card,
+  .pos-container [class*="card"] {
     font-size: 1.4em;
   }
   
-  /* Scale icons */
-  svg, [class*="icon"] {
+  /* Scale icons - BUT NOT on login/auth pages */
+  .pos-page svg, 
+  .pos-page [class*="icon"],
+  .pos-container svg,
+  .pos-container [class*="icon"] {
     width: calc(100% * 1.4);
     height: calc(100% * 1.4);
+  }
+  
+  /* Override scaling for login and auth pages */
+  .login-page,
+  .auth-page,
+  body.login-page,
+  body.auth-page {
+    font-size: 1rem !important;
+  }
+  
+  .login-page button,
+  .login-page .btn,
+  .auth-page button,
+  .auth-page .btn {
+    font-size: 1rem !important;
+    padding: 0.5rem 1rem !important;
+  }
+  
+  .login-page input,
+  .login-page select,
+  .login-page textarea,
+  .auth-page input,
+  .auth-page select,
+  .auth-page textarea {
+    font-size: 1rem !important;
+    padding: 0.75rem 1rem !important;
+  }
+  
+  .login-page svg,
+  .login-page [class*="icon"],
+  .auth-page svg,
+  .auth-page [class*="icon"] {
+    width: auto !important;
+    height: auto !important;
   }
 }
 
@@ -1185,5 +1226,180 @@ body {
 
 .animate-shrink {
   animation: shrink 10s linear;
+}
+
+/* ===== SCALING OVERRIDE UTILITIES ===== */
+
+/* Completely disable scaling for specific elements */
+.no-scale,
+.no-scale * {
+  zoom: 1 !important;
+  transform: none !important;
+  font-size: 1rem !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Disable scaling for login and auth pages */
+.login-page,
+.auth-page,
+.login-page *,
+.auth-page * {
+  zoom: 1 !important;
+  transform: none !important;
+}
+
+/* Specific overrides for icons in login/auth pages */
+.login-page svg,
+.auth-page svg,
+.login-page [class*="icon"],
+.auth-page [class*="icon"] {
+  width: 1em !important;
+  height: 1em !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+}
+
+/* ============================================
+   CUSTOM LOGIN PAGE ANIMATIONS
+   ============================================ */
+
+/* Blob Animation - Floating Circles */
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Fade In Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.8s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
+
+/* Gradient Animation for Text */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Pulse Glow Effect */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.4);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Shake Animation for Error */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s;
+}
+
+/* Floating Animation */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Spin Slow */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
 }
 
