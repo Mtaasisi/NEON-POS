@@ -86,11 +86,12 @@ export const PaymentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         devicePaymentsError = error;
         console.error('Error fetching customer payments:', devicePaymentsError);
         // If table doesn't exist, show helpful message
-        if (devicePaymentsError.message.includes('relation "public.customer_payments" does not exist')) {
+        const errorMessage = devicePaymentsError?.message || '';
+        if (errorMessage.includes('relation "public.customer_payments" does not exist')) {
           console.warn('customer_payments table does not exist. Please run the SQL migration in Supabase dashboard.');
         }
         // If it's an authentication error, show helpful message
-        if (devicePaymentsError.message.includes('JWT') || devicePaymentsError.message.includes('auth')) {
+        if (errorMessage.includes('JWT') || errorMessage.includes('auth')) {
           console.warn('Authentication error. Please log in again.');
         }
       }
@@ -249,24 +250,46 @@ export const PaymentsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
+  // Helper function to convert to TZS
+  const convertToTZS = (amount: number, payment: PaymentRow): number => {
+    const currency = (payment as any).currency;
+    const exchangeRate = (payment as any).exchange_rate;
+    if (!currency || currency === 'TZS') return amount;
+    const rate = exchangeRate && exchangeRate > 1 ? exchangeRate : 
+      (currency === 'USD' ? 2500 : currency === 'EUR' ? 2700 : currency === 'GBP' ? 3200 : 1);
+    return amount * rate;
+  };
+
   const getTotalRevenue = () => {
     return payments
       .filter(payment => payment.status === 'completed')
-      .reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+      .reduce((sum, payment) => {
+        const amount = Number(payment.amount) || 0;
+        return sum + convertToTZS(amount, payment);
+      }, 0);
   };
 
   const getRevenueBySource = () => {
     const devicePayments = getPaymentsBySource('device_payment')
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      .reduce((sum, p) => {
+        const amount = Number(p.amount) || 0;
+        return sum + convertToTZS(amount, p);
+      }, 0);
 
     const posSales = getPaymentsBySource('pos_sale')
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      .reduce((sum, p) => {
+        const amount = Number(p.amount) || 0;
+        return sum + convertToTZS(amount, p);
+      }, 0);
 
     const repairPayments = getPaymentsBySource('repair_payment')
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      .reduce((sum, p) => {
+        const amount = Number(p.amount) || 0;
+        return sum + convertToTZS(amount, p);
+      }, 0);
 
     return {
       devicePayments,

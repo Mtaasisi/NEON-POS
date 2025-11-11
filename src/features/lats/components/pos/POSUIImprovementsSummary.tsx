@@ -21,11 +21,11 @@ const POSUIImprovementsSummary: React.FC = () => {
     );
   }
 
-  // Check permissions
-  const canAccessInventory = rbacManager.can(userRole, 'inventory', 'view');
-  const canViewReports = rbacManager.can(userRole, 'reports', 'view');
-  const canAccessSettings = rbacManager.can(userRole, 'settings', 'view');
-  const canAddProducts = rbacManager.can(userRole, 'products', 'create');
+  // Check permissions - now checks user.permissions array first!
+  const canAccessInventory = rbacManager.canUser(currentUser, 'inventory', 'view');
+  const canViewReports = rbacManager.canUser(currentUser, 'reports', 'view');
+  const canAccessSettings = rbacManager.canUser(currentUser, 'settings', 'view');
+  const canAddProducts = rbacManager.canUser(currentUser, 'products', 'create');
 
   const improvements = [
     {

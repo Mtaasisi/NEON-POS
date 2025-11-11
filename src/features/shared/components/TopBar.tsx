@@ -73,6 +73,7 @@ import SimpleBranchSelector from '../../../components/SimpleBranchSelector';
 import QuickExpenseModal from '../../../components/QuickExpenseModal';
 import QuickReminderModal from '../../../components/QuickReminderModal';
 import { useGlobalSearchModal } from '../../../context/GlobalSearchContext';
+import AddProductModal from '../../lats/components/product/AddProductModal';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -86,6 +87,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const { openSearch } = useGlobalSearchModal();
   const [showQuickExpense, setShowQuickExpense] = useState(false);
   const [showQuickReminder, setShowQuickReminder] = useState(false);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
   
   // Safely access devices context with error handling for HMR
   let devices: any[] = [];
@@ -268,24 +270,35 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
   const getQuickActions = () => {
     const actions = [];
+    const userPermissions = currentUser.permissions || [];
+    const hasAll = userPermissions.includes('all');
     
-    if (currentUser.role === 'admin') {
+    // Check permissions for each action
+    if (hasAll || userPermissions.includes('create_customers') || currentUser.role === 'admin') {
       actions.push(
-        { label: 'Add Customer', icon: <Users size={16} />, action: () => navigate('/customers') },
-        { label: 'Add Device', icon: <Smartphone size={16} />, action: () => navigate('/devices/new') },
-        { label: 'Add Product', icon: <Plus size={16} />, action: () => navigate('/lats/add-product') },
-        { label: 'Unified Inventory', icon: <Package size={16} />, action: () => navigate('/lats/unified-inventory') }
-      );
-    }
-    
-    if (currentUser.role === 'customer-care') {
-      actions.push(
-        { label: 'Add Device', icon: <Smartphone size={16} />, action: () => navigate('/devices/new') },
         { label: 'Add Customer', icon: <Users size={16} />, action: () => navigate('/customers') }
       );
     }
     
-    if (currentUser.role === 'admin') {
+    if (hasAll || userPermissions.includes('add_device') || currentUser.role === 'admin' || currentUser.role === 'customer-care') {
+      actions.push(
+        { label: 'Add Device', icon: <Smartphone size={16} />, action: () => navigate('/devices/new') }
+      );
+    }
+    
+    if (hasAll || userPermissions.includes('add_products') || currentUser.role === 'admin') {
+      actions.push(
+        { label: 'Add Product', icon: <Plus size={16} />, action: () => navigate('/lats/add-product') }
+      );
+    }
+    
+    if (hasAll || userPermissions.includes('view_inventory') || currentUser.role === 'admin') {
+      actions.push(
+        { label: 'Unified Inventory', icon: <Package size={16} />, action: () => navigate('/lats/unified-inventory') }
+      );
+    }
+    
+    if (hasAll || currentUser.role === 'admin') {
       actions.push(
         { label: 'SMS Centre', icon: <MessageSquare size={16} />, action: () => navigate('/sms') }
       );
@@ -426,7 +439,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                     </button>
                     
                     {/* Admin-only options */}
-                    {currentUser.role === 'admin' && (
+                    {(currentUser.permissions?.includes('all') || currentUser.role === 'admin') && (
                       <>
                         {/* Quick Expense */}
                         <button
@@ -448,7 +461,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                         {/* Add Product */}
                         <button
                           onClick={() => {
-                            navigate('/lats/add-product');
+                            setShowAddProductModal(true);
                             setShowCreateDropdown(false);
                           }}
                           className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-orange-50 transition-colors group"
@@ -465,7 +478,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                     )}
                     
                     {/* SMS Centre - Available for admin and customer-care */}
-                    {(currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
+                    {(currentUser.permissions?.includes('all') || currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
                       <button
                         onClick={() => {
                           navigate('/sms');
@@ -953,6 +966,16 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
         onSuccess={() => {
           // Optional: Show toast or refresh data
           console.log('Reminder created successfully');
+        }}
+      />
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onProductCreated={() => {
+          setShowAddProductModal(false);
+          console.log('Product created successfully');
         }}
       />
     </header>

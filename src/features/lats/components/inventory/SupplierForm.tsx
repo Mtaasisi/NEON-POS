@@ -1,31 +1,33 @@
 // SupplierForm component for LATS module
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { LATS_CLASSES } from '../../../tokens';
-import GlassCard from '../../../shared/components/ui/GlassCard';
-import GlassInput from '../../../shared/components/ui/GlassInput';
-import GlassSelect from '../../../shared/components/ui/GlassSelect';
-import GlassButton from '../../../shared/components/ui/GlassButton';
-import GlassBadge from '../../../shared/components/ui/GlassBadge';
-import { t } from '../../lib/i18n/t';
-import { AlertTriangle } from 'lucide-react';
+import { X, Building2, MessageSquare, ChevronDown, ChevronUp, Upload, Image as ImageIcon } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
-// Validation schema - updated to match actual database schema
+// Validation schema
 const supplierFormSchema = z.object({
   name: z.string().min(1, 'Supplier name is required').max(100, 'Supplier name must be less than 100 characters'),
+  company_name: z.string().max(100, 'Company name must be less than 100 characters').optional(),
+  description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   contact_person: z.string().max(100, 'Contact person must be less than 100 characters').optional(),
   email: z.string().email('Invalid email format').max(100, 'Email must be less than 100 characters').optional().or(z.literal('')),
-  address: z.string().max(200, 'Address must be less than 200 characters').optional(),
   phone: z.string().max(20, 'Phone number must be less than 20 characters').optional(),
+  whatsapp: z.string().max(20, 'WhatsApp number must be less than 20 characters').optional(),
+  wechat: z.string().max(50, 'WeChat ID must be less than 50 characters').optional(),
+  address: z.string().max(200, 'Address must be less than 200 characters').optional(),
   city: z.string().max(50, 'City must be less than 50 characters').optional(),
   country: z.string().max(50, 'Country must be less than 50 characters').optional(),
   tax_id: z.string().max(50, 'Tax ID must be less than 50 characters').optional(),
   payment_terms: z.string().max(200, 'Payment terms must be less than 200 characters').optional(),
-  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional(),
-  rating: z.number().min(0).max(5).optional(),
-  is_active: z.boolean().optional()
+  preferred_currency: z.string().max(10, 'Currency code must be less than 10 characters').optional(),
+  exchange_rate: z.union([z.number().min(0, 'Exchange rate must be positive'), z.string()]).optional().transform((val) => {
+    if (val === '' || val === undefined || val === null) return undefined;
+    const num = typeof val === 'string' ? parseFloat(val) : val;
+    return isNaN(num) ? undefined : num;
+  }),
+  notes: z.string().max(1000, 'Notes must be less than 1000 characters').optional()
 });
 
 type SupplierFormData = z.infer<typeof supplierFormSchema>;
@@ -33,16 +35,25 @@ type SupplierFormData = z.infer<typeof supplierFormSchema>;
 interface Supplier {
   id: string;
   name: string;
+  company_name?: string;
+  description?: string;
   contact_person?: string;
   email?: string;
-  address?: string;
   phone?: string;
+  whatsapp?: string;
+  wechat?: string;
+  address?: string;
   city?: string;
   country?: string;
   tax_id?: string;
   payment_terms?: string;
+  preferred_currency?: string;
+  exchange_rate?: number;
   notes?: string;
   rating?: number;
+  wechat_qr_code?: string;
+  alipay_qr_code?: string;
+  bank_account_details?: string;
   is_active?: boolean;
   created_at: string;
   updated_at: string;
@@ -65,7 +76,14 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
   loading = false,
   className = ''
 }) => {
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [wechatQRCode, setWechatQRCode] = useState<string | null>(supplier?.wechat_qr_code || null);
+  const [alipayQRCode, setAlipayQRCode] = useState<string | null>(supplier?.alipay_qr_code || null);
+  const [bankAccount, setBankAccount] = useState(supplier?.bank_account_details || '');
+  
+  // File input refs for manual triggering
+  const wechatFileInputRef = React.useRef<HTMLInputElement>(null);
+  const alipayFileInputRef = React.useRef<HTMLInputElement>(null);
   
   // Form setup
   const {
@@ -79,34 +97,148 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     resolver: zodResolver(supplierFormSchema),
     defaultValues: {
       name: supplier?.name || '',
+      company_name: supplier?.company_name || '',
+      description: supplier?.description || '',
       contact_person: supplier?.contact_person || '',
       email: supplier?.email || '',
-      address: supplier?.address || '',
       phone: supplier?.phone || '',
+      whatsapp: supplier?.whatsapp || '',
+      wechat: supplier?.wechat || '',
+      address: supplier?.address || '',
       city: supplier?.city || '',
       country: supplier?.country || '',
       tax_id: supplier?.tax_id || '',
       payment_terms: supplier?.payment_terms || '',
-      notes: supplier?.notes || '',
-      rating: supplier?.rating || undefined,
-      is_active: supplier?.is_active ?? true, // Default to true for new suppliers
+      preferred_currency: supplier?.preferred_currency || 'TZS',
+      exchange_rate: supplier?.exchange_rate || undefined,
+      notes: supplier?.notes || ''
     }
   });
 
   // Watch form values
-  const watchedValues = watch();
+  const selectedCountry = watch('country');
+  const selectedCurrency = watch('preferred_currency');
+  const notesValue = watch('notes') || '';
+
+  // Country-Currency mapping
+  const countryCurrencyMap: Record<string, string> = {
+    'Tanzania': 'TZS',
+    'UAE': 'AED',
+    'China': 'CNY',
+    'Hong Kong': 'HKD',
+    'India': 'INR',
+    'Kenya': 'KES',
+    'USA': 'USD',
+    'UK': 'GBP',
+    'Germany': 'EUR',
+    'France': 'EUR',
+    'Japan': 'JPY',
+    'South Korea': 'KRW',
+    'Singapore': 'SGD',
+    'Thailand': 'THB',
+    'Vietnam': 'VND',
+    'Malaysia': 'MYR',
+    'Indonesia': 'IDR',
+    'Philippines': 'PHP',
+    'Turkey': 'TRY',
+    'Egypt': 'EGP',
+    'South Africa': 'ZAR',
+    'Nigeria': 'NGN',
+    'Ghana': 'GHS',
+    'Uganda': 'UGX',
+    'Rwanda': 'RWF',
+    'Ethiopia': 'ETB',
+    'Morocco': 'MAD',
+    'Saudi Arabia': 'SAR',
+    'Pakistan': 'PKR'
+  };
+
+  // Auto-set currency based on country selection
+  useEffect(() => {
+    if (selectedCountry && !supplier) {
+      const currency = countryCurrencyMap[selectedCountry];
+      if (currency) {
+        setValue('preferred_currency', currency);
+      }
+    }
+  }, [selectedCountry, supplier, setValue]);
+
+  // Handle QR code image upload
+  const handleQRCodeUpload = (e: React.ChangeEvent<HTMLInputElement>, type: 'wechat' | 'alipay') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image size should be less than 2MB');
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      
+      reader.onloadend = () => {
+        try {
+          const base64String = reader.result as string;
+          if (!base64String) {
+            toast.error('Failed to read image file');
+            return;
+          }
+          
+          if (type === 'wechat') {
+            setWechatQRCode(base64String);
+            toast.success('WeChat QR code uploaded');
+          } else {
+            setAlipayQRCode(base64String);
+            toast.success('Alipay QR code uploaded');
+          }
+        } catch (error) {
+          console.error('Error processing image:', error);
+          toast.error('Failed to process image');
+        }
+      };
+      
+      reader.onerror = () => {
+        console.error('FileReader error:', reader.error);
+        toast.error('Failed to read image file. Please try again.');
+      };
+      
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Error uploading QR code:', error);
+      toast.error('Failed to upload image. Please try again.');
+    }
+    
+    // Reset the input so the same file can be selected again if needed
+    e.target.value = '';
+  };
+
+  // Remove QR code
+  const removeQRCode = (type: 'wechat' | 'alipay') => {
+    if (type === 'wechat') {
+      setWechatQRCode(null);
+    } else {
+      setAlipayQRCode(null);
+    }
+  };
 
   // Handle form submission
   const handleFormSubmit = async (data: SupplierFormData) => {
     try {
-      // Ensure new suppliers are always active by default
       const submissionData = {
         ...data,
-        is_active: data.is_active ?? true // Default to true if not set
-      };
+        wechat_qr_code: wechatQRCode || undefined,
+        alipay_qr_code: alipayQRCode || undefined,
+        bank_account_details: bankAccount || undefined,
+        is_active: supplier?.is_active ?? true
+      } as any;
       
       await onSubmit(submissionData);
-      reset(submissionData); // Reset form with new values
+      reset(data);
     } catch (error) {
       console.error('Supplier form submission error:', error);
     }
@@ -115,13 +247,10 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
   // Handle cancel
   const handleCancel = () => {
     const cancelHandler = onCancel || onClose;
-    if (!cancelHandler) {
-      console.warn('SupplierForm: No cancel handler provided');
-      return;
-    }
+    if (!cancelHandler) return;
 
     if (isDirty) {
-      if (confirm(t('common.confirmDiscard'))) {
+      if (confirm('Discard changes?')) {
         reset();
         cancelHandler();
       }
@@ -130,445 +259,601 @@ const SupplierForm: React.FC<SupplierFormProps> = ({
     }
   };
 
-  // Country options with flags
+  // Country options
   const countryOptions = [
-    { value: 'TZ', label: 'Tanzania', flag: '🇹🇿' },
-    { value: 'AE', label: 'UAE', flag: '🇦🇪' },
-    { value: 'CN', label: 'China', flag: '🇨🇳' },
-    { value: 'US', label: 'United States', flag: '🇺🇸' },
-    { value: 'CA', label: 'Canada', flag: '🇨🇦' },
-    { value: 'UK', label: 'United Kingdom', flag: '🇬🇧' },
-    { value: 'DE', label: 'Germany', flag: '🇩🇪' },
-    { value: 'FR', label: 'France', flag: '🇫🇷' },
-    { value: 'JP', label: 'Japan', flag: '🇯🇵' },
-    { value: 'IN', label: 'India', flag: '🇮🇳' },
-    { value: 'BR', label: 'Brazil', flag: '🇧🇷' },
-    { value: 'AU', label: 'Australia', flag: '🇦🇺' },
-    { value: 'KE', label: 'Kenya', flag: '🇰🇪' },
-    { value: 'UG', label: 'Uganda', flag: '🇺🇬' },
-    { value: 'RW', label: 'Rwanda', flag: '🇷🇼' },
-    { value: 'ET', label: 'Ethiopia', flag: '🇪🇹' },
-    { value: 'NG', label: 'Nigeria', flag: '🇳🇬' },
-    { value: 'ZA', label: 'South Africa', flag: '🇿🇦' },
-    { value: 'EG', label: 'Egypt', flag: '🇪🇬' },
-    { value: 'SA', label: 'Saudi Arabia', flag: '🇸🇦' },
-    { value: 'TR', label: 'Turkey', flag: '🇹🇷' },
-    { value: 'RU', label: 'Russia', flag: '🇷🇺' },
-    { value: 'KR', label: 'South Korea', flag: '🇰🇷' },
-    { value: 'SG', label: 'Singapore', flag: '🇸🇬' },
-    { value: 'MY', label: 'Malaysia', flag: '🇲🇾' },
-    { value: 'TH', label: 'Thailand', flag: '🇹🇭' },
-    { value: 'VN', label: 'Vietnam', flag: '🇻🇳' },
-    { value: 'ID', label: 'Indonesia', flag: '🇮🇩' },
-    { value: 'PH', label: 'Philippines', flag: '🇵🇭' }
+    'Tanzania', 'UAE', 'China', 'Hong Kong', 'India', 'Kenya', 'USA', 'UK', 
+    'Germany', 'France', 'Japan', 'South Korea', 'Singapore', 'Thailand',
+    'Vietnam', 'Malaysia', 'Indonesia', 'Philippines', 'Turkey', 'Egypt',
+    'South Africa', 'Nigeria', 'Ghana', 'Uganda', 'Rwanda', 'Ethiopia',
+    'Morocco', 'Saudi Arabia', 'Pakistan'
   ];
 
-
-
-  // Currency options with flags
+  // Currency options
   const currencyOptions = [
-    { value: 'TZS', label: 'Tanzanian Shilling (TZS)', flag: '🇹🇿' },
-    { value: 'AED', label: 'UAE Dirham (AED)', flag: '🇦🇪' },
-    { value: 'CNY', label: 'Chinese Yuan (CNY)', flag: '🇨🇳' },
-    { value: 'USD', label: 'US Dollar (USD)', flag: '🇺🇸' },
-    { value: 'CAD', label: 'Canadian Dollar (CAD)', flag: '🇨🇦' },
-    { value: 'GBP', label: 'British Pound (GBP)', flag: '🇬🇧' },
-    { value: 'EUR', label: 'Euro (EUR)', flag: '🇪🇺' },
-    { value: 'JPY', label: 'Japanese Yen (JPY)', flag: '🇯🇵' },
-    { value: 'INR', label: 'Indian Rupee (INR)', flag: '🇮🇳' },
-    { value: 'BRL', label: 'Brazilian Real (BRL)', flag: '🇧🇷' },
-    { value: 'AUD', label: 'Australian Dollar (AUD)', flag: '🇦🇺' },
-    { value: 'KES', label: 'Kenyan Shilling (KES)', flag: '🇰🇪' },
-    { value: 'UGX', label: 'Ugandan Shilling (UGX)', flag: '🇺🇬' },
-    { value: 'RWF', label: 'Rwandan Franc (RWF)', flag: '🇷🇼' },
-    { value: 'ETB', label: 'Ethiopian Birr (ETB)', flag: '🇪🇹' },
-    { value: 'NGN', label: 'Nigerian Naira (NGN)', flag: '🇳🇬' },
-    { value: 'ZAR', label: 'South African Rand (ZAR)', flag: '🇿🇦' },
-    { value: 'EGP', label: 'Egyptian Pound (EGP)', flag: '🇪🇬' },
-    { value: 'SAR', label: 'Saudi Riyal (SAR)', flag: '🇸🇦' },
-    { value: 'TRY', label: 'Turkish Lira (TRY)', flag: '🇹🇷' },
-    { value: 'RUB', label: 'Russian Ruble (RUB)', flag: '🇷🇺' },
-    { value: 'KRW', label: 'South Korean Won (KRW)', flag: '🇰🇷' },
-    { value: 'SGD', label: 'Singapore Dollar (SGD)', flag: '🇸🇬' },
-    { value: 'MYR', label: 'Malaysian Ringgit (MYR)', flag: '🇲🇾' },
-    { value: 'THB', label: 'Thai Baht (THB)', flag: '🇹🇭' },
-    { value: 'VND', label: 'Vietnamese Dong (VND)', flag: '🇻🇳' },
-    { value: 'IDR', label: 'Indonesian Rupiah (IDR)', flag: '🇮🇩' },
-    { value: 'PHP', label: 'Philippine Peso (PHP)', flag: '🇵🇭' }
+    { code: 'TZS', name: 'Tanzanian Shilling' },
+    { code: 'USD', name: 'US Dollar' },
+    { code: 'EUR', name: 'Euro' },
+    { code: 'GBP', name: 'British Pound' },
+    { code: 'CNY', name: 'Chinese Yuan' },
+    { code: 'AED', name: 'UAE Dirham' },
+    { code: 'INR', name: 'Indian Rupee' },
+    { code: 'KES', name: 'Kenyan Shilling' },
+    { code: 'HKD', name: 'Hong Kong Dollar' },
+    { code: 'JPY', name: 'Japanese Yen' },
+    { code: 'KRW', name: 'South Korean Won' },
+    { code: 'SGD', name: 'Singapore Dollar' },
+    { code: 'THB', name: 'Thai Baht' },
+    { code: 'VND', name: 'Vietnamese Dong' },
+    { code: 'MYR', name: 'Malaysian Ringgit' },
+    { code: 'IDR', name: 'Indonesian Rupiah' },
+    { code: 'PHP', name: 'Philippine Peso' },
+    { code: 'TRY', name: 'Turkish Lira' },
+    { code: 'EGP', name: 'Egyptian Pound' },
+    { code: 'ZAR', name: 'South African Rand' },
+    { code: 'NGN', name: 'Nigerian Naira' },
+    { code: 'GHS', name: 'Ghanaian Cedi' },
+    { code: 'UGX', name: 'Ugandan Shilling' },
+    { code: 'RWF', name: 'Rwandan Franc' },
+    { code: 'ETB', name: 'Ethiopian Birr' },
+    { code: 'MAD', name: 'Moroccan Dirham' },
+    { code: 'SAR', name: 'Saudi Riyal' },
+    { code: 'PKR', name: 'Pakistani Rupee' }
   ];
-
-  // Map of countries to their default currencies
-  const countryCurrencyMap: { [key: string]: string } = {
-    TZ: 'TZS', // Tanzania
-    AE: 'AED', // UAE
-    CN: 'CNY', // China
-    US: 'USD', // United States
-    CA: 'CAD', // Canada
-    UK: 'GBP', // United Kingdom
-    DE: 'EUR', // Germany
-    FR: 'EUR', // France
-    JP: 'JPY', // Japan
-    IN: 'INR', // India
-    BR: 'BRL', // Brazil
-    AU: 'AUD', // Australia
-    KE: 'KES', // Kenya
-    UG: 'UGX', // Uganda
-    RW: 'RWF', // Rwanda
-    ET: 'ETB', // Ethiopia
-    NG: 'NGN', // Nigeria
-    ZA: 'ZAR', // South Africa
-    EG: 'EGP', // Egypt
-    SA: 'SAR', // Saudi Arabia
-    TR: 'TRY', // Turkey
-    RU: 'RUB', // Russia
-    KR: 'KRW', // South Korea
-    SG: 'SGD', // Singapore
-    MY: 'MYR', // Malaysia
-    TH: 'THB', // Thailand
-    VN: 'VND', // Vietnam
-    ID: 'IDR', // Indonesia
-    PH: 'PHP'  // Philippines
-  };
 
   return (
-    <GlassCard className={`max-w-2xl mx-auto ${className}`}>
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+    <div className={`bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto ${className}`}>
+      <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-lats-text">
-              {supplier ? t('common.edit') : t('common.add')} {t('common.supplier')}
-            </h2>
-            <p className="text-sm text-lats-text-secondary mt-1">
-              {supplier ? 'Update supplier information' : 'Create a new supplier'}
-            </p>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">
+                {supplier ? 'Edit Supplier' : 'Add New Supplier'}
+              </h3>
+              <p className="text-xs text-gray-500">Update supplier information</p>
+            </div>
           </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          )}
         </div>
 
-        {/* Basic Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Basic Information</h3>
-          
+        {/* Supplier Identity */}
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-gray-700 mb-4">Supplier Identity</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Name */}
-            <Controller
-              name="name"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label={t('common.name')}
-                  placeholder="Enter supplier name"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.name?.message}
-                  required
-                  maxLength={100}
-                />
+            {/* Supplier Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Supplier Name <span className="text-red-500">*</span>
+              </label>
+              <Controller
+                name="name"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="text"
+                    {...field}
+                    placeholder="Enter supplier name"
+                    className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors text-gray-900 ${
+                      errors.name ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
+                    }`}
+                  />
+                )}
+              />
+              {errors.name && (
+                <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>
               )}
-            />
+            </div>
+
+            {/* Company Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Company Name
+              </label>
+              <Controller
+                name="company_name"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="text"
+                    {...field}
+                    placeholder="Enter company name"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  />
+                )}
+              />
+            </div>
 
             {/* Contact Person */}
-            <Controller
-              name="contact_person"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Contact Person"
-                  placeholder="Enter contact person name (optional)"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.contact_person?.message}
-                  maxLength={100}
-                  helperText="The person to contact at this supplier"
-                />
-              )}
-            />
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Contact Person
+              </label>
+              <Controller
+                name="contact_person"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="text"
+                    {...field}
+                    placeholder="Enter contact person name"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  />
+                )}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Contact Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Contact Information</h3>
-          
+        {/* Contact Details */}
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-gray-700 mb-4">Contact Details</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Phone */}
-            <Controller
-              name="phone"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Phone"
-                  placeholder="+1 (555) 123-4567"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.phone?.message}
-                  maxLength={20}
-                  helperText="Primary phone number"
-                />
-              )}
-            />
+            {/* Phone Number */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <Controller
+                name="phone"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="tel"
+                    {...field}
+                    placeholder="+255 123 456 789"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  />
+                )}
+              />
+            </div>
 
             {/* Email */}
-            <Controller
-              name="email"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Email"
-                  placeholder="supplier@example.com"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.email?.message}
-                  maxLength={100}
-                  helperText="Email address for communications"
-                />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email
+              </label>
+              <Controller
+                name="email"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="email"
+                    {...field}
+                    placeholder="supplier@example.com"
+                    className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors text-gray-900 ${
+                      errors.email ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
+                    }`}
+                  />
+                )}
+              />
+              {errors.email && (
+                <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
               )}
-            />
-          </div>
-        </div>
+            </div>
 
-        {/* Location Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Location Information</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Country */}
-            <Controller
-              name="country"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Country"
-                  placeholder="Enter country"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.country?.message}
-                  maxLength={50}
-                  helperText="Supplier's country"
+            {/* WhatsApp */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                WhatsApp
+              </label>
+              <div className="relative">
+                <Controller
+                  name="whatsapp"
+                  control={control}
+                  render={({ field }) => (
+                    <input
+                      type="tel"
+                      {...field}
+                      placeholder="+255 123 456 789"
+                      className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    />
+                  )}
                 />
-              )}
-            />
-
-            {/* City */}
-            <Controller
-              name="city"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="City"
-                  placeholder="Enter city"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.city?.message}
-                  maxLength={50}
-                  helperText="Supplier's city"
-                />
-              )}
-            />
-
-            {/* Address */}
-            <Controller
-              name="address"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Address"
-                  placeholder="Enter street address"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.address?.message}
-                  maxLength={200}
-                  helperText="Full street address"
-                  multiline
-                  rows={2}
-                />
-              )}
-            />
-          </div>
-        </div>
-
-        {/* Business Information */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Business Information</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Tax ID */}
-            <Controller
-              name="tax_id"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Tax ID"
-                  placeholder="Enter tax identification number"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.tax_id?.message}
-                  maxLength={50}
-                  helperText="Tax identification number (optional)"
-                />
-              )}
-            />
-
-            {/* Payment Terms */}
-            <Controller
-              name="payment_terms"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Payment Terms"
-                  placeholder="e.g., Net 30, Net 60, COD"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.payment_terms?.message}
-                  maxLength={200}
-                  helperText="Payment terms for this supplier"
-                />
-              )}
-            />
-
-            {/* Rating - Not implemented in form yet, placeholder for future */}
-            <Controller
-              name="rating"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  label="Rating"
-                  placeholder="Enter rating (0-5)"
-                  type="number"
-                  value={field.value?.toString() || ''}
-                  onChange={(value) => field.onChange(value ? parseFloat(value) : undefined)}
-                  error={errors.rating?.message}
-                  helperText="Supplier rating (0-5 stars)"
-                  min={0}
-                  max={5}
-                  step={0.1}
-                />
-              )}
-            />
-          </div>
-        </div>
-
-        {/* Remove old Currency section - replaced with placeholder */}
-        <div className="hidden">
-          <Controller
-              name="country"
-              control={control}
-              render={({ field }) => (
-                <GlassSelect
-                  label="Country"
-                  placeholder="Select country"
-                  value={field.value}
-                  onChange={field.onChange}
-                  options={currencyOptions.map(currency => ({
-                    value: currency.value,
-                    label: `${currency.flag} ${currency.label}`
-                  }))}
-                  error={errors.country?.message}
-                />
-              )}
-            />
-        </div>
-
-        {/* Old currency section removed as currency field doesn't exist in database */}
-
-        {/* Notes */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Additional Information</h3>
-          
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Notes</label>
-            <Controller
-              name="notes"
-              control={control}
-              render={({ field }) => (
-                <GlassInput
-                  placeholder="Enter additional notes about this supplier"
-                  value={field.value}
-                  onChange={field.onChange}
-                  error={errors.notes?.message}
-                  multiline
-                  rows={2}
-                  maxLength={1000}
-                  helperText={`${field.value?.length || 0}/1000 characters`}
-                />
-              )}
-            />
-          </div>
-        </div>
-
-        {/* Status */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-lats-text">Status</h3>
-          
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0">
-                <svg className="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+                <MessageSquare className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
               </div>
-              <div className="text-sm text-green-700">
-                <p className="font-medium mb-1">New suppliers are automatically active</p>
-                <p>
-                  All new suppliers are set to active by default. You can change this status if needed.
-                </p>
+            </div>
+
+            {/* WeChat */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                WeChat ID
+              </label>
+              <div className="relative">
+                <Controller
+                  name="wechat"
+                  control={control}
+                  render={({ field }) => (
+                    <input
+                      type="text"
+                      {...field}
+                      placeholder="Enter WeChat ID"
+                      className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    />
+                  )}
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-green-600 rounded-sm flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">W</span>
+                </div>
               </div>
             </div>
           </div>
-          
-          <div className="flex items-center space-x-3">
-            <Controller
-              name="is_active"
-              control={control}
-              render={({ field }) => (
-                <div className="flex items-center space-x-2">
+        </div>
+
+        {/* Location */}
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-gray-700 mb-4">Location</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Country */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Country
+              </label>
+              <Controller
+                name="country"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    {...field}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  >
+                    <option value="">Select country</option>
+                    {countryOptions.map(country => (
+                      <option key={country} value={country}>
+                        {country}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+            </div>
+
+            {/* City */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                City
+              </label>
+              <Controller
+                name="city"
+                control={control}
+                render={({ field }) => (
                   <input
-                    type="checkbox"
-                    id="is_active"
-                    checked={field.value}
-                    onChange={(e) => field.onChange(e.target.checked)}
-                    className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                    type="text"
+                    {...field}
+                    placeholder="Enter city"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
                   />
-                  <label htmlFor="is_active" className="text-sm font-medium text-gray-700">
-                    Active Supplier
-                  </label>
-                </div>
-              )}
-            />
-            <span className="text-sm text-gray-500">
-              {watch('is_active') ? 'This supplier is currently active' : 'This supplier is currently inactive'}
-            </span>
+                )}
+              />
+            </div>
+
+            {/* Full Address */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Address
+              </label>
+              <Controller
+                name="address"
+                control={control}
+                render={({ field }) => (
+                  <textarea
+                    {...field}
+                    rows={2}
+                    placeholder="Enter full street address"
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none"
+                  />
+                )}
+              />
+            </div>
           </div>
         </div>
 
-        {/* Form Actions */}
-        <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-lats-glass-border">
-          <GlassButton
-            type="submit"
-            variant="primary"
-            loading={loading}
-            disabled={!isDirty}
-            className="flex-1 sm:flex-none"
-          >
-            {loading ? 'Saving...' : supplier ? 'Update Supplier' : 'Create Supplier'}
-          </GlassButton>
-          
-          <GlassButton
+        {/* Financial Terms */}
+        <div className="mb-6">
+          <h4 className="text-sm font-semibold text-gray-700 mb-4">Financial Terms</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Preferred Currency */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Preferred Currency
+              </label>
+              <Controller
+                name="preferred_currency"
+                control={control}
+                render={({ field }) => (
+                  <select
+                    {...field}
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  >
+                    <option value="">Select currency</option>
+                    {currencyOptions.map(currency => (
+                      <option key={currency.code} value={currency.code}>
+                        {currency.code} - {currency.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              />
+            </div>
+
+            {/* Exchange Rate */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Exchange Rate
+              </label>
+              <Controller
+                name="exchange_rate"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={field.value?.toString() || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === '') {
+                        field.onChange(undefined);
+                      } else {
+                        const numValue = parseFloat(value);
+                        field.onChange(isNaN(numValue) ? undefined : numValue);
+                      }
+                    }}
+                    placeholder={`1 ${selectedCurrency || 'USD'} = ? TZS`}
+                    className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors text-gray-900 ${
+                      errors.exchange_rate ? 'border-red-500 focus:border-red-600' : 'border-gray-200 focus:border-blue-500'
+                    }`}
+                  />
+                )}
+              />
+              {errors.exchange_rate && (
+                <p className="text-red-500 text-sm mt-1">{errors.exchange_rate.message}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Advanced Options - Collapsible */}
+        <div className="mb-6">
+          <button
             type="button"
-            variant="secondary"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border-2 border-gray-200"
+          >
+            <span className="text-sm font-semibold text-gray-700">Advanced Options</span>
+            {showAdvanced ? (
+              <ChevronUp className="w-5 h-5 text-gray-600" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-gray-600" />
+            )}
+          </button>
+
+          {showAdvanced && (
+            <div className="mt-4 p-4 border-2 border-gray-200 rounded-lg bg-gray-50/50">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Tax ID */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tax ID
+                  </label>
+                  <Controller
+                    name="tax_id"
+                    control={control}
+                    render={({ field }) => (
+                      <input
+                        type="text"
+                        {...field}
+                        placeholder="Enter tax identification number"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 bg-white"
+                      />
+                    )}
+                  />
+                </div>
+
+                {/* Payment Terms */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Payment Terms
+                  </label>
+                  <Controller
+                    name="payment_terms"
+                    control={control}
+                    render={({ field }) => (
+                      <input
+                        type="text"
+                        {...field}
+                        placeholder="e.g., Net 30, Net 60, COD"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 bg-white"
+                      />
+                    )}
+                  />
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Description
+                  </label>
+                  <Controller
+                    name="description"
+                    control={control}
+                    render={({ field }) => (
+                      <textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Brief description of the supplier"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none bg-white"
+                      />
+                    )}
+                  />
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes
+                  </label>
+                  <Controller
+                    name="notes"
+                    control={control}
+                    render={({ field }) => (
+                      <textarea
+                        {...field}
+                        rows={3}
+                        placeholder="Any additional information about this supplier"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none bg-white"
+                      />
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* Payment Information for Chinese Suppliers */}
+              {selectedCountry === 'China' && (
+                <div className="mt-6 pt-6 border-t-2 border-gray-300">
+                  <div className="flex items-center gap-2 mb-4">
+                    <h5 className="text-sm font-semibold text-gray-700">Payment Information</h5>
+                    <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-full">🇨🇳 China</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* WeChat Pay QR Code */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        WeChat Pay QR Code
+                      </label>
+                      {!wechatQRCode ? (
+                        <div 
+                          onClick={() => wechatFileInputRef.current?.click()}
+                          className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-green-500 hover:bg-green-50 transition-colors bg-white"
+                        >
+                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-500">Upload WeChat QR</p>
+                          <p className="text-xs text-gray-400 mt-1">Click to browse</p>
+                          <input
+                            ref={wechatFileInputRef}
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => handleQRCodeUpload(e, 'wechat')}
+                          />
+                        </div>
+                      ) : (
+                        <div className="relative w-full h-32 border-2 border-green-300 rounded-lg overflow-hidden bg-green-50">
+                          <img
+                            src={wechatQRCode}
+                            alt="WeChat QR Code"
+                            className="w-full h-full object-contain"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeQRCode('wechat')}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-green-600/90 text-white text-xs py-1 px-2 flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3" />
+                            WeChat Pay
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Alipay QR Code */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Alipay QR Code
+                      </label>
+                      {!alipayQRCode ? (
+                        <div 
+                          onClick={() => alipayFileInputRef.current?.click()}
+                          className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors bg-white"
+                        >
+                          <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                          <p className="text-xs text-gray-500">Upload Alipay QR</p>
+                          <p className="text-xs text-gray-400 mt-1">Click to browse</p>
+                          <input
+                            ref={alipayFileInputRef}
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => handleQRCodeUpload(e, 'alipay')}
+                          />
+                        </div>
+                      ) : (
+                        <div className="relative w-full h-32 border-2 border-blue-300 rounded-lg overflow-hidden bg-blue-50">
+                          <img
+                            src={alipayQRCode}
+                            alt="Alipay QR Code"
+                            className="w-full h-full object-contain"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeQRCode('alipay')}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                          <div className="absolute bottom-0 left-0 right-0 bg-blue-600/90 text-white text-xs py-1 px-2 flex items-center gap-1">
+                            <ImageIcon className="w-3 h-3" />
+                            Alipay
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Bank Account Details */}
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Bank Account Details
+                      </label>
+                      <textarea
+                        value={bankAccount}
+                        onChange={(e) => setBankAccount(e.target.value)}
+                        rows={2}
+                        placeholder="Bank name, Account number, SWIFT/BIC code, etc."
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Form Actions */}
+        <div className="flex gap-3 pt-4 border-t border-gray-200">
+          <button
+            type="button"
             onClick={handleCancel}
             disabled={loading}
-            className="flex-1 sm:flex-none"
+            className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
-          </GlassButton>
+          </button>
+          <button
+            type="submit"
+            disabled={loading || !isDirty}
+            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? 'Saving...' : supplier ? 'Update Supplier' : 'Create Supplier'}
+          </button>
         </div>
       </form>
-    </GlassCard>
+    </div>
   );
 };
-
-// Export with display name for debugging
-SupplierForm.displayName = 'SupplierForm';
 
 export default SupplierForm;

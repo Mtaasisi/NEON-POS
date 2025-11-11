@@ -217,14 +217,20 @@ const CustomerLoyaltyPage: React.FC = () => {
   // Get tier color
   const getTierColor = (tier: string) => {
     switch (tier) {
-      case 'platinum':
+      case 'vip':
         return 'text-purple-600 bg-purple-100';
-      case 'gold':
+      case 'premium':
         return 'text-yellow-600 bg-yellow-100';
-      case 'silver':
+      case 'regular':
+        return 'text-blue-600 bg-blue-100';
+      case 'active':
+        return 'text-green-600 bg-green-100';
+      case 'payment_customer':
+        return 'text-teal-600 bg-teal-100';
+      case 'engaged':
+        return 'text-indigo-600 bg-indigo-100';
+      case 'interested':
         return 'text-gray-600 bg-gray-100';
-      case 'bronze':
-        return 'text-orange-600 bg-orange-100';
       default:
         return 'text-gray-600 bg-gray-100';
     }
@@ -346,16 +352,37 @@ const CustomerLoyaltyPage: React.FC = () => {
       }
 
       // Fetch spare part usage for this customer - TODAY ONLY
+      // First fetch usage records
       const { data: spareData, error: spareError } = await supabase
         .from('lats_spare_part_usage')
-        .select(`
-          *,
-          lats_spare_parts(name, part_number, cost_price, selling_price)
-        `)
+        .select('*')
         .eq('customer_id', customerId)
         .gte('used_at', startOfDay.toISOString())
         .lt('used_at', endOfDay.toISOString())
         .order('used_at', { ascending: false });
+      
+      // Fetch spare part details separately to avoid SQL syntax issues
+      if (!spareError && spareData && spareData.length > 0) {
+        const sparePartIds = [...new Set(spareData.map((u: any) => u.spare_part_id).filter(Boolean))];
+        if (sparePartIds.length > 0) {
+          const { data: spareParts } = await supabase
+            .from('lats_spare_parts')
+            .select('id, name, part_number, cost_price, selling_price')
+            .in('id', sparePartIds);
+          
+          const sparePartsMap = (spareParts || []).reduce((acc: any, sp: any) => {
+            acc[sp.id] = sp;
+            return acc;
+          }, {});
+          
+          // Enrich usage data with spare part details
+          spareData.forEach((usage: any) => {
+            if (usage.spare_part_id) {
+              usage.lats_spare_parts = sparePartsMap[usage.spare_part_id] || null;
+            }
+          });
+        }
+      }
 
       if (!finalPosError && finalPosData) {
         setPosSales(finalPosData);
@@ -635,14 +662,14 @@ const CustomerLoyaltyPage: React.FC = () => {
     const segments = [
       {
         name: 'VIP Customers',
-        criteria: 'Platinum tier with high spending',
-        count: customers.filter(c => c.tier === 'platinum' && c.totalSpent > 100000).length,
+        criteria: 'VIP tier with high spending',
+        count: customers.filter(c => c.tier === 'vip' && c.totalSpent > 100000).length,
         color: 'purple'
       },
       {
         name: 'High Value',
-        criteria: 'Gold tier or high points',
-        count: customers.filter(c => c.tier === 'gold' || c.points > 500).length,
+        criteria: 'Premium tier or high points',
+        count: customers.filter(c => c.tier === 'premium' || c.points > 500).length,
         color: 'yellow'
       },
       {

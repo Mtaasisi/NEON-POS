@@ -32,6 +32,14 @@ export class RealTimeStockService {
   }
 
   /**
+   * Validate if a string is a valid UUID
+   */
+  private isValidUUID(id: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+  }
+
+  /**
    * Get stock levels for multiple products
    * @param productIds Array of product IDs to fetch stock for
    * @returns Object mapping product IDs to their stock levels
@@ -63,16 +71,33 @@ export class RealTimeStockService {
 
       }
 
+      // Filter out invalid UUIDs (e.g., sample products)
+      const validUncachedIds = uncachedIds.filter(id => this.isValidUUID(id));
+      const invalidIds = uncachedIds.filter(id => !this.isValidUUID(id));
+
+      // For invalid IDs (sample products), return empty stock arrays immediately
+      const invalidResults: ProductStockLevels = {};
+      invalidIds.forEach(id => {
+        invalidResults[id] = [];
+      });
+
+      // If no valid IDs to query, return cached + invalid results
+      if (validUncachedIds.length === 0) {
+        return { ...cachedResults, ...invalidResults };
+      }
+
       // Get current branch ID for filtering
       const currentBranchId = getCurrentBranchId();
       
 
       
       // Fetch variants for the uncached products, filtered by current branch + shared
+      // 🔧 FIX: Exclude IMEI children (only fetch parent variants)
       let query = supabase
         .from('lats_product_variants')
-        .select('id, product_id, sku, variant_name, quantity, branch_id, is_shared')
-        .in('product_id', uncachedIds);
+        .select('id, product_id, sku, name, variant_name, quantity, branch_id, is_shared')  // 🔧 FIX: Select both name columns
+        .in('product_id', validUncachedIds)
+        .is('parent_variant_id', null);  // ✅ FIX: Exclude IMEI children
 
       // Apply branch filter if branch ID exists (include shared variants)
       if (currentBranchId) {
@@ -103,18 +128,18 @@ export class RealTimeStockService {
           variantId: variant.id,
           quantity: variant.quantity || 0,
           sku: variant.sku || '',
-          name: variant.variant_name || ''
+          name: variant.variant_name || variant.name || ''  // ✅ FIX: Prioritize variant_name (DB column) first
         });
       });
 
       // Ensure all requested product IDs have an entry (even if empty)
-      uncachedIds.forEach(id => {
+      validUncachedIds.forEach(id => {
         if (!stockLevels[id]) {
           stockLevels[id] = [];
         }
       });
 
-      // Update cache
+      // Update cache (only for valid IDs)
       Object.assign(this.stockCache, stockLevels);
       this.cacheTimestamp = now;
 
@@ -125,8 +150,8 @@ export class RealTimeStockService {
         // console.log removed}...: ${totalStock} units (${levels.length} variants)`);
       });
 
-      // Merge cached and fresh results
-      return { ...cachedResults, ...stockLevels };
+      // Merge cached, fresh, and invalid results
+      return { ...cachedResults, ...stockLevels, ...invalidResults };
     } catch (error) {
       console.error('💥 [RealTimeStockService] Exception fetching stock levels:', error);
       // Return empty arrays for all requested products on error
@@ -166,7 +191,7 @@ export class RealTimeStockService {
 
       let query = supabase
         .from('lats_product_variants')
-        .select('id, product_id, sku, variant_name, quantity, branch_id, is_shared')
+        .select('id, product_id, sku, name, variant_name, quantity, branch_id, is_shared')  // 🔧 FIX: Select both name columns
         .eq('sku', sku);
 
       // Apply branch filter if branch ID exists (include shared variants)
@@ -188,7 +213,7 @@ export class RealTimeStockService {
         variantId: variant.id,
         quantity: variant.quantity || 0,
         sku: variant.sku || '',
-        name: variant.variant_name || ''
+        name: variant.variant_name || variant.name || ''  // ✅ FIX: Prioritize variant_name (DB column) first
       };
     } catch (error) {
       console.error('💥 [RealTimeStockService] Exception fetching stock by SKU:', error);

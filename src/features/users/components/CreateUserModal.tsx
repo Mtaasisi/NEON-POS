@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getAllBranches } from '../../../lib/userBranchApi';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 // Comprehensive list of all available permissions
 export const ALL_PERMISSIONS = {
@@ -152,6 +153,9 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [branches, setBranches] = useState<any[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   const {
     control,
@@ -878,7 +882,6 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
             </button>
           </div>
         </form>
-        </div>
         </div>
       </div>
     </>

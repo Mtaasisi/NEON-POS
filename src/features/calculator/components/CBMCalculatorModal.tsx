@@ -82,8 +82,11 @@ const CBMCalculatorModal: React.FC<CBMCalculatorModalProps> = ({ isOpen, onClose
           pointerEvents: 'none'
         }}
       >
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+        <div 
+          className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          style={{ pointerEvents: 'auto' }}
+        >
+          <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
@@ -273,11 +276,9 @@ const CBMCalculatorModal: React.FC<CBMCalculatorModalProps> = ({ isOpen, onClose
           </div>
         </div>
       </div>
-        </div>
       </div>
     </>
   );
 };
 
 export default CBMCalculatorModal;
-

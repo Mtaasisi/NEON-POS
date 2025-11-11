@@ -3,6 +3,7 @@ import { X, Printer, QrCode, Tag } from 'lucide-react';
 import { useBluetoothPrinter } from '../hooks/useBluetoothPrinter';
 import GlassButton from '../features/shared/components/ui/GlassButton';
 import GlassCard from '../features/shared/components/ui/GlassCard';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface Product {
   id: string;
@@ -35,6 +36,9 @@ export const LabelPrintingModal: React.FC<LabelPrintingModalProps> = ({
     printLabel,
     connectedDevice
   } = useBluetoothPrinter();
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   const [labelData, setLabelData] = useState({
     title: product.name,

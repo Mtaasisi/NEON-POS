@@ -23,6 +23,8 @@ export interface PurchaseOrderStats {
   lastCostPrice: number | null;
   lowestCostPrice: number | null;
   highestCostPrice: number | null;
+  currency: string; // Primary currency used (most common or latest)
+  hasMultipleCurrencies: boolean; // Flag if multiple currencies are present
 }
 
 // Helper function to check if a string is a valid UUID
@@ -100,7 +102,7 @@ export const usePurchaseOrderHistory = (productId: string | undefined) => {
             const poPromises = purchaseOrderIds.map(async (id) => {
               const { data, error } = await supabase
                 .from('lats_purchase_orders')
-                .select('id, po_number, created_at, status, supplier_id')
+                .select('id, po_number, created_at, status, supplier_id, total_amount, currency, exchange_rate, total_amount_base_currency, payment_terms')
                 .eq('id', id)
                 .single();
               
@@ -170,7 +172,7 @@ export const usePurchaseOrderHistory = (productId: string | undefined) => {
             receivedQuantity: item.quantity_received || 0,
             status: po?.status || 'unknown',
             supplierName: supplierMap.get(po?.supplier_id) || 'Unknown',
-            currency: 'TZS', // Default currency
+            currency: po?.currency || 'TZS', // Use PO currency or default to TZS
             poStatus: po?.status || 'draft'
           };
         });
@@ -188,6 +190,15 @@ export const usePurchaseOrderHistory = (productId: string | undefined) => {
           const costPrices = historyItems.map(item => item.costPrice).filter(price => price > 0);
           const lowestCostPrice = costPrices.length > 0 ? Math.min(...costPrices) : null;
           const highestCostPrice = costPrices.length > 0 ? Math.max(...costPrices) : null;
+          
+          // Determine primary currency (use latest order's currency)
+          const currencies = [...new Set(historyItems.map(item => item.currency || 'TZS'))];
+          const primaryCurrency = historyItems[0]?.currency || 'TZS';
+          const hasMultipleCurrencies = currencies.length > 1;
+          
+          if (hasMultipleCurrencies) {
+            console.warn(`⚠️ Multiple currencies detected in purchase history: ${currencies.join(', ')}. Using ${primaryCurrency} for statistics.`);
+          }
 
           setStats({
             totalOrders,
@@ -197,7 +208,9 @@ export const usePurchaseOrderHistory = (productId: string | undefined) => {
             lastOrderDate,
             lastCostPrice,
             lowestCostPrice,
-            highestCostPrice
+            highestCostPrice,
+            currency: primaryCurrency,
+            hasMultipleCurrencies
           });
         } else {
           setStats(null);

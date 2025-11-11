@@ -63,8 +63,12 @@ const MyAttendancePage: React.FC = () => {
         .eq('user_id', currentUser.id)
         .single();
 
-      if (empError) {
-        console.error('Employee not found:', empError);
+      if (empError || !empData) {
+        if (empError) {
+          console.error('Error fetching employee record:', empError);
+        } else {
+          console.warn(`No employee record found for user ${currentUser.id}. User account needs to be linked to an employee.`);
+        }
         toast.error('Employee record not found. Please contact HR.');
         return;
       }
@@ -160,15 +164,61 @@ const MyAttendancePage: React.FC = () => {
   if (!employee) {
     return (
       <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
-        <GlassCard className="p-12 text-center">
+        <BackButton to="/dashboard" />
+        <GlassCard className="p-12 text-center max-w-2xl mx-auto">
           <AlertCircle className="w-16 h-16 text-orange-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Employee Record Not Found</h2>
-          <p className="text-gray-600 mb-4">
-            Your user account is not linked to an employee record.
+          <p className="text-gray-600 mb-6">
+            Your user account is not linked to an employee record in the system.
           </p>
-          <p className="text-sm text-gray-500">
-            Please contact your HR department to link your account.
-          </p>
+          
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 text-left">
+            <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+              <Activity className="w-4 h-4" />
+              Why am I seeing this?
+            </h3>
+            <p className="text-sm text-blue-800 mb-3">
+              To use attendance tracking, your user account needs to be connected to an employee record. 
+              This connection allows the system to track your attendance, performance, and other HR-related data.
+            </p>
+          </div>
+
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 text-left">
+            <h3 className="font-semibold text-gray-900 mb-3">How to fix this:</h3>
+            <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
+              <li>
+                <strong>For Administrators:</strong> Go to User Management, click the "Link" button (🔗), 
+                and use the auto-link feature or manually link users to employees.
+              </li>
+              <li>
+                <strong>For Other Users:</strong> Contact your HR department or system administrator 
+                to link your account ({currentUser?.email}) to your employee record.
+              </li>
+            </ol>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            {currentUser?.role === 'admin' && (
+              <button
+                onClick={() => window.location.href = '/users'}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                Go to User Management
+              </button>
+            )}
+            <button
+              onClick={() => window.location.href = '/dashboard'}
+              className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <p className="text-xs text-gray-500">
+              Your account email: <span className="font-mono font-medium">{currentUser?.email}</span>
+            </p>
+          </div>
         </GlassCard>
       </div>
     );

@@ -25,6 +25,7 @@ yarn-error.log*
 
 # Build outputs
 dist/
+dist-deploy/
 build/
 out/
 server/dist/
@@ -112,3 +113,44 @@ archive/
 # Workspace files (keep in root only)
 **/.code-workspace
 src/**/*.code-workspace
+
+# Auto-generated documentation and reports
+*_REPORT.md
+*_SUMMARY.md
+*_GUIDE.md
+*_COMPLETE.md
+*_STATUS.md
+*_FIX*.md
+*_AUDIT*.md
+*_ANALYSIS.md
+*_REFERENCE.md
+*_VERIFICATION.md
+*_INSTRUCTIONS.md
+*_IMPLEMENTATION*.md
+*_MIGRATION*.md
+*_RESULTS*.md
+*_INDEX*.md
+📊*.md
+🎉*.md
+⭐*.md
+✅*.md
+🚀*.md
+📋*.md
+📖*.md
+🔧*.md
+⚡*.md
+🎯*.md
+📄*.md
+📘*.md
+🔍*.md
+📑*.md
+📂*.md
+🌟*.md
+✨*.md
+📸*.md
+🧪*.md
+🔄*.md
+neon-branches.json
+
+# Local Netlify folder
+.netlify

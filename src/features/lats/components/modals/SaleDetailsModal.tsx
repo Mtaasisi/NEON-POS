@@ -249,7 +249,9 @@ const SaleDetailsModal: React.FC<SaleDetailsModalProps> = ({ isOpen, onClose, sa
         }
       }
 
-      // Fetch variants
+      // Fetch variants (includes both parent and child variants for sale details)
+      // Note: We fetch ALL variants here (including children) because sales may have
+      // sold specific IMEI children, and we need to show those in the sale details
       if (variantIds.length > 0) {
         const { data: variants, error: variantsError } = await supabase
           .from('lats_product_variants')

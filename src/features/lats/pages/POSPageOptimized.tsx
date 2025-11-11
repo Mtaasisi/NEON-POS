@@ -107,7 +107,6 @@ import SuccessModal from '../../../components/ui/SuccessModal';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../components/ui/SuccessModalIcons';
 import ShareReceiptModal from '../../../components/ui/ShareReceiptModal';
-import SerialNumberSelector from '../components/pos/SerialNumberSelector';
 import { 
   useDynamicPricingSettings,
   useGeneralSettings,
@@ -123,6 +122,7 @@ import {
 } from '../../../hooks/usePOSSettings';
 import { useDynamicDelivery } from '../hooks/useDynamicDelivery';
 import { format } from '../lib/format';
+import { usePOSFeatures } from '../hooks/usePOSFeatures';
 
 // Helper function to convert old image format to new format
 // const convertToProductImages = (imageUrls: string[]): ProductImage[] => {
@@ -290,20 +290,20 @@ const POSPageOptimized: React.FC = () => {
   //   areAlertsPermanentlyDisabled
   // } = useInventoryAlertPreferences();
 
-  // Permission checks for current user
+  // Permission checks for current user - now checks user.permissions array first!
   const userRole = currentUser?.role as UserRole;
-  const canAccessPOS = rbacManager.can(userRole, 'pos', 'view');
-  const canSell = rbacManager.can(userRole, 'pos', 'sell');
-  const canRefund = rbacManager.can(userRole, 'pos', 'refund');
-  const canVoid = rbacManager.can(userRole, 'pos', 'void');
-  const canViewInventory = rbacManager.can(userRole, 'pos-inventory', 'view');
-  const canSearchInventory = rbacManager.can(userRole, 'pos-inventory', 'search');
-  const canAddToCart = rbacManager.can(userRole, 'pos-inventory', 'add-to-cart');
-  const canCreateSales = rbacManager.can(userRole, 'sales', 'create');
-  const canViewSales = rbacManager.can(userRole, 'sales', 'view');
-  const canEditSales = rbacManager.can(userRole, 'sales', 'edit');
-  const canDeleteSales = rbacManager.can(userRole, 'sales', 'delete');
-  const canRefundSales = rbacManager.can(userRole, 'sales', 'refund');
+  const canAccessPOS = rbacManager.canUser(currentUser, 'pos', 'view');
+  const canSell = rbacManager.canUser(currentUser, 'pos', 'sell');
+  const canRefund = rbacManager.canUser(currentUser, 'pos', 'refund');
+  const canVoid = rbacManager.canUser(currentUser, 'pos', 'void');
+  const canViewInventory = rbacManager.canUser(currentUser, 'pos-inventory', 'view');
+  const canSearchInventory = rbacManager.canUser(currentUser, 'pos-inventory', 'search');
+  const canAddToCart = rbacManager.canUser(currentUser, 'pos-inventory', 'add-to-cart');
+  const canCreateSales = rbacManager.canUser(currentUser, 'sales', 'create');
+  const canViewSales = rbacManager.canUser(currentUser, 'sales', 'view');
+  const canEditSales = rbacManager.canUser(currentUser, 'sales', 'edit');
+  const canDeleteSales = rbacManager.canUser(currentUser, 'sales', 'delete');
+  const canRefundSales = rbacManager.canUser(currentUser, 'sales', 'refund');
 
   // Get payment methods from global context
   // const { paymentMethods: dbPaymentMethods, loading: paymentMethodsLoading } = usePaymentMethodsContext();
@@ -337,6 +337,9 @@ const POSPageOptimized: React.FC = () => {
   // Track if initial data load has been triggered
   const initialLoadTriggered = useRef(false);
 
+  // Track stock adjustments for products/variants when added to cart
+  const [stockAdjustments, setStockAdjustments] = useState<Map<string, number>>(new Map());
+
   // Transform products with category information - OPTIMIZED
   const products = useMemo(() => {
     if (dbProducts.length === 0) {
@@ -349,11 +352,29 @@ const POSPageOptimized: React.FC = () => {
     // DON'T WAIT FOR CATEGORIES - Show products immediately!
     // If no categories loaded yet, return products without category info
     if (categories.length === 0) {
-      return filteredDbProducts.map(product => ({
-        ...product,
-        categoryName: 'Uncategorized',
-        category: undefined
-      }));
+      return filteredDbProducts.map(product => {
+        // Apply stock adjustments to variants
+        const adjustedVariants = product.variants?.map((variant: any) => {
+          const variantKey = `${product.id}-${variant.id}`;
+          const stockAdjustment = stockAdjustments.get(variantKey) || 0;
+          const originalQuantity = variant.stockQuantity ?? variant.quantity ?? 0;
+          const adjustedQuantity = Math.max(0, originalQuantity - stockAdjustment);
+          
+          return {
+            ...variant,
+            quantity: adjustedQuantity,
+            stockQuantity: adjustedQuantity,
+            _originalQuantity: originalQuantity
+          };
+        });
+        
+        return {
+          ...product,
+          variants: adjustedVariants,
+          categoryName: 'Uncategorized',
+          category: undefined
+        };
+      });
     }
     
     return filteredDbProducts.map(product => {
@@ -385,8 +406,25 @@ const POSPageOptimized: React.FC = () => {
         }
       }
       
+      // Apply stock adjustments to variants
+      const adjustedVariants = product.variants?.map((variant: any) => {
+        const variantKey = `${product.id}-${variant.id}`;
+        const stockAdjustment = stockAdjustments.get(variantKey) || 0;
+        const originalQuantity = variant.stockQuantity ?? variant.quantity ?? 0;
+        const adjustedQuantity = Math.max(0, originalQuantity - stockAdjustment);
+        
+        return {
+          ...variant,
+          quantity: adjustedQuantity,
+          stockQuantity: adjustedQuantity,
+          // Keep original quantity for reference
+          _originalQuantity: originalQuantity
+        };
+      });
+      
       return {
         ...product,
+        variants: adjustedVariants,
         categoryName,
         // Ensure category object is available for backward compatibility
         category: product.category || (foundCategory ? {
@@ -397,7 +435,7 @@ const POSPageOptimized: React.FC = () => {
         } : undefined)
       };
     });
-  }, [dbProducts, categories]);
+  }, [dbProducts, categories, stockAdjustments]);
 
   // Log product load status only when products change (not on every render)
   useEffect(() => {
@@ -437,6 +475,16 @@ const POSPageOptimized: React.FC = () => {
 
   // Settings state
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Feature toggles - Load from localStorage
+  const { 
+    features, 
+    isDeliveryEnabled, 
+    isLoyaltyEnabled, 
+    isCustomerProfilesEnabled, 
+    isPaymentTrackingEnabled, 
+    isDynamicPricingEnabled 
+  } = usePOSFeatures();
 
   // Customer state
   const [customerName, setCustomerName] = useState('');
@@ -556,9 +604,6 @@ const POSPageOptimized: React.FC = () => {
   const [showCustomerDetails, setShowCustomerDetails] = useState(false);
   const [selectedCustomerForDetails, setSelectedCustomerForDetails] = useState<any>(null);
   
-  // Serial number selection state
-  const [showSerialNumberSelector, setShowSerialNumberSelector] = useState(false);
-  const [serialNumberProduct, setSerialNumberProduct] = useState<{productId: string; productName: string; variantId?: string; quantity: number; cartItemId: string} | null>(null);
   const [showLoyaltyPoints, setShowLoyaltyPoints] = useState(false);
   const [pointsToAdd, setPointsToAdd] = useState('');
   const [pointsReason, setPointsReason] = useState('');
@@ -577,6 +622,10 @@ const POSPageOptimized: React.FC = () => {
   const [tradeInData, setTradeInData] = useState<any>(null);
   const [tradeInTransaction, setTradeInTransaction] = useState<any>(null);
   const [tradeInDiscount, setTradeInDiscount] = useState(0);
+  
+  // Use a ref to persist the trade-in transaction throughout the payment flow
+  // This prevents the state from being lost due to React's async state updates
+  const tradeInTransactionRef = useRef<any>(null);
 
   // Payment tracking
   const [showPaymentTracking, setShowPaymentTracking] = useState(false);
@@ -623,7 +672,8 @@ const POSPageOptimized: React.FC = () => {
   // Check if user has permission to close daily sales
   const canCloseDailySales = useMemo(() => {
     if (!currentUser) return false;
-    return rbacManager.hasPermission(currentUser.role, 'reports', 'daily-close') || 
+    // Now checks user.permissions array first, then falls back to role
+    return rbacManager.canUser(currentUser, 'reports', 'daily-close') || 
            currentUser.role === 'admin' || 
            currentUser.role === 'manager' ||
            currentUser.role === 'owner';
@@ -635,7 +685,26 @@ const POSPageOptimized: React.FC = () => {
     const dismissedToday = localStorage.getItem('inventoryAlertsDismissedToday');
     if (dismissedToday === today) {
       setAlertsDismissedToday(true);
+    } else {
+      // Clear the flag if it's a new day
+      setAlertsDismissedToday(false);
+      localStorage.removeItem('inventoryAlertsDismissedToday');
     }
+    
+    // Set up interval to check for day change (check every minute)
+    const checkDayInterval = setInterval(() => {
+      const currentDay = new Date().toDateString();
+      const storedDay = localStorage.getItem('inventoryAlertsDismissedToday');
+      
+      if (storedDay && storedDay !== currentDay) {
+        // It's a new day, reset the dismissed flag
+        setAlertsDismissedToday(false);
+        localStorage.removeItem('inventoryAlertsDismissedToday');
+        console.log('🔔 New day detected - low stock alerts will show again');
+      }
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(checkDayInterval);
   }, []);
 
   // Check for low stock on data load
@@ -826,6 +895,54 @@ const POSPageOptimized: React.FC = () => {
     }
   };
 
+  // Feature toggle wrappers - Check if features are enabled before allowing access
+  const handleShowCustomerSelectionModal = () => {
+    if (!isCustomerProfilesEnabled()) {
+      toast.error('Customer Profiles feature is disabled. Enable it in POS Settings > Features');
+      return;
+    }
+    setShowCustomerSelectionModal(true);
+  };
+
+  const handleShowAddCustomerModal = () => {
+    if (!isCustomerProfilesEnabled()) {
+      toast.error('Customer Profiles feature is disabled. Enable it in POS Settings > Features');
+      return;
+    }
+    setShowAddCustomerModal(true);
+  };
+
+  const handleShowDeliverySection = () => {
+    if (!isDeliveryEnabled()) {
+      toast.error('Delivery Management feature is disabled. Enable it in POS Settings > Features');
+      return;
+    }
+    setShowDeliverySection(true);
+  };
+
+  const handleShowLoyaltyPoints = () => {
+    if (!isLoyaltyEnabled()) {
+      toast.error('Loyalty Program feature is disabled. Enable it in POS Settings > Features');
+      return;
+    }
+    setShowLoyaltyPoints(true);
+  };
+
+  const handleShowPaymentTracking = () => {
+    if (!isPaymentTrackingEnabled()) {
+      toast.error('Payment Tracking feature is disabled. Enable it in POS Settings > Features');
+      return;
+    }
+    setShowPaymentTracking(true);
+  };
+
+  const handleShowSalesAnalytics = () => {
+    if (!isDynamicPricingEnabled()) {
+      toast.error('Dynamic Pricing feature is disabled. Enable it in POS Settings > Features');
+      return;
+    }
+    setShowSalesAnalytics(true);
+  };
 
   const handleUnifiedSearch = (query: string) => {
     // Check if it's a barcode
@@ -1300,48 +1417,51 @@ const POSPageOptimized: React.FC = () => {
     }
   }, [showReceiptHistory, dbSales]);
 
-  // Cart functionality with error handling (optimized with useCallback)
-  // Check if product has serial numbers and open selector
-  const checkAndOpenSerialNumberSelector = useCallback(async (cartItem: any, productId: string, variantId?: string) => {
+  // Check if product has IMEI variants (parent-child system)
+  // This is called BEFORE adding to cart to allow variant selection
+  const checkForIMEIVariants = useCallback(async (product: any): Promise<boolean> => {
     try {
-      // Optimized: Open modal immediately and let it handle the loading
-      // This prevents double-querying and makes the UI feel instant
-      setSerialNumberProduct({
-        productId: productId,
-        productName: cartItem.productName,
-        variantId: variantId,
-        quantity: cartItem.quantity,
-        cartItemId: cartItem.id
-      });
-      setShowSerialNumberSelector(true);
-      
-      // The modal will check if items exist and show "No items available" if needed
+      // ✅ NEW: Check for parent variants with IMEI children
+      const { data: parentVariants } = await supabase
+        .from('lats_product_variants')
+        .select('id, variant_name, name, is_parent, variant_type, quantity')
+        .eq('product_id', product.id)
+        .eq('is_active', true)
+        .is('parent_variant_id', null) // Only parents
+        .gt('quantity', 0);
+
+      if (!parentVariants || parentVariants.length === 0) {
+        return false; // No variants with stock
+      }
+
+      // Check if any parent has IMEI children
+      for (const parent of parentVariants) {
+        if (parent.is_parent || parent.variant_type === 'parent') {
+          // This is a parent - check if it has IMEI children
+          const { count } = await supabase
+            .from('lats_product_variants')
+            .select('id', { count: 'exact', head: true })
+            .eq('parent_variant_id', parent.id)
+            .eq('variant_type', 'imei_child')
+            .eq('is_active', true)
+            .gt('quantity', 0);
+
+          if (count && count > 0) {
+            console.log(`✅ Parent variant "${parent.variant_name}" has ${count} IMEI children`);
+            return true; // Has IMEI children - show selector
+          }
+        }
+      }
+
+      return false; // No IMEI children found
     } catch (error) {
-      console.warn('Could not open serial number selector:', error);
+      console.error('Error checking for IMEI variants:', error);
+      return false; // On error, proceed with direct add
     }
   }, []);
 
-  // Handle serial number selection
-  const handleSerialNumbersSelected = useCallback((selectedItems: any[]) => {
-    if (!serialNumberProduct) return;
 
-    // Update cart item with selected serial numbers (append to existing ones)
-    setCartItems(prev => prev.map(item => {
-      if (item.id === serialNumberProduct.cartItemId) {
-        const existingSerials = item.selectedSerialNumbers || [];
-        const newSerials = [...existingSerials, ...selectedItems];
-        return { ...item, selectedSerialNumbers: newSerials };
-      }
-      return item;
-    }));
-
-    console.log('✅ Serial numbers selected for cart item:', serialNumberProduct.cartItemId, selectedItems);
-    toast.success(`${selectedItems.length} device(s) selected`);
-    setShowSerialNumberSelector(false);
-    setSerialNumberProduct(null);
-  }, [serialNumberProduct]);
-
-  const addToCart = useCallback((product: any, variant?: any, quantity: number = 1) => {
+  const addToCart = useCallback(async (product: any, variant?: any, quantity: number = 1) => {
     try {
       // Check permissions
       if (!canAddToCart) {
@@ -1354,6 +1474,16 @@ const POSPageOptimized: React.FC = () => {
         toast.error('Invalid product. Please try again.');
         console.error('Invalid product object:', product);
         return;
+      }
+
+      // If no variant specified, check if this product has IMEI variants that need selection
+      if (!variant || variant.id === 'default') {
+        const hasIMEIVariants = await checkForIMEIVariants(product);
+        if (hasIMEIVariants) {
+          toast.error('Please select a specific device variant first');
+          console.log('⚠️ Product has IMEI variants, variant selection required');
+          return;
+        }
       }
 
       // Validate price and ensure it's a number - check multiple field names
@@ -1374,12 +1504,15 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
-      // Check stock availability - check multiple field names
-      const availableStock = variant?.stockQuantity ?? variant?.quantity ?? product.stockQuantity ?? product.quantity ?? 0;
+      // Check stock availability - use ORIGINAL stock (before cart adjustments)
+      // The variant may have adjusted stock from our stock tracking, so use _originalQuantity
+      const originalStock = variant?._originalQuantity ?? variant?.stockQuantity ?? variant?.quantity ?? product.stockQuantity ?? product.quantity ?? 0;
+      const availableStock = originalStock;
       
       console.log('🔍 Stock check:', {
         productName: product.name,
         variantName: variant?.name,
+        originalStock,
         availableStock,
         variantStockQuantity: variant?.stockQuantity,
         variantQuantity: variant?.quantity,
@@ -1398,7 +1531,7 @@ const POSPageOptimized: React.FC = () => {
       );
 
       if (existingItem) {
-        // Check if adding more would exceed available stock
+        // Check if adding more would exceed ORIGINAL available stock
         if (existingItem.quantity + quantity > availableStock) {
           toast.error(`Only ${availableStock} units available for ${product.name}`);
           return;
@@ -1416,16 +1549,24 @@ const POSPageOptimized: React.FC = () => {
             ? { ...item, quantity: newQuantity, totalPrice: newTotalPrice }
             : item
         ));
-        toast.success(`${product.name} quantity updated to ${newQuantity}`);
         
-        // Check if we need to select more serial numbers
-        const currentSerialCount = existingItem.selectedSerialNumbers?.length || 0;
-        if (currentSerialCount < newQuantity) {
-          // Need to select more serial numbers - only for the additional quantity
-          const additionalQuantity = newQuantity - currentSerialCount;
-          const updatedItem = { ...existingItem, quantity: additionalQuantity }; // Temporarily set quantity to only the additional items needed
-          checkAndOpenSerialNumberSelector(updatedItem, product.id, variant?.id);
+        // Update stock adjustments - track how much stock has been used
+        const variantKey = `${product.id}-${variant?.id || 'default'}`;
+        const currentAdjustment = stockAdjustments.get(variantKey) || 0;
+        const newAdjustment = currentAdjustment + quantity;
+        
+        setStockAdjustments(prev => {
+          const updated = new Map(prev);
+          updated.set(variantKey, newAdjustment);
+          return updated;
+        });
+        
+        // Check if this makes the product out of stock
+        if (availableStock - newAdjustment <= 0) {
+          console.log(`🔴 Product now out of stock: ${product.name} (${variant?.name || 'Default'})`);
         }
+        
+        toast.success(`${product.name} quantity updated to ${newQuantity}`);
       } else {
         const newItem = {
           id: `${product.id}-${variant?.id || 'default'}-${Date.now()}`,
@@ -1439,15 +1580,29 @@ const POSPageOptimized: React.FC = () => {
           totalPrice: price * quantity,
           availableQuantity: availableStock,
           image: product.thumbnail_url || product.image,
-          selectedSerialNumbers: [] // Initialize empty serial numbers array
+          selectedIMEIVariants: variant && variant.attributes?.imei ? [variant] : [] // Store IMEI variant if provided
         };
         
         console.log('✅ Adding to cart:', newItem);
         
         setCartItems(prev => [...prev, newItem]);
         
-        // Check if product has serial numbers and open selector
-        checkAndOpenSerialNumberSelector(newItem, product.id, variant?.id);
+        // Update stock adjustments - track how much stock has been used
+        const variantKey = `${product.id}-${variant?.id || 'default'}`;
+        const currentAdjustment = stockAdjustments.get(variantKey) || 0;
+        const newAdjustment = currentAdjustment + quantity;
+        
+        setStockAdjustments(prev => {
+          const updated = new Map(prev);
+          updated.set(variantKey, newAdjustment);
+          return updated;
+        });
+        
+        // Check if this makes the product out of stock
+        if (availableStock - newAdjustment <= 0) {
+          console.log(`🔴 Product now out of stock: ${product.name} (${variant?.name || 'Default'})`);
+          toast(`${product.name} is now out of stock`, { icon: 'ℹ️' });
+        }
         
         toast.success(`${quantity}x ${product.name} added to cart`);
       }
@@ -1455,7 +1610,7 @@ const POSPageOptimized: React.FC = () => {
       console.error('❌ Error adding to cart:', error);
       toast.error('Failed to add item to cart. Please try again.');
     }
-  }, [canAddToCart, cartItems]);
+  }, [canAddToCart, cartItems, checkForIMEIVariants, stockAdjustments]);
 
   const updateCartItemQuantity = useCallback((itemId: string, quantity: number) => {
     try {
@@ -1494,14 +1649,58 @@ const POSPageOptimized: React.FC = () => {
         : Number(existingItem.unitPrice);
       const newTotalPrice = quantity * unitPrice;
 
+      // Calculate the difference in quantity to update stock adjustments
+      const quantityDifference = quantity - existingItem.quantity;
+      const variantKey = `${existingItem.productId}-${existingItem.variantId}`;
+      
       setCartItems(prev => prev.map(item => 
         item.id === itemId 
           ? { ...item, quantity, totalPrice: newTotalPrice }
           : item
       ));
+      
+      // Update stock adjustments based on the quantity change
+      setStockAdjustments(prev => {
+        const updated = new Map(prev);
+        const currentAdjustment = updated.get(variantKey) || 0;
+        const newAdjustment = currentAdjustment + quantityDifference;
+        
+        if (newAdjustment <= 0) {
+          updated.delete(variantKey);
+        } else {
+          updated.set(variantKey, newAdjustment);
+        }
+        return updated;
+      });
     } catch (error) {
       console.error('Error updating cart item quantity:', error);
       toast.error('Failed to update item quantity. Please try again.');
+    }
+  }, [cartItems]);
+
+  const updateCartItemTags = useCallback((itemId: string, tags: string[]) => {
+    try {
+      if (!itemId) {
+        toast.error('Invalid item ID. Please try again.');
+        return;
+      }
+
+      const existingItem = cartItems.find(item => item.id === itemId);
+      if (!existingItem) {
+        toast.error('Item not found in cart.');
+        return;
+      }
+
+      setCartItems(prev => prev.map(item => 
+        item.id === itemId 
+          ? { ...item, tags }
+          : item
+      ));
+      
+      console.log('✅ Updated tags for item:', itemId, tags);
+    } catch (error) {
+      console.error('Error updating cart item tags:', error);
+      toast.error('Failed to update item tags. Please try again.');
     }
   }, [cartItems]);
 
@@ -1515,6 +1714,22 @@ const POSPageOptimized: React.FC = () => {
       const itemToRemove = cartItems.find(item => item.id === itemId);
       if (itemToRemove) {
         setCartItems(prev => prev.filter(item => item.id !== itemId));
+        
+        // Update stock adjustments - remove the quantity from adjustments
+        const variantKey = `${itemToRemove.productId}-${itemToRemove.variantId}`;
+        setStockAdjustments(prev => {
+          const updated = new Map(prev);
+          const currentAdjustment = updated.get(variantKey) || 0;
+          const newAdjustment = currentAdjustment - itemToRemove.quantity;
+          
+          if (newAdjustment <= 0) {
+            updated.delete(variantKey);
+          } else {
+            updated.set(variantKey, newAdjustment);
+          }
+          return updated;
+        });
+        
         toast.success(`${itemToRemove.productName} removed from cart`);
       } else {
         toast.error('Item not found in cart.');
@@ -1533,6 +1748,7 @@ const POSPageOptimized: React.FC = () => {
       }
       
       setCartItems([]);
+      setStockAdjustments(new Map()); // Clear stock adjustments
       setManualDiscount(0);
       setDiscountValue('');
       setDiscountType('percentage');
@@ -1607,51 +1823,45 @@ const POSPageOptimized: React.FC = () => {
         // Don't return, just show warning
       }
 
-      // Validate IMEI/Serial Numbers are selected for items that require them
-      const itemsRequiringSerialNumbers = await Promise.all(
+      // Validate IMEI Variants are selected for items that require them
+      const itemsRequiringIMEIVariants = await Promise.all(
         cartItems.map(async (item) => {
           try {
-            // Check if this product has items with serial numbers/IMEI
-            let query = supabase
-              .from('inventory_items')
-              .select('id, serial_number, imei, mac_address')
+            // Check if this product has IMEI variants (new system)
+            const { data: imeiVariants } = await supabase
+              .from('lats_product_variants')
+              .select('id, variant_attributes')
               .eq('product_id', item.productId)
-              .eq('status', 'available');
+              .not('variant_attributes->imei', 'is', null)
+              .eq('is_active', true)
+              .gt('quantity', 0)
+              .limit(1);
             
-            if (item.variantId) {
-              query = query.eq('variant_id', item.variantId);
-            }
-            
-            const { data: serialItems } = await query.limit(1);
-            
-            if (serialItems && serialItems.length > 0) {
-              const hasTrackingInfo = serialItems.some(si => 
-                si.serial_number || si.imei || si.mac_address
-              );
+            if (imeiVariants && imeiVariants.length > 0) {
+              // This product has IMEI variants, check if they're selected
+              const hasSelected = item.selectedIMEIVariants && item.selectedIMEIVariants.length > 0;
               
-              if (hasTrackingInfo) {
-                return {
-                  item,
-                  requiresSerial: true,
-                  hasSelected: item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0
-                };
-              }
+              return {
+                item,
+                requiresIMEI: true,
+                hasSelected: hasSelected
+              };
             }
             return null;
           } catch (error) {
-            console.warn('Error checking serial numbers for item:', item, error);
+            console.warn('Error checking IMEI variants for item:', item, error);
             return null;
           }
         })
       );
 
-      const itemsMissingSerials = itemsRequiringSerialNumbers
-        .filter(result => result !== null && result.requiresSerial && !result.hasSelected);
+      const itemsMissingIMEI = itemsRequiringIMEIVariants
+        .filter(result => result !== null && result.requiresIMEI && !result.hasSelected);
 
-      if (itemsMissingSerials.length > 0) {
-        const itemNames = itemsMissingSerials.map(result => result!.item.productName).join(', ');
+      if (itemsMissingIMEI.length > 0) {
+        const itemNames = itemsMissingIMEI.map(result => result!.item.productName).join(', ');
         toast.error(`Please select IMEI/Serial numbers for: ${itemNames}`);
-        console.error('❌ Missing IMEI/Serial numbers for items:', itemsMissingSerials);
+        console.error('❌ Missing IMEI variants for items:', itemsMissingIMEI);
         return;
       }
 
@@ -1698,16 +1908,36 @@ const POSPageOptimized: React.FC = () => {
 
   const handleTradeInComplete = async (data: any) => {
     console.log('✅ handleTradeInComplete called with data:', data);
+    console.log('🔍 Function type:', typeof handleTradeInComplete);
+    console.log('🔍 Data type:', typeof data);
+    console.log('🔍 Selected customer:', selectedCustomer?.id, selectedCustomer?.name);
+    console.log('🔍 Cart items:', cartItems.length, cartItems);
+    
+    if (!selectedCustomer) {
+      console.error('❌ No customer selected - cannot create trade-in');
+      toast.error('Please select a customer before adding trade-in');
+      return;
+    }
+    
+    if (cartItems.length === 0) {
+      console.error('❌ No items in cart - cannot create trade-in');
+      toast.error('Please add items to cart before trade-in');
+      return;
+    }
+    
     setTradeInData(data);
     
     // Apply trade-in value as discount
     setTradeInDiscount(data.final_trade_in_value);
     console.log('💰 Trade-in discount set:', data.final_trade_in_value);
     
+    console.log('📝 About to start try block...');
+    
     // Create transaction
     try {
-      console.log('📝 Creating trade-in transaction...');
+      console.log('📝 Creating trade-in transaction - STARTING...');
       const { createTradeInTransaction } = await import('../lib/tradeInApi');
+      console.log('📝 createTradeInTransaction imported successfully');
       
       // Get product and variant from cart (first item if multiple)
       const firstCartItem = cartItems[0];
@@ -1734,10 +1964,14 @@ const POSPageOptimized: React.FC = () => {
         new_device_price: finalAmount,
         customer_payment_amount: data.customer_payment_amount,
       });
+      
+      console.log('📝 Transaction creation result:', result);
 
       if (result.success && result.data) {
         console.log('✅ Trade-in transaction created successfully:', result.data);
+        console.log('📝 Setting tradeInTransaction state to:', result.data.id);
         setTradeInTransaction(result.data);
+        tradeInTransactionRef.current = result.data; // Also store in ref for reliable access
         setShowTradeInCalculator(false);
         toast.success(`Trade-in added: ${data.trade_in_details.device_name} for ${data.final_trade_in_value.toLocaleString()} TZS`);
         
@@ -1750,6 +1984,7 @@ const POSPageOptimized: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ Error creating trade-in transaction:', error);
+      console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       toast.error('Failed to create trade-in transaction');
     }
   };
@@ -1760,6 +1995,8 @@ const POSPageOptimized: React.FC = () => {
     // Contract is now linked to the trade-in transaction
     // Continue with normal sale process - open payment modal
     console.log('✅ Contract signed, proceeding to payment...');
+    console.log('🔍 Trade-in transaction state at contract sign:', tradeInTransaction?.id || 'none');
+    console.log('🔍 Trade-in transaction ref at contract sign:', tradeInTransactionRef.current?.id || 'none');
     
     // Open payment modal to complete the sale as normal
     setTimeout(() => {
@@ -1797,6 +2034,7 @@ const POSPageOptimized: React.FC = () => {
         
         // Clear trade-in data after successful inventory addition
         setTradeInTransaction(null);
+        tradeInTransactionRef.current = null; // Also clear the ref
         setTradeInData(null);
         setTradeInDiscount(0);
         
@@ -1812,7 +2050,8 @@ const POSPageOptimized: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ Error adding trade-in to inventory:', error);
-      toast.error('Failed to add trade-in to inventory');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add trade-in to inventory';
+      toast.error(errorMessage);
     }
   };
 
@@ -1878,8 +2117,8 @@ const POSPageOptimized: React.FC = () => {
           onRemoveCartItem={removeCartItem}
           onProcessPayment={handleProcessPayment}
           onClearCart={clearCart}
-          onShowCustomerSearch={() => setShowCustomerSelectionModal(true)}
-          onAddCustomer={() => setShowAddCustomerModal(true)}
+          onShowCustomerSearch={() => handleShowCustomerSelectionModal()}
+          onAddCustomer={() => handleShowAddCustomerModal()}
           onRemoveCustomer={handleRemoveCustomer}
           onScanBarcode={startQrCodeScanner}
           onViewReceipts={() => alert('Receipts view coming soon!')}
@@ -1928,6 +2167,10 @@ const POSPageOptimized: React.FC = () => {
             setSelectedCustomer(customer);
             setShowAddCustomerModal(false);
             toast.success(`New customer "${customer.name}" created and selected!`);
+          }}
+          onAddAnother={() => {
+            // Reopen modal for adding another customer
+            setShowAddCustomerModal(true);
           }}
         />
 
@@ -2117,6 +2360,56 @@ const POSPageOptimized: React.FC = () => {
                 const displayAmount = totalPaid || finalAmount;
                 const saleNumber = result.sale?.saleNumber;
                 
+                // ✅ If there's a trade-in transaction, handle based on user role
+                const activeTradeInTransaction = tradeInTransaction || tradeInTransactionRef.current;
+                const isAdmin = userRole === 'admin';
+                
+                if (activeTradeInTransaction && activeTradeInTransaction.id) {
+                  try {
+                    if (isAdmin) {
+                      // Admin: Mark as completed and show pricing modal
+                      console.log('📝 [ADMIN] Marking trade-in transaction as completed:', activeTradeInTransaction.id);
+                      const { completeTradeInTransaction } = await import('../lib/tradeInApi');
+                      const completionResult = await completeTradeInTransaction(activeTradeInTransaction.id);
+                      
+                      if (completionResult.success) {
+                        console.log('✅ Trade-in transaction marked as completed');
+                        setTradeInTransaction(completionResult.data);
+                        tradeInTransactionRef.current = completionResult.data;
+                      } else {
+                        console.error('❌ Failed to mark trade-in as completed:', completionResult.error);
+                        toast.error('Warning: Failed to mark trade-in as completed');
+                      }
+                    } else {
+                      // Customer Care: Mark as approved for admin review
+                      console.log('📝 [CUSTOMER CARE] Marking trade-in transaction as approved for admin review:', activeTradeInTransaction.id);
+                      const { data, error } = await supabase
+                        .from('lats_trade_in_transactions')
+                        .update({
+                          status: 'approved',
+                          approved_at: new Date().toISOString(),
+                          approved_by: currentUser?.id || null,
+                        })
+                        .eq('id', activeTradeInTransaction.id)
+                        .select()
+                        .single();
+                      
+                      if (!error && data) {
+                        console.log('✅ Trade-in marked as approved, awaiting admin to add to inventory');
+                        toast.success('✅ Trade-in submitted for admin review. Admin will add device to inventory with pricing.');
+                        setTradeInTransaction(data);
+                        tradeInTransactionRef.current = data;
+                      } else {
+                        console.error('❌ Failed to mark trade-in as approved:', error);
+                        toast.error('Warning: Failed to submit trade-in for approval');
+                      }
+                    }
+                  } catch (error) {
+                    console.error('❌ Error updating trade-in status:', error);
+                    toast.error('Warning: Failed to update trade-in status');
+                  }
+                }
+                
                 // Prepare receipt data BEFORE clearing anything
                 const receiptData = {
                   id: result.sale?.id || '',
@@ -2289,9 +2582,7 @@ const POSPageOptimized: React.FC = () => {
         onProcessPayment={handleProcessPayment}
         onClearCart={clearCart}
         onScanQrCode={isQrCodeScannerEnabled ? startQrCodeScanner : () => {}}
-        onAddCustomer={() => {
-          setShowAddCustomerModal(true);
-        }}
+        onAddCustomer={() => handleShowAddCustomerModal()}
         onViewReceipts={() => {
           alert('Receipts view coming soon!');
         }}
@@ -2301,17 +2592,17 @@ const POSPageOptimized: React.FC = () => {
           navigate('/lats/sales-reports');
         }}
         onOpenPaymentTracking={() => {
-          setShowPaymentTracking(true);
+          handleShowPaymentTracking();
         }}
         onOpenDrafts={() => setShowDraftModal(true)}
         isProcessingPayment={isProcessingPayment}
         hasSelectedCustomer={!!selectedCustomer}
         draftCount={getAllDrafts().length}
         // Bottom bar actions moved to top bar
-        onViewAnalytics={() => setShowSalesAnalytics(true)}
-        onPaymentTracking={() => setShowPaymentTracking(true)}
-        onCustomers={() => setShowAddCustomerModal(true)}
-        onReports={() => setShowSalesAnalytics(true)}
+        onViewAnalytics={() => handleShowSalesAnalytics()}
+        onPaymentTracking={() => handleShowPaymentTracking()}
+        onCustomers={() => handleShowAddCustomerModal()}
+        onReports={() => handleShowSalesAnalytics()}
         onRefreshData={handleRefreshData}
         onSettings={() => setShowSettings(true)}
         todaysSales={todaysSales}
@@ -2384,10 +2675,11 @@ const POSPageOptimized: React.FC = () => {
             cartItems={cartItems}
             selectedCustomer={selectedCustomer}
             onRemoveCustomer={handleRemoveCustomer}
-            onShowCustomerSearch={() => setShowCustomerSelectionModal(true)}
+            onShowCustomerSearch={() => handleShowCustomerSelectionModal()}
             onShowCustomerDetails={handleShowCustomerDetails}
             onUpdateCartItemQuantity={updateCartItemQuantity}
             onRemoveCartItem={removeCartItem}
+            onUpdateCartItemTags={updateCartItemTags}
             onApplyDiscount={(_type, value) => {
               // Calculate the actual discount amount based on type
               const discountAmount = _type === 'percentage' 
@@ -2428,36 +2720,45 @@ const POSPageOptimized: React.FC = () => {
         }}
       />
 
-      <CustomerSelectionModal
-        isOpen={showCustomerSelectionModal}
-        onClose={() => setShowCustomerSelectionModal(false)}
-        onCustomerSelect={(customer) => {
-          setSelectedCustomer(customer);
-          setShowCustomerSelectionModal(false);
-          toast.success(`Customer "${customer.name}" selected!`);
-        }}
-        selectedCustomer={selectedCustomer}
-      />
+      {/* Customer Selection Modal - Only if feature is enabled */}
+      {isCustomerProfilesEnabled() && (
+        <>
+          <CustomerSelectionModal
+            isOpen={showCustomerSelectionModal}
+            onClose={() => setShowCustomerSelectionModal(false)}
+            onCustomerSelect={(customer) => {
+              setSelectedCustomer(customer);
+              setShowCustomerSelectionModal(false);
+              toast.success(`Customer "${customer.name}" selected!`);
+            }}
+            selectedCustomer={selectedCustomer}
+          />
 
-      <AddCustomerModal
-        isOpen={showAddCustomerModal}
-        onClose={() => setShowAddCustomerModal(false)}
-        onCustomerCreated={(customer) => {
-          setSelectedCustomer(customer);
-          setShowAddCustomerModal(false);
-          toast.success(`New customer "${customer.name}" created and selected!`);
-        }}
-      />
+          <AddCustomerModal
+            isOpen={showAddCustomerModal}
+            onClose={() => setShowAddCustomerModal(false)}
+            onCustomerCreated={(customer) => {
+              setSelectedCustomer(customer);
+              setShowAddCustomerModal(false);
+              toast.success(`New customer "${customer.name}" created and selected!`);
+            }}
+            onAddAnother={() => {
+              // Reopen modal for adding another customer
+              setShowAddCustomerModal(true);
+            }}
+          />
 
-      <CustomerEditModal
-        isOpen={showCustomerEditModal}
-        onClose={() => setShowCustomerEditModal(false)}
-        customer={selectedCustomer}
-        onCustomerUpdated={(updatedCustomer) => {
-          setSelectedCustomer(updatedCustomer);
-          setShowCustomerEditModal(false);
-        }}
-      />
+          <CustomerEditModal
+            isOpen={showCustomerEditModal}
+            onClose={() => setShowCustomerEditModal(false)}
+            customer={selectedCustomer}
+            onCustomerUpdated={(updatedCustomer) => {
+              setSelectedCustomer(updatedCustomer);
+              setShowCustomerEditModal(false);
+            }}
+          />
+        </>
+      )}
 
       <DraftManagementModal
         isOpen={showDraftModal}
@@ -2466,10 +2767,13 @@ const POSPageOptimized: React.FC = () => {
         currentDraftId={currentDraftId || undefined}
       />
 
-      <SalesAnalyticsModal
-        isOpen={showSalesAnalytics}
-        onClose={() => setShowSalesAnalytics(false)}
-      />
+      {/* Sales Analytics Modal - Only if dynamic pricing is enabled */}
+      {isDynamicPricingEnabled() && (
+        <SalesAnalyticsModal
+          isOpen={showSalesAnalytics}
+          onClose={() => setShowSalesAnalytics(false)}
+        />
+      )}
 
       <ZenoPayPaymentModal
         isOpen={showZenoPayPayment}
@@ -2530,10 +2834,58 @@ const POSPageOptimized: React.FC = () => {
             
             if (result.success) {
               // Show pricing modal for trade-in device if there's a trade-in transaction
-              if (tradeInTransaction) {
-                console.log('📋 Opening pricing modal for trade-in device (ZenoPay)...');
-                // Don't clear trade-in data yet - wait for pricing confirmation
-                setShowTradeInPricing(true);
+              const activeTradeInTransaction = tradeInTransaction || tradeInTransactionRef.current;
+              const isAdmin = userRole === 'admin';
+              
+              if (activeTradeInTransaction && activeTradeInTransaction.id) {
+                try {
+                  if (isAdmin) {
+                    // Admin: Mark as completed and show pricing modal
+                    console.log('📝 [ADMIN] Marking trade-in transaction as completed (ZenoPay):', activeTradeInTransaction.id);
+                    const { completeTradeInTransaction } = await import('../lib/tradeInApi');
+                    const completionResult = await completeTradeInTransaction(activeTradeInTransaction.id);
+                    
+                    if (completionResult.success) {
+                      console.log('✅ Trade-in transaction marked as completed (ZenoPay)');
+                      setTradeInTransaction(completionResult.data);
+                      tradeInTransactionRef.current = completionResult.data;
+                      
+                      // Show pricing modal for admin
+                      console.log('📋 [ADMIN] Opening pricing modal for trade-in device (ZenoPay)...');
+                      if (!tradeInTransaction && tradeInTransactionRef.current) {
+                        setTradeInTransaction(tradeInTransactionRef.current);
+                      }
+                      setShowTradeInPricing(true);
+                    } else {
+                      console.error('❌ Failed to mark trade-in as completed:', completionResult.error);
+                    }
+                  } else {
+                    // Customer Care: Mark as approved for admin review
+                    console.log('📝 [CUSTOMER CARE] Marking trade-in as approved (ZenoPay):', activeTradeInTransaction.id);
+                    const { data, error } = await supabase
+                      .from('lats_trade_in_transactions')
+                      .update({
+                        status: 'approved',
+                        approved_at: new Date().toISOString(),
+                        approved_by: currentUser?.id || null,
+                      })
+                      .eq('id', activeTradeInTransaction.id)
+                      .select()
+                      .single();
+                    
+                    if (!error && data) {
+                      console.log('✅ Trade-in marked as approved, awaiting admin');
+                      toast.success('✅ Trade-in submitted for admin review. Admin will add device to inventory with pricing.');
+                      setTradeInTransaction(data);
+                      tradeInTransactionRef.current = data;
+                    } else {
+                      console.error('❌ Failed to mark trade-in as approved:', error);
+                      toast.error('Warning: Failed to submit trade-in for approval');
+                    }
+                  }
+                } catch (error) {
+                  console.error('❌ Error updating trade-in status:', error);
+                }
               }
               
               // Prepare receipt data
@@ -2626,10 +2978,58 @@ const POSPageOptimized: React.FC = () => {
           onClose={() => setShowInstallmentModal(false)}
           onSuccess={async () => {
             // Show pricing modal for trade-in device if there's a trade-in transaction
-            if (tradeInTransaction) {
-              console.log('📋 Opening pricing modal for trade-in device (Installment)...');
-              // Don't clear trade-in data yet - wait for pricing confirmation
-              setShowTradeInPricing(true);
+            const activeTradeInTransaction = tradeInTransaction || tradeInTransactionRef.current;
+            const isAdmin = userRole === 'admin';
+            
+            if (activeTradeInTransaction && activeTradeInTransaction.id) {
+              try {
+                if (isAdmin) {
+                  // Admin: Mark as completed and show pricing modal
+                  console.log('📝 [ADMIN] Marking trade-in as completed (Installment):', activeTradeInTransaction.id);
+                  const { completeTradeInTransaction } = await import('../lib/tradeInApi');
+                  const completionResult = await completeTradeInTransaction(activeTradeInTransaction.id);
+                  
+                  if (completionResult.success) {
+                    console.log('✅ Trade-in transaction marked as completed (Installment)');
+                    setTradeInTransaction(completionResult.data);
+                    tradeInTransactionRef.current = completionResult.data;
+                    
+                    // Show pricing modal for admin
+                    console.log('📋 [ADMIN] Opening pricing modal for trade-in device (Installment)...');
+                    if (!tradeInTransaction && tradeInTransactionRef.current) {
+                      setTradeInTransaction(tradeInTransactionRef.current);
+                    }
+                    setShowTradeInPricing(true);
+                  } else {
+                    console.error('❌ Failed to mark trade-in as completed:', completionResult.error);
+                  }
+                } else {
+                  // Customer Care: Mark as approved for admin review
+                  console.log('📝 [CUSTOMER CARE] Marking trade-in as approved (Installment):', activeTradeInTransaction.id);
+                  const { data, error } = await supabase
+                    .from('lats_trade_in_transactions')
+                    .update({
+                      status: 'approved',
+                      approved_at: new Date().toISOString(),
+                      approved_by: currentUser?.id || null,
+                    })
+                    .eq('id', activeTradeInTransaction.id)
+                    .select()
+                    .single();
+                  
+                  if (!error && data) {
+                    console.log('✅ Trade-in marked as approved, awaiting admin');
+                    toast.success('✅ Trade-in submitted for admin review. Admin will add device to inventory with pricing.');
+                    setTradeInTransaction(data);
+                    tradeInTransactionRef.current = data;
+                  } else {
+                    console.error('❌ Failed to mark trade-in as approved:', error);
+                    toast.error('Warning: Failed to submit trade-in for approval');
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Error updating trade-in status:', error);
+              }
             }
             
             setShowInstallmentModal(false);
@@ -2675,10 +3075,13 @@ const POSPageOptimized: React.FC = () => {
         />
       )}
 
-      <PaymentTrackingModal
-        isOpen={showPaymentTracking}
-        onClose={() => setShowPaymentTracking(false)}
-      />
+      {/* Payment Tracking Modal - Only if feature is enabled */}
+      {isPaymentTrackingEnabled() && (
+        <PaymentTrackingModal
+          isOpen={showPaymentTracking}
+          onClose={() => setShowPaymentTracking(false)}
+        />
+      )}
 
       {/* New Payments Popup Modal */}
       <PaymentsPopupModal
@@ -2749,6 +3152,10 @@ const POSPageOptimized: React.FC = () => {
                 totalPrice: item.totalPrice,
                 costPrice: 0, // Will be calculated by service
                 profit: 0, // Will be calculated by service
+                // Add tags if available
+                ...(item.tags && item.tags.length > 0 && {
+                  tags: item.tags
+                }),
                 // Add selected serial numbers if available
                 ...(item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0 && {
                   serialNumbers: item.selectedSerialNumbers
@@ -2803,10 +3210,64 @@ const POSPageOptimized: React.FC = () => {
               const saleNumber = result.sale?.saleNumber;
               
               // Show pricing modal for trade-in device if there's a trade-in transaction
-              if (tradeInTransaction) {
-                console.log('📋 Opening pricing modal for trade-in device...');
-                // Don't clear trade-in data yet - wait for pricing confirmation
-                setShowTradeInPricing(true);
+              console.log('🔍 Checking for trade-in transaction:', tradeInTransaction?.id || 'none');
+              console.log('🔍 Checking ref for trade-in transaction:', tradeInTransactionRef.current?.id || 'none');
+              const activeTradeInTransaction = tradeInTransaction || tradeInTransactionRef.current;
+              const isAdmin = userRole === 'admin';
+              
+              if (activeTradeInTransaction && activeTradeInTransaction.id) {
+                try {
+                  if (isAdmin) {
+                    // Admin: Mark as completed and show pricing modal
+                    console.log('📝 [ADMIN] Marking trade-in transaction as completed:', activeTradeInTransaction.id);
+                    const { completeTradeInTransaction } = await import('../lib/tradeInApi');
+                    const completionResult = await completeTradeInTransaction(activeTradeInTransaction.id);
+                    
+                    if (completionResult.success) {
+                      console.log('✅ Trade-in transaction marked as completed');
+                      setTradeInTransaction(completionResult.data);
+                      tradeInTransactionRef.current = completionResult.data;
+                      
+                      // Show pricing modal for admin to set prices
+                      console.log('📋 [ADMIN] Opening pricing modal for trade-in device...');
+                      if (!tradeInTransaction && tradeInTransactionRef.current) {
+                        setTradeInTransaction(tradeInTransactionRef.current);
+                      }
+                      setShowTradeInPricing(true);
+                    } else {
+                      console.error('❌ Failed to mark trade-in as completed:', completionResult.error);
+                      toast.error('Warning: Failed to mark trade-in as completed');
+                    }
+                  } else {
+                    // Customer Care: Mark as approved for admin review
+                    console.log('📝 [CUSTOMER CARE] Marking trade-in transaction as approved for admin review:', activeTradeInTransaction.id);
+                    const { data, error } = await supabase
+                      .from('lats_trade_in_transactions')
+                      .update({
+                        status: 'approved',
+                        approved_at: new Date().toISOString(),
+                        approved_by: currentUser?.id || null,
+                      })
+                      .eq('id', activeTradeInTransaction.id)
+                      .select()
+                      .single();
+                    
+                    if (!error && data) {
+                      console.log('✅ Trade-in marked as approved, awaiting admin to add to inventory');
+                      toast.success('✅ Trade-in submitted for admin review. Admin will add device to inventory with pricing.');
+                      setTradeInTransaction(data);
+                      tradeInTransactionRef.current = data;
+                    } else {
+                      console.error('❌ Failed to mark trade-in as approved:', error);
+                      toast.error('Warning: Failed to submit trade-in for approval');
+                    }
+                  }
+                } catch (error) {
+                  console.error('❌ Error updating trade-in status:', error);
+                  toast.error('Warning: Failed to update trade-in status');
+                }
+              } else {
+                console.log('⚠️ No trade-in transaction found - pricing modal not shown');
               }
               
               // Prepare receipt data BEFORE clearing anything
@@ -2892,7 +3353,8 @@ const POSPageOptimized: React.FC = () => {
               
               // Clear cart and customer AFTER showing modal (delayed)
               // Skip clearing if there's a trade-in transaction (will clear after pricing is set)
-              if (!tradeInTransaction) {
+              const hasTradeIn = tradeInTransaction || tradeInTransactionRef.current;
+              if (!hasTradeIn) {
                 setTimeout(() => {
                   clearCart();
                   setSelectedCustomer(null);
@@ -3366,8 +3828,8 @@ const POSPageOptimized: React.FC = () => {
         </div>
       )}
 
-      {/* Loyalty Points Modal */}
-      {showLoyaltyPoints && (
+      {/* Loyalty Points Modal - Only if feature is enabled */}
+      {isLoyaltyEnabled() && showLoyaltyPoints && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">Add Loyalty Points</h3>
@@ -3510,8 +3972,8 @@ const POSPageOptimized: React.FC = () => {
         isVisible={showDraftNotification && getAllDrafts().length > 0}
       />
 
-      {/* Delivery Section */}
-      {showDeliverySection && (
+      {/* Delivery Section - Only if feature is enabled */}
+      {isDeliveryEnabled() && showDeliverySection && (
         <DeliverySection
           isOpen={showDeliverySection}
           onClose={() => setShowDeliverySection(false)}
@@ -3524,32 +3986,6 @@ const POSPageOptimized: React.FC = () => {
 
       {/* Success Modal for Sale Completion */}
       <SuccessModal {...successModal.props} />
-
-      {/* Serial Number Selector Modal */}
-      {serialNumberProduct && (
-        <SerialNumberSelector
-          isOpen={showSerialNumberSelector}
-          onClose={() => {
-            setShowSerialNumberSelector(false);
-            setSerialNumberProduct(null);
-          }}
-          productId={serialNumberProduct.productId}
-          productName={serialNumberProduct.productName}
-          variantId={serialNumberProduct.variantId}
-          quantity={serialNumberProduct.quantity}
-          onItemsSelected={handleSerialNumbersSelected}
-          branchId={currentBranch?.id}
-          excludeItemIds={
-            // Collect all already-selected item IDs from cart for this product
-            cartItems
-              .filter(item => 
-                item.productId === serialNumberProduct.productId && 
-                (!serialNumberProduct.variantId || item.variantId === serialNumberProduct.variantId)
-              )
-              .flatMap(item => item.selectedSerialNumbers?.map((sn: any) => sn.id) || [])
-          }
-        />
-      )}
 
       {/* Share Receipt Modal */}
       <ShareReceiptModal

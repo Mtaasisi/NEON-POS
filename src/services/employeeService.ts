@@ -28,7 +28,7 @@ export interface Employee {
   currency: string;
   status: 'active' | 'inactive' | 'on-leave' | 'terminated';
   performanceRating: number;
-  skills: string[];
+  skills: string[] | null;
   managerId?: string;
   location?: string;
   branchId?: string; // ✨ NEW - Branch/Store assignment
@@ -283,11 +283,29 @@ class EmployeeService {
   }
 
   /**
+   * Helper function to clean data before sending to database
+   * Converts empty arrays to null to avoid PostgreSQL type inference issues
+   */
+  private cleanEmployeeData(data: any): any {
+    const cleaned = { ...data };
+    
+    // Convert empty arrays to null for array columns
+    if (Array.isArray(cleaned.skills) && cleaned.skills.length === 0) {
+      cleaned.skills = null;
+    }
+    if (Array.isArray(cleaned.assigned_branches) && cleaned.assigned_branches.length === 0) {
+      cleaned.assigned_branches = null;
+    }
+    
+    return cleaned;
+  }
+
+  /**
    * Create new employee
    */
   async createEmployee(employee: Partial<Employee>): Promise<Employee> {
     try {
-      const employeeData = toSnakeCase(employee);
+      const employeeData = this.cleanEmployeeData(toSnakeCase(employee));
       
       const { data, error } = await supabase
         .from('employees')
@@ -311,7 +329,7 @@ class EmployeeService {
    */
   async updateEmployee(id: string, updates: Partial<Employee>): Promise<Employee> {
     try {
-      const updateData = toSnakeCase(updates);
+      const updateData = this.cleanEmployeeData(toSnakeCase(updates));
       
       const { data, error } = await supabase
         .from('employees')

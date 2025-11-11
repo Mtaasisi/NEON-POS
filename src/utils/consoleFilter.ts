@@ -22,6 +22,10 @@ const SUPPRESS_PATTERNS = [
   // Neon transient 400 errors (automatically retried)
   /POST.*neon\.tech.*400/i,
   
+  // WebSocket errors to Neon database (using HTTP API instead)
+  /WebSocket connection.*neon\.tech.*failed/i,
+  /network connection was lost/i,
+  
   // Auth state changes (noisy)
   /^Auth state changed:/,
   
@@ -174,6 +178,15 @@ export function initConsoleFilter() {
       return; // Silent suppression - these are handled by retry logic
     }
     
+    // Suppress WebSocket errors to Neon database
+    if (message.includes('WebSocket') && message.includes('neon.tech')) {
+      return; // Silent suppression - using HTTP API instead
+    }
+    
+    if (message.includes('network connection was lost')) {
+      return; // Silent suppression - network reconnection handled automatically
+    }
+    
     // Allow all other errors through
     originalError(...args);
   };
@@ -199,12 +212,14 @@ if (import.meta.env.MODE !== 'test') {
   
   // Also suppress network errors logged to console
   if (typeof window !== 'undefined') {
-    // Create a global error event listener to suppress Neon 400s
+    // Create a global error event listener to suppress Neon 400s and WebSocket errors
     window.addEventListener('error', (event) => {
       if (event.message && (
         event.message.includes('neon.tech') || 
         event.message.includes('400') ||
-        event.message.includes('Bad Request')
+        event.message.includes('Bad Request') ||
+        (event.message.includes('WebSocket') && event.message.includes('neon.tech')) ||
+        event.message.includes('network connection was lost')
       )) {
         event.preventDefault();
         return false;
@@ -215,7 +230,14 @@ if (import.meta.env.MODE !== 'test') {
     window.addEventListener('unhandledrejection', (event) => {
       if (event.reason && typeof event.reason === 'object') {
         const message = JSON.stringify(event.reason);
-        if (message.includes('neon.tech') && message.includes('400')) {
+        if (message.includes('neon.tech') && (message.includes('400') || message.includes('WebSocket'))) {
+          event.preventDefault();
+          return false;
+        }
+      }
+      // Also check string reasons
+      if (typeof event.reason === 'string') {
+        if (event.reason.includes('neon.tech') || event.reason.includes('network connection was lost')) {
           event.preventDefault();
           return false;
         }

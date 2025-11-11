@@ -758,18 +758,35 @@ class FinancialService {
       return itemDate >= startOfMonth;
     };
 
-    // Calculate totals
+    // Helper function to convert to TZS base currency
+    const convertToTZS = (amount: number, currency?: string, exchangeRate?: number): number => {
+      if (!currency || currency === 'TZS') return amount;
+      const rate = exchangeRate && exchangeRate > 1 ? exchangeRate : 
+        (currency === 'USD' ? 2500 : currency === 'EUR' ? 2700 : currency === 'GBP' ? 3200 : 1);
+      return amount * rate;
+    };
+
+    // Calculate totals with currency conversion
     const totalRevenue = payments
       .filter(p => p.status === 'completed')
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      .reduce((sum, p) => {
+        const amount = Number(p.amount) || 0;
+        return sum + convertToTZS(amount, (p as any).currency, (p as any).exchange_rate);
+      }, 0);
 
     const totalOutstanding = payments
       .filter(p => p.status === 'pending')
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      .reduce((sum, p) => {
+        const amount = Number(p.amount) || 0;
+        return sum + convertToTZS(amount, (p as any).currency, (p as any).exchange_rate);
+      }, 0);
 
     const monthlyRevenue = payments
       .filter(p => p.status === 'completed' && isInCurrentMonth(p.payment_date))
-      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      .reduce((sum, p) => {
+        const amount = Number(p.amount) || 0;
+        return sum + convertToTZS(amount, (p as any).currency, (p as any).exchange_rate);
+      }, 0);
 
     const totalExpenses = expenses
       .filter(e => e.status === 'approved')
@@ -779,7 +796,9 @@ class FinancialService {
       .filter(e => e.status === 'approved' && isInCurrentMonth(e.expense_date))
       .reduce((sum, e) => sum + e.amount, 0);
 
-    const totalBalance = accounts.reduce((sum, acc) => sum + acc.balance, 0);
+    const totalBalance = accounts.reduce((sum, acc) => {
+      return sum + convertToTZS(acc.balance, (acc as any).currency, 1);
+    }, 0);
 
     const completedPayments = payments.filter(p => p.status === 'completed').length;
     const pendingPayments = payments.filter(p => p.status === 'pending').length;

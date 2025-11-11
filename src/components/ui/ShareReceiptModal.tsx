@@ -232,17 +232,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
 
   return createPortal(
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 100001,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.6)',
-        backdropFilter: 'blur(4px)',
-        animation: 'fadeIn 0.2s ease-out',
-      }}
+      className="fixed inset-0 z-[100001] flex items-center justify-center bg-black/40 animate-fadeIn"
       onClick={onClose}
     >
       <style>{`
@@ -260,108 +250,58 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
             transform: translateY(0) scale(1);
           }
         }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
       `}</style>
 
       <div
-        style={{
-          background: '#fff',
-          borderRadius: 16,
-          padding: '32px',
-          maxWidth: 500,
-          width: '90%',
-          position: 'relative',
-          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
-          animation: 'slideUp 0.3s ease-out',
-        }}
+        className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden relative animate-slideUp"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
         <button
           onClick={onClose}
-          style={{
-            position: 'absolute',
-            top: 12,
-            right: 12,
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: 8,
-            borderRadius: 8,
-            transition: 'background 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f3f4f6';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-          }}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-10"
         >
-          <X size={20} color="#6b7280" />
+          <X className="w-5 h-5" strokeWidth={2} />
         </button>
 
-        {/* Title */}
-        <h2
-          style={{
-            fontSize: 24,
-            fontWeight: 700,
-            color: '#111827',
-            marginBottom: 8,
-            textAlign: 'center',
-          }}
-        >
-          Share Receipt
-        </h2>
-
-        <p
-          style={{
-            fontSize: 14,
-            color: '#6b7280',
-            marginBottom: 24,
-            textAlign: 'center',
-          }}
-        >
-          Receipt #{receiptData.receiptNumber}
-        </p>
+        {/* Header Section with Gradient */}
+        <div className="p-8 text-center bg-gradient-to-br from-blue-50 to-indigo-50">
+          <div 
+            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4"
+            style={{
+              background: 'linear-gradient(135deg, rgb(59, 130, 246) 0%, rgb(37, 99, 235) 100%)',
+              boxShadow: 'rgba(59, 130, 246, 0.3) 0px 8px 24px'
+            }}
+          >
+            <Share2 className="w-10 h-10 text-white" strokeWidth={2.5} />
+          </div>
+          
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+            Share Receipt
+          </h2>
+          <p className="text-base text-gray-600">
+            Receipt #{receiptData.receiptNumber}
+          </p>
+        </div>
 
         {/* Loading Overlay */}
         {isSending && (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background: 'rgba(255, 255, 255, 0.95)',
-              borderRadius: 16,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 10,
-            }}
-          >
+          <div className="absolute inset-0 bg-white/95 rounded-2xl flex flex-col items-center justify-center z-10">
             <Loader2
               size={48}
               color="#0088cc"
-              style={{
-                animation: 'spin 1s linear infinite',
-              }}
+              className="animate-spin"
             />
-            <p
-              style={{
-                marginTop: 16,
-                fontSize: 16,
-                fontWeight: 600,
-                color: '#374151',
-              }}
-            >
+            <p className="mt-4 text-base font-semibold text-gray-700">
               Sending {sendingMethod}...
             </p>
-            <p
-              style={{
-                marginTop: 8,
-                fontSize: 14,
-                color: '#6b7280',
-              }}
-            >
+            <p className="mt-2 text-sm text-gray-500">
               Please wait
             </p>
             <style>{`
@@ -369,116 +309,92 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                 from { transform: rotate(0deg); }
                 to { transform: rotate(360deg); }
               }
+              .animate-spin {
+                animation: spin 1s linear infinite;
+              }
             `}</style>
           </div>
         )}
 
         {/* Sharing options grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 12,
-            marginBottom: 20,
-            opacity: isSending ? 0.5 : 1,
-            pointerEvents: isSending ? 'none' : 'auto',
-          }}
-        >
-          {shareOptions.map((option, index) => {
-            const Icon = option.icon;
-            const isSMSOption = option.name === 'SMS';
-            
-            return (
-              <button
-                key={index}
-                onClick={() => {
-                  if (isSMSOption) {
-                    // SMS is async, handled in onClick
-                    option.onClick();
-                  } else {
-                    // Other options are sync
-                    option.onClick();
-                    setTimeout(() => onClose(), 500);
-                  }
-                }}
-                disabled={isSending}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '20px 12px',
-                  border: '2px solid #e5e7eb',
-                  borderRadius: 12,
-                  background: '#fff',
-                  cursor: isSending ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.2s',
-                  opacity: isSending ? 0.6 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSending) {
-                    e.currentTarget.style.borderColor = option.color;
-                    e.currentTarget.style.background = `${option.color}08`;
-                    e.currentTarget.style.transform = 'translateY(-4px)';
-                    e.currentTarget.style.boxShadow = `0 8px 16px ${option.color}20`;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSending) {
-                    e.currentTarget.style.borderColor = '#e5e7eb';
-                    e.currentTarget.style.background = '#fff';
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }
-                }}
-              >
-                <div
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: '50%',
-                    background: `${option.color}15`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginBottom: 8,
-                  }}
-                >
-                  <Icon size={24} color={option.color} strokeWidth={2} />
-                </div>
-                <span
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 600,
-                    color: '#374151',
-                  }}
-                >
-                  {option.name}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Customer info if available */}
-        {(receiptData.customerPhone || receiptData.customerEmail) && (
-          <div
+        <div className="p-6">
+          <div 
+            className="grid grid-cols-3 gap-3 mb-5"
             style={{
-              padding: 12,
-              background: '#f9fafb',
-              borderRadius: 8,
-              fontSize: 13,
-              color: '#6b7280',
+              opacity: isSending ? 0.5 : 1,
+              pointerEvents: isSending ? 'none' : 'auto',
             }}
           >
-            <div style={{ fontWeight: 600, marginBottom: 4, color: '#374151' }}>
-              Customer:
-            </div>
-            {receiptData.customerName && <div>{receiptData.customerName}</div>}
-            {receiptData.customerPhone && <div>{receiptData.customerPhone}</div>}
-            {receiptData.customerEmail && <div>{receiptData.customerEmail}</div>}
+            {shareOptions.map((option, index) => {
+              const Icon = option.icon;
+              const isSMSOption = option.name === 'SMS';
+              
+              return (
+                <button
+                  key={index}
+                  onClick={() => {
+                    if (isSMSOption) {
+                      // SMS is async, handled in onClick
+                      option.onClick();
+                    } else {
+                      // Other options are sync
+                      option.onClick();
+                      setTimeout(() => onClose(), 500);
+                    }
+                  }}
+                  disabled={isSending}
+                  className="flex flex-col items-center justify-center p-5 border-2 border-gray-200 rounded-xl bg-white cursor-pointer transition-all hover:-translate-y-1 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{
+                    opacity: isSending ? 0.6 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSending) {
+                      e.currentTarget.style.borderColor = option.color;
+                      e.currentTarget.style.background = `${option.color}08`;
+                      e.currentTarget.style.boxShadow = `0 8px 16px ${option.color}20`;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSending) {
+                      e.currentTarget.style.borderColor = '#e5e7eb';
+                      e.currentTarget.style.background = '#fff';
+                    }
+                  }}
+                >
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center mb-2"
+                    style={{
+                      background: `${option.color}15`,
+                    }}
+                  >
+                    <Icon size={24} color={option.color} strokeWidth={2} />
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">
+                    {option.name}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        )}
+
+          {/* Customer info if available */}
+          {(receiptData.customerPhone || receiptData.customerEmail) && (
+            <div className="p-4 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border border-gray-200">
+              <div className="font-bold text-gray-800 mb-2 text-sm">
+                Customer:
+              </div>
+              {receiptData.customerName && (
+                <div className="text-sm text-gray-700 font-medium">{receiptData.customerName}</div>
+              )}
+              {receiptData.customerPhone && (
+                <div className="text-sm text-gray-600">{receiptData.customerPhone}</div>
+              )}
+              {receiptData.customerEmail && (
+                <div className="text-sm text-gray-600">{receiptData.customerEmail}</div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       
       {/* Success Modal for SMS Sent */}

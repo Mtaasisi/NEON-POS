@@ -4,6 +4,7 @@ import { toast } from 'react-hot-toast';
 import { Customer } from '../../../customers/types';
 import { updateCustomerInDb } from '../../../../lib/customerApi/core';
 import CustomerSearchDropdown from '../../../shared/components/CustomerSearchDropdown';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 interface CustomerEditModalProps {
   isOpen: boolean;
@@ -24,7 +25,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
     whatsapp: '',
     gender: 'other',
     city: '',
-    loyaltyLevel: 'bronze',
+    loyaltyLevel: 'interested',
     colorTag: 'new',
     referredBy: '',
     birthMonth: '',
@@ -38,6 +39,9 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
   const [showRegionDropdown, setShowRegionDropdown] = useState(false);
   const [showMonthDropdown, setShowMonthDropdown] = useState(false);
   const [showDayDropdown, setShowDayDropdown] = useState(false);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Initialize form data when customer changes
   useEffect(() => {
@@ -176,14 +180,20 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
 
   const getLoyaltyIcon = (level: string) => {
     switch (level?.toLowerCase()) {
-      case 'platinum':
+      case 'vip':
         return <Crown className="w-4 h-4 text-purple-500" />;
-      case 'gold':
+      case 'premium':
         return <Star className="w-4 h-4 text-yellow-500 fill-current" />;
-      case 'silver':
+      case 'regular':
+        return <Star className="w-4 h-4 text-blue-500 fill-current" />;
+      case 'active':
+        return <Star className="w-4 h-4 text-green-500 fill-current" />;
+      case 'payment_customer':
+        return <Star className="w-4 h-4 text-teal-500 fill-current" />;
+      case 'engaged':
+        return <Star className="w-4 h-4 text-indigo-500 fill-current" />;
+      case 'interested':
         return <Star className="w-4 h-4 text-gray-400 fill-current" />;
-      case 'bronze':
-        return <Star className="w-4 h-4 text-orange-500 fill-current" />;
       default:
         return <Star className="w-4 h-4 text-gray-400" />;
     }
@@ -500,10 +510,13 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                   </label>
                   <div className="flex flex-wrap gap-3">
                     {[
-                      { value: 'bronze', label: 'Bronze', color: 'bg-white text-orange-700 border-orange-300 hover:border-orange-400', activeColor: 'bg-orange-500 text-white border-orange-500' },
-                      { value: 'silver', label: 'Silver', color: 'bg-white text-gray-700 border-gray-300 hover:border-gray-400', activeColor: 'bg-gray-500 text-white border-gray-500' },
-                      { value: 'gold', label: 'Gold', color: 'bg-white text-yellow-700 border-yellow-300 hover:border-yellow-400', activeColor: 'bg-yellow-500 text-white border-yellow-500' },
-                      { value: 'platinum', label: 'Platinum', color: 'bg-white text-purple-700 border-purple-300 hover:border-purple-400', activeColor: 'bg-purple-500 text-white border-purple-500' }
+                      { value: 'interested', label: 'Interested', color: 'bg-white text-gray-700 border-gray-300 hover:border-gray-400', activeColor: 'bg-gray-500 text-white border-gray-500' },
+                      { value: 'engaged', label: 'Engaged', color: 'bg-white text-indigo-700 border-indigo-300 hover:border-indigo-400', activeColor: 'bg-indigo-500 text-white border-indigo-500' },
+                      { value: 'payment_customer', label: 'Payment Customer', color: 'bg-white text-teal-700 border-teal-300 hover:border-teal-400', activeColor: 'bg-teal-500 text-white border-teal-500' },
+                      { value: 'active', label: 'Active', color: 'bg-white text-green-700 border-green-300 hover:border-green-400', activeColor: 'bg-green-500 text-white border-green-500' },
+                      { value: 'regular', label: 'Regular', color: 'bg-white text-blue-700 border-blue-300 hover:border-blue-400', activeColor: 'bg-blue-500 text-white border-blue-500' },
+                      { value: 'premium', label: 'Premium', color: 'bg-white text-yellow-700 border-yellow-300 hover:border-yellow-400', activeColor: 'bg-yellow-500 text-white border-yellow-500' },
+                      { value: 'vip', label: 'VIP', color: 'bg-white text-purple-700 border-purple-300 hover:border-purple-400', activeColor: 'bg-purple-500 text-white border-purple-500' }
                     ].map((option) => (
                       <button
                         key={option.value}

@@ -18,7 +18,7 @@ interface Employee {
   status: 'active' | 'inactive' | 'on-leave' | 'terminated';
   performance: number;
   attendance: number;
-  skills: string[];
+  skills: string[] | null;
   manager?: string;
   location?: string;
   branchId?: string;
@@ -629,7 +629,6 @@ const EmployeeForm: React.FC<EmployeeFormProps> = ({
           </form>
         </div>
       </div>
-        </div>
       </div>
     </>
   );

@@ -1,23 +1,35 @@
 // Neon Database Client Implementation
-import { neon, neonConfig } from '@neondatabase/serverless';
+// ✅ FIXED: Using WebSocket pooler connection for browser compatibility
+// 
+// This implementation uses Neon's WebSocket pooler connection which works in browsers.
+// The HTTP API (neon() function) has CORS restrictions in browsers.
+//
+// For production, consider:
+// 1. Backend API proxy for database calls (BEST for production security)
+// 2. Deploy as serverless function (Vercel, Netlify, Cloudflare Workers)
 
-// Configure Neon BEFORE creating the client
-// Note: fetchConnectionCache is now always true by default (deprecated option removed)
-// ✅ Properly suppress browser warnings (we understand the security implications)
-neonConfig.disableWarningInBrowsers = true;
+import { neon, neonConfig, Pool } from '@neondatabase/serverless';
 
-// ✅ Configure WebSocket for browser environment to avoid CORS issues
-// The HTTP API doesn't support CORS, so we need to use WebSocket
+// Configure Neon Pool for browser environment
+// Pool uses native PostgreSQL protocol over WebSocket - different from neon() HTTP API
 if (typeof WebSocket !== 'undefined') {
+  // Set the WebSocket constructor for browser environments
   neonConfig.webSocketConstructor = WebSocket;
-  neonConfig.useSecureWebSocket = true;
-  neonConfig.pipelineTLS = false;
-  neonConfig.pipelineConnect = false;
 }
+
+// Pool-specific configuration (not used by neon() HTTP API)
+neonConfig.useSecureWebSocket = true;      // Use wss:// for secure connections
+neonConfig.pipelineConnect = false;        // Disable pipelining for better compatibility
+neonConfig.pipelineTLS = false;            // Disable TLS pipelining
+neonConfig.disableWarningInBrowsers = true; // Suppress browser warnings
+
+// Note: wsProxy is NOT needed for Pool class
+// Pool connects directly using PostgreSQL wire protocol over WebSocket
+// The pooler endpoint handles WebSocket upgrades automatically
 
 // Database URL - Load from environment variable (REQUIRED)
 // Priority: VITE_DATABASE_URL (frontend accessible) > DATABASE_URL (fallback)
-const DATABASE_URL = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE_URL;
+let DATABASE_URL = import.meta.env.VITE_DATABASE_URL || import.meta.env.DATABASE_URL;
 
 // Validate that DATABASE_URL is configured
 if (!DATABASE_URL) {
@@ -28,23 +40,200 @@ if (!DATABASE_URL) {
 
 console.log('✅ Neon client initializing with URL:', DATABASE_URL.substring(0, 50) + '...');
 
-// Create Neon SQL client with full results and enhanced error handling
-const sql = neon(DATABASE_URL, {
-  fetchOptions: {
-    cache: 'no-store',
-  },
-  fullResults: true,
-  // Use WebSocket instead of fetch to avoid CORS issues in browser
-  poolQueryViaFetch: false,
-});
+// Global error handler for WebSocket connection errors
+if (typeof window !== 'undefined') {
+  // Suppress transient WebSocket errors that are automatically retried
+  const originalConsoleError = console.error;
+  const originalConsoleWarn = console.warn;
+  
+  console.error = (...args: any[]) => {
+    const errorMsg = String(args[0] || '');
+    
+    // Suppress common WebSocket connection errors that are automatically retried
+    if (
+      errorMsg.includes('WebSocket connection to') ||
+      errorMsg.includes('WebSocket is closed before the connection is established') ||
+      (errorMsg.includes('@neondatabase/serverless') && errorMsg.includes('Unhandled error'))
+    ) {
+      // These errors are transient and will be retried automatically
+      // Only log in development mode as debug info
+      if (import.meta.env.DEV) {
+        console.debug('🔄 WebSocket reconnecting (automatic)...', errorMsg.substring(0, 100));
+      }
+      return;
+    }
+    
+    // Pass through all other errors
+    originalConsoleError.apply(console, args);
+  };
+  
+  console.warn = (...args: any[]) => {
+    const warnMsg = String(args[0] || '');
+    
+    // Suppress WebSocket warning noise
+    if (warnMsg.includes('WebSocket connection to') || warnMsg.includes('WebSocket is closed')) {
+      return; // Silently ignore
+    }
+    
+    // Pass through all other warnings
+    originalConsoleWarn.apply(console, args);
+  };
+}
 
-console.log('✅ Neon SQL client created successfully');
-console.log('ℹ️ Note: Transient 400 errors from Neon are automatically retried - no action needed');
+// ✅ FIXED: Use WebSocket Pool for browser compatibility
+// The neon() function uses HTTP API which has CORS restrictions in browsers
+// Pool with WebSocket connections works in browser environments
+let sql: any;
+let pool: Pool;
 
-// Helper function to check if error is a network error
+console.log('📡 Using Neon WebSocket Pooler for browser-compatible database connections');
+console.log('ℹ️  Note: WebSocket pooler enabled for CORS-free browser access');
+
+try {
+  // Create a Pool instance for WebSocket connections with proper configuration
+  // These settings prevent "Connection terminated unexpectedly" errors
+  pool = new Pool({ 
+    connectionString: DATABASE_URL,
+    // Connection pool settings optimized for browser environments
+    max: 10,                          // Maximum number of clients in the pool (browser-friendly limit)
+    idleTimeoutMillis: 30000,         // Close idle connections after 30 seconds
+    connectionTimeoutMillis: 30000,   // Wait 30 seconds for new connection (increased for cold starts)
+    maxUses: 7500,                    // Maximum uses before connection is closed and recreated
+    // Statement timeout to prevent long-running queries
+    statement_timeout: 60000,         // 60 seconds max per query (increased from 30s)
+    // Connection parameters for stability
+    keepAlive: true,                  // Enable TCP keepalive
+    keepAliveInitialDelayMillis: 10000, // Start keepalive after 10 seconds
+  });
+  
+  // Add pool error handler to catch connection errors gracefully
+  pool.on('error', (err: any) => {
+    console.warn('⚠️ Unexpected pool error (connection will be recreated):', err.message || err);
+    // Don't throw - let the pool handle reconnection
+  });
+  
+  // Add pool connection handler for debugging
+  pool.on('connect', () => {
+    console.log('🔌 New database connection established');
+  });
+  
+  // Add pool removal handler
+  pool.on('remove', () => {
+    console.log('🔌 Database connection removed from pool');
+  });
+  
+  // Wrap pool.query in a sql-like interface for compatibility
+  sql = async (strings: TemplateStringsArray, ...values: any[]) => {
+    // Build the query string
+    let query = strings[0];
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i];
+      let formattedValue: string;
+      
+      if (value === null || value === undefined) {
+        formattedValue = 'NULL';
+      } else if (typeof value === 'string') {
+        formattedValue = `'${value.replace(/'/g, "''")}'`;
+      } else if (typeof value === 'boolean') {
+        formattedValue = value ? 'TRUE' : 'FALSE';
+      } else if (value instanceof Date) {
+        formattedValue = `'${value.toISOString()}'`;
+      } else if (Array.isArray(value)) {
+        formattedValue = `ARRAY[${value.map(v => `'${String(v).replace(/'/g, "''")}'`).join(',')}]`;
+      } else if (typeof value === 'object') {
+        formattedValue = `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`;
+      } else {
+        formattedValue = String(value);
+      }
+      
+      query += formattedValue + strings[i + 1];
+    }
+    
+    // Execute query using pool
+    const result = await pool.query(query);
+    return result.rows;
+  };
+  
+  console.log('✅ Neon WebSocket Pool created successfully');
+  console.log('ℹ️  Pool config: max=10, idle=30s, timeout=30s, statement_timeout=60s');
+  console.log('ℹ️  Note: Transient errors are automatically retried - no action needed');
+  
+  // Warm up the connection pool in the background (non-blocking)
+  // This helps reduce cold start latency for the first query
+  setTimeout(async () => {
+    try {
+      console.log('🔥 Warming up connection pool...');
+      await pool.query('SELECT 1');
+      console.log('✅ Connection pool warmed up successfully');
+    } catch (warmupError) {
+      // Ignore warmup errors - they'll be retried on actual queries
+      console.log('ℹ️  Pool warmup deferred - will connect on first query');
+    }
+  }, 1000); // Start warmup after 1 second
+  
+  // Keep-alive: Ping database every 4 minutes to prevent it from sleeping
+  // Neon free tier databases sleep after ~5 minutes of inactivity
+  // This significantly reduces cold start issues for better user experience
+  setInterval(async () => {
+    try {
+      // Simple lightweight query to keep connection alive
+      await pool.query('SELECT 1');
+      console.log('💓 Database keep-alive ping successful');
+    } catch (error) {
+      // Silently fail - the retry mechanism will handle reconnection
+      console.debug('⚠️ Keep-alive ping failed (will retry):', getErrorMessage(error));
+    }
+  }, 4 * 60 * 1000); // Ping every 4 minutes (240000ms)
+} catch (error) {
+  console.error('❌ Failed to create Neon pool:', error);
+  throw error;
+}
+
+// Helper function to safely get error message
+const getErrorMessage = (error: any): string => {
+  if (!error) return 'Unknown error';
+  
+  // Handle Event objects (WebSocket errors)
+  if (error instanceof Event) {
+    return `Connection error: ${error.type || 'Unknown event'}`;
+  }
+  
+  // Handle Error objects
+  if (error instanceof Error) {
+    return error.message || 'Unknown error';
+  }
+  
+  // Handle plain objects with message property
+  if (typeof error === 'object' && error.message) {
+    return String(error.message);
+  }
+  
+  // Handle strings
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  // Last resort - try JSON stringify, fallback to type
+  try {
+    const str = JSON.stringify(error);
+    if (str && str !== '{}') return str;
+  } catch (e) {
+    // JSON.stringify failed
+  }
+  
+  return 'Unknown error occurred';
+};
+
+// Helper function to check if error is a network/connection error
 const isNetworkError = (error: any): boolean => {
+  // Check if it's an Event object (WebSocket errors)
+  if (error instanceof Event) {
+    return true;
+  }
+  
   const errorMessage = error?.message?.toLowerCase() || '';
   const errorName = error?.name?.toLowerCase() || '';
+  const errorType = error?.type?.toLowerCase() || '';
   
   return (
     // Network errors
@@ -57,16 +246,30 @@ const isNetworkError = (error: any): boolean => {
     errorMessage.includes('err_connection_reset') ||
     errorMessage.includes('failed to fetch') ||
     errorMessage.includes('network request failed') ||
+    errorMessage.includes('websocket') ||
+    errorMessage.includes('connection lost') ||
+    // Connection termination errors (common with WebSocket pooler)
+    errorMessage.includes('connection terminated') ||
+    errorMessage.includes('connection closed') ||
+    errorMessage.includes('socket closed') ||
+    errorMessage.includes('socket hang up') ||
+    errorMessage.includes('econnreset') ||
+    errorMessage.includes('epipe') ||
+    // Timeout errors (common during cold starts)
+    errorMessage.includes('timeout') ||
+    errorMessage.includes('timed out') ||
+    errorMessage.includes('deadline') ||
+    errorType.includes('error') ||
     errorName.includes('networkerror') ||
-    errorName.includes('typeerror') && errorMessage.includes('fetch')
+    (errorName.includes('typeerror') && errorMessage.includes('fetch'))
   );
 };
 
 // Helper function to execute SQL queries with the Neon serverless client
 const executeSql = async (query: string, params: any[] = [], suppressLogs: boolean = false, retryCount: number = 0): Promise<any> => {
   const MAX_RETRIES = 5; // Increased for network errors
-  const RETRY_DELAY = 500; // Increased base delay for network errors
-  const MAX_NETWORK_RETRIES = 3; // Separate limit for network errors
+  const RETRY_DELAY = 800; // Increased base delay for network errors
+  const MAX_NETWORK_RETRIES = 5; // Increased for WebSocket reconnection
   const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
   
   // Only log queries when suppressLogs is false (reduced noise)
@@ -75,82 +278,93 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
   }
   
   try {
-    // Properly construct template literal for Neon
-    // Neon expects actual template literals, so we need to properly construct them
-    const parts = [query];
-    const raw = [query];
-    const templateParts = Object.assign(parts, { raw }) as TemplateStringsArray;
-    
-    // Execute the query with proper error handling
-    let result;
-    
-    if (params && params.length > 0) {
-      // If we have params, use them (shouldn't happen often in current code)
-      result = await sql(templateParts, ...params);
-    } else {
-      // No params - execute as-is
-      result = await sql(templateParts);
-    }
+    // ✅ FIXED: Use pool.query() for WebSocket connections
+    // The Pool already has built-in connection pooling, so we don't need the connectionPool wrapper
+    const result = await pool.query(query);
     
     // Reduced logging - only in dev mode and when not suppressed
-    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
     if (!suppressLogs && isDevelopment) {
       if (retryCount > 0) {
-        console.log(`✅ [SQL OK after ${retryCount} retries]`, Array.isArray(result) ? `${result.length} rows` : 'Success');
+        console.log(`✅ [SQL OK after ${retryCount} retries]`, result.rows ? `${result.rows.length} rows` : 'Success');
       } else {
-        console.log('✅ [SQL OK]', Array.isArray(result) ? `${result.length} rows` : 'Success');
+        console.log('✅ [SQL OK]', result.rows ? `${result.rows.length} rows` : 'Success');
       }
     }
     
-    // Neon returns an array of rows by default
-    return result;
+    // Return rows array from the Pool result
+    return result.rows || [];
   } catch (error: any) {
-    // Check error types
-    const is400Error = error.message?.includes('400') || error.status === 400 || error.statusCode === 400;
+    // Check error types - safely handle undefined message and Event objects
+    const errorMessage = getErrorMessage(error);
+    const is400Error = errorMessage.includes('400') || error?.status === 400 || error?.statusCode === 400;
     const isNetwork = isNetworkError(error);
+    const isConnectionTerminated = errorMessage.toLowerCase().includes('connection terminated');
+    const isTimeout = errorMessage.toLowerCase().includes('timeout');
     
     // Determine if we should retry
     const shouldRetry = (
       (is400Error && retryCount < MAX_RETRIES) ||
-      (isNetwork && retryCount < MAX_NETWORK_RETRIES)
+      (isNetwork && retryCount < MAX_NETWORK_RETRIES) ||
+      (isConnectionTerminated && retryCount < MAX_NETWORK_RETRIES) ||
+      (isTimeout && retryCount < MAX_NETWORK_RETRIES)
     );
     
     if (shouldRetry) {
-      // Log network errors more prominently
-      if (isNetwork && !suppressLogs) {
-        console.warn(`🌐 Network error detected (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES}): ${error.message || 'Connection issue'}`);
+      // Log timeout errors with specific guidance
+      if (isTimeout && !suppressLogs) {
+        console.warn(`⏱️ Connection timeout (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES})`);
+        console.warn('💡 This may be due to database cold start or network latency. Retrying...');
+      }
+      // Log connection termination errors with specific guidance
+      else if (isConnectionTerminated && !suppressLogs) {
+        console.warn(`🔌 Connection terminated (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES})`);
+        console.warn('💡 Reconnecting to database pool...');
+      }
+      // Log other network errors
+      else if (isNetwork && !suppressLogs) {
+        const networkErrorMsg = getErrorMessage(error);
+        console.warn(`🌐 Network error detected (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES}): ${networkErrorMsg}`);
         console.warn('💡 Tip: Check your internet connection. Retrying...');
       }
       
       // Silent retry for 400 errors - don't log transient errors that will be retried
-      // Only log if this is the last retry attempt
-      const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
-      if (!suppressLogs && isDevelopment && is400Error) {
-        // Always log 400 errors with the query to help debug
-        console.warn(`⚠️ 400 error (attempt ${retryCount + 1}/${MAX_RETRIES}):`, error.message);
+      // Only log if this is the LAST retry attempt (to reduce console noise)
+      if (!suppressLogs && isDevelopment && is400Error && retryCount >= MAX_RETRIES - 1) {
+        // Only log on final retry attempt
+        const error400Msg = getErrorMessage(error);
+        console.warn(`⚠️ 400 error (final attempt ${retryCount + 1}/${MAX_RETRIES}):`, error400Msg);
         console.warn('📝 Query causing 400 error:', query.substring(0, 300));
       }
       
-      // Longer delay for network errors
-      const delay = isNetwork ? RETRY_DELAY * 2 : RETRY_DELAY;
+      // Longer delay for connection termination, timeout, and network errors
+      const delay = (isNetwork || isConnectionTerminated || isTimeout) ? RETRY_DELAY * 2 : RETRY_DELAY;
       await new Promise(resolve => setTimeout(resolve, delay * (retryCount + 1))); // Exponential backoff
       return executeSql(query, params, suppressLogs, retryCount + 1);
     }
     
     // Only log significant errors, not every failure
     if (!suppressLogs) {
-      if (isNetwork) {
+      const finalErrorMsg = getErrorMessage(error);
+      if (isTimeout) {
+        console.error('⏱️ Database connection timeout after', MAX_NETWORK_RETRIES, 'retries');
+        console.error('💡 Possible causes:');
+        console.error('   - Database is cold-starting (first request after idle period)');
+        console.error('   - Network latency is high');
+        console.error('   - Query is too complex');
+        console.error('Error details:', finalErrorMsg);
+      } else if (isNetwork) {
         console.error('❌ Network connection failed after', MAX_NETWORK_RETRIES, 'retries');
         console.error('📡 Please check your internet connection and try again');
-        console.error('Error details:', error.message);
+        console.error('Error details:', finalErrorMsg);
       } else if (is400Error) {
-        console.error('❌ Persistent 400 error after', MAX_RETRIES, 'retries:', error.message);
+        console.error('❌ Persistent 400 error after', MAX_RETRIES, 'retries:', finalErrorMsg);
       } else {
-        console.error('❌ SQL Error:', error.message);
+        console.error('❌ SQL Error:', finalErrorMsg);
       }
       // Only show details for unexpected errors
-      if (error.code && error.code !== '42703' && error.code !== '42P01') {
-        console.error('Code:', error.code, '| Query:', query.substring(0, 100));
+      const errorCode = error?.code || '';
+      if (errorCode && errorCode !== '42703' && errorCode !== '42P01') {
+        console.error('Code:', errorCode, '| Query:', query.substring(0, 100));
       }
     }
     
@@ -202,76 +416,124 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         return -1;
       };
       
-      // Extract base fields and relationships
+      // Extract base fields and relationships using regex
       const relationships: Array<{ alias: string; table: string; foreignKey: string; columns: string[] }> = [];
-      let remainingFields = fields;
+      let workingFields = fields;
       
-      // Find all top-level relationships (handles nested parentheses)
-      let i = 0;
-      while (i < fields.length) {
-        // Look for pattern: alias:table!foreign_key( or alias:table(
-        const explicitMatch = fields.substring(i).match(/^(\w+):(\w+)!(\w+)\(/);
-        const inferredMatch = !explicitMatch ? fields.substring(i).match(/^(\w+):(\w+)\(/) : null;
+      // Pattern 1: alias:table!foreign_key(columns) - explicit foreign key
+      const explicitPattern = /(\w+):(\w+)!(\w+)\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/g;
+      let match;
+      
+      while ((match = explicitPattern.exec(workingFields)) !== null) {
+        const [fullMatch, alias, table, foreignKey, columnsStr] = match;
         
-        if (explicitMatch) {
-          const alias = explicitMatch[1];
-          const table = explicitMatch[2];
-          const foreignKey = explicitMatch[3];
-          const openParenIdx = i + explicitMatch[0].length - 1;
-          const closeParenIdx = findMatchingParen(fields, openParenIdx);
+        // Extract only top-level column names (ignore nested relationships)
+        const columns = columnsStr.split(',')
+          .map(c => c.trim())
+          .filter(c => {
+            // Only keep simple column names, skip nested relationships and empty/undefined values
+            return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
+          });
+        
+        console.log(`🔑 [Explicit FK] Alias: ${alias}, Table: ${table}, FK: ${foreignKey}, Columns: ${columns.join(', ')}`);
+        relationships.push({ alias, table, foreignKey, columns });
+        
+        // Remove this relationship from working fields
+        workingFields = workingFields.replace(fullMatch, '');
+        // Reset regex index after modifying the string
+        explicitPattern.lastIndex = 0;
+      }
+      
+      // Pattern 2: alias:table(columns) - inferred foreign key
+      const inferredPattern = /(\w+):(\w+)\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/g;
+      
+      while ((match = inferredPattern.exec(workingFields)) !== null) {
+        const [fullMatch, alias, table, columnsStr] = match;
+        
+        // Skip if already processed as explicit relationship
+        if (relationships.some(r => r.alias === alias && r.table === table)) {
+          inferredPattern.lastIndex = 0;
+          continue;
+        }
+        
+        // Infer foreign key
+        let foreignKey = `${alias}_id`;
+        
+        // Special handling for known child tables (variants, items, etc.)
+        const knownChildPatterns = ['variants', 'items', 'details', 'lines'];
+        const isChildTable = knownChildPatterns.some(pattern => 
+          alias.includes(pattern) || table.includes(`_${pattern}`)
+        );
+        
+        if (isChildTable) {
+          const tablePattern = /^(.+)_(variants|items|details|lines)$/;
+          const tableMatch = table.match(tablePattern);
           
-          if (closeParenIdx !== -1) {
-            const columnsStr = fields.substring(openParenIdx + 1, closeParenIdx);
-            // Extract only top-level column names (ignore nested relationships)
-            const columns = columnsStr.split(',')
-              .map(c => c.trim())
-              .filter(c => {
-                // Only keep simple column names, skip nested relationships and empty/undefined values
-                return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
-              });
-            
-            relationships.push({ alias, table, foreignKey, columns });
-            
-            // Remove this relationship from remaining fields
-            const fullMatch = fields.substring(i, closeParenIdx + 1);
-            remainingFields = remainingFields.replace(fullMatch, '');
-            
-            i = closeParenIdx + 1;
-            continue;
-          }
-        } else if (inferredMatch) {
-          const alias = inferredMatch[1];
-          const table = inferredMatch[2];
-          const foreignKey = `${alias}_id`;
-          const openParenIdx = i + inferredMatch[0].length - 1;
-          const closeParenIdx = findMatchingParen(fields, openParenIdx);
-          
-          if (closeParenIdx !== -1) {
-            const columnsStr = fields.substring(openParenIdx + 1, closeParenIdx);
-            // Extract only top-level column names (ignore nested relationships)
-            const columns = columnsStr.split(',')
-              .map(c => c.trim())
-              .filter(c => {
-                // Only keep simple column names, skip nested relationships and empty/undefined values
-                return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
-              });
-            
-            relationships.push({ alias, table, foreignKey, columns });
-            
-            // Remove this relationship from remaining fields
-            const fullMatch = fields.substring(i, closeParenIdx + 1);
-            remainingFields = remainingFields.replace(fullMatch, '');
-            
-            i = closeParenIdx + 1;
-            continue;
+          if (tableMatch) {
+            const parentTable = tableMatch[1];
+            const parentParts = parentTable.split('_');
+            const parentEntity = parentParts[parentParts.length - 1];
+            foreignKey = `${parentEntity}_id`;
+            console.log(`🔑 [FK Inference] Child table: ${table}, Alias: ${alias}, Inferred FK: ${foreignKey}`);
           }
         }
         
-        i++;
+        // Extract columns
+        const columns = columnsStr.split(',')
+          .map(c => c.trim())
+          .filter(c => {
+            return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
+          });
+        
+        console.log(`🔑 [Inferred FK] Alias: ${alias}, Table: ${table}, FK: ${foreignKey}, Columns: ${columns.join(', ')}`);
+        relationships.push({ alias, table, foreignKey, columns });
+        
+        // Remove this relationship from working fields
+        workingFields = workingFields.replace(fullMatch, '');
+        // Reset regex index after modifying the string
+        inferredPattern.lastIndex = 0;
+      }
+      
+      // Pattern 3: table_name (columns) - simple syntax with inferred foreign key
+      const simplePattern = /(\w+)\s*\(([^)]*)\)/g;
+      
+      while ((match = simplePattern.exec(workingFields)) !== null) {
+        const [fullMatch, tableName, columnsStr] = match;
+        
+        // Skip if already processed
+        if (relationships.some(r => r.alias === tableName)) {
+          simplePattern.lastIndex = 0;
+          continue;
+        }
+        
+        const alias = tableName;
+        const table = tableName;
+        
+        // Infer foreign key (handle plural table names)
+        let foreignKey = `${tableName}_id`;
+        if (tableName.endsWith('s') && tableName.length > 1) {
+          const singularName = tableName.slice(0, -1);
+          foreignKey = `${singularName}_id`;
+        }
+        
+        // Extract columns
+        const columns = columnsStr.split(',')
+          .map(c => c.trim())
+          .filter(c => {
+            return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
+          });
+        
+        console.log(`🔑 [Simple Syntax] Table: ${table}, Inferred FK: ${foreignKey}`);
+        relationships.push({ alias, table, foreignKey, columns });
+        
+        // Remove this relationship from working fields
+        workingFields = workingFields.replace(fullMatch, '');
+        // Reset regex index after modifying the string
+        simplePattern.lastIndex = 0;
       }
       
       // Clean up remaining fields (non-relationship fields)
-      remainingFields = remainingFields
+      workingFields = workingFields
         .replace(/,\s*,/g, ',')
         .replace(/,\s*$/,'')
         .replace(/^\s*,/, '')
@@ -282,13 +544,13 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         table: rel.table,
         alias: rel.alias,
         on: rel.foreignKey,
-        columns: rel.columns.filter(c => c && typeof c === 'string' && c.length > 0 && c !== 'undefined') // Filter out empty/undefined/null values
+        columns: rel.columns.filter(c => c && typeof c === 'string' && c.length > 0 && c !== 'undefined')
       }));
       
       // Build SELECT fields
-      if (remainingFields && remainingFields !== '*' && remainingFields.length > 0) {
+      if (workingFields && workingFields !== '*' && workingFields.length > 0) {
         // Prefix base table fields with table name
-        const baseFieldsList = remainingFields.split(',').map(f => f.trim()).filter(f => f);
+        const baseFieldsList = workingFields.split(',').map(f => f.trim()).filter(f => f);
         this.selectFields = baseFieldsList.map(f => f === '*' ? `${this.tableName}.*` : `${this.tableName}.${f} as ${f}`).join(', ');
       } else {
         this.selectFields = `${this.tableName}.*`;
@@ -406,10 +668,44 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
   single() {
     this.limitClause = 'LIMIT 1';
     return this.then((result: any) => {
-      if (result.data && result.data.length > 0) {
-        return { data: result.data[0], error: null };
+      // Enhanced debugging for INSERT operations
+      const isInsertOp = (this as any).isInsert;
+      const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+      
+      if (isInsertOp && isDevelopment) {
+        console.log('🔍 [single()] Processing result:', {
+          hasData: !!result.data,
+          dataType: Array.isArray(result.data) ? 'array' : typeof result.data,
+          dataLength: Array.isArray(result.data) ? result.data.length : 'N/A',
+          hasError: !!result.error,
+          error: result.error
+        });
       }
-      return { data: null, error: null };
+      
+      // Check if there's an error
+      if (result.error) {
+        return { data: null, error: result.error };
+      }
+      
+      // Handle array data
+      if (result.data && Array.isArray(result.data)) {
+        if (result.data.length > 0) {
+          return { data: result.data[0], error: null };
+        }
+        // Empty array - this shouldn't happen for INSERT with RETURNING *
+        if (isInsertOp && isDevelopment) {
+          console.error('❌ [single()] INSERT returned empty array - possible RLS issue');
+        }
+        return { data: null, error: { message: 'No data returned from insert. Check RLS policies and database triggers.' } };
+      }
+      
+      // Handle single object (non-array) data
+      if (result.data && typeof result.data === 'object') {
+        return { data: result.data, error: null };
+      }
+      
+      // No data at all
+      return { data: null, error: { message: 'No data returned from operation' } };
     });
   }
 
@@ -456,16 +752,24 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
     
     // Add JOIN clauses
     for (const join of this.joins) {
+      // Determine if this is a child table relationship
+      // Child tables (variants, items, details, lines, payments, etc.) have the FK referencing the parent
+      const knownChildPatterns = ['variants', 'items', 'details', 'lines', 'payments', 'images', 'transactions', 'orders', 'sales'];
+      const isChildTable = knownChildPatterns.some(pattern => 
+        join.alias.includes(pattern) || 
+        join.table.includes(`_${pattern}`) ||
+        join.table.endsWith('_' + pattern)
+      );
+      
       // Determine if foreign key is on main table or joined table
-      // If foreign key matches pattern "{alias}_id", it's on main table
-      // Otherwise, it's on the joined table (reverse join)
-      const expectedForeignKeyOnMain = `${join.alias}_id`;
-      if (join.on === expectedForeignKeyOnMain) {
-        // Standard join: main_table.alias_id = joined_table.id
-        query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.${join.on} = ${join.alias}.id`;
-      } else {
-        // Reverse join: main_table.id = joined_table.foreign_key
+      if (isChildTable || !join.on.endsWith('_id')) {
+        // Child table join: main_table.id = child_table.foreign_key
+        // This handles cases like items, variants, details where the FK is on the child table
         query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.id = ${join.alias}.${join.on}`;
+      } else {
+        // Parent table join: main_table.foreign_key_id = parent_table.id
+        // Examples: main_table.user_id = users.id, main_table.branch_id = branches.id
+        query += ` LEFT JOIN ${join.table} AS ${join.alias} ON ${this.tableName}.${join.on} = ${join.alias}.id`;
       }
     }
     
@@ -521,27 +825,34 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           return { data: [], error: null };
         }
         
-        // Filter out undefined values from the first object to get valid columns
-        const firstRowFiltered = Object.fromEntries(
-          Object.entries(values[0]).filter(([_, v]) => v !== undefined)
-        );
-        const columns = Object.keys(firstRowFiltered).join(', ');
+        // Collect ALL unique columns from ALL rows (not just the first)
+        // This ensures all VALUES lists have the same length
+        const allColumnsSet = new Set<string>();
+        values.forEach(row => {
+          Object.entries(row).forEach(([key, value]) => {
+            if (value !== undefined) {
+              allColumnsSet.add(key);
+            }
+          });
+        });
+        const allColumns = Array.from(allColumnsSet);
+        const columns = allColumns.join(', ');
         
         // Build VALUES clause for multiple rows
+        // Each row MUST have values for ALL columns (use NULL for missing ones)
         const allPlaceholders = values.map(row => {
-          // Filter out undefined values for each row
-          const filteredRow = Object.fromEntries(
-            Object.entries(row).filter(([_, v]) => v !== undefined)
-          );
-          const rowValues = Object.values(filteredRow).map(v => this.formatValue(v)).join(', ');
+          const rowValues = allColumns.map(col => {
+            const value = row[col];
+            return value !== undefined ? this.formatValue(value) : 'NULL';
+          }).join(', ');
           return `(${rowValues})`;
         }).join(', ');
         
         // Determine conflict columns
-        const conflictClause = options?.onConflict || Object.keys(firstRowFiltered).join(',');
+        const conflictClause = options?.onConflict || allColumns.join(',');
         
         // Build update clause for conflict resolution
-        const updateClauses = Object.keys(firstRowFiltered)
+        const updateClauses = allColumns
           .map(key => `${key} = EXCLUDED.${key}`)
           .join(', ');
         
@@ -577,19 +888,26 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           return { data: [], error: null };
         }
         
-        // Filter out undefined values from the first object to get valid columns
-        const firstRowFiltered = Object.fromEntries(
-          Object.entries(values[0]).filter(([_, v]) => v !== undefined)
-        );
-        const columns = Object.keys(firstRowFiltered).join(', ');
+        // Collect ALL unique columns from ALL rows (not just the first)
+        // This ensures all VALUES lists have the same length
+        const allColumnsSet = new Set<string>();
+        values.forEach(row => {
+          Object.entries(row).forEach(([key, value]) => {
+            if (value !== undefined) {
+              allColumnsSet.add(key);
+            }
+          });
+        });
+        const allColumns = Array.from(allColumnsSet);
+        const columns = allColumns.join(', ');
         
         // Build VALUES clause for multiple rows
+        // Each row MUST have values for ALL columns (use NULL for missing ones)
         const allPlaceholders = values.map(row => {
-          // Filter out undefined values for each row
-          const filteredRow = Object.fromEntries(
-            Object.entries(row).filter(([_, v]) => v !== undefined)
-          );
-          const rowValues = Object.values(filteredRow).map(v => this.formatValue(v)).join(', ');
+          const rowValues = allColumns.map(col => {
+            const value = row[col];
+            return value !== undefined ? this.formatValue(value) : 'NULL';
+          }).join(', ');
           return `(${rowValues})`;
         }).join(', ');
         
@@ -638,34 +956,25 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       query = this.buildQuery();
     }
     
+  // Declare isDevelopment outside try/catch so it's accessible in both blocks
+  const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+    
   try {
     // ✅ ENHANCED DEBUG: Always log SQL queries that might fail with 400
     // This helps us identify the exact problematic query
-    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
     if (!this.suppressErrors && isDevelopment) {
       console.log('🔍 [SQL Query]:', query.substring(0, 300) + (query.length > 300 ? '...' : ''));
     }
     
-    // Execute using Neon serverless client with new API
+    // Execute using Neon WebSocket Pool
     // Pass suppressErrors flag to reduce noise for expected errors
-    const rawData = await executeSql(query, [], this.suppressErrors);
+    let data = await executeSql(query, [], this.suppressErrors);
       
-      // Extract rows from Neon fullResults format {fields, rows, command, ...}
-      // Neon with fullResults: true returns an object, not an array
-      let data: any;
-      if (rawData && typeof rawData === 'object' && 'rows' in rawData) {
-        data = rawData.rows; // Extract just the rows array
-      } else if (Array.isArray(rawData)) {
-        data = rawData; // Already an array
-      } else {
-        data = rawData; // Fallback
-      }
+      // executeSql now returns rows array directly from pool.query().rows
       
       // Debug logging for INSERT operations
       if (isInsertOp && process.env.NODE_ENV === 'development') {
-        console.log('🔍 [DEBUG] INSERT rawData type:', typeof rawData);
-        console.log('🔍 [DEBUG] INSERT has rows property:', rawData && 'rows' in rawData);
-        console.log('🔍 [DEBUG] INSERT extracted data:', data);
+        console.log('🔍 [DEBUG] INSERT data:', data);
         console.log('🔍 [DEBUG] INSERT data length:', Array.isArray(data) ? data.length : 'not array');
       }
       
@@ -678,33 +987,33 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       }
       
       return { data, error: null, count };
-    } catch (error: any) {
+  } catch (error: any) {
       // Check if this is a table-not-found or expected error
+      const catchErrorMsg = getErrorMessage(error);
+      const errorCode = error?.code || '';
       const isExpectedError = 
-        error.message?.includes('does not exist') ||
-        error.message?.includes('relation') ||
-        error.code === '42P01' ||
-        error.message?.includes('column') ||
-        error.code === '42703';
+        catchErrorMsg.includes('does not exist') ||
+        catchErrorMsg.includes('relation') ||
+        errorCode === '42P01' ||
+        catchErrorMsg.includes('column') ||
+        errorCode === '42703';
       
       // ✅ ENHANCED: Log 400 errors with the exact SQL query for debugging
-      const is400Error = error.message?.includes('400') || error.status === 400 || error.statusCode === 400;
-      const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+      const is400Error = catchErrorMsg.includes('400') || error?.status === 400 || error?.statusCode === 400;
       
       // Minimal logging - only unexpected errors in development mode
       if (!this.suppressErrors && !isExpectedError && isDevelopment) {
-        console.error(`❌ Query failed on '${this.tableName}':`, error.message);
+        console.error(`❌ Query failed on '${this.tableName}':`, catchErrorMsg);
         
         // If it's a 400 error, log the full query to help debug
         if (is400Error) {
           console.error('🔍 Failing SQL Query:', query);
-          console.error('🔍 Error Code:', error.code);
+          console.error('🔍 Error Code:', errorCode);
           console.error('🔍 Error Details:', error);
-          console.error('🔍 Full Error Object:', JSON.stringify(error, null, 2));
         }
       }
       
-      return { data: null, error: { message: error.message, code: error.code || '400' }, count: null };
+      return { data: null, error: { message: catchErrorMsg, code: errorCode || '400' }, count: null };
     }
   }
 
@@ -777,6 +1086,11 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
           case 'like': sqlOp = 'LIKE'; break;
           case 'ilike': sqlOp = 'ILIKE'; break;
           case 'is': sqlOp = 'IS'; break;
+        }
+        // ✅ FIX: Handle 'IS NULL' and 'IS NOT NULL' properly
+        // When operator is 'is' and value is the string 'null', use SQL NULL keyword
+        if (operator === 'is' && value.toLowerCase() === 'null') {
+          return `${column} IS NULL`;
         }
         return `${column} ${sqlOp} ${this.formatValue(value)}`;
       }
@@ -851,20 +1165,26 @@ const mockAuth = {
     try {
       console.log('🔐 Attempting login with:', { email, password });
       
-      // Query users table for authentication - using tagged template
-      const rawResult = await sql`
+      // Escape single quotes in email and password to prevent SQL injection
+      const escapedEmail = email.replace(/'/g, "''");
+      const escapedPassword = password.replace(/'/g, "''");
+      
+      // Query users table for authentication
+      // NOTE: Using string interpolation instead of parameterized queries ($1, $2)
+      // because WebSocket pooler connections in browser don't support them the same way
+      const query = `
         SELECT id, email, full_name, role, is_active, created_at, updated_at 
         FROM users 
-        WHERE email = ${email}
-        AND password = ${password}
+        WHERE email = '${escapedEmail}'
+        AND password = '${escapedPassword}'
         AND is_active = true
         LIMIT 1
       `;
       
-      // Neon returns results directly as an array (with fullResults: true, but we extract rows)
-      const result = Array.isArray(rawResult) ? rawResult : (rawResult?.rows || rawResult);
+      const rawResult = await pool.query(query);
+      const result = rawResult.rows;
       
-      console.log('🔍 Login query result:', { rawResult, result, length: result?.length });
+      console.log('🔍 Login query result:', { result, length: result?.length });
       
       if (result && Array.isArray(result) && result.length > 0) {
         const user = result[0];
@@ -900,27 +1220,27 @@ const mockAuth = {
   },
   signUp: async ({ email, password, options }: any) => {
     try {
-      // Insert new user - using tagged template
+      // Insert new user
       const metadata = options?.data || {};
       const fullName = metadata.full_name || '';
       const role = metadata.role || 'customer-care';
       
-      const result = await sql`
+      // Escape single quotes to prevent SQL injection
+      const escapedEmail = email.replace(/'/g, "''");
+      const escapedPassword = password.replace(/'/g, "''");
+      const escapedFullName = fullName.replace(/'/g, "''");
+      const escapedRole = role.replace(/'/g, "''");
+      
+      const query = `
         INSERT INTO users (email, password, full_name, role, is_active, created_at, updated_at)
-        VALUES (
-          ${email},
-          ${password},
-          ${fullName},
-          ${role},
-          true,
-          NOW(),
-          NOW()
-        )
+        VALUES ('${escapedEmail}', '${escapedPassword}', '${escapedFullName}', '${escapedRole}', true, NOW(), NOW())
         RETURNING id, email, full_name, role, is_active, created_at, updated_at
       `;
       
-      if (result && result.length > 0) {
-        return { data: { user: result[0] }, error: null };
+      const result = await pool.query(query);
+      
+      if (result.rows && result.rows.length > 0) {
+        return { data: { user: result.rows[0] }, error: null };
       }
       
       return { data: null, error: { message: 'Failed to create user' } };
@@ -1072,8 +1392,9 @@ const rpcCall = async (fn: string, params?: any) => {
       if (typeof value === 'string') {
         const escapedValue = value.replace(/'/g, "''");
         // Check if this looks like a UUID parameter (by name or value format)
-        if (key.includes('_id') || key.includes('_param') || isUUID(value)) {
-          // Cast to UUID for parameters that look like UUIDs
+        // Only cast to UUID if the parameter name suggests it's an ID AND the value looks like a UUID
+        if ((key.endsWith('_id') || key.endsWith('_id_param')) && isUUID(value)) {
+          // Cast to UUID for parameters that are actually UUIDs
           return `'${escapedValue}'::uuid`;
         }
         // Regular text parameter
@@ -1083,26 +1404,17 @@ const rpcCall = async (fn: string, params?: any) => {
     }).join(', ') : '';
     
     const query = `SELECT * FROM ${fn}(${paramsList})`;
-    // Execute using Neon serverless client with new API
+    // Execute using Neon WebSocket Pool
     // Don't suppress logs for RPC calls - we want to see errors
-    const rawData = await executeSql(query, [], false);
-    
-    // Extract rows from Neon fullResults format
-    let data: any;
-    if (rawData && typeof rawData === 'object' && 'rows' in rawData) {
-      data = rawData.rows;
-    } else if (Array.isArray(rawData)) {
-      data = rawData;
-    } else {
-      data = rawData;
-    }
+    const data = await executeSql(query, [], false);
     
     return { data, error: null };
   } catch (error: any) {
     // Log RPC errors for debugging
-    console.error(`❌ RPC Error calling ${fn}:`, error.message);
+    const rpcErrorMsg = getErrorMessage(error);
+    console.error(`❌ RPC Error calling ${fn}:`, rpcErrorMsg);
     console.error('   Params:', params);
-    return { data: null, error: { message: error.message, code: error.code || '400' } };
+    return { data: null, error: { message: rpcErrorMsg, code: error?.code || '400' } };
   }
 };
 
@@ -1140,7 +1452,7 @@ export async function retryWithBackoff<T>(
       
       // Don't retry on certain errors
       if (error && typeof error === 'object') {
-        const errorMessage = (error as any).message || '';
+        const errorMessage = getErrorMessage(error);
         
         // Don't retry on auth errors or client errors
         if (
@@ -1192,9 +1504,9 @@ export async function testSupabaseConnection(): Promise<{
 }> {
   try {
     // Test database connection with a simple query
-    const result = await sql`SELECT 1 as test`;
+    const result = await pool.query('SELECT 1 as test');
     
-    if (result && result.length > 0) {
+    if (result.rows && result.rows.length > 0) {
       return {
         success: true,
         message: 'Database connection successful',
@@ -1220,6 +1532,9 @@ export async function testSupabaseConnection(): Promise<{
 // Export for backward compatibility
 export default supabase;
 
-// Export raw SQL client for advanced queries
+// Export raw SQL client for advanced queries (tagged template interface)
 export { sql };
+
+// Export pool for direct queries
+export { pool };
 

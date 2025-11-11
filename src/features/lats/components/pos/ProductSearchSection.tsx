@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import { Search, Package, QrCode, X, MoreHorizontal, Grid, List } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantProductCard from './VariantProductCard';
-import VariantSelectionModal from './VariantSelectionModal';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../../context/AuthContext';
 import { rbacManager, type UserRole } from '../../lib/rbac';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 import { RealTimeStockService } from '../../lib/realTimeStock';
+import { useGeneralSettingsContext } from '../../../../context/GeneralSettingsContext';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 interface Product {
   id: string;
@@ -99,10 +100,13 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   totalPages,
   productsPerPage
 }) => {
+  // Get products per row setting from context
+  const { productsPerRow } = useGeneralSettingsContext();
   const { currentUser } = useAuth();
   const userRole = currentUser?.role as UserRole;
   const canAddProducts = rbacManager.can(userRole, 'products', 'create');
   const { playClickSound } = usePOSClickSounds();
+  const { t } = useTranslation(); // Add translation hook
   
   // Reset to page 1 when productsPerPage changes
   useEffect(() => {
@@ -121,11 +125,6 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   
   // View mode state (grid or list)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
-  // Variant selection modal state
-  const [showVariantModal, setShowVariantModal] = useState(false);
-  const [selectedProductForVariants, setSelectedProductForVariants] = useState<any>(null);
-  const [selectedVariant, setSelectedVariant] = useState<any>(null);
   
   // Body scroll lock for categories popup
   useBodyScrollLock(showCategoriesPopup);
@@ -286,23 +285,12 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
-  // Paginate products based on productsPerPage setting
-  const startIndex = (currentPage - 1) * productsPerPage;
-  const endIndex = startIndex + productsPerPage;
-  const displayProducts = sortedProducts.slice(startIndex, endIndex);
+  // Display all products (scrolling instead of pagination)
+  const displayProducts = sortedProducts;
   
-  // Calculate total pages based on filtered products
-  const calculatedTotalPages = Math.ceil(sortedProducts.length / productsPerPage);
+  // No pagination - all products displayed with scrolling
+  const calculatedTotalPages = 1;
 
-  // Handle variant selection from modal
-  const handleVariantSelect = (variant: any) => {
-    if (selectedProductForVariants) {
-      setSelectedVariant(variant);
-      onAddToCart(selectedProductForVariants, variant);
-      setShowVariantModal(false);
-      setSelectedProductForVariants(null);
-    }
-  };
 
   return (
     <div className="h-full flex flex-col">
@@ -317,7 +305,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <input
                     type="text"
-                    placeholder="Search products..."
+                    placeholder={`${t('common.search')} ${t('common.products').toLowerCase()}...`}
                     value={searchQuery}
                     onChange={handleSearchInputChange}
                     onKeyPress={handleSearchInputKeyPress}
@@ -354,14 +342,14 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
               <div className="flex gap-2">
                 <input
                   type="number"
-                  placeholder="Min Price"
+                  placeholder={`Min ${t('common.price')}`}
                   value={priceRange.min}
                   onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-white/80 text-sm w-24"
                 />
                 <input
                   type="number"
-                  placeholder="Max Price"
+                  placeholder={`Max ${t('common.price')}`}
                   value={priceRange.max}
                   onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-white/80 text-sm w-24"
@@ -541,15 +529,25 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
         <div className="flex-1 overflow-y-auto overflow-x-hidden pos-products-scroll" style={{ minHeight: 0 }}>
           {displayProducts.length > 0 ? (
             viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 pb-4">
-                {displayProducts.map((product) => (
-                  <VariantProductCard
-                    key={product.id}
-                    product={product as any}
-                    onAddToCart={onAddToCart as any}
-                    realTimeStockData={realTimeStockData}
-                  />
-                ))}
+              <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-6">
+                <div 
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${productsPerRow}, 1fr)`,
+                    gap: 'clamp(1rem, 2vw, 1.5rem)',
+                    gridAutoRows: '1fr'
+                  }}
+                >
+                  {displayProducts.map((product) => (
+                    <VariantProductCard
+                      key={product.id}
+                      product={product as any}
+                      onAddToCart={onAddToCart as any}
+                      realTimeStockData={realTimeStockData}
+                      className="w-full h-full"
+                    />
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="space-y-3 pb-4">
@@ -622,7 +620,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                         {/* Product Details */}
                         <div className="flex-1 min-w-0 space-y-1.5">
                           {/* Product Name */}
-                          <h4 className="font-semibold text-gray-900 text-lg truncate group-hover:text-blue-700 transition-colors">
+                          <h4 className="font-semibold text-gray-900 text-lg truncate group-hover:text-blue-700 transition-colors" title={product.name}>
                             {product.name}
                           </h4>
                           
@@ -689,12 +687,8 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                                 variants: normalizedVariants
                               };
                               
-                              if (hasMultipleVariants) {
-                                // Open variant selection modal
-                                setSelectedProductForVariants(productWithNormalizedVariants);
-                                setShowVariantModal(true);
-                              } else if (primaryVariant) {
-                                // Add single variant directly to cart
+                              if (primaryVariant) {
+                                // Add primary variant directly to cart
                                 onAddToCart(productWithNormalizedVariants, primaryVariant);
                               } else {
                                 // Add product without variant
@@ -737,92 +731,12 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
           )}
         </div>
 
-        {/* Pagination Controls */}
-        {calculatedTotalPages > 1 && (
-          <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                Showing {startIndex + 1}-{Math.min(endIndex, sortedProducts.length)} of {sortedProducts.length} products
-                <span className="ml-2 text-blue-600 font-medium">({productsPerPage} per page)</span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setCurrentPage(Math.max(1, currentPage - 1));
-                  }}
-                  disabled={currentPage <= 1}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    currentPage <= 1
-                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  Previous
-                </button>
-                
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, calculatedTotalPages) }, (_, i) => {
-                    let page;
-                    if (calculatedTotalPages <= 5) {
-                      page = i + 1;
-                    } else if (currentPage <= 3) {
-                      page = i + 1;
-                    } else if (currentPage >= calculatedTotalPages - 2) {
-                      page = calculatedTotalPages - 4 + i;
-                    } else {
-                      page = currentPage - 2 + i;
-                    }
-                    
-                    const isActive = page === currentPage;
-                    
-                    return (
-                      <button
-                        key={page}
-                        onClick={() => {
-                          playClickSound();
-                          setCurrentPage(page);
-                        }}
-                        className={`w-9 h-9 rounded-lg text-sm font-medium transition-colors ${
-                          isActive
-                            ? 'bg-blue-600 text-white'
-                            : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                      >
-                        {page}
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setCurrentPage(Math.min(calculatedTotalPages, currentPage + 1));
-                  }}
-                  disabled={currentPage >= calculatedTotalPages}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                    currentPage >= calculatedTotalPages
-                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
         {/* Product Count Display */}
-        {calculatedTotalPages <= 1 && (
-          <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200">
-            <div className="text-sm text-gray-500 text-center">
-              Showing {displayProducts.length} products ({productsPerPage} per page)
-            </div>
+        <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200">
+          <div className="text-sm text-gray-500 text-center">
+            Showing {displayProducts.length} of {sortedProducts.length} products
           </div>
-        )}
+        </div>
       </GlassCard>
 
       {/* Categories Popup Modal */}
@@ -906,22 +820,6 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
             </div>
           </div>
         </div>
-      )}
-
-      {/* Variant Selection Modal */}
-      {showVariantModal && selectedProductForVariants && createPortal(
-        <VariantSelectionModal
-          isOpen={showVariantModal}
-          onClose={() => {
-            setShowVariantModal(false);
-            setSelectedProductForVariants(null);
-            setSelectedVariant(null);
-          }}
-          product={selectedProductForVariants}
-          onSelectVariant={handleVariantSelect}
-          selectedVariant={selectedVariant}
-        />,
-        document.body
       )}
     </div>
   );

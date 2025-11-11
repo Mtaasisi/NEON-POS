@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { toast } from '../../../lib/toastUtils';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface ProblemTemplate {
   id: string;
@@ -38,6 +39,9 @@ const ProblemSelectionModal: React.FC<ProblemSelectionModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [showPreview, setShowPreview] = useState<ProblemTemplate | null>(null);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   const categories = [
     'all',

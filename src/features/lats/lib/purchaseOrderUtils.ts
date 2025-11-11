@@ -96,7 +96,8 @@ export const validatePurchaseOrder = (
   // Validate cart items
   cartItems.forEach((item, index) => {
     if (!item.productId) errors.push(`Item ${index + 1}: Product is required`);
-    if (!item.variantId) errors.push(`Item ${index + 1}: Variant is required`);
+    // Note: variantId is now optional - will be created automatically when receiving if not present
+    // if (!item.variantId) errors.push(`Item ${index + 1}: Variant is required`);
     if (!item.quantity || item.quantity <= 0) errors.push(`Item ${index + 1}: Valid quantity is required`);
     if (!item.costPrice || item.costPrice <= 0) errors.push(`Item ${index + 1}: Valid cost price is required`);
   });

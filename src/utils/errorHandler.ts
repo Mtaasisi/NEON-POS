@@ -12,6 +12,63 @@ export interface ErrorInfo {
   url?: string;
 }
 
+/**
+ * Safely extracts error message from any error type
+ * Handles cases where error.message is undefined or error is not an Error instance
+ */
+export function safeGetErrorMessage(error: any): string {
+  if (!error) return 'Unknown error';
+  if (typeof error === 'string') return error;
+  if (error instanceof Error && error.message) return error.message;
+  if (error?.message) return String(error.message);
+  return String(error);
+}
+
+/**
+ * Safely checks if an error message includes a substring
+ * Prevents TypeError when error.message is undefined
+ */
+export function safeErrorIncludes(error: any, searchString: string): boolean {
+  const message = safeGetErrorMessage(error);
+  return message.toLowerCase().includes(searchString.toLowerCase());
+}
+
+/**
+ * Checks if an error is a network error
+ */
+export function isNetworkError(error: any): boolean {
+  return (
+    safeErrorIncludes(error, 'network') ||
+    safeErrorIncludes(error, 'fetch') ||
+    safeErrorIncludes(error, 'timeout') ||
+    safeErrorIncludes(error, 'connection') ||
+    safeErrorIncludes(error, 'websocket')
+  );
+}
+
+/**
+ * Checks if an error is a permission/authorization error
+ */
+export function isPermissionError(error: any): boolean {
+  return (
+    safeErrorIncludes(error, 'permission') ||
+    safeErrorIncludes(error, 'unauthorized') ||
+    safeErrorIncludes(error, '401') ||
+    safeErrorIncludes(error, '403')
+  );
+}
+
+/**
+ * Checks if an error is a not found error
+ */
+export function isNotFoundError(error: any): boolean {
+  return (
+    safeErrorIncludes(error, 'not found') ||
+    safeErrorIncludes(error, '404') ||
+    safeErrorIncludes(error, 'does not exist')
+  );
+}
+
 class ErrorHandler {
   private static instance: ErrorHandler;
   private errorLog: ErrorInfo[] = [];
@@ -26,37 +83,42 @@ class ErrorHandler {
     return ErrorHandler.instance;
   }
 
-  handleError(error: Error | string, context?: string): void {
+  handleError(error: Error | string | any, context?: string): void {
     const errorInfo: ErrorInfo = {
-      message: typeof error === 'string' ? error : error.message,
+      message: safeGetErrorMessage(error),
       code: this.extractErrorCode(error),
       timestamp: new Date(),
       context,
       stack: error instanceof Error ? error.stack : undefined,
-      userAgent: navigator.userAgent,
-      url: window.location.href,
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
+      url: typeof window !== 'undefined' ? window.location.href : 'Unknown',
     };
 
     this.logError(errorInfo);
     this.notifyUser(errorInfo);
   }
 
-  private extractErrorCode(error: Error | string): string | undefined {
-    if (error instanceof Error) {
-      // Extract error codes from common error patterns
-      const patterns = [
-        /HTTP (\d+)/,
-        /status (\d+)/,
-        /code (\d+)/,
-      ];
+  private extractErrorCode(error: any): string | undefined {
+    // Try to get code from error object first
+    if (error?.code) {
+      return String(error.code);
+    }
+    
+    // Extract error codes from common error patterns in message
+    const message = safeGetErrorMessage(error);
+    const patterns = [
+      /HTTP (\d+)/,
+      /status (\d+)/,
+      /code (\d+)/,
+    ];
 
-      for (const pattern of patterns) {
-        const match = error.message.match(pattern);
-        if (match) {
-          return match[1];
-        }
+    for (const pattern of patterns) {
+      const match = message.match(pattern);
+      if (match) {
+        return match[1];
       }
     }
+    
     return undefined;
   }
 
@@ -126,13 +188,14 @@ class ErrorHandler {
         break;
       
       default:
-        if (errorInfo.message.includes('WebSocket')) {
+        const msgLower = errorInfo.message.toLowerCase();
+        if (msgLower.includes('websocket')) {
           this.showNotification(
             'Connection issue',
             'Real-time updates are temporarily unavailable. Trying to reconnect...',
             'warning'
           );
-        } else if (errorInfo.message.includes('network')) {
+        } else if (msgLower.includes('network') || msgLower.includes('connection')) {
           this.showNotification(
             'Network error',
             'Please check your internet connection and try again.',

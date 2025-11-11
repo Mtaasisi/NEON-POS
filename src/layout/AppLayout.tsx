@@ -40,7 +40,9 @@ import {
   Repeat,
   Wrench,
   ClipboardList,
-  MessageSquare
+  MessageSquare,
+  Shield,
+  Globe
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
@@ -401,6 +403,16 @@ const AppLayout: React.FC = () => {
         icon: <MessageSquare size={20} strokeWidth={1.5} />,
         roles: ['admin', 'customer-care'],
         count: 0
+      },
+
+      // Customer Portal
+      {
+        path: '/customer-portal/products',
+        label: 'Customer Portal',
+        icon: <Globe size={20} strokeWidth={1.5} />,
+        roles: ['admin'],
+        count: 0,
+        badge: '🌐'
       }
     ];
 
@@ -490,7 +502,7 @@ const AppLayout: React.FC = () => {
               {/* Business Name and Info */}
               <div className={`transition-opacity duration-300 ${isNavCollapsed ? 'md:hidden' : ''} min-w-0 flex-1`}>
                 <h1 className={`font-bold text-xl truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {businessInfo?.name || 'My Store'}
+                  {businessInfo?.name || 'inauzwa'}
                 </h1>
                 {businessInfo?.address && (
                   <p className={`text-sm truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>{businessInfo.address}</p>
@@ -634,7 +646,7 @@ const AppLayout: React.FC = () => {
                   </p>
                   <div className="flex gap-2">
                     <Settings size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
-                    {currentUser.role === 'admin' && (
+                    {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
                       <Users size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
                     )}
                     <User size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
@@ -663,7 +675,7 @@ const AppLayout: React.FC = () => {
                 onMouseLeave={() => setIsHoveringUserMenu(false)}
               >
                 <Settings size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
-                {currentUser.role === 'admin' && (
+                {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
                   <Users size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
                 )}
                 <User size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
@@ -706,7 +718,7 @@ const AppLayout: React.FC = () => {
                     <span>Settings</span>
                   </button>
 
-                  {currentUser.role === 'admin' && (
+                  {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
                     <button
                       onClick={() => {
                         navigate('/users');
@@ -799,7 +811,7 @@ const AppLayout: React.FC = () => {
                 <div className="py-2 px-2">
                   <button
                     onClick={() => {
-                      navigate('/admin-settings');
+                      navigate('/settings');
                       setShowUserMenu(false);
                     }}
                     className={`
@@ -821,8 +833,37 @@ const AppLayout: React.FC = () => {
                     </div>
                     <span className="font-medium">Settings</span>
                   </button>
+                  
+                  {/* Admin Settings - Admin Only */}
+                  {currentUser?.role === 'admin' && (
+                    <button
+                      onClick={() => {
+                        navigate('/admin-settings');
+                        setShowUserMenu(false);
+                      }}
+                      className={`
+                        w-full px-3 py-2.5 text-left text-sm rounded-lg mt-1
+                        ${isDark 
+                          ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
+                          : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                        }
+                        transition-all duration-200 flex items-center gap-3
+                        group
+                      `}
+                    >
+                      <div className={`
+                        p-1.5 rounded-md
+                        ${isDark ? 'bg-slate-700/50 group-hover:bg-red-600' : 'bg-gray-100 group-hover:bg-red-600'}
+                        transition-colors duration-200
+                      `}>
+                        <Shield size={14} className="group-hover:text-white" strokeWidth={1.5} />
+                      </div>
+                      <span className="font-medium">Admin Settings</span>
+                    </button>
+                  )}
+                  
 
-                  {currentUser.role === 'admin' && (
+                  {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
                     <button
                       onClick={() => {
                         navigate('/users');
@@ -897,7 +938,7 @@ const AppLayout: React.FC = () => {
         <Outlet />
 
         {/* Only show modals for users with permissions */}
-        {(currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
+        {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('create_customers') || currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
           <>
             <AddCustomerModal
               isOpen={showAddCustomer}

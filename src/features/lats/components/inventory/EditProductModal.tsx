@@ -142,11 +142,13 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
             });
             
             // Fetch variants separately from the database
+            // Exclude child variants (IMEI children) - only load parent/standard variants for editing
             console.log('📦 Fetching variants for product:', productId);
             const { data: variantsData, error: variantsError } = await supabase
               .from('lats_product_variants')
               .select('*')
-              .eq('product_id', productId);
+              .eq('product_id', productId)
+              .is('parent_variant_id', null); // Exclude IMEI children
             
             if (variantsError) {
               console.warn('⚠️ Could not load variants:', variantsError);
@@ -235,9 +237,9 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
             className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
             style={{ pointerEvents: 'auto' }}
           >
-            <div className="flex items-center justify-center">
-              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-              <span className="ml-2">Loading product data...</span>
+            <div className="flex flex-col items-center justify-center gap-4">
+              <CircularProgress size={48} strokeWidth={4} color="blue" />
+              <span className="text-gray-700 font-medium">Loading product data...</span>
             </div>
           </div>
         </div>
@@ -656,7 +658,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               >
                 {isSubmitting || isLoading ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <CircularProgress size={16} strokeWidth={2} color="white" />
                     <span>{t('Saving...')}</span>
                   </>
                 ) : (

@@ -98,7 +98,7 @@ const BulkFiltersPanel: React.FC<BulkFiltersPanelProps> = (props) => {
         onChange={e => setFilterLoyaltyMulti(Array.from(e.target.selectedOptions, o => o.value))}
         className="border border-gray-200 rounded px-2 py-1 text-xs bg-gray-50 min-w-[100px]"
       >
-        {['platinum','gold','silver','bronze'].map(lvl => (
+        {['vip','premium','regular','active','payment_customer','engaged','interested'].map(lvl => (
           <option key={lvl} value={lvl}>{lvl.charAt(0).toUpperCase() + lvl.slice(1)}</option>
         ))}
       </select>

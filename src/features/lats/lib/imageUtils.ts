@@ -109,21 +109,27 @@ export function cleanupImageData(imageData: any): any {
     return imageData;
   }
 
-  // Remove extremely large data URLs (reduced threshold)
-  if (imageData.image_url && isDataUrl(imageData.image_url) && imageData.image_url.length > 8000) {
+  const MAX_SAFE_SIZE = 8000; // 8KB max - consistent with ImageUrlSanitizer and emergencyUrlCleanup
+
+  // Remove extremely large data URLs (8KB threshold)
+  if (imageData.image_url && isDataUrl(imageData.image_url) && imageData.image_url.length > MAX_SAFE_SIZE) {
+    console.warn(`🧹 Cleaning up large image_url (${Math.round(imageData.image_url.length / 1024)}KB)`);
     imageData.image_url = getFallbackImageUrl('product', imageData.file_name);
   }
 
-  if (imageData.thumbnail_url && isDataUrl(imageData.thumbnail_url) && imageData.thumbnail_url.length > 8000) {
+  if (imageData.thumbnail_url && isDataUrl(imageData.thumbnail_url) && imageData.thumbnail_url.length > MAX_SAFE_SIZE) {
+    console.warn(`🧹 Cleaning up large thumbnail_url (${Math.round(imageData.thumbnail_url.length / 1024)}KB)`);
     imageData.thumbnail_url = getFallbackImageUrl('product', imageData.file_name);
   }
 
   // Handle UploadedImage format
-  if (imageData.url && isDataUrl(imageData.url) && imageData.url.length > 8000) {
+  if (imageData.url && isDataUrl(imageData.url) && imageData.url.length > MAX_SAFE_SIZE) {
+    console.warn(`🧹 Cleaning up large url (${Math.round(imageData.url.length / 1024)}KB)`);
     imageData.url = getFallbackImageUrl('product', imageData.fileName);
   }
 
-  if (imageData.thumbnailUrl && isDataUrl(imageData.thumbnailUrl) && imageData.thumbnailUrl.length > 8000) {
+  if (imageData.thumbnailUrl && isDataUrl(imageData.thumbnailUrl) && imageData.thumbnailUrl.length > MAX_SAFE_SIZE) {
+    console.warn(`🧹 Cleaning up large thumbnailUrl (${Math.round(imageData.thumbnailUrl.length / 1024)}KB)`);
     imageData.thumbnailUrl = getFallbackImageUrl('product', imageData.fileName);
   }
 
@@ -153,21 +159,28 @@ export function validateImageUrl(url: string): boolean {
 
 /**
  * Emergency cleanup for extremely long URLs that might cause HTTP 431 errors
+ * Updated to aggressively replace large base64 images
  */
 export function emergencyUrlCleanup(url: string): string {
   if (!url || typeof url !== 'string') {
     return getFallbackImageUrl('product');
   }
 
-  // If URL is extremely long, immediately return fallback
-  if (url.length > 2000) {
-    console.error('Emergency URL cleanup: URL extremely long, using fallback');
-    return getFallbackImageUrl('product');
+  // Replace Base64 images larger than 8KB to prevent HTTP 431 errors
+  // Lowered from 10KB to 8KB to match ImageUrlSanitizer threshold
+  // Base64 images in the database should be compressed or replaced with URLs
+  if (isDataUrl(url)) {
+    const MAX_SAFE_BASE64_SIZE = 8000; // 8KB max for base64 images (matches ImageUrlSanitizer)
+    
+    if (url.length > MAX_SAFE_BASE64_SIZE) {
+      console.warn(`🚨 Replacing large base64 image (${Math.round(url.length / 1024)}KB) with placeholder to prevent HTTP 431 errors`);
+      return getFallbackImageUrl('product');
+    }
   }
 
-  // If it's a data URL and extremely large, return fallback
-  if (isDataUrl(url) && url.length > 10000) {
-    console.error('Emergency URL cleanup: Data URL extremely large, using fallback');
+  // If URL is extremely long (non-Base64), return fallback
+  if (!isDataUrl(url) && url.length > 2000) {
+    console.error('🚨 Emergency URL cleanup: URL extremely long, using fallback');
     return getFallbackImageUrl('product');
   }
 

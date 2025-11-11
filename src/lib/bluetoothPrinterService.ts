@@ -55,7 +55,8 @@ class BluetoothPrinterService {
     try {
       // Check if Bluetooth is available
       if (!navigator.bluetooth) {
-        throw new Error('Bluetooth not supported in this browser');
+        console.warn('ℹ️ Bluetooth printing not available in this browser. Use Chrome/Edge on HTTPS for Bluetooth support.');
+        return false; // Return false without throwing
       }
 
       // Load saved settings

@@ -5,19 +5,13 @@ import SearchBar from '../../../shared/components/ui/SearchBar';
 import { 
   Truck, Plus, Edit, Trash2, Search, Building, 
   CheckCircle, XCircle, Phone, Mail, Globe, MapPin,
-  RefreshCw, AlertCircle
+  RefreshCw, AlertCircle, Package
 } from 'lucide-react';
-
-// Country flag mapping
-const countryFlags: { [key: string]: string } = {
-  TZ: '🇹🇿', AE: '🇦🇪', CN: '🇨🇳', US: '🇺🇸', CA: '🇨🇦', UK: '🇬🇧',
-  DE: '🇩🇪', FR: '🇫🇷', JP: '🇯🇵', IN: '🇮🇳', BR: '🇧🇷', AU: '🇦🇺',
-  KE: '🇰🇪', UG: '🇺🇬', RW: '🇷🇼', ET: '🇪🇹', NG: '🇳🇬', ZA: '🇿🇦',
-  EG: '🇪🇬', SA: '🇸🇦', TR: '🇹🇷', RU: '🇷🇺', KR: '🇰🇷', SG: '🇸🇬',
-  MY: '🇲🇾', TH: '🇹🇭', VN: '🇻🇳', ID: '🇮🇩', PH: '🇵🇭'
-};
+import { extractProductCategories, getCategoryColor } from '../../../../utils/supplierUtils';
+import { getCountryFlag, formatCountryDisplay } from '../../../../utils/countryFlags';
 import { toast } from 'react-hot-toast';
 import SupplierForm from '../inventory/SupplierForm';
+import SupplierDetailModal from '../../../settings/components/SupplierDetailModal';
 import { 
   getActiveSuppliers, 
   getAllSuppliers,
@@ -35,18 +29,20 @@ const SuppliersTab: React.FC = () => {
   const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'active' | 'all'>('active');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
 
-  // Load suppliers from database
+  // Load suppliers from database - All suppliers are always active
   const loadSuppliers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const data = statusFilter === 'active' ? await getActiveSuppliers() : await getAllSuppliers();
+      const data = await getAllSuppliers();
       setSuppliers(data);
       setFilteredSuppliers(data);
     } catch (err) {
@@ -59,15 +55,26 @@ const SuppliersTab: React.FC = () => {
     }
   };
 
-  // Load suppliers on component mount and when status filter changes
+  // Load suppliers on component mount
   useEffect(() => {
     loadSuppliers();
-  }, [statusFilter]);
+  }, []);
 
-  // Filter suppliers based on search
+  // Filter suppliers based on search and status
   useEffect(() => {
+    let filtered = suppliers;
+
+    // Apply status filter first
+    if (statusFilter === 'active') {
+      filtered = filtered.filter(s => s.is_active === true);
+    } else if (statusFilter === 'inactive') {
+      filtered = filtered.filter(s => s.is_active === false);
+    }
+    // 'all' shows everything - no additional filtering needed
+
+    // Then apply search filter
     if (!searchQuery.trim()) {
-      setFilteredSuppliers(suppliers);
+      setFilteredSuppliers(filtered);
       return;
     }
 
@@ -76,46 +83,59 @@ const SuppliersTab: React.FC = () => {
       const performSearch = async () => {
         try {
           const searchResults = await searchSuppliers(searchQuery);
-          setFilteredSuppliers(searchResults);
+          // Apply status filter to search results
+          let statusFiltered = searchResults;
+          if (statusFilter === 'active') {
+            statusFiltered = searchResults.filter(s => s.is_active === true);
+          } else if (statusFilter === 'inactive') {
+            statusFiltered = searchResults.filter(s => s.is_active === false);
+          }
+          setFilteredSuppliers(statusFiltered);
         } catch (err) {
           console.error('Search error:', err);
           // Fallback to local filtering
-          const filtered = suppliers.filter(supplier => 
+          const searchFiltered = filtered.filter(supplier => 
             supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             supplier.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             supplier.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             supplier.contact_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             supplier.email?.toLowerCase().includes(searchQuery.toLowerCase())
           );
-          setFilteredSuppliers(filtered);
+          setFilteredSuppliers(searchFiltered);
         }
       };
       performSearch();
     } else {
       // Local filtering for short queries
-      const filtered = suppliers.filter(supplier => 
+      const searchFiltered = filtered.filter(supplier => 
         supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         supplier.company_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         supplier.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         supplier.contact_person?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         supplier.email?.toLowerCase().includes(searchQuery.toLowerCase())
       );
-      setFilteredSuppliers(filtered);
+      setFilteredSuppliers(searchFiltered);
     }
-  }, [suppliers, searchQuery]);
+  }, [suppliers, searchQuery, statusFilter]);
 
   const handleAddSupplier = () => {
     setEditingSupplier(null);
     setShowSupplierForm(true);
   };
 
+  const handleViewSupplier = (supplier: Supplier) => {
+    setViewingSupplier(supplier);
+    setShowDetailsModal(true);
+  };
+
   const handleEditSupplier = (supplier: Supplier) => {
     setEditingSupplier(supplier);
     setShowSupplierForm(true);
+    setShowDetailsModal(false); // Close details modal if open
   };
 
   const handleDeleteSupplier = async (supplierId: string) => {
-    if (!confirm('Are you sure you want to delete this supplier? This action cannot be undone.')) {
+    if (!confirm('⚠️ PERMANENT DELETE: Are you sure you want to permanently delete this supplier from the database? This action CANNOT be undone!')) {
       return;
     }
 
@@ -127,7 +147,7 @@ const SuppliersTab: React.FC = () => {
       setSuppliers(prev => prev.filter(s => s.id !== supplierId));
       setFilteredSuppliers(prev => prev.filter(s => s.id !== supplierId));
       
-      toast.success('Supplier deleted successfully');
+      toast.success('Supplier permanently deleted from database');
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete supplier';
       toast.error(errorMessage);
@@ -247,11 +267,12 @@ const SuppliersTab: React.FC = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Status Filter</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'active' | 'all')}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
             >
-              <option value="active">Active Only</option>
               <option value="all">All Suppliers</option>
+              <option value="active">Active Only</option>
+              <option value="inactive">Inactive Only</option>
             </select>
           </div>
         </div>
@@ -303,6 +324,14 @@ const SuppliersTab: React.FC = () => {
                   </div>
                   <div className="flex gap-1">
                     <button
+                      onClick={() => handleViewSupplier(supplier)}
+                      className="p-1 text-gray-400 hover:text-green-600 transition-colors"
+                      title="View details"
+                      disabled={isSubmitting}
+                    >
+                      <Globe size={16} />
+                    </button>
+                    <button
                       onClick={() => handleEditSupplier(supplier)}
                       className="p-1 text-gray-400 hover:text-purple-600 transition-colors"
                       title="Edit supplier"
@@ -344,11 +373,19 @@ const SuppliersTab: React.FC = () => {
                       </a>
                     </div>
                   )}
-                  {supplier.city && supplier.country && (
-                    <div className="flex items-center gap-1">
+                  {(supplier.city || supplier.country) && (
+                    <div className="flex items-center gap-1.5">
                       <MapPin className="w-3 h-3" />
-                      <span>
-                        {supplier.city}, {countryFlags[supplier.country] || '🌍'} {supplier.country}
+                      <span className="flex items-center gap-1.5">
+                        {supplier.country && (
+                          <span className="text-base leading-none">{getCountryFlag(supplier.country)}</span>
+                        )}
+                        <span>
+                          {supplier.city && supplier.country 
+                            ? `${supplier.city}, ${supplier.country}` 
+                            : supplier.city || supplier.country
+                          }
+                        </span>
                       </span>
                     </div>
                   )}
@@ -360,19 +397,35 @@ const SuppliersTab: React.FC = () => {
                       </span>
                     </div>
                   )}
-                  {supplier.is_active !== undefined && (
-                    <div className="flex items-center gap-1">
-                      <span className="font-medium">Status:</span>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        supplier.is_active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {supplier.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                  )}
                 </div>
+
+                {/* Product Categories */}
+                {(() => {
+                  const categories = extractProductCategories(supplier.notes);
+                  return categories.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Package className="w-3.5 h-3.5 text-gray-500" />
+                        <span className="text-xs font-medium text-gray-600">Products:</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {categories.slice(0, 3).map((category, idx) => (
+                          <span
+                            key={idx}
+                            className={`px-2 py-0.5 text-xs font-medium rounded-md border ${getCategoryColor(category)}`}
+                          >
+                            {category}
+                          </span>
+                        ))}
+                        {categories.length > 3 && (
+                          <span className="px-2 py-0.5 text-xs text-gray-500 bg-gray-100 rounded-md border border-gray-200">
+                            +{categories.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             ))}
           </div>
@@ -391,6 +444,21 @@ const SuppliersTab: React.FC = () => {
             />
           </div>
         </div>
+      )}
+
+      {/* Supplier Details Modal */}
+      {viewingSupplier && showDetailsModal && (
+        <SupplierDetailModal
+          supplier={viewingSupplier}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setViewingSupplier(null);
+          }}
+          onUpdate={() => {
+            loadSuppliers();
+          }}
+          onEdit={handleEditSupplier}
+        />
       )}
     </div>
   );

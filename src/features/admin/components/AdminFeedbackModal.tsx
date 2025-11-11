@@ -5,6 +5,7 @@ import { submitAdminFeedback } from '../../../lib/diagnosticsApi';
 import { DiagnosticDevice, NextAction, NEXT_ACTION } from '../types/diagnostics';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface AdminFeedbackModalProps {
   device: DiagnosticDevice;
@@ -22,6 +23,9 @@ const AdminFeedbackModal: React.FC<AdminFeedbackModalProps> = ({
   const [nextAction, setNextAction] = useState<NextAction | ''>('');
   const [feedback, setFeedback] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Action-specific feedback templates
   const getActionTemplate = (action: NextAction) => {

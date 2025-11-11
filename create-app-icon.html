@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>POS App Icon Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            margin: 20px 0;
+            border-radius: 10px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .sizes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .size-card {
+            background: #f7f9fc;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border-left: 4px solid #2196f3;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .instructions ol {
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 POS Mobile App Icon Generator</h1>
+        
+        <canvas id="iconCanvas" width="512" height="512"></canvas>
+        
+        <div style="text-align: center;">
+            <button onclick="generateIcon()">🔄 Regenerate Icon</button>
+            <button onclick="downloadAll()">💾 Download All Sizes</button>
+        </div>
+
+        <div class="instructions">
+            <h3>📋 Installation Instructions:</h3>
+            <ol>
+                <li>Click "Download All Sizes" to get all icon sizes</li>
+                <li>Extract the downloaded icons to your computer</li>
+                <li>Copy icons to these folders in your Android project:
+                    <ul>
+                        <li><code>android/app/src/main/res/mipmap-hdpi/</code></li>
+                        <li><code>android/app/src/main/res/mipmap-mdpi/</code></li>
+                        <li><code>android/app/src/main/res/mipmap-xhdpi/</code></li>
+                        <li><code>android/app/src/main/res/mipmap-xxhdpi/</code></li>
+                        <li><code>android/app/src/main/res/mipmap-xxxhdpi/</code></li>
+                    </ul>
+                </li>
+                <li>Rebuild your APK</li>
+            </ol>
+        </div>
+
+        <div class="sizes">
+            <div class="size-card">
+                <strong>mdpi</strong><br>48x48
+            </div>
+            <div class="size-card">
+                <strong>hdpi</strong><br>72x72
+            </div>
+            <div class="size-card">
+                <strong>xhdpi</strong><br>96x96
+            </div>
+            <div class="size-card">
+                <strong>xxhdpi</strong><br>144x144
+            </div>
+            <div class="size-card">
+                <strong>xxxhdpi</strong><br>192x192
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function generateIcon() {
+            const canvas = document.getElementById('iconCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, 512, 512);
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, 512, 512);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            
+            // Draw rounded rectangle background
+            ctx.fillStyle = gradient;
+            roundRect(ctx, 0, 0, 512, 512, 80);
+            ctx.fill();
+            
+            // Draw POS text
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 180px -apple-system, BlinkMacSystemFont, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('POS', 256, 256);
+            
+            // Draw accent circle
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 8;
+            ctx.beginPath();
+            ctx.arc(256, 256, 200, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+        
+        function downloadImage(size, filename) {
+            const originalCanvas = document.getElementById('iconCanvas');
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = size;
+            tempCanvas.height = size;
+            const ctx = tempCanvas.getContext('2d');
+            ctx.drawImage(originalCanvas, 0, 0, size, size);
+            
+            tempCanvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        function downloadAll() {
+            const sizes = {
+                'ic_launcher-mdpi': 48,
+                'ic_launcher-hdpi': 72,
+                'ic_launcher-xhdpi': 96,
+                'ic_launcher-xxhdpi': 144,
+                'ic_launcher-xxxhdpi': 192,
+                'ic_launcher': 512
+            };
+            
+            let delay = 0;
+            for (const [name, size] of Object.entries(sizes)) {
+                setTimeout(() => downloadImage(size, `${name}.png`), delay);
+                delay += 500;
+            }
+            
+            alert('Downloading all icon sizes! Check your downloads folder.');
+        }
+        
+        // Generate icon on page load
+        generateIcon();
+    </script>
+</body>
+</html>
+

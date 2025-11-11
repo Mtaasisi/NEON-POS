@@ -2,6 +2,7 @@
 @import './styles/general-settings.css';
 @import './styles/mobile.css';
 @import './styles/mobile-responsive.css';
+@import './styles/mobile-auto-responsive.css';
 @import './styles/pos-responsive-scaling.css';
 
 @tailwind base;
@@ -412,6 +413,9 @@ html.font-large {
 /* Modal Scrolling Improvements */
 .modal-scrollable {
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain; /* Prevent scroll chaining to body */
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .modal-scrollable::-webkit-scrollbar {
@@ -431,12 +435,27 @@ html.font-large {
   background: #d1d5db;
 }
 
+/* Prevent scroll chaining on all modal elements */
+.fixed[class*="z-"], 
+[class*="fixed"][class*="inset"],
+[class*="modal"] {
+  overscroll-behavior: contain;
+}
+
+/* When body is locked, ensure modals can still scroll */
+body[style*="position: fixed"] .modal-scrollable,
+body[style*="position: fixed"] [class*="overflow-y-auto"] {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
 /* Ensure modals work well on mobile */
 @media (max-width: 768px) {
   .modal-scrollable {
     -webkit-overflow-scrolling: touch;
     max-height: 80vh;
     overflow-y: auto;
+    overscroll-behavior: contain;
   }
   
   /* Mobile-specific body adjustments */
@@ -444,6 +463,19 @@ html.font-large {
     width: 100vw;
     overflow-x: hidden;
     position: relative;
+  }
+  
+  /* Prevent bounce scrolling on locked body */
+  body[style*="position: fixed"] {
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+  
+  /* But allow scrolling within modals */
+  body[style*="position: fixed"] .modal-scrollable,
+  body[style*="position: fixed"] [class*="overflow-y-auto"] {
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
   }
   
   /* Mobile viewport fixes */
@@ -456,7 +488,7 @@ html.font-large {
     user-select: none;
   }
   
-  input, textarea, select {
+  input, textarea, select, button {
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
@@ -839,6 +871,50 @@ body {
 @media (max-width: 768px) {
   .mobile-wallpaper {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+}
+
+/* ===== DASHBOARD RESPONSIVE COMPONENTS ===== */
+
+/* Dashboard Cards - Responsive Grid Layout */
+.dashboard-cards {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 767px) {
+  .dashboard-cards {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  .dashboard-card {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .dashboard-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Quick Actions - Flexbox Responsive Layout */
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+@media (max-width: 767px) {
+  .quick-actions {
+    flex-direction: column !important;
+    gap: 12px !important;
   }
 }
 

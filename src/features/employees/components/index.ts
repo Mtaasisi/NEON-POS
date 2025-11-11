@@ -1,5 +1,6 @@
 export { default as EmployeeForm } from './EmployeeForm';
 export { default as AttendanceModal } from './AttendanceModal';
+export { default as ImportEmployeesFromUsersModal } from './ImportEmployeesFromUsersModal';
 export { default as EmployeeAttendanceCard } from './EmployeeAttendanceCard';
 export { default as AttendanceFeatureCard } from './AttendanceFeatureCard';
 export { default as LocationVerification } from './LocationVerification';

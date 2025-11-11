@@ -387,9 +387,13 @@ class DraftProductsService {
         productIds.length > 0 
           ? supabase.from('lats_products').select('*').in('id', productIds)
           : Promise.resolve({ data: [], error: null }),
-        // Fetch variants
+        // Fetch variants (exclude child variants - only parent/standard variants)
         productIds.length > 0
-          ? supabase.from('lats_product_variants').select('*').in('product_id', productIds)
+          ? supabase
+              .from('lats_product_variants')
+              .select('*')
+              .in('product_id', productIds)
+              .is('parent_variant_id', null) // Exclude IMEI children
           : Promise.resolve({ data: [], error: null }),
         // Fetch PO items
         poItemIds.length > 0
@@ -400,7 +404,7 @@ class DraftProductsService {
       // Get unique purchase order IDs from PO items
       const poIds = poItemsResult.data?.map(item => item.purchase_order_id).filter(Boolean) || [];
       const poResult = poIds.length > 0
-        ? await supabase.from('lats_purchase_orders').select('id, currency, exchange_rate, base_currency').in('id', poIds)
+        ? await supabase.from('lats_purchase_orders').select('id, currency, exchange_rate, base_currency, total_amount_base_currency, payment_terms, exchange_rate_source, exchange_rate_date').in('id', poIds)
         : { data: [], error: null };
 
       // Map data for easy lookup

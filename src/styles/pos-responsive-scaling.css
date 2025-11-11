@@ -41,11 +41,9 @@
     font-size: 1.45em;
   }
   
-  /* Product cards scaling */
+  /* Product cards scaling - responsive */
   .pos-product-card {
-    transform: scale(1.4);
-    transform-origin: center;
-    margin: 0.5rem;
+    /* Removed fixed scale to allow responsive Tailwind classes to work */
   }
   
   /* Cart items scaling */
@@ -145,11 +143,10 @@
   }
 }
 
-/* Product grid scaling */
+/* Product grid scaling - responsive, controlled by Tailwind grid-cols */
 @media (min-width: 2000px) and (max-width: 2200px) {
   .pos-product-grid {
-    grid-template-columns: repeat(auto-fill, minmax(calc(200px * 1.4), 1fr));
-    gap: calc(1rem * 1.4);
+    /* Grid columns now controlled by responsive Tailwind classes */
   }
 }
 

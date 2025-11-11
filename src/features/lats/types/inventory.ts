@@ -19,14 +19,18 @@ export interface Category {
 export interface Supplier {
   id: string;
   name: string;
+  companyName?: string;
+  description?: string;
   code?: string;
   contactPerson?: string;
   email?: string;
   phone?: string;
+  whatsapp?: string;
   address?: string;
   city?: string;
   country: string;
-  currency?: string; // Add currency field
+  currency?: string; // Preferred currency field
+  exchangeRate?: number; // Exchange rate from preferred currency to base currency
   paymentTerms?: string;
   leadTimeDays: number;
   isActive: boolean;
@@ -34,7 +38,7 @@ export interface Supplier {
   createdAt: string;
   updatedAt: string;
   
-  // New performance fields
+  // Performance fields
   leadTime?: number; // in days
   rating?: number; // 0-5
   totalOrders?: number;

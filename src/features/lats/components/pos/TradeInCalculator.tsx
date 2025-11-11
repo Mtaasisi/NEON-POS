@@ -225,7 +225,7 @@ export const TradeInCalculator: React.FC<TradeInCalculatorProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[99998] p-4"
       onClick={(e) => {
         // Only close if clicking the backdrop itself
         if (e.target === e.currentTarget) {
@@ -233,7 +233,7 @@ export const TradeInCalculator: React.FC<TradeInCalculatorProps> = ({
         }
       }}
     >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col relative z-[99998]">
         {/* Header */}
         <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700">
           <div className="flex items-center justify-between">
@@ -663,16 +663,13 @@ export const TradeInCalculator: React.FC<TradeInCalculatorProps> = ({
                     </button>
                     <button
                       type="button"
-                      onMouseEnter={() => console.log('🖱️ Mouse entered Complete button')}
-                      onMouseDown={() => console.log('👇 Mouse down on Complete button')}
                       onClick={(e) => {
                         console.log('🔘 Complete Trade-In button CLICKED!');
                         e.preventDefault();
                         e.stopPropagation();
                         handleComplete();
                       }}
-                      className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 font-semibold transition-colors cursor-pointer shadow-md hover:shadow-lg"
-                      style={{ position: 'relative', zIndex: 10 }}
+                      className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 font-semibold transition-colors shadow-md hover:shadow-lg"
                     >
                       Complete Trade-In
                     </button>

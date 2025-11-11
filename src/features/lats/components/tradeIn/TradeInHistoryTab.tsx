@@ -79,10 +79,22 @@ const TradeInHistoryTab: React.FC = () => {
       };
     }
 
+    // ✅ FIX: Parse values as numbers and filter out corrupt amounts (> 1 trillion)
+    const MAX_REALISTIC_AMOUNT = 1_000_000_000_000;
+    const validTransactions = transactions.filter((t) => {
+      const value = Number(t.final_trade_in_value) || 0;
+      return Math.abs(value) <= MAX_REALISTIC_AMOUNT && isFinite(value);
+    });
+
+    const totalValue = validTransactions.reduce((sum, t) => {
+      const value = Number(t.final_trade_in_value) || 0;
+      return sum + value;
+    }, 0);
+
     return {
       totalTransactions: transactions.length,
-      totalValue: transactions.reduce((sum, t) => sum + t.final_trade_in_value, 0),
-      averageValue: transactions.reduce((sum, t) => sum + t.final_trade_in_value, 0) / transactions.length,
+      totalValue,
+      averageValue: validTransactions.length > 0 ? totalValue / validTransactions.length : 0,
       pendingCount: transactions.filter((t) => t.status === 'pending').length,
       completedCount: transactions.filter((t) => t.status === 'completed').length,
       needsRepairCount: transactions.filter((t) => t.needs_repair && !t.ready_for_resale).length,
@@ -415,6 +427,10 @@ const TradeInHistoryTab: React.FC = () => {
         <TradeInDetailsModal
           transaction={selectedTransaction}
           onClose={() => setSelectedTransaction(null)}
+          onStatusChange={() => {
+            loadTransactions(); // Refresh the list after status change
+            setSelectedTransaction(null);
+          }}
         />
       )}
     </div>

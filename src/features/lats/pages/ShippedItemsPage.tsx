@@ -1,5 +1,5 @@
 // Shipped Items Management Page - Track and manage purchase order shipments
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import GlassCard from '../../shared/components/ui/GlassCard';
@@ -61,8 +61,9 @@ const ShippedItemsPage: React.FC = () => {
   const [selectedPOFilter, setSelectedPOFilter] = useState<string>(purchaseOrderId || '');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [displayCount, setDisplayCount] = useState(10); // For infinite scroll
   const itemsPerPage = 10;
+  const loaderRef = useRef<HTMLDivElement>(null);
 
   // Modal states
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -91,6 +92,34 @@ const ShippedItemsPage: React.FC = () => {
 
     loadData();
   }, [loadPurchaseOrders, loadProducts, loadSuppliers, loadShippedItems, purchaseOrderId]);
+
+  // Reset display count when filters change
+  useEffect(() => {
+    setDisplayCount(10);
+  }, [searchQuery, statusFilter, selectedPOFilter]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          setDisplayCount(prev => prev + itemsPerPage);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [hasMore, isLoading]);
 
   // Create mock shipped items for demonstration (replace with real data)
   const mockShippedItems: ShippedItemWithDetails[] = useMemo(() => {
@@ -139,12 +168,9 @@ const ShippedItemsPage: React.FC = () => {
     return filtered;
   }, [mockShippedItems, searchQuery, statusFilter, selectedPOFilter]);
 
-  // Paginate results
-  const totalPages = Math.ceil(filteredShippedItems.length / itemsPerPage);
-  const paginatedItems = filteredShippedItems.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  // Infinite scroll - show items up to displayCount
+  const displayedItems = filteredShippedItems.slice(0, displayCount);
+  const hasMore = displayCount < filteredShippedItems.length;
 
   // Handle receive item
   const handleReceiveItem = async (item: ShippedItem) => {
@@ -413,7 +439,7 @@ const ShippedItemsPage: React.FC = () => {
 
               {/* Table Body */}
               <div className="divide-y divide-gray-200">
-                {paginatedItems.map((item) => (
+                {displayedItems.map((item) => (
                   <div key={item.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
                     <div className="grid grid-cols-8 gap-4 items-center">
                       <div>
@@ -502,31 +528,25 @@ const ShippedItemsPage: React.FC = () => {
                 ))}
               </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
+              {/* Infinite Scroll Loading Indicator */}
+              {filteredShippedItems.length > 0 && (
                 <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-600">
-                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredShippedItems.length)} of {filteredShippedItems.length} results
+                  <div className="text-center">
+                    <div className="text-sm text-gray-600 mb-2">
+                      Showing {displayedItems.length} of {filteredShippedItems.length} shipments
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                        disabled={currentPage === 1}
-                        className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        ‹
-                      </button>
-                      <span className="px-3 py-1 text-sm font-medium text-gray-700">
-                        {currentPage} of {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                        disabled={currentPage === totalPages}
-                        className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        ›
-                      </button>
+                    <div ref={loaderRef} className="py-2">
+                      {hasMore && !isLoading && (
+                        <div className="flex items-center justify-center gap-2 text-blue-600">
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span className="text-sm">Loading more shipments...</span>
+                        </div>
+                      )}
+                      {!hasMore && displayedItems.length > 0 && (
+                        <div className="text-gray-500 text-sm">
+                          ✓ All shipments loaded
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

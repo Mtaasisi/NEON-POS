@@ -263,7 +263,7 @@ export const getContextualSuggestions = (context: {
 
     case 'customer':
       return {
-        loyaltyLevel: 'bronze',
+        loyaltyLevel: 'interested',
         colorTag: 'new',
       };
 

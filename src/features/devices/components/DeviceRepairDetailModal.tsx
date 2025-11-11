@@ -701,7 +701,7 @@ const DeviceRepairDetailModal: React.FC<DeviceRepairDetailModalProps> = ({
       
       // Validate status transition
       if (device.status === newStatus) {
-        toast.info(`Device is already in "${newStatus}" status`);
+        toast(`Device is already in "${newStatus}" status`);
         return;
       }
       
@@ -2078,7 +2078,7 @@ const DeviceRepairDetailModal: React.FC<DeviceRepairDetailModalProps> = ({
                         <button
                           onClick={() => {
                             // Diagnostic checklist is now handled by RepairStatusGrid
-                            toast.info('Use the "Start Diagnosis" button in the repair status section');
+                            toast('Use the "Start Diagnosis" button in the repair status section');
                           }}
                           className="block w-full text-sm text-gray-400 font-medium py-2 px-4 bg-gray-50 rounded-lg transition-colors cursor-not-allowed"
                           disabled

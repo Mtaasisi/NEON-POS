@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { PageErrorWrapper } from '../components/PageErrorWrapper';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import { useDashboardSettings } from '../../../hooks/useDashboardSettings';
+import { useSmartGridLayout } from '../../../hooks/useSmartGridLayout';
 import { useDateRange } from '../../../context/DateRangeContext';
 import { DateRangeSelector } from '../../../components/DateRangeSelector';
 import { DashboardBranchFilter } from '../../../components/DashboardBranchFilter';
@@ -14,7 +15,7 @@ import {
   Zap, RefreshCw, FileText,
   BarChart3, MessageCircle, Settings,
   Search, Star, HardDrive,
-  MessageSquare, Wrench, Download, Upload,
+  MessageSquare, Download, Upload,
   UserCheck, Database, Target, Bot,
   Printer, Tag, Building, MapPin, Clock
 } from 'lucide-react';
@@ -60,8 +61,12 @@ const DashboardPageContent: React.FC = () => {
   const { 
     isQuickActionEnabled, 
     isWidgetEnabled, 
+    getWidgetSize,
     loading: settingsLoading 
   } = useDashboardSettings();
+  
+  // Smart grid layout hook
+  const { autoArrangeWidgets } = useSmartGridLayout();
   
   // Date range filter hook
   const { dateRange, setDateRange, getDateRangeForQuery } = useDateRange();
@@ -79,6 +84,80 @@ const DashboardPageContent: React.FC = () => {
   // State management
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
+  
+  // Widget order state - loads from localStorage (set in settings)
+  const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
+  const committedOrderRef = useRef<string[]>([]);
+
+  // Load saved widget order
+  const loadWidgetOrder = () => {
+    try {
+      const savedOrder = localStorage.getItem('dashboard_widget_order');
+      if (savedOrder) {
+        const parsedOrder = JSON.parse(savedOrder);
+        // Filter to only include enabled widgets
+        const filteredOrder = parsedOrder.filter((widget: string) => isWidgetEnabled(widget as any));
+        setWidgetOrder(filteredOrder);
+        committedOrderRef.current = filteredOrder;
+        console.log('📂 Loaded saved widget order:', filteredOrder);
+      } else {
+        // Use default order if no saved order exists
+        const DEFAULT_WIDGET_ORDER = [
+          'revenueTrendChart', 'salesChart', 'deviceStatusChart', 'appointmentsTrendChart',
+          'purchaseOrderChart', 'paymentMethodsChart', 'analyticsWidget', 'salesByCategoryChart', 'profitMarginChart',
+          'stockLevelChart', 'performanceMetricsChart', 'customerActivityChart',
+          'appointmentWidget', 'employeeWidget', 'notificationWidget',
+          'financialWidget', 'salesFunnelChart',
+          'customerInsightsWidget', 'serviceWidget', 'reminderWidget',
+          'systemHealthWidget', 'inventoryWidget', 'activityFeedWidget',
+          'purchaseOrderWidget', 'chatWidget', 'salesWidget', 'topProductsWidget', 
+          'expensesWidget', 'staffPerformanceWidget'
+        ];
+        const filteredOrder = DEFAULT_WIDGET_ORDER.filter((widget: string) => isWidgetEnabled(widget as any));
+        setWidgetOrder(filteredOrder);
+        committedOrderRef.current = filteredOrder;
+        console.log('📂 Using default widget order (no saved order found)');
+      }
+    } catch (error) {
+      console.error('Error loading widget order:', error);
+    }
+  };
+
+  // Load on mount
+  useEffect(() => {
+    loadWidgetOrder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
+
+  // Listen for storage changes (when settings are saved)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'dashboard_widget_order') {
+        console.log('🔄 Widget order changed in storage, reloading...');
+        loadWidgetOrder();
+      }
+    };
+
+    // Listen for custom event (for same-tab updates)
+    const handleCustomStorageChange = () => {
+      console.log('🔄 Widget order updated, reloading...');
+      loadWidgetOrder();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('widgetOrderUpdated', handleCustomStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('widgetOrderUpdated', handleCustomStorageChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only set up listeners once
+
+  // Debug: Track widgetOrder changes
+  useEffect(() => {
+    console.log('🔄 Widget order state:', widgetOrder);
+  }, [widgetOrder]);
 
   // Load comprehensive dashboard data
   useEffect(() => {
@@ -512,6 +591,7 @@ const DashboardPageContent: React.FC = () => {
   // Filter quick actions based on user settings
   const quickActions = allQuickActions.filter(action => isQuickActionEnabled(action.id));
 
+
   return (
     <PageErrorWrapper pageName="Dashboard" showDetails={true}>
       <div className="p-4 sm:p-6 h-full overflow-y-auto">
@@ -528,8 +608,8 @@ const DashboardPageContent: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {/* Branch Filter - Admin only */}
-              {currentUser?.role === 'admin' && (
+              {/* Branch Filter - Show for users with manage_users or all permission */}
+              {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('manage_users') || currentUser?.role === 'admin') && (
                 <DashboardBranchFilter
                   onBranchChange={handleBranchChange}
                   defaultToCurrent={true}
@@ -572,7 +652,7 @@ const DashboardPageContent: React.FC = () => {
               </div>
             </div>
             
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+            <div className="quick-actions flex flex-wrap gap-4 md:flex-row md:gap-8 flex-col gap-2 w-full">
               {quickActions.map((action, index) => {
                 const Icon = action.icon;
                 
@@ -580,7 +660,7 @@ const DashboardPageContent: React.FC = () => {
                   <button
                     key={index}
                     onClick={() => handleNavigation(action.path)}
-                    className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center group"
+                    className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors text-center group w-full md:flex-1 md:min-w-[150px]"
                   >
                     <div className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center mx-auto mb-3">
                       <Icon className="w-5 h-5 text-white" />
@@ -602,99 +682,224 @@ const DashboardPageContent: React.FC = () => {
           </div>
         )}
 
-        {/* Statistics & Charts - Enhanced with Visualizations */}
-        {!isLoading && !settingsLoading && dashboardStats && (
-          <>
-            {/* Top Row - Chart Cards */}
-            {(isWidgetEnabled('revenueTrendChart') || isWidgetEnabled('deviceStatusChart') || isWidgetEnabled('appointmentsTrendChart') || isWidgetEnabled('purchaseOrderChart') || isWidgetEnabled('salesChart') || isWidgetEnabled('paymentMethodsChart') || isWidgetEnabled('salesByCategoryChart') || isWidgetEnabled('profitMarginChart')) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('revenueTrendChart') && <RevenueTrendChart />}
-                {isWidgetEnabled('salesChart') && <SalesChart />}
-                {isWidgetEnabled('deviceStatusChart') && <DeviceStatusChart />}
-                {isWidgetEnabled('appointmentsTrendChart') && <AppointmentsTrendChart />}
-                {isWidgetEnabled('purchaseOrderChart') && <PurchaseOrderChart />}
-                {isWidgetEnabled('paymentMethodsChart') && <PaymentMethodsChart />}
-                {isWidgetEnabled('salesByCategoryChart') && <SalesByCategoryChart />}
-                {isWidgetEnabled('profitMarginChart') && <div className="lg:col-span-2"><ProfitMarginChart /></div>}
-              </div>
-            )}
+        {/* Statistics & Charts - Enhanced with Visualizations - Respects Custom Order */}
+        {!isLoading && !settingsLoading && dashboardStats && (() => {
+          // All chart widget components mapping
+          const CHART_COMPONENTS: Record<string, React.FC<any>> = {
+            'revenueTrendChart': RevenueTrendChart,
+            'salesChart': SalesChart,
+            'deviceStatusChart': DeviceStatusChart,
+            'appointmentsTrendChart': AppointmentsTrendChart,
+            'purchaseOrderChart': PurchaseOrderChart,
+            'paymentMethodsChart': PaymentMethodsChart,
+            'analyticsWidget': AnalyticsWidget,
+            'salesByCategoryChart': SalesByCategoryChart,
+            'profitMarginChart': ProfitMarginChart,
+            'stockLevelChart': StockLevelChart,
+            'performanceMetricsChart': PerformanceMetricsChart,
+            'customerActivityChart': CustomerActivityChart
+          };
+          
+          // Get the saved order (prefer ref, then state)
+          const baseOrder = committedOrderRef.current.length > 0 
+            ? committedOrderRef.current 
+            : widgetOrder;
+          
+          // Filter to only enabled chart widgets that have components
+          const enabledCharts = baseOrder.filter(widget => 
+            isWidgetEnabled(widget as any) && CHART_COMPONENTS[widget]
+          );
+          
+          console.log('📊 Rendering charts in custom order:', enabledCharts);
+          
+          if (enabledCharts.length === 0) return null;
+          
+          // Group charts into rows of 3 for better layout
+          const chartRows: string[][] = [];
+          for (let i = 0; i < enabledCharts.length; i += 3) {
+            chartRows.push(enabledCharts.slice(i, i + 3));
+          }
+          
+          return (
+            <>
+              {chartRows.map((row, rowIndex) => {
+                const smartLayout = autoArrangeWidgets(row);
+                
+                return (
+                  <div 
+                    key={`chart-row-${rowIndex}`}
+                    className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full" 
+                    style={{ 
+                      alignItems: 'stretch'
+                    }}
+                  >
+                    {smartLayout.widgets.map((widget) => {
+                      const { key, expanded } = widget;
+                      const repositioned = 'repositioned' in widget ? widget.repositioned : false;
+                      const ChartComponent = CHART_COMPONENTS[key];
+                      
+                      if (!ChartComponent) return null;
+                      
+                      // Get user's chosen size for this widget
+                      const widgetSize = getWidgetSize(key);
+                      
+                      // Convert widget size to Tailwind responsive classes
+                      const getResponsiveClass = () => {
+                        if (widgetSize === 'small') return 'md:col-span-1';
+                        if (widgetSize === 'large') return 'md:col-span-2 lg:col-span-3';
+                        // medium (default)
+                        return 'md:col-span-2 lg:col-span-2';
+                      };
+                      
+                      return (
+                        <div 
+                          key={key}
+                          style={{ 
+                            height: '100%',
+                            transition: 'all 0.3s ease',
+                            ...(expanded && { 
+                              background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                              borderRadius: '12px'
+                            }),
+                            ...(repositioned && { 
+                              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                              borderRadius: '12px'
+                            })
+                          }}
+                          className={`dashboard-card ${getResponsiveClass()} relative ${expanded || repositioned ? 'shadow-lg' : ''}`}
+                        >
+                          <ChartComponent className="h-full" />
+                          {expanded && (
+                            <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                              Auto-Expanded
+                            </div>
+                          )}
+                          {repositioned && !expanded && (
+                            <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                              Moved to Fill Gap
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </>
+          );
+        })()}
 
-            {/* Second Row - Stock Level Chart */}
-            {isWidgetEnabled('stockLevelChart') && (
-              <div className="grid grid-cols-1">
-                <StockLevelChart />
-              </div>
-            )}
-
-            {/* Third Row - Performance & Analytics */}
-            {(isWidgetEnabled('performanceMetricsChart') || isWidgetEnabled('customerActivityChart')) && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {isWidgetEnabled('performanceMetricsChart') && <PerformanceMetricsChart />}
-                {isWidgetEnabled('customerActivityChart') && <CustomerActivityChart />}
-              </div>
-            )}
-
-          </>
-        )}
-
-        {/* Comprehensive Widgets Layout */}
-        {!isLoading && !settingsLoading && dashboardStats && (
-          <div className="space-y-6">
-            {/* Top Priority Row - Operations */}
-            {(isWidgetEnabled('appointmentWidget') || isWidgetEnabled('employeeWidget') || isWidgetEnabled('notificationWidget')) && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('appointmentWidget') && <AppointmentWidget />}
-                {isWidgetEnabled('employeeWidget') && <EmployeeWidget />}
-                {isWidgetEnabled('notificationWidget') && <NotificationWidget />}
-              </div>
-            )}
-
-            {/* Financial & Analytics Row */}
-            {(isWidgetEnabled('financialWidget') || isWidgetEnabled('analyticsWidget') || isWidgetEnabled('salesFunnelChart')) && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('financialWidget') && <FinancialWidget />}
-                {isWidgetEnabled('analyticsWidget') && <AnalyticsWidget />}
-                {isWidgetEnabled('salesFunnelChart') && <SalesFunnelChart />}
-              </div>
-            )}
-
-            {/* Customer Insights & Service Row */}
-            {(isWidgetEnabled('customerInsightsWidget') || isWidgetEnabled('serviceWidget') || isWidgetEnabled('reminderWidget')) && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('customerInsightsWidget') && <CustomerInsightsWidget />}
-                {isWidgetEnabled('serviceWidget') && <ServiceWidget />}
-                {isWidgetEnabled('reminderWidget') && <ReminderWidget />}
-              </div>
-            )}
-
-            {/* Sales & Business Row */}
-            {(isWidgetEnabled('salesWidget') || isWidgetEnabled('topProductsWidget') || isWidgetEnabled('expensesWidget')) && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('salesWidget') && <SalesWidget />}
-                {isWidgetEnabled('topProductsWidget') && <TopProductsWidget />}
-                {isWidgetEnabled('expensesWidget') && <ExpensesWidget />}
-              </div>
-            )}
-
-            {/* Purchase Orders & Communication Row */}
-            {(isWidgetEnabled('purchaseOrderWidget') || isWidgetEnabled('chatWidget') || isWidgetEnabled('staffPerformanceWidget')) && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('purchaseOrderWidget') && <PurchaseOrderWidget />}
-                {isWidgetEnabled('chatWidget') && <ChatWidget />}
-                {isWidgetEnabled('staffPerformanceWidget') && <StaffPerformanceWidget />}
-              </div>
-            )}
-
-            {/* System Monitoring Row */}
-            {(isWidgetEnabled('systemHealthWidget') || isWidgetEnabled('inventoryWidget') || isWidgetEnabled('activityFeedWidget')) && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {isWidgetEnabled('systemHealthWidget') && <SystemHealthWidget />}
-                {isWidgetEnabled('inventoryWidget') && <InventoryWidget />}
-                {isWidgetEnabled('activityFeedWidget') && <ActivityFeedWidget />}
-              </div>
-            )}
-          </div>
-        )}
+        {/* Unified Widgets Layout - Respects Custom Order */}
+        {!isLoading && !settingsLoading && dashboardStats && (() => {
+          // All widget components mapping
+          const WIDGET_COMPONENTS: Record<string, React.FC<any>> = {
+            'appointmentWidget': AppointmentWidget,
+            'employeeWidget': EmployeeWidget,
+            'notificationWidget': NotificationWidget,
+            'financialWidget': FinancialWidget,
+            'salesFunnelChart': SalesFunnelChart,
+            'customerInsightsWidget': CustomerInsightsWidget,
+            'serviceWidget': ServiceWidget,
+            'reminderWidget': ReminderWidget,
+            'salesWidget': SalesWidget,
+            'topProductsWidget': TopProductsWidget,
+            'expensesWidget': ExpensesWidget,
+            'purchaseOrderWidget': PurchaseOrderWidget,
+            'chatWidget': ChatWidget,
+            'staffPerformanceWidget': StaffPerformanceWidget,
+            'systemHealthWidget': SystemHealthWidget,
+            'inventoryWidget': InventoryWidget,
+            'activityFeedWidget': ActivityFeedWidget
+          };
+          
+          // Get the saved order (prefer ref, then state)
+          const baseOrder = committedOrderRef.current.length > 0 
+            ? committedOrderRef.current 
+            : widgetOrder;
+          
+          // Filter to only enabled widgets that have components
+          const enabledWidgets = baseOrder.filter(widget => 
+            isWidgetEnabled(widget as any) && WIDGET_COMPONENTS[widget]
+          );
+          
+          console.log('🎯 Rendering widgets in custom order:', enabledWidgets);
+          
+          if (enabledWidgets.length === 0) return null;
+          
+          // Group widgets into rows of 3 for better layout
+          const widgetRows: string[][] = [];
+          for (let i = 0; i < enabledWidgets.length; i += 3) {
+            widgetRows.push(enabledWidgets.slice(i, i + 3));
+          }
+          
+          return (
+            <div className="space-y-6">
+              {widgetRows.map((row, rowIndex) => {
+                const smartLayout = autoArrangeWidgets(row);
+                
+                return (
+                  <div 
+                    key={`widget-row-${rowIndex}`}
+                    className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full" 
+                    style={{ 
+                      alignItems: 'stretch'
+                    }}
+                  >
+                    {smartLayout.widgets.map((widget) => {
+                      const { key, expanded } = widget;
+                      const repositioned = 'repositioned' in widget ? widget.repositioned : false;
+                      const WidgetComponent = WIDGET_COMPONENTS[key];
+                      
+                      if (!WidgetComponent) return null;
+                      
+                      // Get user's chosen size for this widget
+                      const widgetSize = getWidgetSize(key);
+                      
+                      // Convert widget size to Tailwind responsive classes
+                      const getResponsiveClass = () => {
+                        if (widgetSize === 'small') return 'md:col-span-1';
+                        if (widgetSize === 'large') return 'md:col-span-2 lg:col-span-3';
+                        // medium (default)
+                        return 'md:col-span-2 lg:col-span-2';
+                      };
+                      
+                      return (
+                        <div 
+                          key={key}
+                          style={{ 
+                            height: '100%',
+                            transition: 'all 0.3s ease',
+                            ...(expanded && { 
+                              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                              borderRadius: '12px'
+                            }),
+                            ...(repositioned && { 
+                              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                              borderRadius: '12px'
+                            })
+                          }}
+                          className={`dashboard-card ${getResponsiveClass()} relative ${expanded || repositioned ? 'shadow-lg' : ''}`}
+                        >
+                          <WidgetComponent className="h-full" />
+                          {expanded && (
+                            <div className="absolute top-2 right-2 bg-cyan-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                              Auto-Expanded
+                            </div>
+                          )}
+                          {repositioned && !expanded && (
+                            <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                              Moved to Fill Gap
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         </div>
       </div>

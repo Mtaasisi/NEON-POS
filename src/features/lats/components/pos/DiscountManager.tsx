@@ -115,14 +115,20 @@ const DiscountManager: React.FC<DiscountManagerProps> = ({
   // Get loyalty discount based on customer level
   const getLoyaltyDiscount = (level?: string): number => {
     switch (level?.toLowerCase()) {
-      case 'platinum':
+      case 'vip':
         return 20;
-      case 'gold':
+      case 'premium':
         return 15;
-      case 'silver':
+      case 'regular':
         return 10;
-      case 'bronze':
+      case 'active':
+        return 7;
+      case 'payment_customer':
         return 5;
+      case 'engaged':
+        return 3;
+      case 'interested':
+        return 0;
       default:
         return 0;
     }

@@ -6,19 +6,19 @@
 
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { CheckCircle, X } from 'lucide-react';
+import { Package, X } from 'lucide-react';
 import { SoundManager } from '../../lib/soundUtils';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 export interface SuccessModalProps {
   isOpen: boolean;
   onClose: () => void;
   title?: string;
   message: string;
-  autoCloseDelay?: number; // in milliseconds, 0 = no auto-close
   actionButtons?: Array<{
     label: string;
     onClick: () => void;
-    variant?: 'primary' | 'secondary';
+    variant?: 'primary' | 'secondary' | 'whatsapp';
   }>;
   icon?: React.ReactNode; // Custom icon (default is CheckCircle)
   showCloseButton?: boolean;
@@ -30,12 +30,26 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
   onClose,
   title = 'Success!',
   message,
-  autoCloseDelay = 3000,
   actionButtons,
   icon,
   showCloseButton = true,
   playSound = true,
 }) => {
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+
+  // Validate message - provide fallback if empty
+  const displayMessage = message && message.trim() !== '' 
+    ? message 
+    : 'Operation completed successfully!';
+
+  // Warn if message is empty (in development)
+  useEffect(() => {
+    if (isOpen && (!message || message.trim() === '')) {
+      console.warn('⚠️ SuccessModal: Empty message provided. Using fallback message.');
+    }
+  }, [isOpen, message]);
+
   // Play success sound when modal opens
   useEffect(() => {
     if (isOpen && playSound) {
@@ -44,17 +58,6 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
       });
     }
   }, [isOpen, playSound]);
-
-  // Auto-close functionality
-  useEffect(() => {
-    if (isOpen && autoCloseDelay > 0) {
-      const timer = setTimeout(() => {
-        onClose();
-      }, autoCloseDelay);
-
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, autoCloseDelay, onClose]);
 
   // Handle ESC key
   useEffect(() => {
@@ -74,18 +77,13 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
 
   return createPortal(
     <div
-      className="success-modal-backdrop"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 100000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.4)',
-        animation: 'fadeIn 0.2s ease-out',
+      className="fixed inset-0 z-[100000] flex items-center justify-center bg-black/40 animate-fadeIn p-4"
+      onClick={(e) => {
+        // Only close if clicking the backdrop, not the modal content
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
       }}
-      onClick={onClose}
     >
       <style>{`
         @keyframes fadeIn {
@@ -122,199 +120,93 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
           }
         }
 
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
+
+        .animate-checkmark {
+          animation: checkmark 0.4s ease-out;
         }
       `}</style>
 
       <div
-        className="success-modal-content"
-        style={{
-          background: '#fff',
-          borderRadius: 12,
-          padding: '24px',
-          maxWidth: 400,
-          width: '90%',
-          position: 'relative',
-          border: '1px solid #e5e7eb',
-          animation: 'slideUp 0.3s ease-out',
-        }}
+        className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative animate-slideUp"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close button */}
         {showCloseButton && (
           <button
-            onClick={onClose}
-            style={{
-              position: 'absolute',
-              top: 12,
-              right: 12,
-              background: '#ef4444',
-              border: 'none',
-              cursor: 'pointer',
-              width: 28,
-              height: 28,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '50%',
-              transition: 'all 0.2s ease',
-              boxShadow: '0 2px 6px rgba(239, 68, 68, 0.3)',
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              console.log('✖️ Success modal close button clicked');
+              onClose();
             }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#dc2626';
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.boxShadow = '0 3px 8px rgba(220, 38, 38, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#ef4444';
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 2px 6px rgba(239, 68, 68, 0.3)';
-            }}
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-red-500 hover:bg-red-600 active:bg-red-700 text-white rounded-full transition-all shadow-lg hover:shadow-xl hover:scale-110 active:scale-95 z-50 cursor-pointer touch-manipulation"
+            aria-label="Close modal"
+            type="button"
+            title="Close"
           >
-            <X size={14} color="#fff" strokeWidth={2.5} />
+            <X className="w-5 h-5" strokeWidth={2.5} />
           </button>
         )}
 
-        {/* Success Icon */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: 16,
-          }}
-        >
-          {icon || (
-            <div
-              style={{
-                background: '#10b981',
-                borderRadius: 8,
-                width: 40,
-                height: 40,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                animation: 'checkmark 0.4s ease-out',
-              }}
-            >
-              <CheckCircle size={24} color="white" strokeWidth={2} />
-            </div>
-          )}
+        {/* Icon Section with Gradient Background */}
+        <div className="p-8 text-center transition-all duration-500 bg-gradient-to-br from-green-50 to-emerald-50">
+          <div 
+            className="w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 transition-all duration-500 animate-checkmark"
+            style={{
+              background: 'linear-gradient(135deg, rgb(16, 185, 129) 0%, rgb(5, 150, 105) 100%)',
+              boxShadow: 'rgba(16, 185, 129, 0.3) 0px 8px 24px'
+            }}
+          >
+            {icon || <Package className="w-12 h-12 text-white" strokeWidth={2.5} />}
+          </div>
+          
+          {/* Title */}
+          <h3 className="text-2xl font-bold text-gray-900">
+            {title}
+          </h3>
         </div>
 
-        {/* Title */}
-        <h2
-          style={{
-            fontSize: 18,
-            fontWeight: 600,
-            color: '#111827',
-            margin: 0,
-            marginBottom: 12,
-            textAlign: 'center',
-          }}
-        >
-          {title}
-        </h2>
-
-        {/* Message */}
-        <p
-          style={{
-            fontSize: 14,
-            color: '#6b7280',
-            lineHeight: 1.5,
-            marginBottom: actionButtons && actionButtons.length > 0 ? 20 : 0,
-            textAlign: 'center',
-          }}
-        >
-          {message}
-        </p>
+        {/* Message Section */}
+        <div className="p-6">
+          <p className="text-center text-gray-600 leading-relaxed">
+            {displayMessage}
+          </p>
+        </div>
 
         {/* Action Buttons */}
         {actionButtons && actionButtons.length > 0 && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 8,
-              justifyContent: 'center',
-            }}
-          >
-            {actionButtons.map((button, index) => (
-              <button
-                key={index}
-                onClick={() => {
-                  button.onClick();
-                  onClose();
-                }}
-                style={{
-                  padding: '10px 24px',
-                  borderRadius: 10,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  border: 'none',
-                  background: button.variant === 'secondary' 
-                    ? '#f3f4f6' 
-                    : '#10b981',
-                  color: button.variant === 'secondary' ? '#1f2937' : '#fff',
-                  transition: 'all 0.2s ease',
-                  minWidth: 100,
-                  letterSpacing: '0.01em',
-                }}
-                onMouseEnter={(e) => {
-                  if (button.variant === 'secondary') {
-                    e.currentTarget.style.background = '#e5e7eb';
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                  } else {
-                    e.currentTarget.style.background = '#059669';
-                    e.currentTarget.style.transform = 'scale(1.02)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (button.variant === 'secondary') {
-                    e.currentTarget.style.background = '#f3f4f6';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  } else {
-                    e.currentTarget.style.background = '#10b981';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }
-                }}
-              >
-                {button.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Auto-close indicator */}
-        {autoCloseDelay > 0 && (
-          <div
-            style={{
-              marginTop: 16,
-              fontSize: 12,
-              color: '#9ca3af',
-              textAlign: 'right',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 6,
-            }}
-          >
-            <div
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                background: '#9ca3af',
-                animation: 'pulse 1.5s ease-in-out infinite',
-              }}
-            />
-            Closes in {Math.ceil(autoCloseDelay / 1000)}s
+          <div className="p-6 pt-0">
+            <div className="grid grid-cols-2 gap-3">
+              {actionButtons.map((button, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    button.onClick();
+                    onClose();
+                  }}
+                  className={`
+                    w-full px-6 py-3.5 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl active:scale-[0.98] text-lg cursor-pointer
+                    ${button.variant === 'whatsapp'
+                      ? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white'
+                      : button.variant === 'secondary'
+                      ? 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 active:from-gray-800 active:to-gray-900 text-white'
+                      : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white'
+                    }
+                  `}
+                >
+                  {button.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>

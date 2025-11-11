@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Package, Hash, FileText, Check, DollarSign } from 'lucide-react';
+import { Package, FileText, Check } from 'lucide-react';
 import CategoryInput from '../../../shared/components/ui/CategoryInput';
-import AIDescriptionGenerator from './AIDescriptionGenerator';
 import { 
   formatSpecificationValue, 
   parseSpecification, 
@@ -23,7 +22,7 @@ interface ProductInformationFormProps {
   isCheckingName: boolean;
   nameExists: boolean;
   onNameCheck: (name: string) => void;
-  onSpecificationsClick: () => void;
+  onSpecificationsClick?: () => void;
   useVariants?: boolean;
   onGenerateSKU?: () => string;
 }
@@ -87,53 +86,9 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
               <p className="mt-1 text-sm text-red-600">{currentErrors.name}</p>
             )}
             {nameExists && (
-              <p className="mt-1 text-sm text-amber-600">⚠️ Another product with a similar name already exists</p>
+              <p className="mt-1 text-sm text-amber-600">⚠️ A product with this exact name already exists</p>
             )}
           </div>
-
-          {/* SKU */}
-          <div>
-            <label 
-              htmlFor="sku"
-              className={`block mb-2 font-medium ${currentErrors.sku ? 'text-red-600' : 'text-gray-700'}`}
-            >
-              Base SKU (Stock Keeping Unit) *
-            </label>
-            <div className="relative">
-              <input
-                id="sku"
-                type="text"
-                value={formData.sku}
-                onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
-                className={`w-full py-3 pl-12 pr-20 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors ${
-                  currentErrors.sku 
-                    ? 'border-red-500 focus:border-red-600' 
-                    : 'border-gray-300 focus:border-blue-500'
-                }`}
-                placeholder="IP14PM-256-GOLD"
-                required
-              />
-              <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-              {onGenerateSKU && (
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, sku: onGenerateSKU() }))}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
-                  title="Generate new SKU"
-                >
-                  Auto
-                </button>
-              )}
-            </div>
-            <p className="mt-1 text-xs text-gray-500">
-              Variant SKUs will be auto-generated: {formData.sku ? `${formData.sku}-V01, ${formData.sku}-V02...` : 'BASE-V01, BASE-V02...'}
-            </p>
-            {currentErrors.sku && (
-              <p className="mt-1 text-sm text-red-600">{currentErrors.sku}</p>
-            )}
-          </div>
-
-
 
           {/* Category */}
           <div>
@@ -157,14 +112,14 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
           </div>
 
           {/* Condition */}
-          <div>
+          <div className="md:col-span-2">
             <label 
               htmlFor="condition"
               className={`block mb-2 font-medium ${currentErrors.condition ? 'text-red-600' : 'text-gray-700'}`}
             >
               Condition *
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 { value: 'new', label: 'New', color: 'bg-green-500 hover:bg-green-600 border-green-500' },
                 { value: 'used', label: 'Used', color: 'bg-blue-500 hover:bg-blue-600 border-blue-500' },
@@ -174,9 +129,9 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
                   key={option.value}
                   type="button"
                   onClick={() => setFormData(prev => ({ ...prev, condition: option.value }))}
-                  className={`py-3 px-4 rounded-lg border-2 transition-all duration-200 font-medium ${
+                  className={`py-4 px-6 rounded-lg border-2 transition-all duration-200 font-semibold text-base ${
                     formData.condition === option.value
-                      ? `${option.color} text-white`
+                      ? `${option.color} text-white shadow-lg`
                       : 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-700'
                   } ${currentErrors.condition ? 'border-red-500' : ''}`}
                 >
@@ -260,21 +215,10 @@ const ProductInformationForm: React.FC<ProductInformationFormProps> = ({
               {formData.description.length}/500 characters
             </p>
           )}
-          
-          {/* AI Description Generator */}
-          <div className="mt-4">
-            <AIDescriptionGenerator
-              productName={formData.name}
-              categoryName={categories.find(c => c.id === formData.categoryId)?.name}
-              currentDescription={formData.description}
-              onDescriptionGenerated={(description) => setFormData(prev => ({ ...prev, description }))}
-              disabled={!formData.name.trim()}
-            />
-          </div>
         </div>
 
-        {/* Specification - Only show when not using variants */}
-        {!useVariants && (
+        {/* Specification - Only show when not using variants AND when onSpecificationsClick is provided */}
+        {!useVariants && onSpecificationsClick && (
           <div>
             <label 
               className={`block mb-2 font-medium ${currentErrors.specification ? 'text-red-600' : 'text-gray-700'}`}

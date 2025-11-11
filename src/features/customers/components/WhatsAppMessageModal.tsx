@@ -7,6 +7,7 @@ import { MessageSquare, Send, AlertCircle, CheckCircle, XCircle, Loader2 } from 
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { useAuth } from '../../../context/AuthContext';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface WhatsAppMessageModalProps {
   isOpen: boolean;
@@ -29,6 +30,9 @@ const WhatsAppMessageModal: React.FC<WhatsAppMessageModalProps> = ({
     state: string;
   } | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Check WhatsApp instance status on mount
   useEffect(() => {

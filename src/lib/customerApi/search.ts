@@ -61,7 +61,7 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
       // 🌐 CUSTOMERS ARE SHARED ACROSS ALL BRANCHES
       const currentBranchId = localStorage.getItem('current_branch_id');
       
-      // Build the search query - search in name and phone primarily
+      // Build the search query - search in name, phone, and email
       const searchLower = query.toLowerCase();
       
       // Get count first (using a separate query since custom client doesn't support count in select)
@@ -69,7 +69,7 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
       const countQuery = supabase
         .from('customers')
         .select('id')
-        .ilike('name', `%${searchLower}%`);
+        .or(`name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,email.ilike.%${searchLower}%`);
       
       const { data: allMatches } = await countQuery;
       
@@ -80,7 +80,7 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
       const dataQuery = supabase
         .from('customers')
         .select('id, name, phone, email, branch_id, created_by_branch_name')
-        .ilike('name', `%${searchLower}%`)
+        .or(`name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,email.ilike.%${searchLower}%`)
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
       
@@ -107,7 +107,9 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
         total: 0,
         page,
         pageSize,
-        totalPages: 0
+        totalPages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false
       };
     }
     
@@ -124,7 +126,6 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
         gender,
         city,
         country,
-        address,
         color_tag,
         loyalty_level,
         points,
@@ -205,7 +206,7 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
           gender: customer.gender || 'other',
           city: customer.city || '',
           colorTag: normalizeColorTag(customer.color_tag || 'new'),
-          loyaltyLevel: customer.loyalty_level || 'bronze',
+          loyaltyLevel: customer.loyalty_level || 'interested',
           points: customer.points || 0,
           totalSpent: customer.total_spent || 0,
           lastVisit: customer.last_visit || customer.created_at,
@@ -254,12 +255,16 @@ export async function searchCustomers(query: string, page: number = 1, pageSize:
         };
         return mappedCustomer;
       });
+      const totalPages = Math.ceil((count || 0) / pageSize);
+      
       return {
         customers: processedCustomers,
         total: count || 0,
         page,
         pageSize,
-        totalPages: Math.ceil((count || 0) / pageSize)
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
       };
     }
     
@@ -317,7 +322,7 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
       let countQuery = supabase
         .from('customers')
         .select('id')
-        .ilike('name', `%${searchLower}%`);
+        .or(`name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,email.ilike.%${searchLower}%`);
       
       // 🔒 Apply branch filter
       if (currentBranchId) {
@@ -333,7 +338,7 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
       let dataQuery = supabase
         .from('customers')
         .select('id,name,phone,email,gender,city,color_tag,loyalty_level,points,total_spent,last_visit,is_active,referral_source,birth_month,birth_day,initial_notes,notes,customer_tag,location_description,national_id,joined_date,created_at,updated_at,branch_id,is_shared')
-        .ilike('name', `%${searchLower}%`)
+        .or(`name.ilike.%${searchLower}%,phone.ilike.%${searchLower}%,email.ilike.%${searchLower}%`)
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
       
@@ -363,12 +368,16 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
         colorTag: normalizeColorTag(customer.color_tag || 'new')
       }));
       
+      const totalPages = Math.ceil((count || 0) / pageSize);
+      
       const result = {
         customers: processedCustomers,
         total: count || 0,
         page,
         pageSize,
-        totalPages: Math.ceil((count || 0) / pageSize)
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
       };
       
       // Cache the result
@@ -381,7 +390,9 @@ export async function searchCustomersFast(query: string, page: number = 1, pageS
       total: 0,
       page,
       pageSize,
-      totalPages: 0
+      totalPages: 0,
+      hasNextPage: false,
+      hasPreviousPage: false
     };
     
     return emptyResult;

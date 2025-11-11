@@ -3,19 +3,23 @@ import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import SearchBar from '../../../shared/components/ui/SearchBar';
 import GlassSelect from '../../../shared/components/ui/GlassSelect';
+import CircularProgress from '../../../../components/ui/CircularProgress';
+import ModernLoadingOverlay from '../../../../components/ui/ModernLoadingOverlay';
 import VariantProductCard from '../pos/VariantProductCard';
 import { SafeImage } from '../../../../components/SafeImage';
 import { ProductImage } from '../../../../lib/robustImageService';
 import { LabelPrintingModal } from '../../../../components/LabelPrintingModal';
-import GeneralProductDetailModal from '../product/GeneralProductDetailModal';
+import ProductModal from '../product/ProductModal';
 import { 
   Package, Grid, List, Star, CheckCircle, XCircle, 
   Download, Edit, Eye, Trash2, DollarSign, TrendingUp,
-  AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy, Columns
+  AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy, Columns,
+  CheckSquare, XSquare, Files
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { validateProductsBatch } from '../../lib/productUtils';
 import { toast } from 'react-hot-toast';
+import { useInventoryStore } from '../../stores/useInventoryStore';
 
 interface EnhancedInventoryTabProps {
   products: any[];
@@ -39,6 +43,7 @@ interface EnhancedInventoryTabProps {
   selectedProducts: string[];
   setSelectedProducts: (products: string[]) => void;
   categories: any[];
+  suppliers: any[];
   brands: any[];
   formatMoney: (amount: number) => string;
   getStatusColor: (status: string) => string;
@@ -91,6 +96,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   selectedProducts,
   setSelectedProducts,
   categories,
+  suppliers,
   formatMoney,
   getStatusColor,
   handleBulkAction,
@@ -127,6 +133,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   const [showStockTransferModal, setShowStockTransferModal] = useState(false);
   const [selectedProductForTransfer, setSelectedProductForTransfer] = useState<any>(null);
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [isPreLoading, setIsPreLoading] = useState(false);
   
   // Column visibility configuration
   const availableColumns = [
@@ -496,36 +503,69 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
         </div>
       </div>
 
-      {/* Bulk Actions */}
+      {/* Bulk Actions - Flat Design */}
       {selectedProducts.length > 0 && (
-        <GlassCard className="bg-blue-50 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">
-                {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
-              </span>
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 shadow-md">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            {/* Selection Info */}
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 text-white rounded-full p-2">
+                <CheckCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-blue-900">
+                  {selectedProducts.length} product{selectedProducts.length !== 1 ? 's' : ''} selected
+                </div>
+                <div className="text-xs text-blue-700">
+                  Choose an action below
+                </div>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <GlassButton
-                variant="secondary"
-                icon={<Download size={16} />}
+
+            {/* Action Buttons */}
+            <div className="flex gap-2 flex-wrap">
+              {/* Export */}
+              <button
                 onClick={() => handleBulkAction('export')}
-                className="text-sm"
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Export selected products to CSV"
               >
-                Export
-              </GlassButton>
-              <GlassButton
-                variant="secondary"
-                icon={<Star size={16} />}
+                <Download size={16} />
+                <span className="hidden sm:inline">Export</span>
+              </button>
+
+              {/* Feature */}
+              <button
                 onClick={() => handleBulkAction('feature')}
-                className="text-sm"
+                className="flex items-center gap-2 px-4 py-2.5 bg-yellow-500 text-white rounded-lg text-sm font-medium hover:bg-yellow-600 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Toggle featured status"
               >
-                Feature
-              </GlassButton>
-              <GlassButton
-                variant="secondary"
-                icon={<Printer size={16} />}
+                <Star size={16} />
+                <span className="hidden sm:inline">Feature</span>
+              </button>
+
+              {/* Activate */}
+              <button
+                onClick={() => handleBulkAction('activate')}
+                className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Activate selected products"
+              >
+                <CheckSquare size={16} />
+                <span className="hidden sm:inline">Activate</span>
+              </button>
+
+              {/* Deactivate */}
+              <button
+                onClick={() => handleBulkAction('deactivate')}
+                className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white rounded-lg text-sm font-medium hover:bg-orange-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Deactivate selected products"
+              >
+                <XSquare size={16} />
+                <span className="hidden sm:inline">Deactivate</span>
+              </button>
+
+              {/* Print Labels */}
+              <button
                 onClick={() => {
                   // Open label printing modal for first selected product
                   const firstProduct = products.find(p => selectedProducts.includes(p.id));
@@ -542,37 +582,55 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       category: categories.find(c => c.id === firstProduct.categoryId)?.name || ''
                     });
                     setShowLabelModal(true);
+                  } else {
+                    toast.error('Please select at least one product');
                   }
                 }}
-                className="text-sm"
+                className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Print product labels"
               >
-                Print Labels
-              </GlassButton>
-              <GlassButton
-                variant="secondary"
-                icon={<Trash2 size={16} />}
+                <Printer size={16} />
+                <span className="hidden sm:inline">Labels</span>
+              </button>
+
+              {/* Duplicate */}
+              <button
+                onClick={() => handleBulkAction('duplicate')}
+                className="flex items-center gap-2 px-4 py-2.5 bg-teal-600 text-white rounded-lg text-sm font-medium hover:bg-teal-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Duplicate selected products"
+              >
+                <Files size={16} />
+                <span className="hidden sm:inline">Duplicate</span>
+              </button>
+
+              {/* Delete All */}
+              <button
                 onClick={() => setShowDeleteConfirmation(true)}
-                className="text-sm text-red-600 hover:bg-red-50"
+                className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Delete all selected products"
               >
-                Delete All
-              </GlassButton>
-              <GlassButton
-                variant="secondary"
-                icon={<XCircle size={16} />}
+                <Trash2 size={16} />
+                <span className="hidden sm:inline">Delete</span>
+              </button>
+
+              {/* Clear Selection */}
+              <button
                 onClick={() => setSelectedProducts([])}
-                className="text-sm text-red-600"
+                className="flex items-center gap-2 px-4 py-2.5 bg-gray-600 text-white rounded-lg text-sm font-medium hover:bg-gray-700 active:scale-95 transition-all shadow-md hover:shadow-lg"
+                title="Clear selection"
               >
-                Clear
-              </GlassButton>
+                <XCircle size={16} />
+                <span className="hidden sm:inline">Clear</span>
+              </button>
             </div>
           </div>
-        </GlassCard>
+        </div>
       )}
 
       {/* Products Display */}
       {viewMode === 'list' ? (
-        <GlassCard>
-          <div className="overflow-x-auto">
+        <GlassCard className="overflow-visible">
+          <div className="overflow-x-auto overflow-y-visible">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200/50">
@@ -613,8 +671,29 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
               <tbody>
                 {products.map((product) => {
                   const category = categories.find(c => c.id === product.categoryId);
-                  const mainVariant = product.variants?.[0];
-                  const totalStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) || 0;
+                  
+                  // Smart variant selection: prefer variant with stock, then highest price
+                  const mainVariant = (() => {
+                    if (!product.variants || product.variants.length === 0) return null;
+                    
+                    // Try to find variant with stock
+                    const variantWithStock = product.variants.find((v: any) => (v.quantity || 0) > 0);
+                    if (variantWithStock) return variantWithStock;
+                    
+                    // If no stock, use variant with highest price
+                    const variantWithPrice = [...product.variants]
+                      .sort((a: any, b: any) => (b.sellingPrice || 0) - (a.sellingPrice || 0))[0];
+                    if (variantWithPrice && variantWithPrice.sellingPrice > 0) return variantWithPrice;
+                    
+                    // Fallback to first variant
+                    return product.variants[0];
+                  })();
+                  
+                  // Calculate stock: Use variant stock if product HAS variants, otherwise use product-level stock
+                  // 🐛 FIX: Don't fallback to product stock when variants exist but have 0 stock
+                  const hasVariants = product.variants && product.variants.length > 0;
+                  const variantStock = hasVariants ? product.variants.reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) : 0;
+                  const totalStock = hasVariants ? variantStock : (product.stockQuantity || product.stock_quantity || 0);
                   const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
                   const availableStock = totalStock - reservedStock;
                   const stockStatus = availableStock <= 0 ? 'out-of-stock' : availableStock <= 10 ? 'low-stock' : 'in-stock';
@@ -623,13 +702,44 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                     <tr 
                       key={product.id} 
                       className="border-b border-gray-100 hover:bg-blue-50 transition-colors cursor-pointer group"
-                      onClick={() => {
-                        setSelectedProductForDetail(product);
-                        setShowProductDetailModal(true);
+                      onClick={async () => {
+                        console.log('🟢 [Table View] Clicking product row:', product.name, product.id);
+                        
+                        // Show immediate loading overlay
+                        setIsPreLoading(true);
+                        
+                        try {
+                          // 🔧 FETCH FRESH PRODUCT DATA with variant_attributes
+                          const freshProduct = await useInventoryStore.getState().getProduct(product.id);
+                          console.log('🟢 [Table View] Fresh product result:', {
+                            ok: freshProduct?.ok,
+                            hasData: !!freshProduct?.data,
+                            variantCount: freshProduct?.data?.variants?.length || 0
+                          });
+                          
+                          if (!freshProduct?.ok || !freshProduct?.data) {
+                            console.error('❌ [Table View] Failed to fetch product:', freshProduct?.message);
+                            setIsPreLoading(false);
+                            alert('Failed to load product details. Please try again.');
+                            return;
+                          }
+                          
+                          // Allow products without variants - they can be added to POs and variants will be created automatically
+                          if (!freshProduct.data.variants || freshProduct.data.variants.length === 0) {
+                            console.warn('⚠️ [Table View] Product has no variants - variants will be created automatically when added to PO', freshProduct.data);
+                            // Don't block - continue to show product details
+                          }
+                          
+                          setSelectedProductForDetail(freshProduct.data);
+                          setShowProductDetailModal(true);
+                        } finally {
+                          // Hide loading after a short delay to allow modal to appear
+                          setTimeout(() => setIsPreLoading(false), 100);
+                        }
                       }}
                       title="Click to view product details"
                     >
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4" onClick={e => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={selectedProducts.includes(product.id)}
@@ -643,29 +753,47 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                             {/* Colored Flat Thumbnail */}
                             <div className="relative flex-shrink-0">
                               {product.images && product.images.length > 0 ? (
-                                <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-blue-200 bg-white">
-                                  <img
-                                    src={product.images[0]}
-                                    alt={product.name}
-                                    className="w-full h-full object-cover"
-                                    onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                      e.currentTarget.parentElement!.innerHTML = `
-                                        <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
-                                            <path d="M16.5 9.4 7.55 4.24"></path>
-                                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                                            <polyline points="3.29 7 12 12 20.71 7"></polyline>
-                                            <line x1="12" x2="12" y1="22" y2="12"></line>
-                                          </svg>
-                                        </div>
-                                      `;
-                                    }}
-                                  />
-                                </div>
+                                <>
+                                  <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-blue-200 bg-white">
+                                    <img
+                                      src={product.images[0]}
+                                      alt={product.name}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        const variantCount = product.variants?.length || 0;
+                                        e.currentTarget.style.display = 'none';
+                                        e.currentTarget.parentElement!.innerHTML = `
+                                          <div class="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-500">
+                                              <path d="M16.5 9.4 7.55 4.24"></path>
+                                              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                              <polyline points="3.29 7 12 12 20.71 7"></polyline>
+                                              <line x1="12" x2="12" y1="22" y2="12"></line>
+                                            </svg>
+                                          </div>
+                                        `;
+                                        // Add badge after error fallback
+                                        const badge = document.createElement('div');
+                                        badge.className = 'absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center';
+                                        badge.innerHTML = '<span class="text-xs font-bold text-white">' + variantCount + '</span>';
+                                        e.currentTarget.parentElement!.parentElement!.appendChild(badge);
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10">
+                                    <span className="text-xs font-bold text-white">
+                                      {product.variants?.length || 0}
+                                    </span>
+                                  </div>
+                                </>
                               ) : (
-                                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200">
+                                <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center border-2 border-blue-200 relative">
                                   <Package className="w-6 h-6 text-blue-500" strokeWidth={2} />
+                                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+                                    <span className="text-xs font-bold text-white">
+                                      {product.variants?.length || 0}
+                                    </span>
+                                  </div>
                                 </div>
                               )}
                               {product.isFeatured && (
@@ -675,7 +803,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                               )}
                             </div>
                             <div className="flex-1 min-w-0">
-                              <p className="font-medium text-gray-900 truncate">{product.name}</p>
+                              <p className="font-medium text-gray-900 truncate max-w-[250px]" title={product.name}>{product.name}</p>
                               {product.description && (
                                 <p className="text-sm text-gray-500 truncate max-w-[300px]">{product.description}</p>
                               )}
@@ -703,14 +831,34 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       )}
                       {visibleColumns.includes('category') && (
                         <td className="py-3 px-4">
-                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm">
+                          <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[150px] truncate" title={category?.name || 'Uncategorized'}>
                             {category?.name || 'Uncategorized'}
                           </span>
                         </td>
                       )}
                       {visibleColumns.includes('supplier') && (
                         <td className="py-3 px-4">
-                          <span className="text-sm text-gray-600">{product.supplier?.name || 'N/A'}</span>
+                          {(() => {
+                            // Look up supplier from suppliers list using supplierId
+                            const supplier = product.supplierId 
+                              ? suppliers.find(s => s.id === product.supplierId)
+                              : product.supplier; // Fallback to embedded supplier object
+                            
+                            if (supplier?.name?.startsWith('Trade-In:')) {
+                              return (
+                                <div>
+                                  <span className="text-sm font-medium text-blue-600">
+                                    {supplier.name.replace('Trade-In: ', '')}
+                                  </span>
+                                  <div className="text-xs text-gray-500">Trade-In Customer</div>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <span className="text-sm text-gray-600">{supplier?.name || 'N/A'}</span>
+                            );
+                          })()}
                         </td>
                       )}
                       {visibleColumns.includes('shelf') && (
@@ -733,17 +881,17 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       {visibleColumns.includes('stock') && (
                         <td className="py-3 px-4">
                           <div>
-                            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm ${
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold shadow-sm inline-block max-w-[120px] truncate ${
                               stockStatus === 'out-of-stock' 
                                 ? 'bg-red-500 text-white' 
                                 : stockStatus === 'low-stock'
                                 ? 'bg-orange-500 text-white'
                                 : 'bg-green-500 text-white'
-                            }`}>
+                            }`} title={`${availableStock} in stock${reservedStock > 0 ? ` (${reservedStock} reserved)` : ''}`}>
                               {availableStock} in stock
                             </span>
                             {reservedStock > 0 && (
-                              <p className="text-xs text-gray-500 mt-1">{reservedStock} reserved</p>
+                              <p className="text-xs text-gray-500 mt-1 truncate max-w-[120px]" title={`${reservedStock} reserved`}>{reservedStock} reserved</p>
                             )}
                           </div>
                         </td>
@@ -767,7 +915,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                             <>
                               {/* Backdrop to close dropdown */}
                               <div 
-                                className="fixed inset-0 z-10" 
+                                className="fixed inset-0 z-[998]" 
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenDropdownId(null);
@@ -775,7 +923,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                               />
                               
                               {/* Dropdown Content */}
-                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-20 overflow-hidden">
+                              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-100 z-[999] overflow-hidden">
                                 <div className="py-2">
                                   <button
                                     onClick={(e) => { 
@@ -791,9 +939,11 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                     <span className="font-medium group-hover:text-blue-600">Edit Product</span>
                                   </button>
                                   <button
-                                    onClick={(e) => { 
+                                    onClick={async (e) => { 
                                       e.stopPropagation(); 
-                                      setSelectedProductForDetail(product);
+                                      // 🔧 FETCH FRESH PRODUCT DATA with variant_attributes
+                                      const freshProduct = await useInventoryStore.getState().getProduct(product.id);
+                                      setSelectedProductForDetail(freshProduct || product);
                                       setShowProductDetailModal(true);
                                       setOpenDropdownId(null);
                                     }}
@@ -1001,14 +1151,14 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           </GlassCard>
 
           <div 
-            className={`grid gap-3 ${
-              cardVariant === 'detailed' 
-                ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4' 
-                : ''
-            }`}
-            style={cardVariant === 'default' ? {
-              gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))`
-            } : undefined}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: cardVariant === 'detailed'
+                ? 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))'
+                : `repeat(${gridColumns}, minmax(0, 1fr))`,
+              gap: 'clamp(0.75rem, 2vw, 1rem)',
+              gridAutoRows: '1fr'
+            }}
           >
           {products.map((product) => {
             const category = categories.find(c => c.id === product.categoryId);
@@ -1022,9 +1172,41 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   categoryName: category?.name,
                   brandName: brand?.name
                 }}
-                onView={(product) => {
-                  setSelectedProductForDetail(product);
-                  setShowProductDetailModal(true);
+                className="w-full h-full"
+                onView={async (product) => {
+                  console.log('🔵 [Grid View] Clicking product:', product.name, product.id);
+                  
+                  // Show immediate loading overlay
+                  setIsPreLoading(true);
+                  
+                  try {
+                    // 🔧 FETCH FRESH PRODUCT DATA with variant_attributes
+                    const freshProduct = await useInventoryStore.getState().getProduct(product.id);
+                    console.log('🔵 [Grid View] Fresh product result:', {
+                      ok: freshProduct?.ok,
+                      hasData: !!freshProduct?.data,
+                      variantCount: freshProduct?.data?.variants?.length || 0
+                    });
+                    
+                    if (!freshProduct?.ok || !freshProduct?.data) {
+                      console.error('❌ [Grid View] Failed to fetch product:', freshProduct?.message);
+                      setIsPreLoading(false);
+                      alert('Failed to load product details. Please try again.');
+                      return;
+                    }
+                    
+                    // Allow products without variants - they can be added to POs and variants will be created automatically
+                    if (!freshProduct.data.variants || freshProduct.data.variants.length === 0) {
+                      console.warn('⚠️ [Grid View] Product has no variants - variants will be created automatically when added to PO', freshProduct.data);
+                      // Don't block - continue to show product details
+                    }
+                    
+                    setSelectedProductForDetail(freshProduct.data);
+                    setShowProductDetailModal(true);
+                  } finally {
+                    // Hide loading after a short delay to allow modal to appear
+                    setTimeout(() => setIsPreLoading(false), 100);
+                  }
                 }}
                 onEdit={(product) => {
                   navigate(`/lats/products/${product.id}/edit`);
@@ -1077,9 +1259,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
         />
       )}
 
-      {/* Product Detail Modal */}
+      {/* Product Detail Modal - Using ProductModal */}
       {selectedProductForDetail && (
-        <GeneralProductDetailModal
+        <ProductModal
           isOpen={showProductDetailModal}
           onClose={() => {
             setShowProductDetailModal(false);
@@ -1089,8 +1271,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           onEdit={(product) => {
             setShowProductDetailModal(false);
             setSelectedProductForDetail(null);
-            // ✅ FIXED: Open EditProductModal instead of navigating to edit page
-            productModals.openEditModal(product.id);
+            navigate(`/lats/products/${product.id}/edit`);
           }}
         />
       )}
@@ -1211,6 +1392,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* Pre-Loading Overlay - Shows immediately when clicking a product */}
+      {isPreLoading && <ModernLoadingOverlay />}
     </div>
   );
 };
@@ -1219,7 +1403,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
 const MemoizedEnhancedInventoryTab = memo(EnhancedInventoryTab, (prevProps, nextProps) => {
   // Custom comparison function to prevent re-renders when data hasn't actually changed
   const propsToCompare = [
-    'products', 'metrics', 'categories', 'selectedProducts',
+    'products', 'metrics', 'categories', 'suppliers', 'selectedProducts',
     'selectedCategory', 'selectedStatus', 'showLowStockOnly',
     'showFeaturedOnly', 'viewMode', 'sortBy'
   ];

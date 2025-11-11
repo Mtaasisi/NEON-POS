@@ -12,6 +12,12 @@ export interface CartItem {
   totalPrice: number;
   availableQuantity: number;
   image?: string;
+  tags?: string[];
+  notes?: string;
+  attributes?: Record<string, any>;
+  selectedSerialNumbers?: any[];
+  costPrice?: number;
+  profit?: number;
 }
 
 export interface Cart {
@@ -124,10 +130,21 @@ export interface ProductSearchVariant {
   id: string;
   sku: string;
   name: string;
-  attributes: Record<string, string>;
+  attributes: Record<string, any>;
+  variant_attributes?: Record<string, any>;
+  variant_name?: string;
   sellingPrice: number;
+  price?: number;
+  costPrice?: number;
   quantity: number;
+  stockQuantity?: number;
   barcode?: string;
+  // Parent-child variant fields
+  is_parent?: boolean;
+  variant_type?: string;
+  variantType?: string;
+  parent_variant_id?: string;
+  isActive?: boolean;
 }
 
 // Form types

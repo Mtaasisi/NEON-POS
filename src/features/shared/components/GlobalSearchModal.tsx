@@ -9,6 +9,7 @@ import SearchFiltersPanel from './SearchFiltersPanel';
 import { Search, X, Command, Filter } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { SearchFilters } from '../../../lib/searchService';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -40,6 +41,9 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState<SearchFilters>({});
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Load recent searches from localStorage
   useEffect(() => {

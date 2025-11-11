@@ -262,7 +262,7 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                 <span className="text-xs sm:text-sm font-medium">Scan</span>
               </button>
 
-              {(currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
+              {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('access_pos') || currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
                 <button
                   onClick={() => {
                     playClickSound();

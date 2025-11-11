@@ -230,9 +230,10 @@ class SaleProcessingService {
       }
       
       // Single query to get both quantity and cost_price for all variants
+      // Also fetch parent-child relationship fields
       const { data: variants, error } = await supabase
         .from('lats_product_variants')
-        .select('id, quantity, cost_price')
+        .select('id, quantity, cost_price, is_parent, variant_type, parent_variant_id')
         .in('id', variantIds);
 
       if (error) {
@@ -266,11 +267,24 @@ class SaleProcessingService {
           };
         }
         
-        if (variantData.quantity < item.quantity) {
+        // For parent variants, calculate stock from children
+        let availableStock = variantData.quantity;
+        if (variantData.is_parent || variantData.variant_type === 'parent') {
+          console.warn('⚠️ Attempting to sell parent variant - stock calculated from children');
+          const { data: children } = await supabase
+            .from('lats_product_variants')
+            .select('quantity')
+            .eq('parent_variant_id', item.variantId)
+            .eq('is_active', true);
+          
+          availableStock = children?.reduce((sum, child) => sum + (child.quantity || 0), 0) || 0;
+        }
+        
+        if (availableStock < item.quantity) {
           return {
             stockValidation: { 
               success: false, 
-              error: `Insufficient stock for ${item.productName} (${item.variantName}). Available: ${variantData.quantity}, Requested: ${item.quantity}` 
+              error: `Insufficient stock for ${item.productName} (${item.variantName}). Available: ${availableStock}, Requested: ${item.quantity}` 
             },
             itemsWithCosts: []
           };
@@ -793,45 +807,44 @@ class SaleProcessingService {
 
         // Try to get current stats to calculate increments
         const { data: customer } = await supabase
-          .from('customers')
+          .from('lats_customers')
           .select('*')
           .eq('id', saleData.customerId)
           .single();
 
         if (customer) {
-          // Helper function to safely parse numeric values
-          const safeParseNumber = (value: any, defaultValue: number = 0): number => {
-            if (value === null || value === undefined) return defaultValue;
-            const parsed = typeof value === 'string' ? parseFloat(value) : Number(value);
-            // Detect corrupted data (unrealistic values > 1 trillion TZS)
-            if (isNaN(parsed) || parsed > 1000000000000 || parsed < 0) {
-              console.warn('⚠️ Detected corrupted value:', value, '- resetting to', defaultValue);
-              return defaultValue;
-            }
-            return parsed;
-          };
-
+          // Import parseAmount from format utility for consistent type handling
+          const { parseAmount } = await import('../features/lats/lib/format');
+          
           // Add fields that exist in the customer record with safe numeric parsing
           if ('total_spent' in customer) {
-            const currentTotal = safeParseNumber(customer.total_spent, 0);
-            const saleTotal = safeParseNumber(saleData.total, 0); // ✅ FIX: Parse sale total to prevent string concatenation
+            const currentTotal = parseAmount(customer.total_spent);
+            const saleTotal = parseAmount(saleData.total);
             const newTotal = currentTotal + saleTotal;
+            
+            // Validate the new total is within reasonable bounds
+            const MAX_REALISTIC_TOTAL = 1_000_000_000_000; // 1 trillion
+            if (newTotal > MAX_REALISTIC_TOTAL) {
+              console.error(`❌ New total ${newTotal} exceeds maximum realistic amount`);
+              return { success: false, error: 'Customer total would exceed realistic limit' };
+            }
+            
             updateData.total_spent = Math.max(0, newTotal); // Ensure non-negative
             console.log(`💰 Updating total_spent: ${currentTotal} + ${saleTotal} = ${newTotal}`);
           }
           if ('total_orders' in customer) {
-            const currentOrders = safeParseNumber(customer.total_orders, 0);
+            const currentOrders = parseAmount(customer.total_orders);
             updateData.total_orders = currentOrders + 1;
           }
           if ('points' in customer) {
-            const currentPoints = safeParseNumber(customer.points, 0);
+            const currentPoints = parseAmount(customer.points);
             updateData.points = currentPoints + pointsEarned;
           }
         }
 
-        // Update customer record
+        // Update customer record (use lats_customers directly to avoid VIEW issues)
         const { error: updateError } = await supabase
-          .from('customers')
+          .from('lats_customers')
           .update(updateData)
           .eq('id', saleData.customerId);
 
@@ -874,12 +887,12 @@ class SaleProcessingService {
       // ✅ Handle empty items array
       if (variantIds.length === 0) {
         console.log('ℹ️ No variants to restore stock for');
-        return;
+        return { success: true };
       }
       
       const { data: currentVariants, error: fetchError } = await supabase
         .from('lats_product_variants')
-        .select('id, quantity')
+        .select('id, quantity, is_parent, variant_type')
         .in('id', variantIds);
       
       if (fetchError) {
@@ -887,14 +900,21 @@ class SaleProcessingService {
       }
 
       // Create a map for quick lookup
-      const currentStockMap = new Map(currentVariants.map(v => [v.id, v.quantity]));
+      const currentStockMap = new Map(currentVariants.map(v => [v.id, v]));
 
       // Batch inventory updates and stock movements in parallel
       const updatePromises = items.map(item => {
-        const currentQuantity = currentStockMap.get(item.variantId) || 0;
+        const variantData = currentStockMap.get(item.variantId);
+        const currentQuantity = variantData?.quantity || 0;
         const newQuantity = Math.max(0, currentQuantity - item.quantity);
         
+        // Warn if updating parent variant (should update children instead)
+        if (variantData?.is_parent || variantData?.variant_type === 'parent') {
+          console.warn(`⚠️ Updating stock for parent variant ${item.variantId}. Consider selling specific child variants (IMEI children) instead.`);
+        }
+        
         // Update with calculated quantity
+        // Note: Database triggers will auto-update parent stock when children are updated
         return supabase
           .from('lats_product_variants')
           .update({ 
@@ -906,7 +926,8 @@ class SaleProcessingService {
 
       // Prepare all stock movement records for batch insert
       const stockMovements = items.map(item => {
-        const currentQuantity = currentStockMap.get(item.variantId) || 0;
+        const variantData = currentStockMap.get(item.variantId);
+        const currentQuantity = variantData?.quantity || 0;
         const newQuantity = Math.max(0, currentQuantity - item.quantity);
         
         return {
@@ -1349,11 +1370,11 @@ ${footerMessage}`;
 
         const [productsResult, variantsResult] = await Promise.all([
           productIds.length > 0 ? supabase.from('lats_products').select('id, name').in('id', productIds) : { data: [] },
-          variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds) : { data: [] }
+          variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, variant_name, sku').in('id', variantIds) : { data: [] }  // 🔧 FIX: Select both name columns
         ]);
 
         const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
-        const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
+        const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, { ...v, name: v.variant_name || v.name }]));  // 🔧 FIX: Map variant_name to name
 
         // Attach product and variant data to sale items
         const enhancedItems = saleItems.map(item => ({
@@ -1404,11 +1425,11 @@ ${footerMessage}`;
 
         const [productsResult, variantsResult] = await Promise.all([
           productIds.length > 0 ? supabase.from('lats_products').select('id, name').in('id', productIds) : { data: [] },
-          variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds) : { data: [] }
+          variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, variant_name, sku').in('id', variantIds) : { data: [] }  // 🔧 FIX: Select both name columns
         ]);
 
         const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
-        const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
+        const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, { ...v, name: v.variant_name || v.name }]));  // 🔧 FIX: Map variant_name to name
 
         // Group sale items by sale_id
         const itemsBySaleId = new Map<string, any[]>();

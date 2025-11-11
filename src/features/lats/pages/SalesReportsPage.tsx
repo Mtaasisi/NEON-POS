@@ -161,8 +161,11 @@ const SalesReportsPage: React.FC = () => {
   // Check if user can view profit information
   const canViewProfit = useMemo(() => {
     if (!currentUser) return false;
-    // Only admins can view profit information
-    return currentUser.role === 'admin';
+    // Check user permissions first, then fall back to role
+    const userPermissions = currentUser.permissions || [];
+    return userPermissions.includes('all') || 
+           userPermissions.includes('view_financial_reports') ||
+           currentUser.role === 'admin';
   }, [currentUser]);
 
   // Calculate summary metrics
@@ -323,14 +326,18 @@ const SalesReportsPage: React.FC = () => {
   // Check if user has permission to close daily sales
   const canCloseDailySales = useMemo(() => {
     if (!currentUser) return false;
-    return rbacManager.hasPermission(currentUser.role, 'reports', 'daily-close');
+    // Now checks user.permissions array first!
+    return rbacManager.canUser(currentUser, 'reports', 'daily-close');
   }, [currentUser]);
 
   // Check if user has permission to confirm transactions
   const canConfirmTransactions = useMemo(() => {
     if (!currentUser) return false;
-    // Use RBAC to check permissions, or allow admin as fallback
-    return rbacManager.hasPermission(currentUser.role, 'reports', 'confirm-transactions') || 
+    // Check user permissions first, then fall back to role
+    const userPermissions = currentUser.permissions || [];
+    return userPermissions.includes('all') || 
+           userPermissions.includes('view_reports') ||
+           rbacManager.hasPermission(currentUser.role, 'reports', 'confirm-transactions') || 
            currentUser.role === 'admin';
   }, [currentUser]);
 

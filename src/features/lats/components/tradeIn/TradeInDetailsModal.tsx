@@ -3,7 +3,7 @@
  * Displays comprehensive details of a trade-in transaction
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   X,
   Smartphone,
@@ -17,16 +17,55 @@ import {
   Wrench,
   FileText,
   Hash,
+  AlertCircle,
+  ShoppingCart,
 } from 'lucide-react';
 import type { TradeInTransaction } from '../../types/tradeIn';
 import { format } from '../../lib/format';
+import { approveTradeInTransaction, completeTradeInTransaction } from '../../lib/tradeInApi';
+import { toast } from 'sonner';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 interface TradeInDetailsModalProps {
   transaction: TradeInTransaction;
   onClose: () => void;
+  onStatusChange?: () => void; // Callback to refresh the list after status change
 }
 
-const TradeInDetailsModal: React.FC<TradeInDetailsModalProps> = ({ transaction, onClose }) => {
+const TradeInDetailsModal: React.FC<TradeInDetailsModalProps> = ({ transaction, onClose, onStatusChange }) => {
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(true);
+
+  const handleApprove = async () => {
+    setIsProcessing(true);
+    const result = await approveTradeInTransaction(transaction.id);
+    setIsProcessing(false);
+    
+    if (result.success) {
+      toast.success('Transaction approved successfully!');
+      onStatusChange?.();
+      onClose();
+    } else {
+      toast.error(result.error || 'Failed to approve transaction');
+    }
+  };
+
+  const handleComplete = async () => {
+    setIsProcessing(true);
+    const result = await completeTradeInTransaction(transaction.id);
+    setIsProcessing(false);
+    
+    if (result.success) {
+      toast.success('Transaction completed successfully!');
+      onStatusChange?.();
+      onClose();
+    } else {
+      toast.error(result.error || 'Failed to complete transaction');
+    }
+  };
+
   const getStatusConfig = (status: string) => {
     const configs = {
       pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock, label: 'Pending' },
@@ -88,6 +127,45 @@ const TradeInDetailsModal: React.FC<TradeInDetailsModalProps> = ({ transaction, 
               )}
             </div>
           </div>
+
+          {/* Inventory Status Info */}
+          {transaction.status === 'completed' && !transaction.inventory_item_id && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+              <ShoppingCart className="w-5 h-5 text-green-600 mt-0.5" />
+              <div>
+                <div className="font-semibold text-green-900">Ready for Inventory</div>
+                <p className="text-sm text-green-700 mt-1">
+                  This device can now be added to POS inventory and sold to customers.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          {transaction.status !== 'completed' && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+              <div>
+                <div className="font-semibold text-yellow-900">Not Ready for Sale</div>
+                <p className="text-sm text-yellow-700 mt-1">
+                  This device cannot be added to inventory or sold until an admin marks it as <strong>Completed</strong>.
+                  {transaction.status === 'pending' && ' Please approve and complete this transaction first.'}
+                  {transaction.status === 'approved' && ' Please complete this transaction to proceed.'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {transaction.inventory_item_id && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
+              <Package className="w-5 h-5 text-blue-600 mt-0.5" />
+              <div>
+                <div className="font-semibold text-blue-900">Already in Inventory</div>
+                <p className="text-sm text-blue-700 mt-1">
+                  This device has been added to inventory and is available for sale in POS.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Device Information */}
           <div className="bg-gray-50 rounded-lg p-5">
@@ -268,11 +346,38 @@ const TradeInDetailsModal: React.FC<TradeInDetailsModalProps> = ({ transaction, 
           )}
         </div>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-end">
+        {/* Footer with Action Buttons */}
+        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-between">
+          <div className="flex gap-3">
+            {/* Show Approve button if status is pending */}
+            {transaction.status === 'pending' && (
+              <button
+                onClick={handleApprove}
+                disabled={isProcessing}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {isProcessing ? 'Approving...' : 'Approve Transaction'}
+              </button>
+            )}
+            
+            {/* Show Complete button if status is pending or approved */}
+            {(transaction.status === 'pending' || transaction.status === 'approved') && (
+              <button
+                onClick={handleComplete}
+                disabled={isProcessing}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {isProcessing ? 'Completing...' : 'Complete Transaction'}
+              </button>
+            )}
+          </div>
+          
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            disabled={isProcessing}
+            className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Close
           </button>

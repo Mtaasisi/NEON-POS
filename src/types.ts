@@ -187,7 +187,7 @@ export interface Signature {
   signatureData: string;
 }
 
-export type LoyaltyLevel = 'bronze' | 'silver' | 'gold' | 'platinum';
+export type LoyaltyLevel = 'interested' | 'engaged' | 'payment_customer' | 'active' | 'regular' | 'premium' | 'vip';
 export type CustomerTag = 'vip' | 'new' | 'complainer' | 'purchased';
 
 export interface Customer {

@@ -108,8 +108,8 @@ const POSBottomBar: React.FC<POSBottomBarProps> = ({
               </button>
             )}
 
-            {/* Settings - Show only for admin users */}
-            {currentUser?.role === 'admin' && (
+            {/* Settings - Show for users with settings permission */}
+            {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('view_settings') || currentUser?.role === 'admin') && (
               <button
                 onClick={onSettings}
                 className="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"

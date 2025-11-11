@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, Copy, Edit, Plus, Eye, Download, Share2, ArrowRight } from 'lucide-react';
+import { CheckCircle, Copy, Plus, Eye, Download, Share2, ArrowRight, ShoppingCart } from 'lucide-react';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
@@ -9,13 +9,13 @@ interface ProductSuccessModalProps {
   productId: string;
   productName: string;
   onViewProduct: () => void;
-  onEditProduct: () => void;
   onDuplicateProduct: () => void;
   onCreateAnother: () => void;
   onCopyProductLink: () => void;
   onDownloadDetails: () => void;
   onShareProduct: () => void;
   onGoToInventory: () => void;
+  onAddToPO: () => void;
 }
 
 const ProductSuccessModal: React.FC<ProductSuccessModalProps> = ({
@@ -24,13 +24,13 @@ const ProductSuccessModal: React.FC<ProductSuccessModalProps> = ({
   productId,
   productName,
   onViewProduct,
-  onEditProduct,
   onDuplicateProduct,
   onCreateAnother,
   onCopyProductLink,
   onDownloadDetails,
   onShareProduct,
-  onGoToInventory
+  onGoToInventory,
+  onAddToPO
 }) => {
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
@@ -44,13 +44,10 @@ const ProductSuccessModal: React.FC<ProductSuccessModalProps> = ({
 
     if (isOpen) {
       document.addEventListener('keydown', handleEscape);
-      // Prevent body scroll when modal is open
-      document.body.style.overflow = 'hidden';
     }
 
     return () => {
       document.removeEventListener('keydown', handleEscape);
-      document.body.style.overflow = 'unset';
     };
   }, [isOpen, onClose]);
 
@@ -115,15 +112,6 @@ const ProductSuccessModal: React.FC<ProductSuccessModalProps> = ({
               </GlassButton>
               
               <GlassButton
-                onClick={() => handleAction(onEditProduct, 'edit')}
-                icon={<Edit size={16} />}
-                className="w-full justify-start bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200"
-                disabled={isLoading !== null}
-              >
-                {isLoading === 'edit' ? 'Loading...' : 'Edit This Product'}
-              </GlassButton>
-              
-              <GlassButton
                 onClick={() => handleAction(onDuplicateProduct, 'duplicate')}
                 icon={<Copy size={16} />}
                 className="w-full justify-start bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-200"
@@ -139,6 +127,15 @@ const ProductSuccessModal: React.FC<ProductSuccessModalProps> = ({
                 disabled={isLoading !== null}
               >
                 {isLoading === 'create' ? 'Loading...' : 'Create Another Product'}
+              </GlassButton>
+              
+              <GlassButton
+                onClick={() => handleAction(onAddToPO, 'addToPO')}
+                icon={<ShoppingCart size={16} />}
+                className="w-full justify-start bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
+                disabled={isLoading !== null}
+              >
+                {isLoading === 'addToPO' ? 'Loading...' : 'Add to Purchase Order'}
               </GlassButton>
             </div>
 

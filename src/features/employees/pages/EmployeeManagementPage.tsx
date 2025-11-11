@@ -4,7 +4,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useBranch } from '../../../context/BranchContext';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
-import { EmployeeForm, AttendanceModal } from '../components';
+import { EmployeeForm, AttendanceModal, ImportEmployeesFromUsersModal } from '../components';
 import { 
   Users, User, UserPlus, Calendar, Clock, TrendingUp, Award, 
   Plus, Edit, Trash2, CheckCircle, AlertTriangle, Filter,
@@ -81,6 +81,7 @@ const EmployeeManagementPage: React.FC = () => {
   // Modals
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showImportFromUsers, setShowImportFromUsers] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | undefined>(undefined);
   const [showBulkActions, setShowBulkActions] = useState(false);
 
@@ -377,6 +378,15 @@ const EmployeeManagementPage: React.FC = () => {
             <Plus size={18} />
             New Employee
             <span className="hidden sm:inline text-xs opacity-75 ml-2">⌘N</span>
+          </button>
+          
+          <button
+            onClick={() => setShowImportFromUsers(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors text-sm"
+            title="Import employees from existing users"
+          >
+            <UserPlus size={18} />
+            <span className="hidden sm:inline">Import from Users</span>
           </button>
           
           <button
@@ -811,6 +821,18 @@ const EmployeeManagementPage: React.FC = () => {
           setEditingEmployee(undefined);
         }}
         onSave={handleSaveEmployee}
+      />
+
+      <ImportEmployeesFromUsersModal
+        isOpen={showImportFromUsers}
+        onClose={() => setShowImportFromUsers(false)}
+        onImportComplete={() => {
+          loadData();
+          successModal.show('Employees imported successfully! You can now edit them to add more details.', {
+            title: 'Import Complete',
+            autoCloseDelay: 3000
+          });
+        }}
       />
 
       <AttendanceModal

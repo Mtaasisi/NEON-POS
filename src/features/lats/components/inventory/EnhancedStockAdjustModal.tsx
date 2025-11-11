@@ -11,6 +11,7 @@ import GlassButton from '../../../shared/components/ui/GlassButton';
 import GlassBadge from '../../../shared/components/ui/GlassBadge';
 import PriceInput from '../../../../shared/components/ui/PriceInput';
 import { format } from '../../lib/format';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 // Enhanced validation schema
 const enhancedStockAdjustmentSchema = z.object({
@@ -60,6 +61,9 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Form setup
   const {

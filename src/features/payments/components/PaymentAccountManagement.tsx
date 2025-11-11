@@ -5,17 +5,23 @@ import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassInput from '../../shared/components/ui/GlassInput';
 import GlassSelect from '../../shared/components/ui/GlassSelect';
 import AccountThumbnail from './AccountThumbnail';
+import ManualTransactionModal from './ManualTransactionModal';
+import TransferModal from './TransferModal';
+import TransactionReversalModal from './TransactionReversalModal';
+import ScheduledTransfersView from './ScheduledTransfersView';
 import { 
   Settings, Plus, Edit3, Trash2, Save, X, 
   CheckCircle, XCircle, AlertTriangle, RefreshCw,
   TrendingUp, TrendingDown, Eye, EyeOff, Wallet,
   BarChart3, DollarSign, CreditCard, Building, Smartphone,
-  History, Filter, Calendar, ArrowUpRight, ArrowDownRight
+  History, Filter, Calendar, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
+  RepeatIcon
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePaymentMethodsContext } from '../../../context/PaymentMethodsContext';
 import { financeAccountService, FinanceAccount } from '../../../lib/financeAccountService';
+import { exportToCSV, exportToPDF } from '../utils/exportTransactions';
 
 interface Transaction {
   id: string;
@@ -27,10 +33,12 @@ interface Transaction {
   balance_before: number;
   reference_number?: string;
   metadata?: any;
+  account_id: string;
 }
 
 interface AccountWithTransactions extends FinanceAccount {
   recentTransactions: Transaction[];
+  initialBalance?: number; // Store the database balance (starting point)
   totalReceived: number;
   totalSpent: number;
 }
@@ -50,6 +58,24 @@ const PaymentAccountManagement: React.FC = () => {
   const [accountTransactions, setAccountTransactions] = useState<Transaction[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<string>('all');
+  const [dateFilter, setDateFilter] = useState<{ start: string; end: string }>({
+    start: '',
+    end: '',
+  });
+
+  // Manual transaction modal state
+  const [showManualTransactionModal, setShowManualTransactionModal] = useState(false);
+  const [manualTransactionAccount, setManualTransactionAccount] = useState<FinanceAccount | null>(null);
+
+  // Transfer modal state
+  const [showTransferModal, setShowTransferModal] = useState(false);
+
+  // Reversal modal state
+  const [showReversalModal, setShowReversalModal] = useState(false);
+  const [reversalTransaction, setReversalTransaction] = useState<Transaction | null>(null);
+
+  // View state - toggle between accounts and scheduled transfers
+  const [activeView, setActiveView] = useState<'accounts' | 'scheduled'>('accounts');
 
   // Form state
   const [formData, setFormData] = useState<Partial<FinanceAccount>>({
@@ -64,12 +90,12 @@ const PaymentAccountManagement: React.FC = () => {
   });
 
   // Format currency with NaN protection
-  const formatMoney = (amount: number | undefined | null) => {
+  const formatMoney = (amount: number | undefined | null, currency: string = 'TZS') => {
     const safeAmount = Number(amount);
     if (!isFinite(safeAmount) || isNaN(safeAmount)) {
       return new Intl.NumberFormat('en-TZ', {
         style: 'currency',
-        currency: 'TZS',
+        currency: currency || 'TZS',
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
       }).format(0);
@@ -77,7 +103,7 @@ const PaymentAccountManagement: React.FC = () => {
     
     return new Intl.NumberFormat('en-TZ', {
       style: 'currency',
-      currency: 'TZS',
+      currency: currency || 'TZS',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(safeAmount);
@@ -162,12 +188,16 @@ const PaymentAccountManagement: React.FC = () => {
             )
             .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
-          // Calculate actual balance from transactions
-          const calculatedBalance = totalReceived - totalSpent;
+          // Use the authoritative database balance directly
+          // The database balance is the single source of truth
+          const currentBalance = Number(account.balance) || 0;
+          
+          // Note: totalReceived and totalSpent are for display purposes only
+          // The actual balance is maintained by the database through triggers and RPC functions
 
           return {
             ...account,
-            balance: calculatedBalance, // Use calculated balance instead of database balance
+            balance: currentBalance, // Authoritative database balance
             recentTransactions: transactions || [],
             totalReceived,
             totalSpent
@@ -190,8 +220,22 @@ const PaymentAccountManagement: React.FC = () => {
     await fetchAccounts();
   }, [refreshPaymentMethods, fetchAccounts]);
 
+  // Initial load and auto-refresh every 30 seconds
   useEffect(() => {
     fetchAccounts();
+    
+    // 🔄 AUTO-REFRESH: Update balances every 30 seconds
+    console.log('🔄 Setting up automatic balance refresh (every 30s)');
+    const refreshInterval = setInterval(() => {
+      console.log('💳 Auto-refreshing account balances...');
+      fetchAccounts();
+    }, 30000); // 30 seconds
+    
+    // Cleanup interval on unmount
+    return () => {
+      console.log('⏹️ Stopping automatic balance refresh');
+      clearInterval(refreshInterval);
+    };
   }, [fetchAccounts]);
 
   // Handle form input changes
@@ -204,9 +248,47 @@ const PaymentAccountManagement: React.FC = () => {
 
   // Save account
   const handleSave = async () => {
+    // Validation
+    if (!formData.name || formData.name.trim() === '') {
+      toast.error('Account name is required');
+      return;
+    }
+
+    if (!formData.type) {
+      toast.error('Account type is required');
+      return;
+    }
+
+    if (!formData.currency) {
+      toast.error('Currency is required');
+      return;
+    }
+
+    if (formData.type === 'bank' && !formData.bank_name) {
+      toast.error('Bank name is required for bank accounts');
+      return;
+    }
+
+    if (formData.type === 'mobile_money') {
+      if (!formData.bank_name) {
+        toast.error('Mobile money provider is required');
+        return;
+      }
+      if (!formData.account_number) {
+        toast.error('Phone number is required for mobile money accounts');
+        return;
+      }
+    }
+
+    // Prevent negative balance
+    if (formData.balance && formData.balance < 0) {
+      toast.error('Balance cannot be negative');
+      return;
+    }
+
     try {
       if (editingAccount) {
-        // Update existing account
+        // Update existing account (trigger will sync duplicate columns automatically)
         const { error } = await supabase
           .from('finance_accounts')
           .update({
@@ -227,7 +309,7 @@ const PaymentAccountManagement: React.FC = () => {
         if (error) throw error;
         toast.success('Account updated successfully');
       } else {
-        // Create new account
+        // Create new account (trigger will sync duplicate columns automatically)
         const { error } = await supabase
           .from('finance_accounts')
           .insert({
@@ -347,10 +429,9 @@ const PaymentAccountManagement: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold text-gray-900 mb-1">Payment Accounts</h2>
             <p className="text-gray-500">Track balances and manage your payment methods</p>
@@ -364,6 +445,26 @@ const PaymentAccountManagement: React.FC = () => {
               <span>Refresh</span>
             </button>
             <button
+              onClick={() => setShowTransferModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-purple-500/30"
+            >
+              <ArrowRightLeft size={18} />
+              <span>Transfer</span>
+            </button>
+            <button
+              onClick={async () => {
+                console.log('🔄 Manual refresh triggered');
+                setIsLoading(true);
+                await fetchAccounts();
+                setIsLoading(false);
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl transition-all font-medium shadow-lg shadow-green-500/30"
+              title="Refresh account balances from database"
+            >
+              <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+              <span>Refresh</span>
+            </button>
+            <button
               onClick={handleAdd}
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl transition-all font-medium shadow-lg shadow-blue-500/30"
             >
@@ -373,6 +474,39 @@ const PaymentAccountManagement: React.FC = () => {
           </div>
         </div>
 
+        {/* View Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8">
+            <button
+              onClick={() => setActiveView('accounts')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+                activeView === 'accounts'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Wallet size={16} />
+              Payment Accounts
+            </button>
+            <button
+              onClick={() => setActiveView('scheduled')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
+                activeView === 'scheduled'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <RepeatIcon size={16} />
+              Scheduled Transfers
+            </button>
+          </nav>
+        </div>
+
+        {/* Conditional View Rendering */}
+        {activeView === 'scheduled' ? (
+          <ScheduledTransfersView onRefresh={fetchAccounts} />
+        ) : (
+          <>
         {/* Currency Filter */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between">
@@ -426,7 +560,7 @@ const PaymentAccountManagement: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-500 font-medium mb-1">Total Balance</p>
-              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalBalance)}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.totalBalance, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
             </div>
           </div>
 
@@ -452,7 +586,7 @@ const PaymentAccountManagement: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-500 font-medium mb-1">Net Flow</p>
-              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.netFlow)}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatMoney(summaryStats.netFlow, currencyFilter !== 'all' ? currencyFilter : 'TZS')}</p>
             </div>
           </div>
         </div>
@@ -484,6 +618,17 @@ const PaymentAccountManagement: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        setManualTransactionAccount(account);
+                        setShowManualTransactionModal(true);
+                      }}
+                      className="p-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all shadow-sm"
+                      title="Add transaction"
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleEdit(account);
                       }}
                       className="p-2 bg-white hover:bg-gray-100 text-gray-600 hover:text-gray-900 rounded-lg transition-all border border-gray-200 shadow-sm"
@@ -508,8 +653,11 @@ const PaymentAccountManagement: React.FC = () => {
                 <div>
                   <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Current Balance</p>
                   <p className="text-3xl font-bold text-gray-900">
-                    {formatMoney(account.balance)}
+                    {formatMoney(account.balance, account.currency)}
                   </p>
+                  {account.currency !== 'TZS' && (
+                    <p className="text-xs text-gray-500 mt-1">Currency: {account.currency}</p>
+                  )}
                 </div>
               </div>
 
@@ -522,14 +670,14 @@ const PaymentAccountManagement: React.FC = () => {
                       <TrendingUp size={14} />
                       <span className="text-xs font-semibold uppercase tracking-wide">Received</span>
                     </div>
-                    <div className="text-base font-bold text-emerald-900">{formatMoney(account.totalReceived)}</div>
+                    <div className="text-base font-bold text-emerald-900">{formatMoney(account.totalReceived, account.currency)}</div>
                   </div>
                   <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
                     <div className="flex items-center gap-1.5 text-red-700 mb-1">
                       <TrendingDown size={14} />
                       <span className="text-xs font-semibold uppercase tracking-wide">Spent</span>
                     </div>
-                    <div className="text-base font-bold text-red-900">{formatMoney(account.totalSpent)}</div>
+                    <div className="text-base font-bold text-red-900">{formatMoney(account.totalSpent, account.currency)}</div>
                   </div>
                 </div>
 
@@ -552,7 +700,7 @@ const PaymentAccountManagement: React.FC = () => {
                               isIncoming ? 'text-emerald-600' : 'text-red-600'
                             }`}>
                               {isIncoming ? '+' : '-'}
-                              {formatMoney(transaction.amount)}
+                              {formatMoney(transaction.amount, account.currency)}
                             </div>
                           </div>
                         );
@@ -596,7 +744,6 @@ const PaymentAccountManagement: React.FC = () => {
             </div>
           ))}
         </div>
-      </div>
 
       {/* Add/Edit Modal */}
       {showAddModal && (
@@ -643,27 +790,55 @@ const PaymentAccountManagement: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Account Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Account Name <span className="text-red-500">*</span>
+                </label>
                 <GlassInput
                   value={formData.name || ''}
                   onChange={(e) => handleInputChange('name', e.target.value)}
                   placeholder="e.g., Cash Drawer, CRDB Bank"
+                  required
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Account Type</label>
-                <GlassSelect
-                  value={formData.type || 'cash'}
-                  onChange={(e) => handleInputChange('type', e.target.value)}
-                >
-                  <option value="cash">Cash</option>
-                  <option value="bank">Bank</option>
-                  <option value="mobile_money">Mobile Money</option>
-                  <option value="credit_card">Credit Card</option>
-                  <option value="savings">Savings</option>
-                  <option value="other">Other</option>
-                </GlassSelect>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Account Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.type || 'cash'}
+                    onChange={(e) => handleInputChange('type', e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-white/80 backdrop-blur-sm text-sm font-medium transition-all"
+                  >
+                    <option value="cash">💰 Cash</option>
+                    <option value="bank">🏦 Bank</option>
+                    <option value="mobile_money">📱 Mobile Money</option>
+                    <option value="credit_card">💳 Credit Card</option>
+                    <option value="savings">💎 Savings</option>
+                    <option value="other">📦 Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Currency <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.currency || 'TZS'}
+                    onChange={(e) => handleInputChange('currency', e.target.value)}
+                    required
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-white/80 backdrop-blur-sm text-sm font-medium transition-all"
+                  >
+                    <option value="TZS">🇹🇿 TZS - Tanzanian Shilling</option>
+                    <option value="USD">🇺🇸 USD - US Dollar</option>
+                    <option value="EUR">🇪🇺 EUR - Euro</option>
+                    <option value="GBP">🇬🇧 GBP - British Pound</option>
+                    <option value="KES">🇰🇪 KES - Kenyan Shilling</option>
+                    <option value="UGX">🇺🇬 UGX - Ugandan Shilling</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -673,17 +848,24 @@ const PaymentAccountManagement: React.FC = () => {
                   value={formData.balance || 0}
                   onChange={(e) => handleInputChange('balance', Number(e.target.value))}
                   placeholder="0"
+                  step="0.01"
+                  min="0"
                 />
+                <p className="text-xs text-gray-500 mt-1">Starting balance for this account (cannot be negative)</p>
               </div>
 
+              {/* Bank-specific fields */}
               {formData.type === 'bank' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Bank Name <span className="text-red-500">*</span>
+                    </label>
                     <GlassInput
                       value={formData.bank_name || ''}
                       onChange={(e) => handleInputChange('bank_name', e.target.value)}
-                      placeholder="e.g., CRDB Bank"
+                      placeholder="e.g., CRDB Bank, NMB Bank"
+                      required
                     />
                   </div>
                   <div>
@@ -691,7 +873,61 @@ const PaymentAccountManagement: React.FC = () => {
                     <GlassInput
                       value={formData.account_number || ''}
                       onChange={(e) => handleInputChange('account_number', e.target.value)}
-                      placeholder="Account number"
+                      placeholder="Bank account number"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Mobile Money-specific fields */}
+              {formData.type === 'mobile_money' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Mobile Money Provider <span className="text-red-500">*</span>
+                    </label>
+                    <GlassInput
+                      value={formData.bank_name || ''}
+                      onChange={(e) => handleInputChange('bank_name', e.target.value)}
+                      placeholder="e.g., M-Pesa, Tigo Pesa, Airtel Money"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone Number <span className="text-red-500">*</span>
+                    </label>
+                    <GlassInput
+                      value={formData.account_number || ''}
+                      onChange={(e) => handleInputChange('account_number', e.target.value)}
+                      placeholder="e.g., +255712345678"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Credit Card-specific fields */}
+              {formData.type === 'credit_card' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Card Issuer</label>
+                    <GlassInput
+                      value={formData.bank_name || ''}
+                      onChange={(e) => handleInputChange('bank_name', e.target.value)}
+                      placeholder="e.g., Visa, Mastercard"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Last 4 Digits</label>
+                    <GlassInput
+                      value={formData.account_number || ''}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 4);
+                        handleInputChange('account_number', value);
+                      }}
+                      placeholder="Last 4 digits of card"
+                      pattern="\d{0,4}"
                     />
                   </div>
                 </>
@@ -699,32 +935,79 @@ const PaymentAccountManagement: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <GlassInput
+                <textarea
                   value={formData.notes || ''}
                   onChange={(e) => handleInputChange('notes', e.target.value)}
-                  placeholder="Optional notes"
+                  placeholder="Optional notes or description"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 bg-white/50 backdrop-blur-sm text-sm"
+                  rows={3}
                 />
               </div>
 
-              <div className="flex items-center gap-4">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_active || false}
-                    onChange={(e) => handleInputChange('is_active', e.target.checked)}
-                    className="mr-2"
-                  />
-                  <span className="text-sm text-gray-700">Active</span>
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={formData.is_payment_method || false}
-                    onChange={(e) => handleInputChange('is_payment_method', e.target.checked)}
-                    className="mr-2"
-                  />
-                  <span className="text-sm text-gray-700">Payment Method</span>
-                </label>
+              {/* Account Settings */}
+              <div className="border-t border-gray-200 pt-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3">Account Settings</h4>
+                <div className="space-y-3">
+                  <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_active || false}
+                        onChange={(e) => handleInputChange('is_active', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">Active Account</span>
+                        <p className="text-xs text-gray-500">Enable this account for transactions</p>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_payment_method || false}
+                        onChange={(e) => handleInputChange('is_payment_method', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">Payment Method</span>
+                        <p className="text-xs text-gray-500">Allow this account to be used for payments</p>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.requires_reference || false}
+                        onChange={(e) => handleInputChange('requires_reference', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">Require Reference Number</span>
+                        <p className="text-xs text-gray-500">Require reference/transaction number for payments</p>
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.requires_account_number || false}
+                        onChange={(e) => handleInputChange('requires_account_number', e.target.checked)}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">Require Account Number</span>
+                        <p className="text-xs text-gray-500">Require account/phone number for payments</p>
+                      </div>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -775,55 +1058,150 @@ const PaymentAccountManagement: React.FC = () => {
 
             {/* Account Summary */}
             <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Current Balance</div>
-                  <div className="text-2xl font-bold text-gray-900">{formatMoney(selectedAccount.balance)}</div>
+                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Initial Balance</div>
+                  <div className="text-xl font-bold text-gray-700">{formatMoney(selectedAccount.initialBalance || 0, selectedAccount.currency)}</div>
+                  <div className="text-xs text-gray-500 mt-1">Starting amount</div>
                 </div>
                 <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 rounded-2xl border border-emerald-200 hover:shadow-md transition-shadow">
                   <div className="text-xs text-emerald-700 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
                     <TrendingUp size={14} />
                     Received
                   </div>
-                  <div className="text-2xl font-bold text-emerald-900">{formatMoney(selectedAccount.totalReceived)}</div>
+                  <div className="text-xl font-bold text-emerald-900">{formatMoney(selectedAccount.totalReceived, selectedAccount.currency)}</div>
+                  <div className="text-xs text-emerald-600 mt-1">Money in</div>
                 </div>
                 <div className="bg-gradient-to-br from-red-50 to-red-100 p-5 rounded-2xl border border-red-200 hover:shadow-md transition-shadow">
                   <div className="text-xs text-red-700 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
                     <TrendingDown size={14} />
                     Spent
                   </div>
-                  <div className="text-2xl font-bold text-red-900">{formatMoney(selectedAccount.totalSpent)}</div>
+                  <div className="text-xl font-bold text-red-900">{formatMoney(selectedAccount.totalSpent, selectedAccount.currency)}</div>
+                  <div className="text-xs text-red-600 mt-1">Money out</div>
+                </div>
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-2xl border border-blue-200 hover:shadow-md transition-shadow">
+                  <div className="text-xs text-blue-700 font-semibold uppercase tracking-wide mb-2">Current Balance</div>
+                  <div className="text-2xl font-bold text-blue-900">{formatMoney(selectedAccount.balance, selectedAccount.currency)}</div>
+                  <div className="text-xs text-blue-600 mt-1">Available now</div>
                 </div>
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
                   <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Total Transactions</div>
                   <div className="text-2xl font-bold text-gray-900">{accountTransactions.length}</div>
+                  <div className="text-xs text-gray-500 mt-1">All time</div>
                 </div>
               </div>
             </div>
 
             {/* Filter Bar */}
             <div className="p-6 bg-white border-b border-gray-200">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-3 flex-1">
-                  <Filter size={18} className="text-gray-400" />
-                  <select
-                    value={transactionTypeFilter}
-                    onChange={(e) => setTransactionTypeFilter(e.target.value)}
-                    className="px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-sm font-medium bg-white"
-                  >
-                    <option value="all">All Transactions</option>
-                    <option value="payment_received">Money In</option>
-                    <option value="expense">Expenses</option>
-                    <option value="payment_made">Payments Made</option>
-                    <option value="transfer_in">Transfers In</option>
-                    <option value="transfer_out">Transfers Out</option>
-                  </select>
+              <div className="space-y-4">
+                {/* Type Filter and Export Buttons */}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Filter size={18} className="text-gray-400" />
+                    <select
+                      value={transactionTypeFilter}
+                      onChange={(e) => setTransactionTypeFilter(e.target.value)}
+                      className="px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-sm font-medium bg-white"
+                    >
+                      <option value="all">All Transactions</option>
+                      <option value="payment_received">Money In</option>
+                      <option value="expense">Expenses</option>
+                      <option value="payment_made">Payments Made</option>
+                      <option value="transfer_in">Transfers In</option>
+                      <option value="transfer_out">Transfers Out</option>
+                    </select>
+                  </div>
+                  
+                  {/* Export Buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (!selectedAccount) return;
+                        const filtered = accountTransactions.filter(t => {
+                          if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                          if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                          if (dateFilter.end) {
+                            const endDate = new Date(dateFilter.end);
+                            endDate.setHours(23, 59, 59, 999);
+                            if (new Date(t.created_at) > endDate) return false;
+                          }
+                          return true;
+                        });
+                        exportToCSV(filtered, {
+                          accountName: selectedAccount.name,
+                          currency: selectedAccount.currency || 'TZS',
+                          dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
+                        });
+                        toast.success('CSV exported successfully');
+                      }}
+                      className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all text-sm font-medium"
+                    >
+                      📊 CSV
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!selectedAccount) return;
+                        const filtered = accountTransactions.filter(t => {
+                          if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                          if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                          if (dateFilter.end) {
+                            const endDate = new Date(dateFilter.end);
+                            endDate.setHours(23, 59, 59, 999);
+                            if (new Date(t.created_at) > endDate) return false;
+                          }
+                          return true;
+                        });
+                        exportToPDF(filtered, {
+                          accountName: selectedAccount.name,
+                          currency: selectedAccount.currency || 'TZS',
+                          dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
+                        });
+                        toast.success('PDF opened in new window');
+                      }}
+                      className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-all text-sm font-medium"
+                    >
+                      📄 PDF
+                    </button>
+                  </div>
+                  
+                  <div className="text-sm text-gray-500 bg-gray-100 px-4 py-2.5 rounded-xl font-medium">
+                    {transactionTypeFilter === 'all' 
+                      ? `${accountTransactions.length} transactions`
+                      : `${accountTransactions.filter(t => t.transaction_type === transactionTypeFilter).length} transactions`
+                    }
+                  </div>
                 </div>
-                <div className="text-sm text-gray-500 bg-gray-100 px-4 py-2.5 rounded-xl font-medium">
-                  {transactionTypeFilter === 'all' 
-                    ? `${accountTransactions.length} transactions`
-                    : `${accountTransactions.filter(t => t.transaction_type === transactionTypeFilter).length} transactions`
-                  }
+                
+                {/* Date Range Filter */}
+                <div className="flex items-center gap-4">
+                  <Calendar size={18} className="text-gray-400" />
+                  <div className="flex items-center gap-3 flex-1">
+                    <input
+                      type="date"
+                      value={dateFilter.start}
+                      onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
+                      className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      placeholder="Start date"
+                    />
+                    <span className="text-gray-500">to</span>
+                    <input
+                      type="date"
+                      value={dateFilter.end}
+                      onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
+                      className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                      placeholder="End date"
+                    />
+                    {(dateFilter.start || dateFilter.end) && (
+                      <button
+                        onClick={() => setDateFilter({ start: '', end: '' })}
+                        className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -846,7 +1224,24 @@ const PaymentAccountManagement: React.FC = () => {
               ) : (
                 <div className="space-y-3">
                   {accountTransactions
-                    .filter(t => transactionTypeFilter === 'all' || t.transaction_type === transactionTypeFilter)
+                    .filter(t => {
+                      // Filter by transaction type
+                      if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) {
+                        return false;
+                      }
+                      // Filter by date range
+                      if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) {
+                        return false;
+                      }
+                      if (dateFilter.end) {
+                        const endDate = new Date(dateFilter.end);
+                        endDate.setHours(23, 59, 59, 999); // Include the entire end date
+                        if (new Date(t.created_at) > endDate) {
+                          return false;
+                        }
+                      }
+                      return true;
+                    })
                     .map((transaction) => {
                       const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
                       const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
@@ -910,12 +1305,32 @@ const PaymentAccountManagement: React.FC = () => {
                               }`}>
                                 {isIncoming && '+'}
                                 {isOutgoing && '-'}
-                                {formatMoney(transaction.amount)}
+                                {formatMoney(transaction.amount, selectedAccount.currency)}
                               </div>
                               <div className="text-xs text-gray-500 mt-1">
-                                Balance: {formatMoney(transaction.balance_after)}
+                                Balance: {formatMoney(transaction.balance_after, selectedAccount.currency)}
                               </div>
                             </div>
+                            
+                            {/* Reverse Button */}
+                            {!transaction.metadata?.reversed && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReversalTransaction(transaction);
+                                  setShowReversalModal(true);
+                                }}
+                                className="px-3 py-1.5 text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 hover:text-orange-900 rounded-lg transition-all font-medium border border-orange-200"
+                                title="Reverse this transaction"
+                              >
+                                Reverse
+                              </button>
+                            )}
+                            {transaction.metadata?.reversed && (
+                              <span className="px-3 py-1.5 text-xs bg-gray-100 text-gray-500 rounded-lg font-medium border border-gray-200">
+                                Reversed
+                              </span>
+                            )}
                           </div>
                         </div>
                       );
@@ -935,6 +1350,53 @@ const PaymentAccountManagement: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      </>
+      )}
+
+      {/* Manual Transaction Modal */}
+      {showManualTransactionModal && manualTransactionAccount && (
+        <ManualTransactionModal
+          account={manualTransactionAccount}
+          onClose={() => {
+            setShowManualTransactionModal(false);
+            setManualTransactionAccount(null);
+          }}
+          onSuccess={() => {
+            fetchAccounts();
+          }}
+        />
+      )}
+
+      {/* Transfer Modal */}
+      {showTransferModal && (
+        <TransferModal
+          accounts={accounts}
+          onClose={() => setShowTransferModal(false)}
+          onSuccess={() => {
+            fetchAccounts();
+          }}
+        />
+      )}
+
+      {/* Transaction Reversal Modal */}
+      {showReversalModal && reversalTransaction && selectedAccount && (
+        <TransactionReversalModal
+          transaction={reversalTransaction}
+          accountName={selectedAccount.name}
+          accountCurrency={selectedAccount.currency || 'TZS'}
+          onClose={() => {
+            setShowReversalModal(false);
+            setReversalTransaction(null);
+          }}
+          onSuccess={() => {
+            fetchAccounts();
+            // Reload the transactions for the selected account
+            if (selectedAccount) {
+              handleViewHistory(selectedAccount);
+            }
+          }}
+        />
       )}
     </div>
   );

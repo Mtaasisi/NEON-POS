@@ -71,8 +71,9 @@ const CustomersPage = () => {
   const successModal = useSuccessModal();
   // Restore preferences from localStorage
   const prefs = getInitialPrefs();
-  const [searchQuery, setSearchQuery] = useState(prefs.searchQuery ?? '');
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(prefs.searchQuery ?? '');
+  // Don't restore search query to prevent automatic searches on page load that might timeout
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [loyaltyFilter, setLoyaltyFilter] = useState<LoyaltyLevel | 'all'>(prefs.loyaltyFilter ?? 'all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>(prefs.statusFilter ?? 'all');
   const [showInactive, setShowInactive] = useState(prefs.showInactive ?? false);
@@ -102,12 +103,14 @@ const CustomersPage = () => {
   const [searchProgress, setSearchProgress] = useState(0);
   const [currentSearchJobId, setCurrentSearchJobId] = useState<string | null>(null);
   
-  // Pagination state
+  // Pagination state (now for infinite scroll)
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [hasPreviousPage, setHasPreviousPage] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const loaderRef = useRef<HTMLDivElement>(null);
 
   // Add state for multi-select filters
   const [loyaltyFilterMulti, setLoyaltyFilterMulti] = useState<LoyaltyLevel[]>([]);
@@ -182,7 +185,7 @@ const CustomersPage = () => {
     localStorage.setItem(
       LOCAL_STORAGE_KEY,
       JSON.stringify({
-        searchQuery,
+        // Don't save searchQuery to prevent auto-search on reload
         loyaltyFilter,
         statusFilter,
         showInactive,
@@ -191,22 +194,18 @@ const CustomersPage = () => {
         sortBy,
       })
     );
-  }, [searchQuery, loyaltyFilter, statusFilter, showInactive, showAdvancedFilters, viewMode, sortBy]);
+  }, [loyaltyFilter, statusFilter, showInactive, showAdvancedFilters, viewMode, sortBy]);
 
   useEffect(() => {
+    let progressInterval: NodeJS.Timeout | null = null;
+    let isComponentMounted = true;
+    
     const loadCustomers = async () => {
       try {
         if (currentPage === 1) {
           setLoading(true);
         } else {
-          setPageLoading(true);
-        }
-        
-        // Set search loading state when searching (only if we have enough characters)
-        if (debouncedSearchQuery.trim() && debouncedSearchQuery.trim().length >= 2) {
-          setSearchLoading(true);
-        } else {
-          setSearchLoading(false);
+          setIsLoadingMore(true);
         }
         
         // Cancel any existing background search
@@ -216,41 +215,140 @@ const CustomersPage = () => {
         }
         
         if (debouncedSearchQuery.trim() && debouncedSearchQuery.trim().length >= 2) {
-          // Use direct search for better performance and typing experience
-          const result = await searchCustomers(debouncedSearchQuery, currentPage, 50);
-          setCustomers(result.customers);
-          setTotalCount(result.total);
-          setTotalPages(result.totalPages);
-          setHasNextPage(currentPage < result.totalPages);
-          setHasPreviousPage(currentPage > 1);
-          setIsBackgroundSearching(false);
-          setSearchStatus('completed');
-          setSearchProgress(100);
-          setCurrentSearchJobId(null);
+          // Show search progress bar
+          setIsBackgroundSearching(true);
+          setSearchStatus('processing');
+          setSearchProgress(20);
+          setSearchLoading(true);
+          
+          // Simulate progress while searching
+          progressInterval = setInterval(() => {
+            setSearchProgress(prev => {
+              if (prev < 90) return prev + 10;
+              return prev;
+            });
+          }, 100);
+          
+          try {
+            // Use direct search for better performance and typing experience
+            const result = await searchCustomers(debouncedSearchQuery, currentPage, 100);
+            
+            if (!isComponentMounted) return;
+            
+            // Clear progress interval
+            if (progressInterval) {
+              clearInterval(progressInterval);
+              progressInterval = null;
+            }
+            
+            // For infinite scroll: append to existing customers if loading more, otherwise replace
+            let updatedCustomers;
+            if (currentPage === 1) {
+              updatedCustomers = result.customers;
+              setCustomers(result.customers);
+            } else {
+              updatedCustomers = [...customers, ...result.customers];
+              setCustomers(updatedCustomers);
+            }
+            
+            // Fix totalCount if it's 0 but we have customers
+            const actualTotalCount = result.total || 0;
+            const hasMoreCustomers = result.customers.length >= 100;
+            
+            setTotalCount(actualTotalCount > 0 ? actualTotalCount : updatedCustomers.length);
+            setTotalPages(result.totalPages > 0 ? result.totalPages : (hasMoreCustomers ? currentPage + 1 : currentPage));
+            setHasNextPage((currentPage < result.totalPages) || (hasMoreCustomers && actualTotalCount === 0));
+            setHasPreviousPage(currentPage > 1);
+            
+            // Complete search
+            setSearchProgress(100);
+            setSearchStatus('completed');
+            setTimeout(() => {
+              if (isComponentMounted) {
+                setIsBackgroundSearching(false);
+              }
+            }, 500);
+            setCurrentSearchJobId(null);
+          } catch (searchError) {
+            // Clear progress interval on search error
+            if (progressInterval) {
+              clearInterval(progressInterval);
+              progressInterval = null;
+            }
+            throw searchError; // Re-throw to be caught by outer catch
+          }
         } else {
           // Use regular pagination when no search query
-          const result = await fetchCustomersPaginated(currentPage, 50);
-          setCustomers(result.customers);
-          setTotalCount(result.totalCount);
-          setTotalPages(result.totalPages);
-          setHasNextPage(result.hasNextPage);
+          setIsBackgroundSearching(false);
+          setSearchLoading(false);
+          
+          const result = await fetchCustomersPaginated(currentPage, 100);
+          
+          if (!isComponentMounted) return;
+          
+          // For infinite scroll: append to existing customers if loading more, otherwise replace
+          let updatedCustomers;
+          if (currentPage === 1) {
+            updatedCustomers = result.customers;
+            setCustomers(result.customers);
+          } else {
+            updatedCustomers = [...customers, ...result.customers];
+            setCustomers(updatedCustomers);
+          }
+          
+          // Fix totalCount if it's 0 but we have customers
+          const actualTotalCount = result.totalCount || 0;
+          const hasMoreCustomers = result.customers.length >= 100;
+          
+          setTotalCount(actualTotalCount > 0 ? actualTotalCount : updatedCustomers.length);
+          setTotalPages(result.totalPages > 0 ? result.totalPages : (hasMoreCustomers ? currentPage + 1 : currentPage));
+          setHasNextPage(result.hasNextPage || (hasMoreCustomers && actualTotalCount === 0));
           setHasPreviousPage(result.hasPreviousPage);
         }
       } catch (err: unknown) {
+        // Clear progress interval on any error
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+        
+        if (!isComponentMounted) return;
+        
         const errorMessage = err instanceof Error ? err.message : 'Failed to load customers';
+        console.error('❌ Error loading customers:', errorMessage);
+        
+        // Show user-friendly error message
         setError(errorMessage);
+        setSearchProgress(0);
+        setSearchStatus('failed');
+        setIsBackgroundSearching(false); // Hide the progress bar immediately on error
+        
+        // Show toast notification
+        toast.error(`Failed to load customers: ${errorMessage.includes('timed out') ? 'Request timed out. Please try again.' : errorMessage}`, {
+          duration: 5000,
+          position: 'top-center',
+        });
       } finally {
-        setLoading(false);
-        setPageLoading(false);
-        setSearchLoading(false);
+        if (isComponentMounted) {
+          setLoading(false);
+          setIsLoadingMore(false);
+          setSearchLoading(false);
+        }
       }
     };
+    
     loadCustomers();
+    
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    
     return () => {
+      isComponentMounted = false;
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -263,6 +361,30 @@ const CustomersPage = () => {
     setShowAddCustomerModal(false);
     setShowBulkSMS(false);
   }, []);
+
+  // Infinite Scroll - Intersection Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first.isIntersecting && hasNextPage && !isLoadingMore && !loading) {
+          setCurrentPage(prev => prev + 1);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [hasNextPage, isLoadingMore, loading]);
 
   // Fetch real appointments data
   useEffect(() => {
@@ -355,31 +477,34 @@ const CustomersPage = () => {
     }
     
     const pageCustomers = customers.length;
-    const vipCustomers = customers.filter(c => c.colorTag === 'vip').length;
     
     // For now, set device and POS revenue to 0 - this should be fetched separately
     const deviceRevenue = 0;
     const posRevenue = 0;
     
     const totalPoints = customers.reduce((sum, c) => sum + (c.points || 0), 0);
-    const platinumCustomers = customers.filter(c => c.loyaltyLevel === 'platinum').length;
-    const goldCustomers = customers.filter(c => c.loyaltyLevel === 'gold').length;
-    const silverCustomers = customers.filter(c => c.loyaltyLevel === 'silver').length;
-    const bronzeCustomers = customers.filter(c => c.loyaltyLevel === 'bronze').length;
+    const vipCustomers = customers.filter(c => c.loyaltyLevel === 'vip').length;
+    const premiumCustomers = customers.filter(c => c.loyaltyLevel === 'premium').length;
+    const regularCustomers = customers.filter(c => c.loyaltyLevel === 'regular').length;
+    const activeCustomers = customers.filter(c => c.loyaltyLevel === 'active').length;
+    const paymentCustomers = customers.filter(c => c.loyaltyLevel === 'payment_customer').length;
+    const engagedCustomers = customers.filter(c => c.loyaltyLevel === 'engaged').length;
+    const interestedCustomers = customers.filter(c => c.loyaltyLevel === 'interested').length;
 
     return {
       totalCustomers: dbStats.totalCustomers, // Use database stats
       pageCustomers, // Customers on current page
       activeCustomers: dbStats.activeCustomers, // Use database stats
-      vipCustomers,
       totalRevenue: dbStats.totalRevenue, // Use database stats
       deviceRevenue,
       posRevenue,
       totalPoints,
-      platinumCustomers,
-      goldCustomers,
-      silverCustomers,
-      bronzeCustomers,
+      vipCustomers,
+      premiumCustomers,
+      regularCustomers,
+      paymentCustomers,
+      engagedCustomers,
+      interestedCustomers,
       totalDevices: dbStats.totalDevices, // Use database stats
       devicesInRepair,
       todaysBirthdays: dbStats.todaysBirthdays // Use database stats
@@ -814,11 +939,19 @@ const CustomersPage = () => {
 
   const getLoyaltyStyle = (level: LoyaltyLevel) => {
     switch (level) {
-      case 'platinum':
+      case 'vip':
         return 'bg-purple-500/20 text-purple-700 border-purple-300/30';
-      case 'gold':
+      case 'premium':
         return 'bg-amber-500/20 text-amber-700 border-amber-300/30';
-      case 'silver':
+      case 'regular':
+        return 'bg-blue-500/20 text-blue-700 border-blue-300/30';
+      case 'active':
+        return 'bg-green-500/20 text-green-700 border-green-300/30';
+      case 'payment_customer':
+        return 'bg-teal-500/20 text-teal-700 border-teal-300/30';
+      case 'engaged':
+        return 'bg-indigo-500/20 text-indigo-700 border-indigo-300/30';
+      case 'interested':
         return 'bg-gray-400/20 text-gray-700 border-gray-300/30';
       default:
         return 'bg-orange-500/20 text-orange-700 border-orange-300/30';
@@ -934,11 +1067,16 @@ const CustomersPage = () => {
       setSelectedCustomers([]);
       
       // Reload customers to refresh counts
-      const result = await fetchCustomersPaginated(currentPage, 50);
+      const result = await fetchCustomersPaginated(currentPage, 100);
       setCustomers(result.customers);
-      setTotalCount(result.totalCount);
-      setTotalPages(result.totalPages);
-      setHasNextPage(result.hasNextPage);
+      
+      // Fix totalCount if it's 0 but we have customers
+      const actualTotalCount = result.totalCount || 0;
+      const hasMoreCustomers = result.customers.length >= 100;
+      
+      setTotalCount(actualTotalCount > 0 ? actualTotalCount : result.customers.length);
+      setTotalPages(result.totalPages > 0 ? result.totalPages : (hasMoreCustomers ? currentPage + 1 : currentPage));
+      setHasNextPage(result.hasNextPage || (hasMoreCustomers && actualTotalCount === 0));
       setHasPreviousPage(result.hasPreviousPage);
     } catch (error) {
       console.error('Delete error:', error);
@@ -1198,19 +1336,6 @@ const CustomersPage = () => {
     return filtered;
   }, [appointments, appointmentFilters]);
 
-  if (loading) {
-    return (
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-center h-32">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-400 mx-auto mb-3 opacity-60"></div>
-            <p className="text-gray-500 text-sm">Loading customers...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="p-4 sm:p-6 max-w-7xl mx-auto">
@@ -1229,6 +1354,18 @@ const CustomersPage = () => {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+      {/* Initial Loading Progress Bar */}
+      {loading && customers.length === 0 && (
+        <div className="mb-4">
+          <BackgroundSearchIndicator
+            isSearching={true}
+            searchStatus="processing"
+            searchProgress={50}
+            resultCount={0}
+          />
+        </div>
+      )}
+
       {isOffline && (
         <div style={{ background: '#fbbf24', color: 'black', padding: '8px', textAlign: 'center' }}>
           You are offline. Data is loaded from cache.
@@ -1878,22 +2015,25 @@ const CustomersPage = () => {
         onLastVisitToChange={setLastVisitTo}
       />
 
-      {/* Background Search Indicator */}
-      <BackgroundSearchIndicator
-        isSearching={isBackgroundSearching}
-        searchStatus={searchStatus}
-        searchProgress={searchProgress}
-        resultCount={filteredCustomers.length}
-        onCancel={() => {
-          if (currentSearchJobId) {
-            const searchManager = getBackgroundSearchManager();
-            searchManager.cancelSearchJob(currentSearchJobId);
-            setIsBackgroundSearching(false);
-            setCurrentSearchJobId(null);
-          }
-        }}
-        className="mt-4"
-      />
+      {/* Beautiful Search Progress Bar */}
+      {isBackgroundSearching && (
+        <div className="mb-4">
+          <BackgroundSearchIndicator
+            isSearching={isBackgroundSearching}
+            searchStatus={searchStatus}
+            searchProgress={searchProgress}
+            resultCount={totalCount}
+            onCancel={() => {
+              if (currentSearchJobId) {
+                const searchManager = getBackgroundSearchManager();
+                searchManager.cancelSearchJob(currentSearchJobId);
+                setIsBackgroundSearching(false);
+                setCurrentSearchJobId(null);
+              }
+            }}
+          />
+        </div>
+      )}
 
       {/* Bulk Actions */}
       {selectedCustomers.length > 0 && (
@@ -2292,56 +2432,83 @@ const CustomersPage = () => {
         </div>
       )}
 
-      {/* Pagination Controls */}
+      {/* Infinite Scroll Loading Indicator */}
       {filteredCustomers.length > 0 && (
-        <GlassCard className="mt-6">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600">
-              Showing {((currentPage - 1) * 50) + 1} to {Math.min(currentPage * 50, totalCount)} of {totalCount} customers
-              {pageLoading && <span className="ml-2 text-gray-500 text-xs opacity-70">Loading...</span>}
-            </div>
+        <div className="mt-6 text-center space-y-4">
+          {/* Progress Counter */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-full border border-gray-200">
             <div className="flex items-center gap-2">
-              <GlassButton
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={!hasPreviousPage || pageLoading}
-                className="px-3 py-1 text-sm"
-                icon={<ChevronLeft size={16} />}
-              >
-                Previous
-              </GlassButton>
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const pageNum = i + 1;
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      disabled={pageLoading}
-                      className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                        currentPage === pageNum
-                          ? 'bg-blue-500 text-white'
-                          : 'text-gray-600 hover:text-blue-600'
-                      } ${pageLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-                {totalPages > 5 && (
-                  <span className="px-2 text-gray-400">...</span>
-                )}
-              </div>
-              <GlassButton
-                onClick={() => setCurrentPage(prev => prev + 1)}
-                disabled={!hasNextPage || pageLoading}
-                className="px-3 py-1 text-sm"
-                icon={<ChevronRight size={16} />}
-              >
-                Next
-              </GlassButton>
+              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              <span className="text-sm font-medium text-gray-700">
+                Showing {filteredCustomers.length.toLocaleString()} of {totalCount.toLocaleString()}
+              </span>
             </div>
+            {(hasNextPage || filteredCustomers.length < totalCount) && (
+              <span className="text-xs text-gray-500">
+                • Scroll for more
+              </span>
+            )}
           </div>
-        </GlassCard>
+          
+          {/* Load More Button - Show when there are more customers to load */}
+          {!isLoadingMore && (hasNextPage || filteredCustomers.length < totalCount) && filteredCustomers.length > 0 && (
+            <div className="flex flex-col items-center gap-3 py-6 bg-gradient-to-b from-transparent via-blue-50/30 to-transparent">
+              {/* Prominent Load More button */}
+              <button
+                onClick={() => {
+                  if (!isLoadingMore) {
+                    setIsLoadingMore(true);
+                    setCurrentPage(prev => prev + 1);
+                  }
+                }}
+                className="group relative px-10 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 text-lg font-bold shadow-2xl hover:shadow-blue-500/50 transform hover:scale-110 flex items-center gap-3 border-2 border-blue-400/50"
+              >
+                <span>Load More Customers</span>
+                <svg 
+                  className="w-6 h-6 group-hover:translate-y-1 transition-transform duration-300" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              <div className="text-sm font-medium text-gray-600">
+                Click to load {Math.min(100, totalCount - filteredCustomers.length)} more customers
+              </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {isLoadingMore && (
+            <div className="flex flex-col items-center justify-center gap-3 py-6">
+              <div className="relative">
+                <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
+                <div className="absolute inset-0 bg-blue-400 blur-lg opacity-30 animate-pulse" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-gray-700">Loading more customers...</p>
+                <p className="text-xs text-gray-500 mt-1">Please wait</p>
+              </div>
+            </div>
+          )}
+
+          {/* All Loaded State */}
+          {!isLoadingMore && !hasNextPage && filteredCustomers.length > 0 && (
+            <div className="flex flex-col items-center gap-2 py-6">
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-full border border-green-200">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-700">
+                  All {totalCount.toLocaleString()} customers loaded
+                </span>
+              </div>
+              <p className="text-xs text-gray-500">You've reached the end of the list</p>
+            </div>
+          )}
+
+          {/* Loader element for intersection observer - Hidden but needed for auto-scroll */}
+          <div ref={loaderRef} className="h-1"></div>
+        </div>
       )}
 
       {/* Empty State */}

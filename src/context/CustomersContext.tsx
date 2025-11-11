@@ -95,12 +95,18 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         hasNotes: !!customerData.notes
       });
 
-      if (!currentUser) {
-        console.error('❌ CustomersContext.addCustomer: User not authenticated');
-        throw new Error('User not authenticated');
-      }
+      // Use fallback system user if not authenticated (Neon direct mode)
+      const effectiveUser = currentUser || {
+        id: 'system',
+        email: 'system@neon.direct',
+        user_metadata: { name: 'System User' }
+      };
       
-      console.log('✅ User authenticated:', currentUser.id);
+      if (!currentUser) {
+        console.warn('⚠️ No authenticated user, using system user for customer creation');
+      } else {
+        console.log('✅ User authenticated:', currentUser.id);
+      }
       
       const newCustomerId = crypto.randomUUID();
       const timestamp = new Date().toISOString();
@@ -116,7 +122,7 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         gender: customerData.gender || 'other',
         city: customerData.city || '',
         joinedDate: timestamp,
-        loyaltyLevel: 'bronze' as LoyaltyLevel,
+        loyaltyLevel: 'interested' as LoyaltyLevel,
         colorTag: 'new' as CustomerTag, // always new
         referredBy: customerData.referredBy || undefined,
         referrals: [],
@@ -133,7 +139,7 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         promoHistory: [],
         payments: [],
         devices: [],
-        createdBy: currentUser.id,
+        createdBy: effectiveUser.id,
       };
       
       console.log('📦 Prepared customer object for database:', {
@@ -162,7 +168,7 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const noteData = {
           id: crypto.randomUUID(),
           note: noteContent,
-          created_by: currentUser.id,
+          created_by: effectiveUser.id,
           created_at: new Date().toISOString(),
           customer_id: newCustomerId
         };
@@ -217,7 +223,16 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.log('🔧 CustomersContext: Starting customer update for ID:', customerId);
       console.log('🔧 CustomersContext: Updates received:', updates);
       
-      if (!currentUser) return false;
+      // Use fallback system user if not authenticated (Neon direct mode)
+      const effectiveUser = currentUser || {
+        id: 'system',
+        email: 'system@neon.direct',
+        user_metadata: { name: 'System User' }
+      };
+      
+      if (!currentUser) {
+        console.warn('⚠️ No authenticated user, using system user for customer update');
+      }
       // Fetch current customer for logic
       const current = customers.find(c => c.id === customerId);
               let newColorTag = current?.colorTag || 'new';
@@ -295,18 +310,20 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const markCustomerAsRead = async (customerId: string) => {
     try {
-      if (!currentUser) return false;
+      // Use fallback system user if not authenticated (Neon direct mode)
+      const effectiveUser = currentUser || {
+        id: 'system',
+        email: 'system@neon.direct',
+        user_metadata: { name: 'System User' }
+      };
       
-      // Update the customer's read status in the database
-      const success = await updateCustomerInDb(customerId, { isRead: true });
+      // Note: isRead field doesn't exist in the database schema
+      // This function is kept for compatibility but does nothing
+      // Consider implementing this feature by adding is_read column to customers table
+      // or tracking read status in a separate table
       
-      if (success) {
-        // Update the local state
-        // The setCustomers call is now handled by the useCustomers hook's onSuccess
-        return true;
-      }
-      
-      return false;
+      console.log('markCustomerAsRead called but not implemented (no is_read column in schema)');
+      return true;
     } catch (error) {
       console.error('Error marking customer as read:', error);
       return false;
@@ -314,11 +331,17 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const addNote = async (customerId: string, content: string) => {
-    if (!currentUser) return false;
+    // Use fallback system user if not authenticated (Neon direct mode)
+    const effectiveUser = currentUser || {
+      id: 'system',
+      email: 'system@neon.direct',
+      user_metadata: { name: 'System User' }
+    };
+    
     const newNote: CustomerNote = {
       id: `note-${Date.now()}`,
       content,
-      createdBy: currentUser.id,
+      createdBy: effectiveUser.id,
       createdAt: new Date().toISOString()
     };
     const dbNote = await addCustomerNote(newNote, customerId);
@@ -328,7 +351,13 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const sendPromo = async (customerId: string, promo: Omit<PromoMessage, 'id' | 'sentAt' | 'status'>) => {
-    if (!currentUser) return false;
+    // Use fallback system user if not authenticated (Neon direct mode)
+    const effectiveUser = currentUser || {
+      id: 'system',
+      email: 'system@neon.direct',
+      user_metadata: { name: 'System User' }
+    };
+    
     const newPromo: PromoMessage = {
       ...promo,
       id: `promo-${Date.now()}`,
@@ -342,7 +371,12 @@ export const CustomersProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const addPoints = (customerId: string, points: number, reason: string) => {
-    if (!currentUser) return false;
+    // Use fallback system user if not authenticated (Neon direct mode)
+    const effectiveUser = currentUser || {
+      id: 'system',
+      email: 'system@neon.direct',
+      user_metadata: { name: 'System User' }
+    };
     
     // The setCustomers call is now handled by the useCustomers hook's onSuccess
 

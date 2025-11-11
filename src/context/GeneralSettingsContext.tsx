@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useGeneralSettings } from '../hooks/usePOSSettings';
 import { GeneralSettings } from '../lib/posSettingsApi';
 import { useAuth } from './AuthContext';
+import { setLocale } from '../features/lats/lib/i18n/t';
 
 interface GeneralSettingsContextType {
   settings: GeneralSettings | null;
@@ -19,6 +20,7 @@ interface GeneralSettingsContextType {
   showPrices: boolean;
   showBarcodes: boolean;
   productsPerPage: number;
+  productsPerRow: number;
   autoCompleteSearch: boolean;
   confirmDelete: boolean;
   showConfirmations: boolean;
@@ -62,6 +64,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         showPrices: true,
         showBarcodes: true,
         productsPerPage: 20,
+        productsPerRow: 4,
         autoCompleteSearch: true,
         confirmDelete: true,
         showConfirmations: true,
@@ -109,6 +112,10 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
   const applyLanguage = (language: 'en' | 'sw' | 'fr') => {
     document.documentElement.lang = language;
     localStorage.setItem('language', language);
+    
+    // Activate the translation system
+    setLocale(language);
+    console.log(`🌍 Language changed to: ${language === 'sw' ? 'Swahili' : language === 'fr' ? 'French' : 'English'}`);
   };
 
   // Apply currency
@@ -157,12 +164,28 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
 
   // Apply behavior settings
   const applyBehaviorSettings = (settings: GeneralSettings) => {
+    const root = document.documentElement;
+    
     // Store behavior settings in localStorage for components to access
     localStorage.setItem('autoCompleteSearch', settings.auto_complete_search.toString());
     localStorage.setItem('confirmDelete', settings.confirm_delete.toString());
     localStorage.setItem('showConfirmations', settings.show_confirmations.toString());
     localStorage.setItem('enableSoundEffects', settings.enable_sound_effects.toString());
     localStorage.setItem('enableAnimations', settings.enable_animations.toString());
+    
+    // Apply data attributes to root element for CSS targeting
+    root.setAttribute('data-enable-animations', settings.enable_animations.toString());
+    root.setAttribute('data-enable-sounds', settings.enable_sound_effects.toString());
+    root.setAttribute('data-auto-complete', settings.auto_complete_search.toString());
+    root.setAttribute('data-confirm-delete', settings.confirm_delete.toString());
+    root.setAttribute('data-show-confirmations', settings.show_confirmations.toString());
+    
+    // Add/remove body class for animations
+    if (settings.enable_animations) {
+      document.body.classList.remove('animations-disabled');
+    } else {
+      document.body.classList.add('animations-disabled');
+    }
   };
 
   // Apply performance settings
@@ -210,11 +233,18 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     }
   }, [settings]);
 
-  // Load font size from localStorage on mount (for immediate application)
+  // Load font size and language from localStorage on mount (for immediate application)
   useEffect(() => {
     const savedFontSize = localStorage.getItem('fontSize') as 'tiny' | 'extra-small' | 'small' | 'medium' | 'large' | null;
     if (savedFontSize) {
       applyFontSize(savedFontSize);
+    }
+    
+    // Load and apply saved language
+    const savedLanguage = localStorage.getItem('language') as 'en' | 'sw' | 'fr' | null;
+    if (savedLanguage) {
+      setLocale(savedLanguage);
+      console.log(`🌍 Initialized language from localStorage: ${savedLanguage === 'sw' ? 'Swahili' : savedLanguage === 'fr' ? 'French' : 'English'}`);
     }
   }, []);
 
@@ -222,14 +252,41 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
   useEffect(() => {
     const handleSettingsUpdate = (event: CustomEvent) => {
       if (event.detail.type === 'general') {
+        console.log('📢 Settings updated event received, reloading...');
         loadSettings();
       }
     };
 
+    const handleSettingsSaved = (event: CustomEvent) => {
+      if (event.detail.type === 'general') {
+        console.log('💾 General settings saved event received:', event.detail.settings);
+        // Apply settings immediately
+        if (event.detail.settings) {
+          setCurrentSettings(event.detail.settings);
+          applySettingsToUI(event.detail.settings);
+        }
+      }
+    };
+
+    const handleSettingsLoaded = (event: CustomEvent) => {
+      if (event.detail.type === 'general') {
+        console.log('📥 General settings loaded event received:', event.detail.settings);
+        // Apply settings immediately
+        if (event.detail.settings) {
+          setCurrentSettings(event.detail.settings);
+          applySettingsToUI(event.detail.settings);
+        }
+      }
+    };
+
     window.addEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
+    window.addEventListener('settingsSaved', handleSettingsSaved as EventListener);
+    window.addEventListener('posSettingsLoaded', handleSettingsLoaded as EventListener);
     
     return () => {
       window.removeEventListener('settingsUpdated', handleSettingsUpdate as EventListener);
+      window.removeEventListener('settingsSaved', handleSettingsSaved as EventListener);
+      window.removeEventListener('posSettingsLoaded', handleSettingsLoaded as EventListener);
     };
   }, [loadSettings]);
 
@@ -252,6 +309,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
         showPrices: true,
         showBarcodes: true,
         productsPerPage: 20,
+        productsPerRow: 4,
         autoCompleteSearch: true,
         confirmDelete: true,
         showConfirmations: true,
@@ -326,6 +384,7 @@ export const GeneralSettingsProvider: React.FC<{ children: React.ReactNode }> = 
     showPrices: currentSettings?.show_prices ?? true,
     showBarcodes: currentSettings?.show_barcodes ?? true,
     productsPerPage: currentSettings?.products_per_page ?? 20,
+    productsPerRow: currentSettings?.products_per_row ?? 4,
     autoCompleteSearch: currentSettings?.auto_complete_search ?? true,
     confirmDelete: currentSettings?.confirm_delete ?? true,
     showConfirmations: currentSettings?.show_confirmations ?? true,

@@ -5,6 +5,7 @@ import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import { MessageSquare, Send, AlertCircle, CheckCircle, XCircle, Loader2, Users, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface BulkWhatsAppModalProps {
   isOpen: boolean;
@@ -27,6 +28,9 @@ const BulkWhatsAppModal: React.FC<BulkWhatsAppModalProps> = ({
     state: string;
   } | null>(null);
   const [loadingStatus, setLoadingStatus] = useState(true);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Filter customers with phone numbers
   const customersWithPhone = selectedCustomers.filter(customer => customer.phone);

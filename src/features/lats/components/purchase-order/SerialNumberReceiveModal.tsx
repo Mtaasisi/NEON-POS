@@ -11,7 +11,9 @@ interface PurchaseOrderItem {
   name?: string;
   quantity: number;
   receivedQuantity?: number;
-  cost_price: number;
+  cost_price?: number;     // snake_case (legacy)
+  costPrice?: number;       // camelCase (current)
+  unitCost?: number;        // alternative name
   product?: {
     name: string;
     sku?: string;
@@ -19,6 +21,7 @@ interface PurchaseOrderItem {
   variant?: {
     name: string;
     sku?: string;
+    variant_name?: string;  // Added for proper variant name display
   };
 }
 
@@ -42,6 +45,7 @@ interface SerialNumberReceiveModalProps {
   purchaseOrder: {
     id: string;
     items: PurchaseOrderItem[];
+    currency?: string; // Currency used in the PO
   };
   onConfirm: (receivedItems: Array<{
     id: string;
@@ -50,6 +54,11 @@ interface SerialNumberReceiveModalProps {
   }>) => Promise<void>;
   isLoading?: boolean;
   mode?: 'full' | 'partial'; // Receive mode from previous step
+  initialReceivedItems?: Array<{
+    id: string;
+    receivedQuantity: number;
+    serialNumbers?: SerialNumberData[];
+  }>;
 }
 
 const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
@@ -58,7 +67,8 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
   purchaseOrder,
   onConfirm,
   isLoading = false,
-  mode = 'partial'
+  mode = 'partial',
+  initialReceivedItems
 }) => {
   const [receivedItems, setReceivedItems] = useState<Map<string, {
     quantity: number;
@@ -88,6 +98,20 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
   // Initialize received items when modal opens - Auto-generate rows based on quantity
   useEffect(() => {
     if (isOpen) {
+      // Check if we have saved data to restore
+      if (initialReceivedItems && initialReceivedItems.length > 0) {
+        console.log('📦 Restoring saved serial number data');
+        const restoredItems = new Map();
+        initialReceivedItems.forEach(savedItem => {
+          restoredItems.set(savedItem.id, {
+            quantity: savedItem.receivedQuantity,
+            serialNumbers: savedItem.serialNumbers || []
+          });
+        });
+        setReceivedItems(restoredItems);
+        return;
+      }
+      
       const initialItems = new Map();
       purchaseOrder.items.forEach(item => {
         const remainingQty = item.quantity - (item.receivedQuantity || 0);
@@ -113,7 +137,7 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
             warranty_start: warrantyStart,
             warranty_end: warrantyEnd,
             warranty_months: 12,
-            cost_price: item.cost_price,
+            cost_price: item.costPrice || item.cost_price || item.unitCost || 0,
             selling_price: undefined,
             notes: ''
           });
@@ -126,7 +150,7 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
       });
       setReceivedItems(initialItems);
     }
-  }, [isOpen, purchaseOrder.items, mode]);
+  }, [isOpen, purchaseOrder.items, mode, initialReceivedItems]);
 
   const loadStorageRooms = async () => {
     try {
@@ -155,13 +179,21 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
   };
 
   const handleLocationSelect = (roomId: string, shelfId: string) => {
-    if (!selectedLocationIndex) return;
+    console.log('handleLocationSelect called:', { roomId, shelfId, selectedLocationIndex });
+    
+    if (!selectedLocationIndex) {
+      console.log('No selectedLocationIndex, returning');
+      return;
+    }
 
     const room = storageRooms.find(r => r.id === roomId);
     const shelf = allShelves[roomId]?.find(s => s.id === shelfId);
     
+    console.log('Found room and shelf:', { room, shelf });
+    
     if (room && shelf) {
       const locationText = `${room.code} - ${shelf.code}`;
+      console.log('Updating location to:', locationText);
       updateSerialNumber(
         selectedLocationIndex.itemId, 
         selectedLocationIndex.index, 
@@ -219,6 +251,33 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           warranty_start: value,
           warranty_end: endDate.toISOString().split('T')[0]
         };
+      }
+      // 🔧 SMART DETECTION: If serial_number is being updated, detect if it's an IMEI or serial number
+      else if (field === 'serial_number' && typeof value === 'string') {
+        // Remove spaces, dashes, and other common separators
+        const cleanValue = value.replace(/[\s\-_.]/g, '');
+        
+        // Detect if it's an IMEI: exactly 15 digits
+        const isIMEI = /^\d{15}$/.test(cleanValue);
+        
+        // Detect if it's primarily numeric (could be other ID format)
+        const isNumeric = /^\d+$/.test(cleanValue);
+        
+        if (isIMEI) {
+          // ✅ It's an IMEI: Populate both serial_number and imei fields
+          updatedSerialNumbers[index] = {
+            ...currentSerial,
+            serial_number: value,      // Keep original format (with spaces/dashes)
+            imei: cleanValue           // Clean version for IMEI field
+          };
+        } else {
+          // ⚠️ It's a serial number (not IMEI): Only populate serial_number
+          updatedSerialNumbers[index] = {
+            ...currentSerial,
+            serial_number: value,
+            imei: ''                   // Clear IMEI field if it was set before
+          };
+        }
       }
       else {
         updatedSerialNumbers[index] = {
@@ -330,6 +389,43 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     return total;
   };
 
+  const getTotalCost = () => {
+    let totalCost = 0;
+    receivedItems.forEach((data, itemId) => {
+      const item = purchaseOrder.items.find(i => i.id === itemId);
+      if (item) {
+        const cost = Number(item.costPrice || item.cost_price || item.unitCost || 0);
+        totalCost += cost * data.quantity;
+      }
+    });
+    return totalCost;
+  };
+
+  // Format currency with PO currency, thousand separator, and no decimals
+  const formatCurrency = (amount: number): string => {
+    const currency = purchaseOrder.currency || 'USD';
+    const roundedAmount = Math.round(amount); // Remove decimals
+    
+    // Handle different currencies
+    if (currency === 'TSh' || currency === 'TZS') {
+      return `TSh ${roundedAmount.toLocaleString('en-US')}`;
+    }
+    
+    // For other currencies, use their symbol
+    try {
+      const formatted = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(roundedAmount);
+      return formatted;
+    } catch (error) {
+      // Fallback for unsupported currencies
+      return `${currency} ${roundedAmount.toLocaleString('en-US')}`;
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -359,45 +455,45 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           pointerEvents: 'none'
         }}
       >
-      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                <PackageCheck className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">
-                  {mode === 'full' ? 'Full Receive - Add Serial Numbers' : 'Partial Receive - Select Items & Add Serial Numbers'}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {mode === 'full' 
-                    ? 'Enter Serial Number or IMEI for all remaining items' 
-                    : 'Choose quantities and enter serial numbers for items you want to receive now'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
+      <div 
+        className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col relative"
+        onClick={(e) => e.stopPropagation()}
+        style={{ pointerEvents: 'auto' }}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+        >
+          <X className="w-5 h-5" />
+        </button>
 
+        {/* Icon Header */}
+        <div className="p-8 bg-gradient-to-br from-green-50 to-emerald-50 text-center">
+          <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <Package className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-2xl font-bold text-gray-900">
+            {mode === 'full' ? 'Add Serial Numbers' : 'Select Items & Add Serial Numbers'}
+          </h3>
+          
           {/* Summary Info */}
-          <div className="mt-4 flex items-center gap-4 text-sm">
-            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
-              <AlertCircle className="w-4 h-4 text-blue-600" />
-              <span className="text-blue-900 font-medium">
-                Total Items: {getTotalReceivedItems()}
+          <div className="flex items-center justify-center gap-3 text-sm mt-4">
+            <div className="px-4 py-2 bg-white rounded-lg shadow-sm">
+              <span className="text-gray-600">Total:</span>
+              <span className="text-gray-900 font-bold ml-1">
+                {getTotalReceivedItems()} items
               </span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
-              <Package className="w-4 h-4 text-green-600" />
-              <span className="text-green-900 font-medium">
-                Products: {purchaseOrder.items.length}
+            <div className="px-4 py-2 bg-white rounded-lg shadow-sm">
+              <span className="text-gray-900 font-medium">
+                {purchaseOrder.items.length} {purchaseOrder.items.length === 1 ? 'product' : 'products'}
+              </span>
+            </div>
+            <div className="px-4 py-2 bg-green-100 rounded-lg shadow-sm border border-green-300">
+              <span className="text-green-700 font-medium">Cost: </span>
+              <span className="text-green-900 font-bold">
+                {formatCurrency(getTotalCost())}
               </span>
             </div>
           </div>
@@ -415,34 +511,29 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
               if (mode === 'full' && itemData.quantity === 0) return null;
               
               // Get product name from different possible sources
+              // Priority: variant_name (main variant field) > name (legacy) > product name
+              const variantName = item.variant?.variant_name || item.variant?.name || null;
               const productName = item.name || 
                                  (item.product?.name || '') + 
-                                 (item.variant?.name ? ` - ${item.variant.name}` : '');
+                                 (variantName ? ` - ${variantName}` : '');
               
               return (
-                <div key={item.id} className={`rounded-lg p-4 border-2 ${
-                  itemData.quantity > 0 ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+                <div key={item.id} className={`rounded-xl p-5 border ${
+                  itemData.quantity > 0 ? 'bg-white border-gray-300 shadow-sm' : 'bg-gray-50 border-gray-200'
                 }`}>
                   {/* Product Header */}
-                  <div className="mb-4 pb-3 border-b-2 border-gray-300">
+                  <div className="mb-4 pb-4 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <h4 className="text-lg font-bold text-gray-900">{productName}</h4>
-                        <p className="text-sm text-gray-600 mt-1">
-                          {mode === 'partial' && (
-                            <>
-                              <span className="text-blue-700">Ordered: {item.quantity}</span> • 
-                              <span className="text-green-700">Already Received: {item.receivedQuantity || 0}</span> • 
-                              <span className="text-orange-700">Remaining: {remainingQty}</span> • 
-                            </>
-                          )}
-                          Cost: <span className="font-semibold text-gray-900">${(item.cost_price || 0).toFixed(2)}</span>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Cost: <span className="font-semibold text-gray-900">{formatCurrency(Number(item.costPrice || item.cost_price || item.unitCost || 0))}</span>
                         </p>
                       </div>
                       {mode === 'partial' && (
                         <div className="ml-4">
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Receiving Now:
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            Receiving:
                           </label>
                           <input
                             type="number"
@@ -450,75 +541,88 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                             max={remainingQty}
                             value={itemData.quantity}
                             onChange={(e) => updateReceivingQuantity(item.id, parseInt(e.target.value) || 0)}
-                            className="w-24 px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-500 text-center font-bold text-lg"
+                            className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-center font-bold text-lg"
                           />
-                          <p className="text-xs text-gray-500 mt-1">Max: {remainingQty}</p>
                         </div>
                       )}
                       {mode === 'full' && (
-                        <div className="ml-4 px-4 py-2 bg-green-100 rounded-lg">
+                        <div className="ml-4 px-4 py-2 bg-blue-50 rounded-lg">
                           <p className="text-xs text-gray-600">Receiving:</p>
-                          <p className="text-lg font-bold text-green-700">{itemData.quantity} pcs</p>
+                          <p className="text-lg font-bold text-blue-700">{itemData.quantity} pcs</p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Excel-like Table - Only show if items selected for partial mode */}
+                  {/* Table - Only show if items selected */}
                   {itemData.quantity > 0 ? (
                   <div className="overflow-x-auto">
-                    <table className="w-full border-collapse">
+                    <table className="w-full">
                       <thead>
-                        <tr className="bg-green-600 text-white">
-                          <th className="border-2 border-green-700 px-3 py-2 text-center text-sm font-semibold w-12">#</th>
-                          <th className="border-2 border-green-700 px-3 py-2 text-left text-sm font-semibold min-w-[200px]">
+                        <tr className="bg-gray-100">
+                          <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 w-12">#</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
                             Product Name
                           </th>
-                          <th className="border-2 border-green-700 px-3 py-2 text-left text-sm font-semibold min-w-[250px]">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[250px]">
                             Serial Number / IMEI *
                           </th>
-                          <th className="border-2 border-green-700 px-3 py-2 text-left text-sm font-semibold min-w-[180px]">
+                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[180px]">
                             Location
                           </th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody className="divide-y divide-gray-200">
                         {itemData.serialNumbers.map((serial, index) => (
                           <tr 
                             key={index} 
-                            className={index % 2 === 0 ? 'bg-white' : 'bg-gray-100'}
+                            className="hover:bg-gray-50"
                           >
                             {/* Row Number */}
-                            <td className="border-2 border-gray-300 px-3 py-2 text-center font-semibold text-gray-700">
+                            <td className="px-4 py-3 text-center font-medium text-gray-600">
                               {index + 1}
                             </td>
                             
                             {/* Product Name */}
-                            <td className="border-2 border-gray-300 px-3 py-2 font-medium text-gray-900">
+                            <td className="px-4 py-3 font-medium text-gray-900">
                               {productName}
                             </td>
                             
                             {/* Serial Number / IMEI */}
-                            <td className="border-2 border-gray-300 p-1">
+                            <td className="px-4 py-3">
                               <input
                                 type="text"
-                                placeholder="Enter Serial Number or IMEI"
+                                placeholder="Enter Serial Number or IMEI (auto-detects)"
                                 value={serial.serial_number}
                                 onChange={(e) => updateSerialNumber(item.id, index, 'serial_number', e.target.value)}
-                                className={`w-full px-3 py-2 border-2 rounded focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                                   !serial.serial_number.trim() 
                                     ? 'border-red-300 bg-red-50' 
-                                    : 'border-transparent bg-white'
+                                    : 'border-gray-300 bg-white'
                                 }`}
+                                title="Enter either Serial Number or IMEI - system auto-detects IMEI (15 digits)"
                               />
+                              {/* Show detection indicator */}
+                              {serial.serial_number && (
+                                <div className="text-xs mt-1">
+                                  {serial.imei ? (
+                                    <span className="text-green-600 font-medium">✓ IMEI detected</span>
+                                  ) : (
+                                    <span className="text-blue-600">Serial Number</span>
+                                  )}
+                                </div>
+                              )}
                             </td>
                             
                             {/* Location */}
-                            <td className="border-2 border-gray-300 p-1">
+                            <td className="px-4 py-3">
                               <button
                                 type="button"
-                                onClick={() => openLocationModal(item.id, index)}
-                                className="w-full px-3 py-2 border-2 border-transparent rounded hover:border-green-500 bg-white text-left flex items-center gap-2 transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openLocationModal(item.id, index);
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg hover:border-blue-400 bg-white text-left flex items-center gap-2 transition-colors cursor-pointer"
                               >
                                 <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                 <span className={serial.location ? 'text-gray-900' : 'text-gray-400'}>
@@ -532,17 +636,16 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                     </table>
                   </div>
                   ) : mode === 'partial' ? (
-                    <div className="mt-4 p-6 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 text-center">
-                      <Package className="w-12 h-12 text-gray-400 mx-auto mb-2" />
+                    <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center">
+                      <Package className="w-10 h-10 text-gray-400 mx-auto mb-2" />
                       <p className="text-gray-600 font-medium">Set quantity above to add serial numbers</p>
-                      <p className="text-xs text-gray-500 mt-1">Enter how many items you want to receive</p>
                     </div>
                   ) : null}
 
                   {/* Table Footer Info */}
                   {itemData.quantity > 0 && (
-                    <div className="mt-3 text-xs text-gray-500 italic">
-                      * Serial Number / IMEI is required (enter either one)
+                    <div className="mt-3 text-xs text-gray-500">
+                      * Serial Number / IMEI is required
                     </div>
                   )}
                 </div>
@@ -552,15 +655,8 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50">
+        <div className="p-6 border-t border-gray-200 bg-white">
           <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-3 border-2 border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-100 transition-colors"
-            >
-              Cancel
-            </button>
             <button
               type="button"
               onClick={() => {
@@ -576,7 +672,7 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                 onConfirm(emptyItems);
               }}
               disabled={isLoading}
-              className="flex-1 px-4 py-3 border-2 border-blue-500 bg-blue-50 text-blue-700 rounded-lg font-medium hover:bg-blue-100 transition-colors disabled:opacity-50"
+              className="flex-1 px-6 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors disabled:opacity-50 text-lg"
             >
               Skip Serial Numbers →
             </button>
@@ -584,21 +680,28 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
               type="button"
               onClick={handleConfirm}
               disabled={isLoading || getTotalReceivedItems() === 0}
-              className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
             >
-              {isLoading ? 'Processing...' : `Continue with Serials (${getTotalReceivedItems()} items)`}
+              {isLoading ? 'Processing...' : `Continue (${getTotalReceivedItems()} items)`}
             </button>
           </div>
-          <p className="text-xs text-center text-gray-500 mt-3">
-            Serial numbers are optional - you can skip this step or add them for tracking
-          </p>
         </div>
       </div>
 
       {/* Storage Location Modal */}
       {showLocationModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100000] p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden">
+        <div 
+          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100000] p-4"
+          onClick={() => {
+            setShowLocationModal(false);
+            setSelectedLocationIndex(null);
+          }}
+          style={{ pointerEvents: 'auto' }}
+        >
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
               <div className="flex items-center gap-3">
@@ -622,8 +725,12 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                 {storageRooms.map((room) => (
                   <button
                     key={room.id}
-                    onClick={() => setSelectedRoomId(room.id)}
-                    className={`flex-shrink-0 px-4 py-2 rounded font-medium text-sm transition-colors ${
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedRoomId(room.id);
+                    }}
+                    className={`flex-shrink-0 px-4 py-2 rounded font-medium text-sm transition-colors cursor-pointer ${
                       selectedRoomId === room.id
                         ? 'bg-green-600 text-white shadow-md'
                         : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
@@ -656,7 +763,7 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
             {/* Shelves Grid */}
             <div className="p-4 overflow-y-auto max-h-[50vh]">
               {getFilteredShelves().length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3" style={{ pointerEvents: 'auto' }}>
                   {getFilteredShelves().map((shelf) => {
                     if (!shelf || !shelf.code) return null;
                     
@@ -687,8 +794,19 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                     return (
                       <button
                         key={shelf.id}
-                        onClick={() => handleLocationSelect(selectedRoomId, shelf.id)}
-                        className={`py-3 px-2 rounded-lg border-2 font-bold text-center text-white text-sm ${bgColor} border-transparent hover:border-white hover:shadow-lg transition-all`}
+                        type="button"
+                        onClick={(e) => {
+                          console.log('Shelf button clicked:', shelf.code);
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleLocationSelect(selectedRoomId, shelf.id);
+                        }}
+                        onMouseDown={(e) => {
+                          console.log('Shelf button mouse down:', shelf.code);
+                          e.stopPropagation();
+                        }}
+                        className={`py-3 px-2 rounded-lg border-2 font-bold text-center text-white text-sm ${bgColor} border-transparent hover:border-white hover:shadow-lg transition-all cursor-pointer`}
+                        style={{ pointerEvents: 'auto', zIndex: 1 }}
                       >
                         {completeCellNumber}
                       </button>
@@ -727,7 +845,6 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           </div>
         </div>
       )}
-        </div>
       </div>
     </>
   );

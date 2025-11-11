@@ -126,7 +126,7 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                   )}
                   {settings.show_business_name && (
                     <div className="text-2xl font-bold text-gray-900">
-                      {businessInfo?.name || 'Your Business Name'}
+                      {businessInfo?.name || 'inauzwa'}
                     </div>
                   )}
                   {settings.show_business_address && (
@@ -172,7 +172,7 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
               <div className="text-center border-b border-dashed border-gray-400 pb-2">
                 {settings.show_business_name && (
                   <div className={`font-bold ${isCompact ? 'text-base' : 'text-lg'}`}>
-                    {businessInfo?.name || 'Your Business Name'}
+                    {businessInfo?.name || 'inauzwa'}
                   </div>
                 )}
                 {settings.show_business_address && !isCompact && (

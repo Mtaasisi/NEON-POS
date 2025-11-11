@@ -202,7 +202,7 @@ export const exportDatabaseSchema = async (): Promise<Blob> => {
         'gender text',
         'city text',
         'joined_date date',
-        'loyalty_level text DEFAULT \'bronze\'',
+        'loyalty_level text DEFAULT \'interested\'',
         'color_tag text',
         'total_spent numeric DEFAULT 0',
         'points integer DEFAULT 0',

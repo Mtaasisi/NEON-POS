@@ -71,13 +71,34 @@ export const useQuickActions = () => {
     if (!action.requiresPermission) return true;
     if (!currentUser) return false;
     
+    // Check user permissions first (from their profile), then fall back to role
+    const userPermissions = currentUser.permissions || [];
+    
+    // If user has 'all' permission, they can do anything
+    if (userPermissions.includes('all')) {
+      return true;
+    }
+    
     // Check if user has the required permission
     if (action.requiresPermission === 'customer') {
-      return currentUser.role === 'customer-care';
+      return userPermissions.includes('view_customers') || 
+             userPermissions.includes('create_customers') ||
+             currentUser.role === 'customer-care';
     }
     if (action.requiresPermission === 'admin') {
-      return currentUser.role === 'admin';
+      return userPermissions.includes('all') || 
+             userPermissions.includes('manage_users') ||
+             currentUser.role === 'admin';
     }
+    
+    // Check for specific permission strings
+    if (typeof action.requiresPermission === 'string') {
+      if (userPermissions.includes(action.requiresPermission)) {
+        return true;
+      }
+    }
+    
+    // Fallback to role check
     return currentUser.role === 'admin' || action.requiresPermission === 'all';
   };
 

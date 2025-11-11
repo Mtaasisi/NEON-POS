@@ -26,6 +26,7 @@ export interface GeneralSettings {
   show_prices: boolean;
   show_barcodes: boolean;
   products_per_page: number;
+  products_per_row: number;
   auto_complete_search: boolean;
   confirm_delete: boolean;
   show_confirmations: boolean;
@@ -512,9 +513,9 @@ export class POSSettingsAPI {
   }
 
   // Get default settings for a specific table
-  private static getDefaultSettings(tableKey: SettingsTableKey, userId: string): any {
+  private static getDefaultSettings(tableKey: SettingsTableKey, userId: string | null): any {
     const baseRecord = {
-      user_id: userId,
+      user_id: userId, // Can be null for global settings
       business_id: null
     };
 
@@ -936,7 +937,17 @@ export class POSSettingsAPI {
       }
 
       // No existing records found, create a default one
-      const defaultRecord = this.getDefaultSettings(tableKey, user.id);
+      // Verify user exists in users table before using user_id
+      const { data: userExists } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+      
+      const defaultRecord = this.getDefaultSettings(
+        tableKey, 
+        userExists ? user.id : null // Use NULL if user doesn't exist
+      );
       
       const { data: insertData, error: insertError } = await supabase
         .from(tableName)
@@ -945,7 +956,14 @@ export class POSSettingsAPI {
         .single();
       
       if (insertError) {
-        // Silently return default settings even if insert fails
+        // Check if it's a foreign key constraint error (user doesn't exist)
+        if (insertError.code === '23503' || insertError.message?.includes('foreign key constraint')) {
+          console.log('ℹ️ User not found in users table, using global settings');
+          // Return defaults without user_id
+          return this.getDefaultSettings(tableKey, null) as T;
+        }
+        
+        // Silently return default settings even if insert fails for other reasons
         return defaultRecord as T;
       } else {
         return insertData as T;
@@ -1000,6 +1018,10 @@ export class POSSettingsAPI {
           .single();
 
         if (error) {
+          // Check for foreign key constraint errors
+          if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
+            console.log('ℹ️ User not found in users table - cannot update settings');
+          }
           console.error(`Database update error for ${tableKey}:`, error.message);
           return null;
         }
@@ -1023,6 +1045,10 @@ export class POSSettingsAPI {
           .single();
 
         if (error) {
+          // Check for foreign key constraint errors
+          if (error.code === '23503' || error.message?.includes('foreign key constraint')) {
+            console.log('ℹ️ User not found in users table - cannot save settings');
+          }
           // Silently return null on error
           return null;
         }

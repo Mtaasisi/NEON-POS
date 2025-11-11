@@ -119,22 +119,29 @@ export const ProfitMarginChart: React.FC<ProfitMarginChartProps> = ({ className 
           }
         }
         
-        const dayProfit = dayRevenue - dayCost;
-        const dayMargin = dayRevenue > 0 ? (dayProfit / dayRevenue) * 100 : 0;
+        // Ensure all values are valid numbers
+        const validRevenue = isNaN(dayRevenue) || !isFinite(dayRevenue) ? 0 : dayRevenue;
+        const validCost = isNaN(dayCost) || !isFinite(dayCost) ? 0 : dayCost;
+        const dayProfit = validRevenue - validCost;
+        const dayMargin = validRevenue > 0 ? (dayProfit / validRevenue) * 100 : 0;
         
-        totalProfitSum += dayProfit;
-        if (dayRevenue > 0) {
-          marginSum += dayMargin;
+        // Validate margin before using it
+        const validMargin = isNaN(dayMargin) || !isFinite(dayMargin) ? 0 : dayMargin;
+        const validProfit = isNaN(dayProfit) || !isFinite(dayProfit) ? 0 : dayProfit;
+        
+        totalProfitSum += validProfit;
+        if (validRevenue > 0) {
+          marginSum += validMargin;
           daysWithData++;
         }
         
         data.push({
           day: dayName,
           date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          revenue: dayRevenue,
-          cost: dayCost,
-          profit: dayProfit,
-          margin: dayMargin
+          revenue: validRevenue,
+          cost: validCost,
+          profit: validProfit,
+          margin: validMargin
         });
       }
       
@@ -195,6 +202,19 @@ export const ProfitMarginChart: React.FC<ProfitMarginChartProps> = ({ className 
     );
   }
 
+  // Filter out any items with invalid values before rendering
+  const validProfitData = profitData.filter(item => {
+    const isValid = 
+      !isNaN(item.profit) && isFinite(item.profit) &&
+      !isNaN(item.margin) && isFinite(item.margin) &&
+      !isNaN(item.revenue) && isFinite(item.revenue) &&
+      !isNaN(item.cost) && isFinite(item.cost);
+    if (!isValid) {
+      console.warn('⚠️ Filtering out invalid profit data item:', item);
+    }
+    return isValid;
+  });
+
   return (
     <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
       {/* Header */}
@@ -221,7 +241,7 @@ export const ProfitMarginChart: React.FC<ProfitMarginChartProps> = ({ className 
       {/* Chart */}
       <div className="flex-grow -mx-2 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={profitData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+          <ComposedChart data={validProfitData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
             <XAxis 
               dataKey="day" 

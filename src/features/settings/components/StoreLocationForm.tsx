@@ -319,6 +319,7 @@ export const StoreLocationForm: React.FC<StoreLocationFormProps> = ({
           <div className="space-y-4">
             <div>
               <GlassInput
+                type="tel"
                 value={formData.phone}
                 onChange={(e) => handleInputChange('phone', e.target.value)}
                 placeholder="Phone number"
@@ -328,6 +329,7 @@ export const StoreLocationForm: React.FC<StoreLocationFormProps> = ({
 
             <div>
               <GlassInput
+                type="email"
                 value={formData.email}
                 onChange={(e) => handleInputChange('email', e.target.value)}
                 placeholder="Email address"
@@ -338,6 +340,7 @@ export const StoreLocationForm: React.FC<StoreLocationFormProps> = ({
 
             <div>
               <GlassInput
+                type="tel"
                 value={formData.whatsapp}
                 onChange={(e) => handleInputChange('whatsapp', e.target.value)}
                 placeholder="WhatsApp number"

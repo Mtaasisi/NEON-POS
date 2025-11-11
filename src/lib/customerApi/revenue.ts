@@ -207,19 +207,45 @@ export async function getAllCustomersRevenueSummary(): Promise<{
     }
     
     const revenue = data || [];
-    const totalRevenue = revenue.reduce((sum, item) => sum + Number(item.amount), 0);
+    
+    // Helper to convert to TZS if needed
+    const convertToTZS = (amount: number, item: any): number => {
+      const currency = item.currency;
+      const exchangeRate = item.exchange_rate;
+      if (!currency || currency === 'TZS') return amount;
+      const rate = exchangeRate && exchangeRate > 1 ? exchangeRate : 
+        (currency === 'USD' ? 2500 : currency === 'EUR' ? 2700 : currency === 'GBP' ? 3200 : 1);
+      return amount * rate;
+    };
+    
+    const totalRevenue = revenue.reduce((sum, item) => {
+      const amount = Number(item.amount) || 0;
+      return sum + convertToTZS(amount, item);
+    }, 0);
     const deviceRevenue = revenue
       .filter(item => item.revenue_type === 'device_repair')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+      .reduce((sum, item) => {
+        const amount = Number(item.amount) || 0;
+        return sum + convertToTZS(amount, item);
+      }, 0);
     const posRevenue = revenue
       .filter(item => item.revenue_type === 'pos_sale')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+      .reduce((sum, item) => {
+        const amount = Number(item.amount) || 0;
+        return sum + convertToTZS(amount, item);
+      }, 0);
     const serviceRevenue = revenue
       .filter(item => item.revenue_type === 'service_fee')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+      .reduce((sum, item) => {
+        const amount = Number(item.amount) || 0;
+        return sum + convertToTZS(amount, item);
+      }, 0);
     const consultationRevenue = revenue
       .filter(item => item.revenue_type === 'consultation')
-      .reduce((sum, item) => sum + Number(item.amount), 0);
+      .reduce((sum, item) => {
+        const amount = Number(item.amount) || 0;
+        return sum + convertToTZS(amount, item);
+      }, 0);
     
     // Get unique customer count
     const uniqueCustomers = new Set(revenue.map(item => item.customer_id));

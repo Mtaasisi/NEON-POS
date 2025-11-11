@@ -4,39 +4,47 @@ import {
   Search, Plus, User, Phone, Mail, MapPin, Building, Truck, 
   Star, Crown, Globe, CreditCard, Calendar, DollarSign,
   CheckCircle, XCircle, RefreshCw, AlertCircle, Factory,
-  Store, Coins, Scale, Target, Activity, TrendingUp
+  Store, Coins, Scale, Target, Activity, TrendingUp, Package
 } from 'lucide-react';
-
-// Country flag mapping
-const countryFlags: { [key: string]: string } = {
-  TZ: '🇹🇿', AE: '🇦🇪', CN: '🇨🇳', US: '🇺🇸', CA: '🇨🇦', UK: '🇬🇧',
-  DE: '🇩🇪', FR: '🇫🇷', JP: '🇯🇵', IN: '🇮🇳', BR: '🇧🇷', AU: '🇦🇺',
-  KE: '🇰🇪', UG: '🇺🇬', RW: '🇷🇼', ET: '🇪🇹', NG: '🇳🇬', ZA: '🇿🇦',
-  EG: '🇪🇬', SA: '🇸🇦', TR: '🇹🇷', RU: '🇷🇺', KR: '🇰🇷', SG: '🇸🇬',
-  MY: '🇲🇾', TH: '🇹🇭', VN: '🇻🇳', ID: '🇮🇩', PH: '🇵🇭'
-};
+import { extractProductCategories, getCategoryColor } from '../../../../utils/supplierUtils';
+import { getCountryFlag, formatCountryDisplay } from '../../../../utils/countryFlags';
+import EnhancedAddSupplierModal from '../../../settings/components/EnhancedAddSupplierModal';
+import SupplierDetailModal from '../../../settings/components/SupplierDetailModal';
+import SupplierForm from '../inventory/SupplierForm';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { formatMoney, formatDate } from '../../lib/purchaseOrderUtils';
+import { updateSupplier, type UpdateSupplierData } from '../../../../lib/supplierApi';
+import { toast } from 'react-hot-toast';
 
 interface Supplier {
   id: string;
   name: string;
   company_name?: string;
   contactPerson?: string;
+  contact_person?: string;
   phone?: string;
   email?: string;
+  whatsapp?: string;
+  wechat?: string;
   address?: string;
   city?: string;
   country?: string;
+  tax_id?: string;
+  payment_terms?: string;
   exchangeRates?: string;
+  exchange_rate?: number;
   leadTimeDays?: number;
-  currency?: string;
+  preferred_currency?: string;
+  currency?: string; // Legacy field, use preferred_currency
   isActive: boolean;
+  is_active?: boolean;
   totalSpent?: number;
   ordersCount?: number;
   lastOrderDate?: string;
   rating?: number;
+  description?: string;
+  notes?: string;
 }
 
 interface SupplierSelectionModalProps {
@@ -55,6 +63,12 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCountry, setSelectedCountry] = useState<string>('');
   const [sortBy, setSortBy] = useState<'name' | 'orders' | 'recent' | 'rating'>('name');
+  const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
+  const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [showSupplierForm, setShowSupplierForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
 
   // Get unique countries from suppliers
@@ -101,7 +115,7 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
           const bDate = b.lastOrderDate ? new Date(b.lastOrderDate).getTime() : 0;
           return bDate - aDate;
         case 'rating':
-          return (b.rating || 0) - (a.rating || 0);
+          return Number(b.rating || 0) - Number(a.rating || 0);
         default:
           return 0;
       }
@@ -120,54 +134,111 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
   };
 
   const getSupplierBadgeColor = (supplier: Supplier) => {
-    if (!supplier.isActive) return 'bg-gray-100 text-gray-700';
     if ((supplier.ordersCount || 0) >= 10) return 'bg-purple-100 text-purple-700';
-    if ((supplier.rating || 0) >= 4.5) return 'bg-green-100 text-green-700';
+    if (Number(supplier.rating || 0) >= 4.5) return 'bg-green-100 text-green-700';
     return 'bg-blue-100 text-blue-700';
   };
 
   const getSupplierBadgeText = (supplier: Supplier) => {
-    if (!supplier.isActive) return 'Inactive';
     if ((supplier.ordersCount || 0) >= 10) return 'Preferred';
-    if ((supplier.rating || 0) >= 4.5) return 'Top Rated';
-    return 'Active';
+    if (Number(supplier.rating || 0) >= 4.5) return 'Top Rated';
+    return 'Supplier';
+  };
+
+  const handleSupplierCreated = (newSupplier: Supplier) => {
+    setShowAddSupplierModal(false);
+    // Automatically select the newly created supplier
+    onSupplierSelect(newSupplier);
+    onClose();
+  };
+
+  const handleEditSupplier = (supplier: any) => {
+    // Convert to the format expected by SupplierForm
+    const supplierForEdit = {
+      id: supplier.id,
+      name: supplier.name,
+      company_name: supplier.company_name,
+      contact_person: supplier.contact_person || supplier.contactPerson,
+      email: supplier.email,
+      phone: supplier.phone,
+      whatsapp: supplier.whatsapp,
+      wechat: supplier.wechat,
+      address: supplier.address,
+      city: supplier.city,
+      country: supplier.country,
+      tax_id: supplier.tax_id,
+      payment_terms: supplier.payment_terms,
+      preferred_currency: supplier.preferred_currency,
+      notes: supplier.notes,
+      is_active: supplier.is_active ?? supplier.isActive,
+      created_at: supplier.created_at || supplier.lastOrderDate || new Date().toISOString(),
+      updated_at: supplier.updated_at || new Date().toISOString()
+    };
+    setEditingSupplier(supplierForEdit);
+    setShowSupplierForm(true);
+    setShowDetailsModal(false);
+  };
+
+  // Handle supplier update
+  const handleSubmitSupplier = async (data: UpdateSupplierData) => {
+    if (!editingSupplier) return;
+    
+    try {
+      setIsSubmitting(true);
+      const updatedSupplier = await updateSupplier(editingSupplier.id, data);
+      
+      toast.success('Supplier updated successfully!');
+      setShowSupplierForm(false);
+      setEditingSupplier(null);
+      
+      // Note: The parent component would need to refresh suppliers list
+      // For now, we just close the modal
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to update supplier';
+      toast.error(errorMessage);
+      console.error('Error updating supplier:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
 
   return (
     <div 
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={onClose}
     >
       <GlassCard 
-        className="w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="w-full max-w-[95vw] sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[95vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-amber-50">
+        {/* Fixed Header */}
+        <div className="flex-shrink-0 p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-amber-50">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 rounded-xl">
-                <Truck className="w-8 h-8 text-orange-600" />
+            <div className="flex items-center gap-2 sm:gap-4">
+              <div className="p-2 sm:p-3 bg-orange-100 rounded-xl">
+                <Truck className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-gray-800">Select Supplier</h2>
-                <p className="text-gray-600">Choose a supplier for your purchase order</p>
+                <h2 className="text-lg sm:text-2xl font-bold text-gray-800">Select Supplier</h2>
+                <p className="text-xs sm:text-base text-gray-600 hidden sm:block">Choose a supplier for your purchase order</p>
               </div>
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-1 sm:p-2 hover:bg-gray-100 rounded-lg transition-colors"
             >
-              <XCircle className="w-6 h-6 text-gray-500" />
+              <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-gray-500" />
             </button>
           </div>
         </div>
 
-        {/* Search and Filters */}
-        <div className="p-6 border-b border-gray-200 bg-gray-50">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Search and Filters */}
+          <div className="p-4 sm:p-6 border-b border-gray-200 bg-gray-50">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             {/* Search */}
             <div className="lg:col-span-2">
               <div className="relative">
@@ -221,15 +292,14 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
           </div>
         </div>
 
-        {/* Suppliers List */}
-        <div className="flex-1 overflow-y-auto p-6">
+          {/* Suppliers List */}
+          <div className="p-4 sm:p-6">
           {filteredSuppliers.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {filteredSuppliers.map((supplier) => (
                 <div
                   key={supplier.id}
-                  onClick={() => onSupplierSelect(supplier)}
-                  className="p-4 border border-gray-200 rounded-xl hover:shadow-lg hover:border-orange-300 cursor-pointer transition-all duration-200 hover:scale-[1.02] bg-white"
+                  className="p-4 border border-gray-200 rounded-xl hover:shadow-lg hover:border-orange-300 transition-all duration-200 bg-white"
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
@@ -252,9 +322,9 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                       </span>
                       {supplier.rating && (
                         <div className="flex items-center gap-1">
-                          <Star className={`w-4 h-4 fill-current ${getSupplierRatingColor(supplier.rating)}`} />
-                          <span className={`text-sm font-medium ${getSupplierRatingColor(supplier.rating)}`}>
-                            {supplier.rating.toFixed(1)}
+                          <Star className={`w-4 h-4 fill-current ${getSupplierRatingColor(Number(supplier.rating))}`} />
+                          <span className={`text-sm font-medium ${getSupplierRatingColor(Number(supplier.rating))}`}>
+                            {Number(supplier.rating).toFixed(1)}
                           </span>
                         </div>
                       )}
@@ -278,9 +348,16 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                     {(supplier.city || supplier.country) && (
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <MapPin className="w-4 h-4" />
-                        <span>
-                          {[supplier.city, supplier.country].filter(Boolean).join(', ')}
-                          {supplier.country && ` ${countryFlags[supplier.country] || '🌍'}`}
+                        <span className="flex items-center gap-1.5">
+                          {supplier.country && (
+                            <span className="text-base leading-none">{getCountryFlag(supplier.country)}</span>
+                          )}
+                          <span>
+                            {supplier.city && supplier.country 
+                              ? `${supplier.city}, ${supplier.country}` 
+                              : supplier.city || supplier.country
+                            }
+                          </span>
                         </span>
                       </div>
                     )}
@@ -294,8 +371,11 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                     </div>
                     <div>
                       <div className="text-xs text-gray-500">Currency</div>
-                      <div className="font-semibold text-gray-900 flex items-center gap-1">
-                        {supplier.country && (countryFlags[supplier.country] || '💱')} {supplier.currency || 'TZS'}
+                      <div className="font-semibold text-gray-900 flex items-center gap-1.5">
+                        {supplier.country && (
+                          <span className="text-base leading-none">{getCountryFlag(supplier.country)}</span>
+                        )}
+                        <span>{supplier.preferred_currency || supplier.currency || 'TZS'}</span>
                       </div>
                     </div>
                     {supplier.totalSpent && (
@@ -323,55 +403,153 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                       </div>
                     )}
                   </div>
+
+                  {/* Product Categories */}
+                  {(() => {
+                    const categories = extractProductCategories(supplier.notes);
+                    return categories.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Package className="w-3.5 h-3.5 text-purple-600" />
+                          <span className="text-xs font-semibold text-gray-700">Deals with:</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {categories.slice(0, 4).map((category, idx) => (
+                            <span
+                              key={idx}
+                              className={`px-2 py-1 text-xs font-medium rounded-md border ${getCategoryColor(category)}`}
+                            >
+                              {category}
+                            </span>
+                          ))}
+                          {categories.length > 4 && (
+                            <span className="px-2 py-1 text-xs text-gray-500 bg-gray-100 rounded-md border border-gray-200 font-medium">
+                              +{categories.length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Action Buttons */}
+                  <div className="flex flex-col sm:flex-row gap-2 pt-4 border-t border-gray-100 mt-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingSupplier(supplier);
+                        setShowDetailsModal(true);
+                      }}
+                      className="flex-1 bg-gray-100 text-gray-700 py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg hover:bg-gray-200 transition-colors font-medium text-xs sm:text-sm flex items-center justify-center gap-2"
+                    >
+                      <Globe className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">View Details</span>
+                      <span className="sm:hidden">Details</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSupplierSelect(supplier);
+                      }}
+                      className="flex-1 bg-gradient-to-r from-orange-500 to-orange-600 text-white py-2 sm:py-2.5 px-3 sm:px-4 rounded-lg hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg font-medium text-xs sm:text-sm flex items-center justify-center gap-2"
+                    >
+                      <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+                      <span className="hidden sm:inline">Select Supplier</span>
+                      <span className="sm:hidden">Select</span>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-12">
-              <Building className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">No suppliers found</h3>
-              <p className="text-gray-600 mb-6">
+            <div className="text-center py-8 sm:py-12">
+              <Building className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-2">No suppliers found</h3>
+              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-6 px-4">
                 {searchQuery || selectedCountry 
                   ? "Try adjusting your search criteria or filters" 
                   : "No suppliers available in the system"
                 }
               </p>
-              <GlassButton
-                onClick={() => {
-                  // TODO: Navigate to add supplier page
-                  onClose();
-                }}
-                icon={<Plus size={18} />}
-                className="bg-gradient-to-r from-orange-500 to-amber-600 text-white"
+              <button
+                onClick={() => setShowAddSupplierModal(true)}
+                className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-lg hover:from-orange-600 hover:to-amber-700 transition-all font-medium text-sm flex items-center justify-center gap-2 mx-auto"
               >
+                <Plus className="w-4 h-4" />
                 Add New Supplier
-              </GlassButton>
+              </button>
             </div>
           )}
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50">
-          <div className="space-y-4">
-            <div className="text-sm text-gray-600 text-center">
+        {/* Fixed Footer */}
+        <div className="flex-shrink-0 p-4 sm:p-6 border-t border-gray-200 bg-gray-50">
+          <div className="space-y-3 sm:space-y-4">
+            <div className="text-xs sm:text-sm text-gray-600 text-center">
               {filteredSuppliers.length > 0 
                 ? `Select a supplier to continue with your purchase order`
                 : `No suppliers match your criteria`
               }
             </div>
-            <GlassButton
-              onClick={() => {
-                // TODO: Navigate to add supplier page
-                onClose();
-              }}
-              icon={<Plus size={20} />}
-              className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white text-lg font-semibold"
+            <button
+              onClick={() => setShowAddSupplierModal(true)}
+              className="w-full py-3 sm:py-4 px-4 bg-gradient-to-r from-orange-500 to-amber-600 text-white text-base sm:text-lg font-semibold rounded-lg hover:from-orange-600 hover:to-amber-700 transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2"
             >
+              <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
               Add New Supplier
-            </GlassButton>
+            </button>
           </div>
         </div>
       </GlassCard>
+
+      {/* Add Supplier Modal */}
+      <EnhancedAddSupplierModal
+        isOpen={showAddSupplierModal}
+        onClose={() => setShowAddSupplierModal(false)}
+        onSupplierCreated={() => {
+          // Note: Parent component should refresh suppliers list
+          setShowAddSupplierModal(false);
+        }}
+      />
+
+      {/* Supplier Details Modal */}
+      {viewingSupplier && showDetailsModal && (
+        <SupplierDetailModal
+          supplier={{
+            ...viewingSupplier,
+            contact_person: viewingSupplier.contactPerson,
+            is_active: viewingSupplier.isActive,
+            created_at: viewingSupplier.lastOrderDate || new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          }}
+          onClose={() => {
+            setShowDetailsModal(false);
+            setViewingSupplier(null);
+          }}
+          onUpdate={() => {
+            // Note: Parent component should refresh suppliers after update
+          }}
+          onEdit={handleEditSupplier}
+        />
+      )}
+
+      {/* Supplier Edit Form Modal */}
+      {showSupplierForm && editingSupplier && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <SupplierForm
+              supplier={editingSupplier}
+              onSubmit={handleSubmitSupplier}
+              onCancel={() => {
+                setShowSupplierForm(false);
+                setEditingSupplier(null);
+              }}
+              loading={isSubmitting}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

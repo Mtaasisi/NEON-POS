@@ -143,21 +143,29 @@ export async function fetchCustomersPaginated(page: number = 1, pageSize: number
         promoHistory: []
       }));
       
+      const totalPages = Math.ceil((count || 0) / pageSize);
+      
       return {
         customers: processedCustomers,
+        totalCount: count || 0,
         total: count || 0,
         page,
         pageSize,
-        totalPages: Math.ceil((count || 0) / pageSize)
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
       };
     }
     
     return {
       customers: [],
+      totalCount: 0,
       total: 0,
       page,
       pageSize,
-      totalPages: 0
+      totalPages: 0,
+      hasNextPage: false,
+      hasPreviousPage: false
     };
     
   } catch (error) {
@@ -215,7 +223,7 @@ export async function loadCustomerDetails(customerId: string) {
         gender: data.gender || 'other',
         city: data.city || '',
         colorTag: normalizeColorTag(data.color_tag || 'new'),
-        loyaltyLevel: data.loyalty_level || 'bronze',
+        loyaltyLevel: data.loyalty_level || 'interested',
         points: data.points || 0,
         totalSpent: data.total_spent || 0,
         lastVisit: data.last_visit || data.created_at,

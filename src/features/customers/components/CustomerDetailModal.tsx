@@ -33,6 +33,7 @@ import WhatsAppMessageModal from './WhatsAppMessageModal';
 import AppointmentModal from './forms/AppointmentModal';
 import CustomerJourneyTimeline from './CustomerJourneyTimeline';
 import CallAnalyticsCard from './CallAnalyticsCard';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface CustomerDetailModalProps {
   isOpen: boolean;
@@ -48,6 +49,9 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   onEdit
 }) => {
   const { currentUser } = useAuth();
+  
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
   const { addNote, updateCustomer, markCustomerAsRead } = useCustomers();
   const [currentCustomer, setCurrentCustomer] = useState(customer);
   
@@ -272,17 +276,40 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
       // Fetch spare part usage for this customer (optional, may not exist)
       try {
+        // First fetch the usage records
         const { data: spareData, error: spareError } = await supabase
           .from('lats_spare_part_usage')
-          .select(`
-            *,
-            lats_spare_parts!spare_part_id(name, part_number, cost_price, selling_price)
-          `)
+          .select('*')
           .eq('customer_id', customer.id)
           .order('used_at', { ascending: false});
 
-        if (!spareError && spareData) {
-          setSparePartUsage(spareData);
+        if (!spareError && spareData && spareData.length > 0) {
+          // Get unique spare part IDs
+          const sparePartIds = [...new Set(spareData.map((u: any) => u.spare_part_id).filter(Boolean))];
+          
+          // Fetch spare part details separately
+          if (sparePartIds.length > 0) {
+            const { data: spareParts } = await supabase
+              .from('lats_spare_parts')
+              .select('id, name, part_number, cost_price, selling_price')
+              .in('id', sparePartIds);
+            
+            // Create a lookup map
+            const sparePartsMap = (spareParts || []).reduce((acc: any, sp: any) => {
+              acc[sp.id] = sp;
+              return acc;
+            }, {});
+            
+            // Enrich usage records with spare part details
+            const enrichedData = spareData.map((usage: any) => ({
+              ...usage,
+              lats_spare_parts: sparePartsMap[usage.spare_part_id] || null
+            }));
+            
+            setSparePartUsage(enrichedData);
+          } else {
+            setSparePartUsage(spareData);
+          }
         }
 
         // Calculate customer analytics
@@ -290,6 +317,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
         setCustomerAnalytics(analytics);
       } catch (spareError) {
         // Spare parts data is optional, continue without it
+        console.log('Spare parts data not available for this customer');
         const analytics = calculateCustomerAnalytics(customer.id, posData || [], []);
         setCustomerAnalytics(analytics);
       }

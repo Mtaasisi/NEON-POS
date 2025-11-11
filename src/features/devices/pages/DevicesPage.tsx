@@ -247,7 +247,7 @@ const DevicesPage: React.FC = () => {
             <Plus size={18} />
             Add Device
           </button>
-          {currentUser?.role === 'admin' && (
+          {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('edit_settings') || currentUser?.role === 'admin') && (
             <button 
               onClick={() => setShowTemplateManagerModal(true)}
               className="flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium bg-gray-600 text-white hover:bg-gray-700 transition-colors"

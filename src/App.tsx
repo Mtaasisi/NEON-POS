@@ -66,10 +66,13 @@ const AppLayout = createSafeLazyComponent(() => import('./layout/AppLayout'));
 import { ErrorBoundary } from './features/shared/components/ErrorBoundary';
 import DynamicImportErrorBoundary from './features/shared/components/DynamicImportErrorBoundary';
 import UrlValidatedRoute from './components/UrlValidatedRoute';
+import NativeOnlyRoute from './components/NativeOnlyRoute';
+import MobileOnlyRedirect from './components/MobileOnlyRedirect';
+import DefaultRedirect from './components/DefaultRedirect';
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
 const IntegrationsTestPage = lazy(() => import('./features/admin/pages/IntegrationsTestPage'));
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
-const UnifiedSupplierManagementPage = lazy(() => import('./features/settings/pages/UnifiedSupplierManagementPage'));
+const EnhancedSupplierManagementPage = lazy(() => import('./features/settings/pages/EnhancedSupplierManagementPage'));
 import { SuppliersProvider } from './context/SuppliersContext';
 import { WhatsAppProvider } from './context/WhatsAppContext';
 const SMSControlCenterPage = lazy(() => import('./features/sms/pages/SMSControlCenterPage'));
@@ -98,13 +101,37 @@ const ExcelImportPage = lazy(() => import('./features/reports/pages/ExcelImportP
 const ExcelTemplateDownloadPage = lazy(() => import('./features/lats/pages/ExcelTemplateDownloadPage'));
 const ProductExportPage = lazy(() => import('./features/lats/pages/ProductExportPage'));
 
+// Customer Portal Pages
+const CustomerLoginPage = lazy(() => import('./features/customer-portal/pages/LoginPage'));
+const CustomerSignupPage = lazy(() => import('./features/customer-portal/pages/SignupPage'));
+const CustomerDashboardPage = lazy(() => import('./features/customer-portal/pages/DashboardPage'));
+const CustomerProductsPage = lazy(() => import('./features/customer-portal/pages/ProductsPage'));
+const CustomerProductDetailPage = lazy(() => import('./features/customer-portal/pages/ProductDetailPage'));
+const CustomerProfilePage = lazy(() => import('./features/customer-portal/pages/ProfilePage'));
+const CustomerOrdersPage = lazy(() => import('./features/customer-portal/pages/OrdersPage'));
+const CustomerLoyaltyPage = lazy(() => import('./features/customer-portal/pages/LoyaltyPage'));
 
 // Test Pages
 const TestImageUpload = lazy(() => import('./pages/TestImageUpload'));
 const BackgroundRemovalPage = lazy(() => import('./pages/BackgroundRemovalPage'));
 
+// Mobile App Pages
+const MobileLayout = lazy(() => import('./features/mobile/components/MobileLayout'));
+const MobileDashboard = lazy(() => import('./features/mobile/pages/MobileDashboard'));
+const MobilePOS = lazy(() => import('./features/mobile/pages/MobilePOS'));
+const MobileInventory = lazy(() => import('./features/mobile/pages/MobileInventory'));
+const MobileAddProduct = lazy(() => import('./features/mobile/pages/MobileAddProduct'));
+const MobileEditProduct = lazy(() => import('./features/mobile/pages/MobileEditProduct'));
+const MobileClients = lazy(() => import('./features/mobile/pages/MobileClients'));
+const MobileEditClient = lazy(() => import('./features/mobile/pages/MobileEditClient'));
+const MobileMore = lazy(() => import('./features/mobile/pages/MobileMore'));
+const MobileAnalytics = lazy(() => import('./features/mobile/pages/MobileAnalytics'));
+const MobileProductDetail = lazy(() => import('./features/mobile/pages/MobileProductDetail'));
+const MobileClientDetail = lazy(() => import('./features/mobile/pages/MobileClientDetail'));
+const MobileSheetDemo = lazy(() => import('./features/mobile/pages/MobileSheetDemo'));
+
 const LATSDashboardPage = lazy(() => import('./features/lats/pages/LATSDashboardPage'));
-const SerialNumberManagerPage = lazy(() => import('./features/lats/pages/SerialNumberManagerPage'));
+// SerialNumberManagerPage removed - replaced by IMEI Variant System
 const PurchaseOrdersPage = lazy(() => import('./features/lats/pages/PurchaseOrdersPage'));
 const POcreate = lazy(() => import('./features/lats/pages/POcreate'));
 const PurchaseOrderDetailPage = lazy(() => import('./features/lats/pages/PurchaseOrderDetailPage'));
@@ -117,11 +144,10 @@ const TradeInManagementPage = lazy(() => import('./features/lats/pages/TradeInMa
 const TradeInTestPage = lazy(() => import('./features/lats/pages/TradeInTestPage'));
 
 const SalesReportsPage = lazy(() => import('./features/lats/pages/SalesReportsPage'));
-const CustomerLoyaltyPage = lazy(() => import('./features/lats/pages/CustomerLoyaltyPage'));
+const LoyaltyManagementPage = lazy(() => import('./features/lats/pages/CustomerLoyaltyPage'));
 
 // Purchase Orders Module Pages
 const ShippedItemsPage = lazy(() => import('./features/lats/pages/ShippedItemsPage'));
-const SuppliersManagementPage = lazy(() => import('./features/lats/pages/SuppliersManagementPage'));
 
 
 
@@ -146,12 +172,15 @@ const BulkSMSPage = lazy(() => import('./features/sms/pages/BulkSMSPage'));
 const SMSLogsPage = lazy(() => import('./features/sms/pages/SMSLogsPage'));
 const SMSSettingsPage = lazy(() => import('./features/sms/pages/SMSSettingsPage'));
 const IntegrationSettingsPage = lazy(() => import('./features/settings/pages/IntegrationSettingsPage'));
+const UserSettingsPage = lazy(() => import('./features/shared/pages/UserSettingsPage'));
 
 import { initializeDatabaseCheck } from './lib/databaseUtils';
 import { reminderService } from './lib/reminderService';
 import { initializeCache } from './lib/offlineCache';
 import { getPendingActions, clearPendingActions } from './lib/offlineSync';
+import PreloadIndicator from './components/PreloadIndicator';
 import BackgroundDataLoader from './components/BackgroundDataLoader';
+import ProductPreloader from './components/ProductPreloader';
 import { POSSettingsDatabaseSetup } from './components/POSSettingsDatabaseSetup';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
@@ -295,11 +324,12 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 };
 
-// Role-based protected route component
+// Role-based protected route component (now supports permissions too!)
 const RoleProtectedRoute: React.FC<{ 
   children: React.ReactNode; 
   allowedRoles: string[];
-}> = ({ children, allowedRoles }) => {
+  requiredPermissions?: string[]; // Optional permission check
+}> = ({ children, allowedRoles, requiredPermissions }) => {
   // Ensure allowedRoles is always an array to prevent primitive conversion errors
   const safeAllowedRoles = Array.isArray(allowedRoles) ? allowedRoles.map(role => String(role)) : [];
   
@@ -385,7 +415,26 @@ const RoleProtectedRoute: React.FC<{
     
     // Ensure currentUser has a valid role before checking
     const userRole = currentUser?.role ? String(currentUser.role) : null;
-    if (!currentUser || !userRole || !safeAllowedRoles.includes(userRole)) {
+    
+    // Check if user has required permissions (if specified)
+    let hasRequiredPermissions = true;
+    if (requiredPermissions && requiredPermissions.length > 0) {
+      // Check if user has 'all' permission (admin)
+      if (currentUser.permissions?.includes('all')) {
+        hasRequiredPermissions = true;
+      } else {
+        // Check if user has at least one of the required permissions
+        hasRequiredPermissions = requiredPermissions.some(permission => 
+          currentUser.permissions?.includes(permission)
+        );
+      }
+    }
+    
+    // User must have either the right role OR the right permissions
+    const hasRoleAccess = userRole && safeAllowedRoles.includes(userRole);
+    const hasAccess = hasRoleAccess || hasRequiredPermissions;
+    
+    if (!currentUser || !hasAccess) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-red-50 to-orange-50">
           <div className="text-center">
@@ -396,6 +445,10 @@ const RoleProtectedRoute: React.FC<{
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
             <p className="text-gray-600 mb-4">You don't have permission to access this page.</p>
+            <p className="text-sm text-gray-500 mb-4">
+              {!hasRoleAccess && 'Required role: ' + safeAllowedRoles.join(', ')}
+              {requiredPermissions && requiredPermissions.length > 0 && ' or permission: ' + requiredPermissions.join(', ')}
+            </p>
             <button
               onClick={() => window.history.back()}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -538,7 +591,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route index element={<DefaultRedirect />} />
           <Route path="/dashboard" element={
             <Suspense fallback={<DynamicPageLoader />}>
               <ConditionalDashboard />
@@ -584,7 +637,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           } />
 
         <Route path="/category-management" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><CategoryManagementPage /></Suspense></RoleProtectedRoute>} />
-                  <Route path="/supplier-management" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><UnifiedSupplierManagementPage /></Suspense></RoleProtectedRoute>} />
+                  <Route path="/supplier-management" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedSupplierManagementPage /></Suspense></RoleProtectedRoute>} />
         <Route path="/store-locations" element={
           <RoleProtectedRoute allowedRoles={['admin']}>
             <Suspense fallback={<DynamicPageLoader />}>
@@ -653,7 +706,8 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </RoleProtectedRoute>
           } />
 
-          <Route path="/settings" element={<Navigate to="/admin-settings" replace />} />
+          {/* User Settings - Available to all authenticated users */}
+          <Route path="/settings" element={<Suspense fallback={<DynamicPageLoader />}><UserSettingsPage /></Suspense>} />
           
           {/* SMS Module Routes - Now Complete */}
           <Route path="/sms" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SMSControlCenterPage /></Suspense></RoleProtectedRoute>} />
@@ -726,7 +780,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* LATS Module Routes */}
           <Route path="/lats" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><LATSDashboardPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/lats/serial-manager" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><SerialNumberManagerPage /></Suspense></RoleProtectedRoute>} />
+          {/* /lats/serial-manager route removed - replaced by IMEI Variant System */}
           
           {/* POS Route */}
           <Route path="/pos" element={
@@ -787,7 +841,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           } />
 
           <Route path="/lats/sales-reports" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SalesReportsPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/lats/loyalty" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><CustomerLoyaltyPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/lats/loyalty" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><LoyaltyManagementPage /></Suspense></RoleProtectedRoute>} />
 
           <Route path="/lats/purchase-orders" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrdersPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/purchase-order/create" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><POcreate /></Suspense></RoleProtectedRoute>} />
@@ -798,7 +852,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           <Route path="/test/set-pricing-modal" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><TestSetPricingModal /></Suspense></RoleProtectedRoute>} />
           
           <Route path="/lats/purchase-orders/shipped-items" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><ShippedItemsPage /></Suspense></RoleProtectedRoute>} />
-          <Route path="/lats/purchase-orders/suppliers" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><SuppliersManagementPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/lats/purchase-orders/suppliers" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><EnhancedSupplierManagementPage /></Suspense></RoleProtectedRoute>} />
           
           {/* Stock Transfer Route */}
           <Route path="/lats/stock-transfers" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><StockTransferPage /></Suspense></RoleProtectedRoute>} />
@@ -834,6 +888,126 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
 
         {/* Full-page routes (outside AppLayout) */}
         
+        {/* Customer Portal Routes - Public Access */}
+        <Route path="/customer-portal/login" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerLoginPage />
+          </Suspense>
+        } />
+        
+        <Route path="/customer-portal/signup" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerSignupPage />
+          </Suspense>
+        } />
+        
+        <Route path="/customer-portal/dashboard" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerDashboardPage />
+          </Suspense>
+        } />
+        
+        <Route path="/customer-portal/products" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerProductsPage />
+          </Suspense>
+        } />
+        
+        <Route path="/customer-portal/products/:id" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerProductDetailPage />
+          </Suspense>
+        } />
+        
+        <Route path="/customer-portal/profile" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerProfilePage />
+          </Suspense>
+        } />
+        
+        <Route path="/customer-portal/orders" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerOrdersPage />
+          </Suspense>
+        } />
+        
+        <Route path="/customer-portal/loyalty" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <CustomerLoyaltyPage />
+          </Suspense>
+        } />
+        
+        {/* Mobile App Routes - APK Only */}
+        <Route path="/mobile" element={
+          <NativeOnlyRoute>
+              <Suspense fallback={<DynamicPageLoader />}>
+                <MobileLayout />
+              </Suspense>
+          </NativeOnlyRoute>
+        }>
+          <Route index element={<Navigate to="/mobile/dashboard" replace />} />
+          <Route path="dashboard" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileDashboard />
+            </Suspense>
+          } />
+          <Route path="pos" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobilePOS />
+            </Suspense>
+          } />
+          <Route path="inventory" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileInventory />
+            </Suspense>
+          } />
+          <Route path="inventory/add" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileAddProduct />
+            </Suspense>
+          } />
+          <Route path="inventory/:productId" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileProductDetail />
+            </Suspense>
+          } />
+          <Route path="inventory/:productId/edit" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileEditProduct />
+            </Suspense>
+          } />
+          <Route path="clients" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileClients />
+            </Suspense>
+          } />
+          <Route path="clients/:clientId" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileClientDetail />
+            </Suspense>
+          } />
+          <Route path="clients/:clientId/edit" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileEditClient />
+            </Suspense>
+          } />
+          <Route path="more" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileMore />
+            </Suspense>
+          } />
+          <Route path="analytics" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileAnalytics />
+            </Suspense>
+          } />
+          <Route path="sheet-demo" element={
+            <Suspense fallback={<DynamicPageLoader />}>
+              <MobileSheetDemo />
+            </Suspense>
+          } />
+        </Route>
+        
         {/* Test Pages */}
         <Route path="/test-image-upload" element={
           <Suspense fallback={<DynamicPageLoader />}>
@@ -847,7 +1021,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           </Suspense>
         } />
         
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<DefaultRedirect />} />
       </Routes>
     </>
   );
@@ -992,9 +1166,15 @@ function App() {
     };
   }, []);
 
+  // Get the base path from environment variable (matches Vite base config)
+  // Default to empty string for root domain deployment (routes already have /lats/ prefix)
+  const basename = import.meta.env.VITE_ROUTER_BASENAME !== undefined 
+    ? import.meta.env.VITE_ROUTER_BASENAME 
+    : '';
+
   return (
     <ErrorBoundary>
-      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <ThemeProvider>
           <AuthProvider>
             <GlobalSearchProvider>
@@ -1012,13 +1192,17 @@ function App() {
                                 <SuppliersProvider>
                                   <WhatsAppProvider>
                                   <POSSettingsDatabaseSetup>
-                                    <AppContent 
-                                      isOnline={isOnline} 
-                                      isSyncing={isSyncing} 
-                                    />
-                                    <LoadingProgressWrapper />
-                                    <BackgroundDataLoader />
-                                    <ErrorManager />
+                                    <MobileOnlyRedirect>
+                                      <AppContent 
+                                        isOnline={isOnline} 
+                                        isSyncing={isSyncing} 
+                                      />
+                                      <LoadingProgressWrapper />
+                                      <BackgroundDataLoader />
+                                      <ProductPreloader />
+                                      <PreloadIndicator />
+                                      <ErrorManager />
+                                    </MobileOnlyRedirect>
                                   </POSSettingsDatabaseSetup>
                                 </WhatsAppProvider>
                               </SuppliersProvider>

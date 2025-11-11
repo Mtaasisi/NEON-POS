@@ -11,12 +11,14 @@ interface CreateCustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCustomerCreated: (customer: Customer) => void;
+  onAddAnother?: () => void; // Callback to reopen modal for adding another customer
 }
 
 const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
   isOpen,
   onClose,
-  onCustomerCreated
+  onCustomerCreated,
+  onAddAnother
 }) => {
   const [formData, setFormData] = useState({
     name: '',
@@ -25,7 +27,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
     address: '',
     city: '',
     country: 'Tanzania',
-    loyaltyLevel: 'bronze' as 'bronze' | 'silver' | 'gold' | 'platinum',
+    loyaltyLevel: 'interested' as 'interested' | 'engaged' | 'payment_customer' | 'active' | 'regular' | 'premium' | 'vip',
     notes: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -89,7 +91,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       const result = await createCustomer(customerData);
 
       if (result.success && result.customer) {
-        // Show success modal
+        // Show success modal with WhatsApp, View Customer, and Add Another buttons
         successModal.show(
           `${result.customer.name} has been added to your customer list!`,
           {
@@ -98,11 +100,38 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
             autoCloseDelay: 0, // Don't auto-close when there are action buttons
             actionButtons: [
               {
+                label: 'Message on WhatsApp',
+                onClick: () => {
+                  // Open WhatsApp with pre-filled message
+                  const phone = result.customer.phone?.replace(/\D/g, '');
+                  if (phone) {
+                    const message = encodeURIComponent(`Hello ${result.customer.name}, thank you for becoming our customer!`);
+                    window.open(`https://wa.me/${phone}?text=${message}`, '_blank');
+                  } else {
+                    toast.error('Customer has no phone number');
+                  }
+                },
+                variant: 'whatsapp',
+              },
+              {
                 label: 'View Customer',
                 onClick: () => {
                   onCustomerCreated(result.customer);
                 },
-                variant: 'primary',
+                variant: 'secondary',
+              },
+              {
+                label: 'Add Another',
+                onClick: () => {
+                  // Reopen the modal for adding another customer
+                  if (onAddAnother) {
+                    onAddAnother();
+                  } else {
+                    // Fallback: just show toast
+                    toast.success('Ready to add another customer!');
+                  }
+                },
+                variant: 'secondary',
               },
             ],
           }
@@ -127,7 +156,7 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       address: '',
       city: '',
       country: 'Tanzania',
-      loyaltyLevel: 'bronze',
+      loyaltyLevel: 'interested',
       notes: ''
     });
     setErrors({});

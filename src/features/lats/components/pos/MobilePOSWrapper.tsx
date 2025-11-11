@@ -205,17 +205,26 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
               const loyaltyPoints = customer.loyalty_points || 0;
               
               // Determine loyalty tier
-              let loyaltyTier = 'bronze';
-              let tierColor = 'orange';
+              let loyaltyTier = 'interested';
+              let tierColor = 'gray';
               if (loyaltyPoints >= 1000) {
-                loyaltyTier = 'platinum';
+                loyaltyTier = 'vip';
                 tierColor = 'purple';
-              } else if (loyaltyPoints >= 500) {
-                loyaltyTier = 'gold';
+              } else if (loyaltyPoints >= 700) {
+                loyaltyTier = 'premium';
                 tierColor = 'yellow';
+              } else if (loyaltyPoints >= 400) {
+                loyaltyTier = 'regular';
+                tierColor = 'blue';
               } else if (loyaltyPoints >= 200) {
-                loyaltyTier = 'silver';
-                tierColor = 'gray';
+                loyaltyTier = 'active';
+                tierColor = 'green';
+              } else if (loyaltyPoints >= 100) {
+                loyaltyTier = 'payment_customer';
+                tierColor = 'teal';
+              } else if (loyaltyPoints >= 50) {
+                loyaltyTier = 'engaged';
+                tierColor = 'indigo';
               }
 
               return {
@@ -526,7 +535,7 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                       {selectedCustomer.name.charAt(0)}
                     </div>
                     <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-sm ${
-                      selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold'
+                      selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium'
                         ? 'bg-amber-500' 
                         : 'bg-emerald-500'
                     }`}>
@@ -541,11 +550,11 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                     </div>
                     <div className="flex items-center gap-2 mt-2">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold'
+                        selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium'
                           ? 'bg-amber-100 text-amber-800 border-2 border-amber-300' 
                           : 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300'
                       }`}>
-                        {selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'platinum' || selectedCustomer.loyaltyLevel === 'gold' ? 'VIP' : 'Active'}
+                        {selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium' ? 'VIP' : 'Active'}
                       </span>
                       <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-800 bg-white px-3 py-1 rounded-full border-2 border-gray-200 shadow-sm">
                         <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
@@ -604,29 +613,35 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
         
         {/* Cart Summary Footer */}
         {cartItems.length > 0 && (
-          <div className="border-t border-gray-200 bg-white flex-shrink-0 pb-safe">
+          <div className="border-t-2 border-gray-300 bg-white flex-shrink-0 pb-safe shadow-lg">
             <div className="p-4 space-y-3">
               {/* Summary */}
-              <div className="space-y-2">
+              <div className="bg-gradient-to-br from-gray-50 to-blue-50 border-2 border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
+                {/* Quantity */}
+                <div className="flex justify-between items-center pb-2 border-b border-gray-300">
+                  <span className="text-base font-bold text-gray-900">Quantity:</span>
+                  <span className="text-lg font-extrabold text-gray-900">{totalItems}</span>
+                </div>
+                
                 {/* Subtotal */}
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'}):</span>
-                  <span className="font-medium">TZS {totalAmount.toLocaleString()}</span>
+                <div className="flex justify-between items-center pb-2 border-b border-gray-300">
+                  <span className="text-base font-bold text-gray-900">Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'}):</span>
+                  <span className="text-lg font-extrabold text-gray-900">TZS {totalAmount.toLocaleString()}</span>
                 </div>
                 
                 {/* Discount Section */}
                 <div className="space-y-2">
                   {discountAmount > 0 ? (
-                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between p-3 bg-green-100 border-2 border-green-300 rounded-lg shadow-sm">
                       <div className="flex items-center gap-2">
-                        <div className="p-1 bg-green-100 rounded">
-                          <Percent className="w-4 h-4 text-green-600" />
+                        <div className="p-1.5 bg-green-200 rounded-lg">
+                          <Percent className="w-5 h-5 text-green-700" />
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-green-800">
+                          <div className="text-sm font-extrabold text-green-900">
                             Discount Applied
                           </div>
-                          <div className="text-xs text-green-600">-TZS {discountAmount.toLocaleString()}</div>
+                          <div className="text-sm font-bold text-green-700">-TZS {discountAmount.toLocaleString()}</div>
                         </div>
                       </div>
                       <button
@@ -635,10 +650,10 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                           // Clear discount - call parent function if available
                           toast.success('Discount removed');
                         }}
-                        className="p-1 text-red-600 hover:text-red-700 hover:bg-red-100 rounded transition-colors"
+                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-100 rounded-lg transition-colors"
                         title="Remove Discount"
                       >
-                        <XCircle className="w-4 h-4" />
+                        <XCircle className="w-5 h-5" />
                       </button>
                     </div>
                   ) : (
@@ -647,37 +662,37 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                         playClickSound();
                         onShowDiscountModal();
                       }}
-                      className="w-full flex items-center justify-center gap-2 p-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-purple-400 hover:text-purple-600 hover:bg-purple-50 transition-all duration-200"
+                      className="w-full flex items-center justify-center gap-2 p-4 border-3 border-dashed border-purple-300 rounded-xl text-purple-700 hover:border-purple-500 hover:text-purple-800 hover:bg-purple-100 transition-all duration-200 shadow-sm bg-purple-50"
                     >
-                      <div className="p-1 bg-gray-100 rounded">
-                        <Percent className="w-4 h-4" />
+                      <div className="p-1.5 bg-purple-200 rounded-lg">
+                        <Percent className="w-5 h-5" />
                       </div>
-                      <span className="text-sm font-medium">Add Discount</span>
+                      <span className="text-base font-extrabold">Add Discount</span>
                     </button>
                   )}
                 </div>
 
                 {/* Tax/VAT Line */}
                 {isTaxEnabled && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Tax (VAT {taxRate}%):</span>
-                    <span className="font-medium">TZS {taxAmount.toLocaleString()}</span>
+                  <div className="flex justify-between items-center pb-2 border-b border-gray-300">
+                    <span className="text-base font-bold text-gray-900">Tax (VAT {taxRate}%):</span>
+                    <span className="text-lg font-extrabold text-gray-900">TZS {taxAmount.toLocaleString()}</span>
                   </div>
                 )}
                 
                 {/* Total */}
-                <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-2">
-                  <span>Total:</span>
-                  <span className="text-green-600">TZS {finalAmount.toLocaleString()}</span>
+                <div className="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-3 shadow-md">
+                  <span className="text-xl font-extrabold text-gray-900">Total:</span>
+                  <span className="text-2xl font-black text-green-600">TZS {finalAmount.toLocaleString()}</span>
                 </div>
               </div>
 
               {/* Customer Warning */}
               {!selectedCustomer && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm text-amber-800">
-                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                    <span className="font-medium">Please select a customer to proceed</span>
+                <div className="p-4 bg-gradient-to-r from-amber-100 to-orange-100 border-3 border-amber-400 rounded-xl shadow-md">
+                  <div className="flex items-center gap-3 text-base text-amber-900">
+                    <div className="w-3 h-3 bg-amber-600 rounded-full animate-pulse"></div>
+                    <span className="font-extrabold">Please select a customer to proceed</span>
                   </div>
                 </div>
               )}
@@ -1271,7 +1286,7 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                 View Receipts
               </button>
 
-              {currentUser?.role === 'admin' && (
+              {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('view_settings') || currentUser?.role === 'admin') && (
                 <button
                   onClick={() => {
                     playClickSound();

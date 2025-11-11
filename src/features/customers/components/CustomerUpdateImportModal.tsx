@@ -1062,7 +1062,6 @@ Jane Smith,jane@example.com,+255987654321,female,Arusha,+255987654321,Another cu
           </div>
         </div>
       </div>
-        </div>
       </div>
     </>
   );

@@ -230,92 +230,142 @@ const DEFAULT_TRANSLATIONS: TranslationKey = {
   'common.availableUp': 'Available Up',
   'common.availableUpon': 'Available Upon',
   'common.availableVersus': 'Available Versus',
-  'common.availableWorth': 'Available Worth'
+  'common.availableWorth': 'Available Worth',
+  
+  // Settings
+  'settings.title': 'Settings',
+  'settings.posSettings': 'POS Settings',
+  'settings.configure': 'Configure your point of sale system',
+  'settings.searchSettings': 'Search settings...',
+  'settings.noSettingsFound': 'No settings found matching',
+  'settings.saveSettings': 'Save Settings',
+  'settings.saving': 'Saving...',
+  'settings.general': 'General',
+  'settings.pricing': 'Pricing & Discounts',
+  'settings.receipt': 'Receipts',
+  'settings.notifications': 'Notifications',
+  'settings.features': 'Features',
+  'settings.permissions': 'Users & Permissions',
+  
+  // General Settings
+  'general.businessInfo': 'Business Information',
+  'general.businessInfoHelp': 'Enter your business details that will appear on receipts, invoices, and other documents.',
+  'general.businessName': 'Business Name',
+  'general.businessPhone': 'Business Phone',
+  'general.businessEmail': 'Business Email',
+  'general.businessWebsite': 'Business Website',
+  'general.businessAddress': 'Business Address',
+  'general.uploadLogo': 'Upload Logo',
+  'general.changeLogo': 'Change',
+  'general.uploading': 'Uploading...',
+  
+  // Interface Settings
+  'interface.title': 'Interface Settings',
+  'interface.help': 'Control the visual appearance and language settings of your POS system.',
+  'interface.theme': 'Theme',
+  'interface.light': 'Light',
+  'interface.dark': 'Dark',
+  'interface.auto': 'Auto',
+  'interface.language': 'Language',
+  'interface.english': 'English',
+  'interface.swahili': 'Swahili',
+  'interface.french': 'French',
+  'interface.fontSize': 'Font Size',
+  'interface.tiny': 'Tiny',
+  'interface.extraSmall': 'Extra Small',
+  'interface.small': 'Small',
+  'interface.medium': 'Medium',
+  'interface.large': 'Large',
+  'interface.currency': 'Currency',
+  'interface.dateFormat': 'Date Format',
+  'interface.timeFormat': 'Time Format',
+  'interface.12hour': '12-hour',
+  'interface.24hour': '24-hour'
 };
 
 // Swahili translations
 const SWAHILI_TRANSLATIONS: TranslationKey = {
-  // Common
-  'common.save': 'Hifadhi',
-  'common.cancel': 'Ghairi',
-  'common.delete': 'Futa',
-  'common.edit': 'Hariri',
+  // Common (Simple Dar Street Swahili)
+  'common.save': 'Save',
+  'common.cancel': 'Cancel',
+  'common.delete': 'Delete',
+  'common.edit': 'Edit',
   'common.add': 'Ongeza',
   'common.search': 'Tafuta',
-  'common.filter': 'Chuja',
-  'common.clear': 'Futa',
+  'common.filter': 'Filter',
+  'common.clear': 'Clear',
   'common.loading': 'Inapakia...',
-  'common.error': 'Hitilafu',
-  'common.success': 'Mafanikio',
-  'common.warning': 'Onyo',
-  'common.info': 'Maelezo',
+  'common.error': 'Kuna tatizo',
+  'common.success': 'Imefanikiwa',
+  'common.warning': 'Angalia',
+  'common.info': 'Info',
   'common.yes': 'Ndiyo',
   'common.no': 'Hapana',
   'common.ok': 'Sawa',
   'common.close': 'Funga',
   'common.back': 'Rudi',
-  'common.next': 'Ifuatayo',
-  'common.previous': 'Iliyotangulia',
-  'common.submit': 'Wasilisha',
-  'common.reset': 'Weka upya',
-  'common.refresh': 'Onyesha upya',
-  'common.export': 'Hamisha nje',
-  'common.import': 'Hamisha ndani',
-  'common.download': 'Pakua',
-  'common.upload': 'Pakia',
-  'common.print': 'Chapa',
-  'common.copy': 'Nakili',
-  'common.paste': 'Bandika',
+  'common.next': 'Next',
+  'common.previous': 'Previous',
+  'common.submit': 'Submit',
+  'common.reset': 'Reset',
+  'common.refresh': 'Refresh',
+  'common.export': 'Export',
+  'common.import': 'Import',
+  'common.download': 'Download',
+  'common.upload': 'Upload',
+  'common.print': 'Print',
+  'common.copy': 'Copy',
+  'common.paste': 'Paste',
   'common.select': 'Chagua',
   'common.selectAll': 'Chagua Zote',
-  'common.deselectAll': 'Ondoa Uchaguzi Zote',
-  'common.actions': 'Vitendo',
-  'common.status': 'Hali',
+  'common.deselectAll': 'Ondoa Zote',
+  'common.actions': 'Actions',
+  'common.status': 'Status',
   'common.date': 'Tarehe',
-  'common.time': 'Muda',
-  'common.quantity': 'Kiasi',
+  'common.time': 'Saa',
+  'common.quantity': 'Idadi',
   'common.price': 'Bei',
   'common.total': 'Jumla',
-  'common.subtotal': 'Jumla ndogo',
-  'common.tax': 'Kodi',
-  'common.discount': 'Punguzo',
+  'common.subtotal': 'Jumla Ndogo',
+  'common.tax': 'Tax',
+  'common.discount': 'Discount',
   'common.amount': 'Kiasi',
-  'common.currency': 'Sarafu',
-  'common.percentage': 'Asilimia',
-  'common.unit': 'Kimoja',
-  'common.units': 'Vimoja',
-  'common.item': 'Kipengele',
-  'common.items': 'Vipengele',
+  'common.currency': 'Currency',
+  'common.percentage': 'Percent',
+  'common.unit': 'Unit',
+  'common.units': 'Units',
+  'common.item': 'Item',
+  'common.items': 'Items',
   'common.product': 'Bidhaa',
   'common.products': 'Bidhaa',
-  'common.category': 'Kategoria',
-  'common.categories': 'Kategoria',
+  'common.category': 'Category',
+  'common.categories': 'Categories',
 
-  'common.supplier': 'Mtoaji',
-  'common.suppliers': 'Watoaji',
-  'common.customer': 'Mteja',
-  'common.customers': 'Wateja',
-  'common.order': 'Oda',
-  'common.orders': 'Oda',
-  'common.sale': 'Uuzaji',
-  'common.sales': 'Uuzaji',
-  'common.invoice': 'Fakturi',
-  'common.invoices': 'Fakturi',
-  'common.receipt': 'Risiti',
-  'common.receipts': 'Risiti',
-  'common.payment': 'Malipo',
-  'common.payments': 'Malipo',
-  'common.stock': 'Hifadhi',
-  'common.inventory': 'Orodha ya bidhaa',
-  'common.warehouse': 'Ghala',
-  'common.warehouses': 'Maghala',
+  'common.supplier': 'Supplier',
+  'common.suppliers': 'Suppliers',
+  'common.customer': 'Customer',
+  'common.customers': 'Customers',
+  'common.order': 'Order',
+  'common.orders': 'Orders',
+  'common.sale': 'Sale',
+  'common.sales': 'Sales',
+  'common.invoice': 'Invoice',
+  'common.invoices': 'Invoices',
+  'common.receipt': 'Receipt',
+  'common.receipts': 'Receipts',
+  'common.payment': 'Payment',
+  'common.payments': 'Payments',
+  'common.stock': 'Stock',
+  'common.inventory': 'Inventory',
+  'common.warehouse': 'Store',
+  'common.warehouses': 'Stores',
   'common.location': 'Mahali',
   'common.locations': 'Mahali',
   'common.sku': 'SKU',
-  'common.barcode': 'Msimbo wa mstari',
+  'common.barcode': 'Barcode',
   'common.description': 'Maelezo',
-  'common.notes': 'Maelezo',
-  'common.remarks': 'Maoni',
+  'common.notes': 'Notes',
+  'common.remarks': 'Remarks',
   'common.reason': 'Sababu',
   'common.reference': 'Marejeleo',
   'common.created': 'Iliundwa',
@@ -456,7 +506,85 @@ const SWAHILI_TRANSLATIONS: TranslationKey = {
   'common.availableUp': 'Inapatikana juu',
   'common.availableUpon': 'Inapatikana juu ya',
   'common.availableVersus': 'Inapatikana dhidi ya',
-  'common.availableWorth': 'Inapatikana thamani ya'
+  'common.availableWorth': 'Inapatikana thamani ya',
+  
+  // Settings (Simple Dar es Salaam Swahili)
+  'settings.title': 'Settings',
+  'settings.posSettings': 'POS Settings',
+  'settings.configure': 'Weka settings za duka lako',
+  'settings.searchSettings': 'Tafuta settings...',
+  'settings.noSettingsFound': 'Hakuna settings',
+  'settings.saveSettings': 'Save',
+  'settings.saving': 'Inahifadhi...',
+  'settings.general': 'General',
+  'settings.pricing': 'Bei na Discounts',
+  'settings.receipt': 'Receipt',
+  'settings.notifications': 'Notifications',
+  'settings.features': 'Features',
+  'settings.permissions': 'Users na Permissions',
+  
+  // General Settings (Street Swahili)
+  'general.businessInfo': 'Taarifa za Duka',
+  'general.businessInfoHelp': 'Weka jina la duka na taarifa zote hapa.',
+  'general.businessName': 'Jina la Duka',
+  'general.businessPhone': 'Namba ya Simu',
+  'general.businessEmail': 'Email',
+  'general.businessWebsite': 'Website',
+  'general.businessAddress': 'Address ya Duka',
+  'general.uploadLogo': 'Weka Logo',
+  'general.changeLogo': 'Badilisha',
+  'general.uploading': 'Inapakia...',
+  
+  // Interface Settings (Mixed - technical in English)
+  'interface.title': 'Display Settings',
+  'interface.help': 'Badilisha muonekano wa screen yako.',
+  'interface.theme': 'Rangi',
+  'interface.light': 'Mwangaza',
+  'interface.dark': 'Dark',
+  'interface.auto': 'Auto',
+  'interface.language': 'Lugha',
+  'interface.english': 'English',
+  'interface.swahili': 'Swahili',
+  'interface.french': 'French',
+  'interface.fontSize': 'Size ya Maneno',
+  'interface.tiny': 'Ndogo Sana',
+  'interface.extraSmall': 'Ndogo Kidogo',
+  'interface.small': 'Ndogo',
+  'interface.medium': 'Wastani',
+  'interface.large': 'Kubwa',
+  'interface.currency': 'Currency',
+  'interface.dateFormat': 'Format ya Tarehe',
+  'interface.timeFormat': 'Format ya Saa',
+  'interface.12hour': '12 Saa',
+  'interface.24hour': '24 Saa',
+  
+  // Features Tab
+  'features.delivery': 'Delivery',
+  'features.loyalty': 'Loyalty Program',
+  'features.customerProfiles': 'Customer Profiles',
+  'features.paymentTracking': 'Payment Tracking',
+  'features.dynamicPricing': 'Dynamic Pricing',
+  'features.enable': 'Enable',
+  'features.disable': 'Disable',
+  
+  // Receipt Settings
+  'receipt.template': 'Receipt Template',
+  'receipt.logo': 'Logo',
+  'receipt.showLogo': 'Show Logo',
+  'receipt.businessInfo': 'Business Info',
+  'receipt.items': 'Items',
+  'receipt.totals': 'Totals',
+  'receipt.footerMessage': 'Footer Message',
+  'receipt.autoprint': 'Auto Print',
+  
+  // Notifications
+  'notifications.whatsapp': 'WhatsApp',
+  'notifications.sms': 'SMS',
+  'notifications.email': 'Email',
+  'notifications.autoSend': 'Auto Send',
+  'notifications.enabled': 'Enabled',
+  'notifications.message': 'Message',
+  'notifications.template': 'Template'
 };
 
 // All translations
@@ -468,11 +596,18 @@ const TRANSLATIONS: Translations = {
 // Current locale
 let currentLocale = 'en';
 
+// Listeners for locale changes
+const localeChangeListeners: Set<() => void> = new Set();
+
 /**
  * Set the current locale
  */
 export function setLocale(locale: string) {
-  currentLocale = locale;
+  if (currentLocale !== locale) {
+    currentLocale = locale;
+    // Notify all listeners
+    localeChangeListeners.forEach(listener => listener());
+  }
 }
 
 /**
@@ -480,6 +615,16 @@ export function setLocale(locale: string) {
  */
 export function getLocale(): string {
   return currentLocale;
+}
+
+/**
+ * Subscribe to locale changes (for React components)
+ */
+export function subscribeToLocaleChange(listener: () => void): () => void {
+  localeChangeListeners.add(listener);
+  return () => {
+    localeChangeListeners.delete(listener);
+  };
 }
 
 /**

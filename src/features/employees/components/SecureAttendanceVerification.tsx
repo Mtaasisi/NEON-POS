@@ -302,7 +302,7 @@ const SecureAttendanceVerification: React.FC<SecureAttendanceVerificationProps> 
       {/* Backdrop - respects sidebar and topbar */}
       <div 
         className="fixed bg-black/50"
-        onClick={onClose}
+        onClick={onVerificationFailed}
         style={{
           left: 'var(--sidebar-width, 0px)',
           top: 'var(--topbar-height, 64px)',
@@ -517,7 +517,6 @@ const SecureAttendanceVerification: React.FC<SecureAttendanceVerificationProps> 
           </div>
         </div>
       )}
-        </div>
       </div>
     </>
   );

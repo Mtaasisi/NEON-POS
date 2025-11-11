@@ -13,6 +13,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { getAllBranches, getUserBranchAssignments } from '../../../lib/userBranchApi';
 import { ALL_PERMISSIONS, ROLE_DEFAULT_PERMISSIONS } from './CreateUserModal';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 // Validation schema for editing
 const editUserSchema = z.object({
@@ -77,6 +78,9 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
   const [userBranchAssignments, setUserBranchAssignments] = useState<string[]>([]);
   const [showPermissions, setShowPermissions] = useState(false);
   const [customPermissions, setCustomPermissions] = useState(false);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   const {
     control,
@@ -283,17 +287,7 @@ const EditUserModal: React.FC<EditUserModalProps> = ({
     return roleOption?.description || '';
   };
 
-  // Toggle permission
-  const togglePermission = (permission: string) => {
-    const currentPermissions = watchedValues.permissions || [];
-    if (currentPermissions.includes(permission)) {
-      setValue('permissions', currentPermissions.filter(p => p !== permission), { shouldDirty: true });
-    } else {
-      setValue('permissions', [...currentPermissions, permission], { shouldDirty: true });
-    }
-  };
-
-  // Check if permission is selected
+  // Check if permission is selected (for legacy permission section)
   const hasPermission = (permission: string) => {
     return (watchedValues.permissions || []).includes(permission);
   };

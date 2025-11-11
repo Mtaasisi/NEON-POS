@@ -344,7 +344,7 @@ export const createStockTransfer = async (
     // Validate product/variant exists and has enough available stock
     const { data: variantData, error: variantError } = await supabase
       .from('lats_product_variants')
-      .select('quantity, reserved_quantity, branch_id, variant_name, sku')
+      .select('quantity, reserved_quantity, branch_id, variant_name, sku, is_parent, variant_type')
       .eq('id', transfer.entity_id)
       .single();
 
@@ -353,12 +353,29 @@ export const createStockTransfer = async (
     }
 
     // Calculate available stock (total - reserved)
-    const availableStock = variantData.quantity - (variantData.reserved_quantity || 0);
+    // For parent variants, calculate from children
+    let totalStock = variantData.quantity;
+    let reservedStock = variantData.reserved_quantity || 0;
+    
+    if (variantData.is_parent || variantData.variant_type === 'parent') {
+      const { data: children } = await supabase
+        .from('lats_product_variants')
+        .select('quantity, reserved_quantity')
+        .eq('parent_variant_id', transfer.entity_id)
+        .eq('is_active', true);
+      
+      if (children && children.length > 0) {
+        totalStock = children.reduce((sum, child) => sum + (child.quantity || 0), 0);
+        reservedStock = children.reduce((sum, child) => sum + (child.reserved_quantity || 0), 0);
+      }
+    }
+    
+    const availableStock = totalStock - reservedStock;
 
     if (availableStock < transfer.quantity) {
       throw new Error(
-        `Insufficient available stock. Total: ${variantData.quantity}, ` +
-        `Reserved: ${variantData.reserved_quantity || 0}, ` +
+        `Insufficient available stock. Total: ${totalStock}, ` +
+        `Reserved: ${reservedStock}, ` +
         `Available: ${availableStock}, Requested: ${transfer.quantity}`
       );
     }
@@ -411,7 +428,7 @@ export const createStockTransfer = async (
     const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', newTransfer.from_branch_id).single(),
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', newTransfer.to_branch_id).single(),
-      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', newTransfer.entity_id).single()
+      supabase.from('lats_product_variants').select('id, name, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', newTransfer.entity_id).single()  // 🔧 FIX: Select both name columns
     ]);
 
     // Fetch product for variant
@@ -506,7 +523,7 @@ export const approveStockTransfer = async (
     const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
-      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+      supabase.from('lats_product_variants').select('id, name, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()  // 🔧 FIX: Select both name columns
     ]);
 
     // Fetch product for variant
@@ -593,7 +610,7 @@ export const rejectStockTransfer = async (
     const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
-      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+      supabase.from('lats_product_variants').select('id, name, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()  // 🔧 FIX: Select both name columns
     ]);
 
     // Fetch product for variant
@@ -680,7 +697,7 @@ export const markTransferInTransit = async (
     const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
-      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+      supabase.from('lats_product_variants').select('id, name, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()  // 🔧 FIX: Select both name columns
     ]);
 
     // Fetch product for variant
@@ -741,9 +758,9 @@ export const completeStockTransfer = async (
       throw new Error('This transfer has already been completed');
     }
 
-    if (currentTransfer.status !== 'in_transit' && currentTransfer.status !== 'approved') {
+    if (currentTransfer.status !== 'in_transit') {
       console.error('❌ Invalid status for completion:', currentTransfer.status);
-      throw new Error(`Transfer must be approved or in_transit to complete. Current status: ${currentTransfer.status}`);
+      throw new Error(`Transfer must be marked as "in_transit" (shipped) before it can be completed. Current status: ${currentTransfer.status}. Please ask the sender to mark it as shipped first.`);
     }
 
     // Call the comprehensive database function
@@ -762,6 +779,15 @@ export const completeStockTransfer = async (
 
     console.log('✅ Transfer completed successfully:', result);
 
+    // 🔄 Emit event to refresh inventory after transfer completion
+    latsEventBus.emit('lats:stock.updated', {
+      action: 'transfer_completed',
+      transferId: transferId,
+      sourceVariantId: result.source_variant_id,
+      destinationVariantId: result.destination_variant_id,
+      quantity: result.quantity_transferred
+    });
+
     // Fetch the updated transfer - FIXED: Remove PostgREST relationship syntax
     const { data: updatedTransfer, error: fetchError } = await supabase
       .from('branch_transfers')
@@ -778,7 +804,7 @@ export const completeStockTransfer = async (
     const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
-      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+      supabase.from('lats_product_variants').select('id, name, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()  // 🔧 FIX: Select both name columns
     ]);
 
     // Fetch product for variant
@@ -898,7 +924,7 @@ export const cancelStockTransfer = async (
     const [fromBranchResult, toBranchResult, variantResult] = await Promise.all([
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.from_branch_id).single(),
       supabase.from('store_locations').select('id, name, code, city, is_active').eq('id', updatedTransfer.to_branch_id).single(),
-      supabase.from('lats_product_variants').select('id, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()
+      supabase.from('lats_product_variants').select('id, name, variant_name, sku, quantity, reserved_quantity, product_id').eq('id', updatedTransfer.entity_id).single()  // 🔧 FIX: Select both name columns
     ]);
 
     // Fetch product for variant
@@ -1000,7 +1026,7 @@ export const getAvailableStock = async (variantId: string): Promise<number> => {
   try {
     const { data, error } = await supabase
       .from('lats_product_variants')
-      .select('quantity, reserved_quantity')
+      .select('quantity, reserved_quantity, is_parent, variant_type')
       .eq('id', variantId)
       .single();
 
@@ -1008,7 +1034,24 @@ export const getAvailableStock = async (variantId: string): Promise<number> => {
       return 0;
     }
 
-    return data.quantity - (data.reserved_quantity || 0);
+    // For parent variants, calculate from children
+    let totalStock = data.quantity;
+    let reservedStock = data.reserved_quantity || 0;
+    
+    if (data.is_parent || data.variant_type === 'parent') {
+      const { data: children } = await supabase
+        .from('lats_product_variants')
+        .select('quantity, reserved_quantity')
+        .eq('parent_variant_id', variantId)
+        .eq('is_active', true);
+      
+      if (children && children.length > 0) {
+        totalStock = children.reduce((sum, child) => sum + (child.quantity || 0), 0);
+        reservedStock = children.reduce((sum, child) => sum + (child.reserved_quantity || 0), 0);
+      }
+    }
+
+    return totalStock - reservedStock;
   } catch (error) {
     console.error('❌ Failed to get available stock:', error);
     return 0;

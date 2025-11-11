@@ -13,7 +13,7 @@ import { toast } from 'react-hot-toast';
 
 // Import tab components
 import CategoriesTab from '../components/inventory-management/CategoriesTab';
-import SuppliersTab from '../components/inventory-management/SuppliersTab';
+import EnhancedSupplierManagementPage from '../../settings/pages/EnhancedSupplierManagementPage';
 import StoreLocationsTab from '../components/inventory-management/StoreLocationsTab';
 import StorageRoomManagementPage from './StorageRoomManagementPage';
 import SpecificationsTab from '../components/inventory-management/SpecificationsTab';
@@ -90,7 +90,13 @@ const InventoryManagementPage: React.FC = () => {
     }
 
     // Check if user has inventory management permissions
-    if (!['admin', 'customer-care'].includes(currentUser.role)) {
+    // Now checks user.permissions array first, then falls back to role
+    const hasAccess = currentUser.permissions?.includes('all') || 
+                      currentUser.permissions?.includes('view_inventory') ||
+                      currentUser.permissions?.includes('edit_settings') ||
+                      ['admin', 'customer-care'].includes(currentUser.role);
+    
+    if (!hasAccess) {
       navigate('/dashboard');
       return;
     }
@@ -112,7 +118,7 @@ const InventoryManagementPage: React.FC = () => {
       case 'categories':
         return <CategoriesTab />;
       case 'suppliers':
-        return <SuppliersTab />;
+        return <EnhancedSupplierManagementPage embedded={true} />;
       case 'store-locations':
         return <StoreLocationsTab />;
       case 'storage-room':

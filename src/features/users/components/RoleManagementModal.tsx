@@ -10,6 +10,7 @@ import {
   AlertTriangle, CheckCircle2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 // Validation schema
 const roleSchema = z.object({
@@ -48,6 +49,9 @@ const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
   const [isCreatingRole, setIsCreatingRole] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   const {
     control,

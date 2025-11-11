@@ -7,7 +7,7 @@ import { businessInfoService, BusinessInfo } from '../lib/businessInfoService';
  */
 export function useBusinessInfo() {
   const [businessInfo, setBusinessInfo] = useState<BusinessInfo>({
-    name: 'My Store',
+    name: 'inauzwa',
     address: 'Dar es Salaam, Tanzania',
     phone: '+255 123 456 789',
     email: undefined,

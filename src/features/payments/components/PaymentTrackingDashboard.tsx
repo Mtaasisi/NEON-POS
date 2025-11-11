@@ -1,9 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
-import SearchBar from '../../shared/components/ui/SearchBar';
-import GlassSelect from '../../shared/components/ui/GlassSelect';
 import { 
   CreditCard, DollarSign, TrendingUp, BarChart3, Wallet, 
   RefreshCw, ChevronRight, Download, Activity, ArrowUpDown,
@@ -980,134 +976,123 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Payments Overview</h1>
-          <p className="text-gray-600">Complete summary of all payment activities across your business</p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={fetchPaymentData}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
-          <button
-            onClick={onExport}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <Download size={16} />
-            Export
-          </button>
-        </div>
-      </div>
-
-      {/* Financial Overview */}
+      {/* Financial Overview - Modern Widget Style */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <GlassCard className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-green-600">Total Revenue</p>
-              <p className="text-2xl font-bold text-green-900">{formatMoney(chartData.totalRevenue || metrics.totalAmount)}</p>
-              <p className="text-xs text-green-600 mt-1">{chartData.totalPayments || metrics.totalPayments} transactions</p>
-            </div>
-            <div className="p-3 bg-green-500 rounded-lg">
-              <DollarSign className="w-6 h-6 text-white" />
+        {/* Total Revenue Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-start justify-between mb-3">
+            <div className="p-2.5 bg-emerald-50 rounded-xl">
+              <DollarSign className="w-5 h-5 text-emerald-600" />
             </div>
           </div>
-        </GlassCard>
+          <div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
+            <p className="text-3xl font-bold text-gray-900">{formatMoney(chartData.totalRevenue || metrics.totalAmount)}</p>
+            <p className="text-xs text-gray-500 mt-2">{chartData.totalPayments || metrics.totalPayments} transactions</p>
+          </div>
+        </div>
 
-        <GlassCard className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-blue-600">Completed Payments</p>
-              <p className="text-2xl font-bold text-blue-900">{formatMoney(metrics.completedAmount)}</p>
-              <p className="text-xs text-blue-600 mt-1">{metrics.successRate}% success rate</p>
+        {/* Completed Payments Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-start justify-between mb-3">
+            <div className="p-2.5 bg-blue-50 rounded-xl">
+              <CheckCircle className="w-5 h-5 text-blue-600" />
             </div>
-            <div className="p-3 bg-blue-500 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-white" />
+            <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50">
+              <span className="text-sm font-semibold text-emerald-600">{metrics.successRate}%</span>
             </div>
           </div>
-        </GlassCard>
+          <div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Completed</p>
+            <p className="text-3xl font-bold text-gray-900">{formatMoney(metrics.completedAmount)}</p>
+            <p className="text-xs text-gray-500 mt-2">Success rate</p>
+          </div>
+        </div>
 
-        <GlassCard className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-orange-600">Pending Payments</p>
-              <p className="text-2xl font-bold text-orange-900">{formatMoney(metrics.pendingAmount)}</p>
-              <p className="text-xs text-orange-600 mt-1">Awaiting confirmation</p>
-            </div>
-            <div className="p-3 bg-orange-500 rounded-lg">
-              <Clock className="w-6 h-6 text-white" />
+        {/* Pending Payments Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-start justify-between mb-3">
+            <div className="p-2.5 bg-orange-50 rounded-xl">
+              <Clock className="w-5 h-5 text-orange-600" />
             </div>
           </div>
-        </GlassCard>
+          <div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Pending</p>
+            <p className="text-3xl font-bold text-gray-900">{formatMoney(metrics.pendingAmount)}</p>
+            <p className="text-xs text-gray-500 mt-2">Awaiting confirmation</p>
+          </div>
+        </div>
 
-        <GlassCard className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-purple-600">Processing Fees</p>
-              <p className="text-2xl font-bold text-purple-900">{formatMoney(metrics.totalFees)}</p>
-              <p className="text-xs text-purple-600 mt-1">Total fees collected</p>
-            </div>
-            <div className="p-3 bg-purple-500 rounded-lg">
-              <CreditCard className="w-6 h-6 text-white" />
+        {/* Processing Fees Card */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-start justify-between mb-3">
+            <div className="p-2.5 bg-purple-50 rounded-xl">
+              <CreditCard className="w-5 h-5 text-purple-600" />
             </div>
           </div>
-        </GlassCard>
+          <div>
+            <p className="text-sm font-medium text-gray-600 mb-1">Processing Fees</p>
+            <p className="text-3xl font-bold text-gray-900">{formatMoney(metrics.totalFees)}</p>
+            <p className="text-xs text-gray-500 mt-2">Total fees collected</p>
+          </div>
+        </div>
       </div>
 
-      {/* System Status */}
-      <GlassCard className="p-4">
+      {/* System Status - Modern Widget Style */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span className="text-sm font-medium text-gray-700">Database Status: All Systems Connected</span>
+            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse"></div>
+            <span className="text-sm font-medium text-gray-900">All Systems Connected</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-gray-600">
-            <span className="flex items-center gap-1">
-              <Package className="w-4 h-4" />
-              {chartData.totalPayments} Total Transactions
+            <span className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-gray-400" />
+              <span className="font-medium text-gray-900">{chartData.totalPayments}</span>
+              <span className="text-gray-500">Transactions</span>
             </span>
-            <span className="flex items-center gap-1">
-              <Users className="w-4 h-4" />
-              {paymentProviders.length} Providers
+            <span className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-gray-400" />
+              <span className="font-medium text-gray-900">{paymentProviders.length}</span>
+              <span className="text-gray-500">Providers</span>
             </span>
-            <span className="flex items-center gap-1">
-              <Wallet className="w-4 h-4" />
-              {financeAccounts.length} Accounts
+            <span className="flex items-center gap-2">
+              <Wallet className="w-4 h-4 text-gray-400" />
+              <span className="font-medium text-gray-900">{financeAccounts.length}</span>
+              <span className="text-gray-500">Accounts</span>
             </span>
-            <span className="flex items-center gap-1">
-              <Building className="w-4 h-4" />
-              {availableCurrencies.length} Currencies
+            <span className="flex items-center gap-2">
+              <Building className="w-4 h-4 text-gray-400" />
+              <span className="font-medium text-gray-900">{availableCurrencies.length}</span>
+              <span className="text-gray-500">Currencies</span>
             </span>
           </div>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* Comprehensive Charts Section */}
+      {/* Comprehensive Charts Section - Modern Widget Style */}
       <div className="grid grid-cols-1 gap-6">
 
         {/* Payment Status Bar Chart */}
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Payment Status</h3>
-              <p className="text-sm text-gray-600">Amount by status</p>
+              <div className="flex items-center gap-2 mb-1">
+                <Activity className="w-5 h-5 text-blue-600" />
+                <h3 className="text-sm font-medium text-gray-900">Payment Status</h3>
+              </div>
+              <p className="text-xs text-gray-500">Amount by status</p>
             </div>
-            <Activity className="w-5 h-5 text-orange-600" />
           </div>
           <div className="h-64">
             {chartData.statusData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData.statusData} layout="horizontal">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                   <XAxis 
                     type="number"
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
@@ -1115,24 +1100,25 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                   <YAxis 
                     type="category"
                     dataKey="status"
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any, name, props) => [
                       formatMoney(value), 
                       `${props.payload.status} (${props.payload.count} transactions)`
                     ]}
                   />
-                  <Bar dataKey="amount" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="amount" fill="#3B82F6" radius={[0, 8, 8, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -1143,20 +1129,22 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
               </div>
             )}
           </div>
-        </GlassCard>
+        </div>
       </div>
 
-      {/* Additional Comprehensive Charts */}
+      {/* Additional Comprehensive Charts - Modern Widget Style */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Payment Methods Pie Chart */}
         {chartData.methodsData.length > 0 && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Payment Methods</h3>
-                <p className="text-sm text-gray-600">Distribution by method</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <Wallet className="w-5 h-5 text-purple-600" />
+                  <h3 className="text-sm font-medium text-gray-900">Payment Methods</h3>
+                </div>
+                <p className="text-xs text-gray-500">Distribution by method</p>
               </div>
-              <PieChartIcon className="w-5 h-5 text-blue-600" />
             </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
@@ -1165,10 +1153,9 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                     data={chartData.methodsData}
                     cx="50%"
                     cy="50%"
-                    labelLine={false}
-                    label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                    innerRadius={50}
                     outerRadius={80}
-                    fill="#8884d8"
+                    paddingAngle={2}
                     dataKey="value"
                   >
                     {chartData.methodsData.map((entry, index) => (
@@ -1177,10 +1164,11 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                   </Pie>
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any, name, props) => [
                       formatMoney(value), 
@@ -1190,90 +1178,116 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 </PieChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
+            {/* Legend */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="grid grid-cols-2 gap-3">
+                {chartData.methodsData.map((item, index) => {
+                  const percentage = item.percentage.toFixed(0);
+                  return (
+                    <div key={index} className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded-full flex-shrink-0" 
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-gray-900 font-medium truncate">{item.name}</p>
+                        <p className="text-xs text-gray-500">{percentage}%</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Currency Usage Chart */}
         {chartData.currencyData.length > 0 && (
-          <GlassCard className="p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Currency Usage</h3>
-                <p className="text-sm text-gray-600">Transactions by currency</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <Building className="w-5 h-5 text-indigo-600" />
+                  <h3 className="text-sm font-medium text-gray-900">Currency Usage</h3>
+                </div>
+                <p className="text-xs text-gray-500">Transactions by currency</p>
               </div>
-              <Building className="w-5 h-5 text-purple-600" />
             </div>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData.currencyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                   <XAxis 
                     dataKey="currency" 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                   />
                   <YAxis 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any, name, props) => [
                       formatMoney(value), 
                       `${props.payload.currency} (${props.payload.count} transactions)`
                     ]}
                   />
-                  <Bar dataKey="amount" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="amount" fill="#8B5CF6" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
-          </GlassCard>
+          </div>
         )}
 
         {/* Hourly Payment Trends */}
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Hourly Trends</h3>
-              <p className="text-sm text-gray-600">Payment activity by hour</p>
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="w-5 h-5 text-blue-600" />
+                <h3 className="text-sm font-medium text-gray-900">Hourly Trends</h3>
+              </div>
+              <p className="text-xs text-gray-500">Payment activity by hour</p>
             </div>
-            <Clock className="w-5 h-5 text-blue-600" />
           </div>
           {chartData.hourlyData.filter(h => h.transaction_count > 0).length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData.hourlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                   <XAxis 
                     dataKey="hour" 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                   />
                   <YAxis 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any, name, props) => [
                       formatMoney(value), 
@@ -1284,7 +1298,7 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                     type="monotone"
                     dataKey="amount"
                     stroke="#3B82F6"
-                    strokeWidth={2}
+                    strokeWidth={3}
                     dot={{ fill: '#3B82F6', strokeWidth: 2, r: 3 }}
                   />
                 </LineChart>
@@ -1294,33 +1308,35 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
             <div className="h-64 flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <Clock className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p>No hourly trend data available yet</p>
+                <p className="text-sm">No hourly trend data available yet</p>
               </div>
             </div>
           )}
-        </GlassCard>
+        </div>
       </div>
 
-      {/* Top Customers and Failed Payments Analysis */}
+      {/* Top Customers and Failed Payments Analysis - Modern Widget Style */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Customers by Payments */}
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Top Customers</h3>
-              <p className="text-sm text-gray-600">Highest paying customers</p>
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-medium text-gray-900">Top Customers</h3>
+              </div>
+              <p className="text-xs text-gray-500">Highest paying customers</p>
             </div>
-            <Users className="w-5 h-5 text-green-600" />
           </div>
           {chartData.customerData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData.customerData.slice(0, 10)} layout="horizontal">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                   <XAxis 
                     type="number"
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
@@ -1328,25 +1344,26 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                   <YAxis 
                     type="category"
                     dataKey="name"
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     width={100}
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any, name, props) => [
                       formatMoney(value), 
                       `${props.payload.name} (${props.payload.transactions} transactions)`
                     ]}
                   />
-                  <Bar dataKey="amount" fill="#10B981" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="amount" fill="#10B981" radius={[0, 8, 8, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1354,20 +1371,22 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
             <div className="h-64 flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <Users className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p>No customer payment data available yet</p>
+                <p className="text-sm">No customer payment data available yet</p>
               </div>
             </div>
           )}
-        </GlassCard>
+        </div>
 
         {/* Failed Payment Analysis */}
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Failed Payments</h3>
-              <p className="text-sm text-gray-600">Analysis of payment failures</p>
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+                <h3 className="text-sm font-medium text-gray-900">Failed Payments</h3>
+              </div>
+              <p className="text-xs text-gray-500">Analysis of payment failures</p>
             </div>
-            <AlertTriangle className="w-5 h-5 text-red-600" />
           </div>
           {chartData.failedPaymentData.length > 0 ? (
             <div className="h-64">
@@ -1377,10 +1396,9 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                     data={chartData.failedPaymentData}
                     cx="50%"
                     cy="50%"
-                    labelLine={false}
-                    label={({ reason, count }) => `${reason} (${count})`}
+                    innerRadius={50}
                     outerRadius={80}
-                    fill="#8884d8"
+                    paddingAngle={2}
                     dataKey="count"
                   >
                     {chartData.failedPaymentData.map((entry, index) => (
@@ -1389,10 +1407,11 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                   </Pie>
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any, name, props) => [
                       `${value} failures`, 
@@ -1405,110 +1424,114 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
           ) : (
             <div className="h-64 flex items-center justify-center text-gray-500">
               <div className="text-center">
-                <CheckCircle className="w-12 h-12 mx-auto mb-2 text-green-300" />
-                <p className="font-medium text-green-600">Great! No failed payments</p>
-                <p className="text-sm">All transactions are successful</p>
+                <CheckCircle className="w-12 h-12 mx-auto mb-2 text-emerald-300" />
+                <p className="font-medium text-emerald-600 text-sm">Great! No failed payments</p>
+                <p className="text-xs">All transactions are successful</p>
               </div>
             </div>
           )}
-        </GlassCard>
+        </div>
       </div>
 
-      {/* Payment Methods Summary */}
+      {/* Payment Methods Summary - Modern Widget Style */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Top Payment Methods</h3>
+              <h3 className="text-sm font-medium text-gray-900">Top Payment Methods</h3>
             </div>
             <button
               onClick={() => onNavigateToTab?.('providers')}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
             >
               View All →
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {methodSummary.slice(0, 4).map((method) => {
               const methodName = method.method ? method.method.replace(/_/g, ' ') : 'unknown';
               return (
-                <div key={method.method || 'unknown'} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={method.method || 'unknown'} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      {method.method === 'cash' && <DollarSign className="w-4 h-4 text-orange-600" />}
-                      {method.method === 'mobile_money' && <Smartphone className="w-4 h-4 text-green-600" />}
-                      {method.method === 'card' && <CreditCard className="w-4 h-4 text-blue-600" />}
-                      {method.method === 'bank_transfer' && <Building className="w-4 h-4 text-purple-600" />}
+                    <div className="p-2 bg-white rounded-lg">
+                      {method.method === 'cash' && <DollarSign className="w-4 h-4 text-orange-500" />}
+                      {method.method === 'mobile_money' && <Smartphone className="w-4 h-4 text-emerald-500" />}
+                      {method.method === 'card' && <CreditCard className="w-4 h-4 text-blue-500" />}
+                      {method.method === 'bank_transfer' && <Building className="w-4 h-4 text-purple-500" />}
+                      {!['cash', 'mobile_money', 'card', 'bank_transfer'].includes(method.method) && <Wallet className="w-4 h-4 text-gray-500" />}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900 capitalize">{methodName}</div>
-                      <div className="text-xs text-gray-600">{method.count} transactions</div>
+                      <div className="font-medium text-gray-900 text-sm capitalize">{methodName}</div>
+                      <div className="text-xs text-gray-500">{method.count} transactions</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-semibold text-gray-900">{formatMoney(method.totalAmount)}</div>
+                    <div className="font-semibold text-gray-900 text-sm">{formatMoney(method.totalAmount)}</div>
                     <div className="text-xs text-gray-500">{method.percentage.toFixed(1)}%</div>
                   </div>
                 </div>
               );
             })}
           </div>
-        </GlassCard>
+        </div>
 
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
+              <h3 className="text-sm font-medium text-gray-900">Recent Activity</h3>
             </div>
             <button
               onClick={() => onNavigateToTab?.('transactions')}
-              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
             >
               View All →
             </button>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {payments.slice(0, 5).map((payment) => (
-              <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-lg ${
-                    payment.status === 'completed' ? 'bg-green-100' :
-                    payment.status === 'pending' ? 'bg-orange-100' : 'bg-red-100'
+                    payment.status === 'completed' ? 'bg-emerald-50' :
+                    payment.status === 'pending' ? 'bg-orange-50' : 'bg-red-50'
                   }`}>
                     <CreditCard className={`w-4 h-4 ${
-                      payment.status === 'completed' ? 'text-green-600' :
+                      payment.status === 'completed' ? 'text-emerald-600' :
                       payment.status === 'pending' ? 'text-orange-600' : 'text-red-600'
                     }`} />
                   </div>
                   <div>
                     <div className="font-medium text-gray-900 text-sm">{payment.customerName}</div>
-                    <div className="text-xs text-gray-600">{new Date(payment.date).toLocaleDateString()}</div>
+                    <div className="text-xs text-gray-500">{new Date(payment.date).toLocaleDateString()}</div>
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="font-semibold text-gray-900">{formatMoney(payment.amount)}</div>
+                  <div className="font-semibold text-gray-900 text-sm">{formatMoney(payment.amount)}</div>
                 </div>
               </div>
             ))}
           </div>
-        </GlassCard>
+        </div>
       </div>
 
-      {/* Performance Charts */}
+      {/* Performance Charts - Modern Widget Style */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Daily Performance Chart */}
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Daily Performance</h3>
-              <p className="text-sm text-gray-600">Revenue trends over the last 7 days</p>
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="w-5 h-5 text-blue-600" />
+                <h3 className="text-sm font-medium text-gray-900">Daily Performance</h3>
+              </div>
+              <p className="text-xs text-gray-500">Revenue trends over the last 7 days</p>
             </div>
-            <div className="flex gap-2">
-              <button className="px-3 py-1 text-xs bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200">
-                Last 7 Days
+            <div className="flex gap-1">
+              <button className="px-2.5 py-1 text-xs bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 font-medium">
+                7D
               </button>
-              <button className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-                Last 30 Days
+              <button className="px-2.5 py-1 text-xs bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 font-medium">
+                30D
               </button>
             </div>
           </div>
@@ -1518,31 +1541,34 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                 <AreaChart data={chartData.dailyData}>
                   <defs>
                     <linearGradient id="colorAmount" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                      <stop offset="0%" stopColor="#3B82F6" stopOpacity={0.4}/>
+                      <stop offset="30%" stopColor="#3B82F6" stopOpacity={0.2}/>
+                      <stop offset="70%" stopColor="#3B82F6" stopOpacity={0.1}/>
+                      <stop offset="100%" stopColor="#3B82F6" stopOpacity={0.05}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                   <XAxis 
                     dataKey="date" 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                   />
                   <YAxis 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any) => [formatMoney(value), 'Amount']}
                     labelFormatter={(label) => `Date: ${label}`}
@@ -1551,7 +1577,7 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                     type="monotone"
                     dataKey="amount"
                     stroke="#3B82F6"
-                    strokeWidth={2}
+                    strokeWidth={3}
                     fillOpacity={1}
                     fill="url(#colorAmount)"
                   />
@@ -1562,46 +1588,49 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
             <div className="h-64 flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <TrendingUp className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p>No daily performance data available yet</p>
+                <p className="text-sm">No daily performance data available yet</p>
               </div>
             </div>
           )}
-        </GlassCard>
+        </div>
 
         {/* Monthly Trends Chart */}
-        <GlassCard className="p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Monthly Trends</h3>
-              <p className="text-sm text-gray-600">Revenue trends over the last 12 months</p>
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+                <h3 className="text-sm font-medium text-gray-900">Monthly Trends</h3>
+              </div>
+              <p className="text-xs text-gray-500">Revenue trends over the last 12 months</p>
             </div>
-            <TrendingUp className="w-5 h-5 text-green-600" />
           </div>
           {chartData.monthlyData.length > 0 ? (
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData.monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                   <XAxis 
                     dataKey="month" 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                   />
                   <YAxis 
-                    stroke="#6B7280"
-                    fontSize={12}
+                    stroke="#9ca3af"
+                    tick={{ fill: '#6b7280', fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                   />
                   <Tooltip 
                     contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      backgroundColor: '#1f2937',
+                      border: 'none',
                       borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      color: 'white'
                     }}
                     formatter={(value: any) => [formatMoney(value), 'Amount']}
                     labelFormatter={(label) => `Month: ${label}`}
@@ -1621,11 +1650,11 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
             <div className="h-64 flex items-center justify-center text-gray-500">
               <div className="text-center">
                 <TrendingUp className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                <p>No monthly trend data available yet</p>
+                <p className="text-sm">No monthly trend data available yet</p>
               </div>
             </div>
           )}
-        </GlassCard>
+        </div>
       </div>
 
       {/* Comprehensive Analytics Section */}
@@ -1634,70 +1663,81 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
           {/* Financial Analytics with Charts */}
           {financialAnalytics && (
             <>
-              {/* Financial Summary Cards */}
+              {/* Financial Summary Cards - Modern Widget Style */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <GlassCard className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-blue-600">Total Revenue</p>
-                      <p className="text-2xl font-bold text-blue-900">
-                        {formatMoney(financialAnalytics?.summary?.totalRevenue || 0)}
-                      </p>
-                      <p className="text-xs text-blue-600 mt-1">
-                        Revenue Growth: {financialAnalytics?.summary?.revenueGrowth?.toFixed(1) || '0.0'}%
-                      </p>
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-2.5 bg-blue-50 rounded-xl">
+                      <TrendingUp className="w-5 h-5 text-blue-600" />
                     </div>
-                    <div className="p-3 bg-blue-500 rounded-lg">
-                      <TrendingUp className="w-6 h-6 text-white" />
+                    <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50">
+                      <span className="text-xs font-semibold text-emerald-600">
+                        +{financialAnalytics?.summary?.revenueGrowth?.toFixed(1) || '0.0'}%
+                      </span>
                     </div>
                   </div>
-                </GlassCard>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Total Revenue</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {formatMoney(financialAnalytics?.summary?.totalRevenue || 0)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">Revenue growth</p>
+                  </div>
+                </div>
 
-                <GlassCard className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-orange-600">Total Expenses</p>
-                      <p className="text-2xl font-bold text-orange-900">
-                        {formatMoney(financialAnalytics?.summary?.totalExpenses || 0)}
-                      </p>
-                      <p className="text-xs text-orange-600 mt-1">
-                        Expense Growth: {financialAnalytics?.summary?.expenseGrowth?.toFixed(1) || '0.0'}%
-                      </p>
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-2.5 bg-orange-50 rounded-xl">
+                      <TrendingDown className="w-5 h-5 text-orange-600" />
                     </div>
-                    <div className="p-3 bg-orange-500 rounded-lg">
-                      <TrendingDown className="w-6 h-6 text-white" />
+                    <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-orange-50">
+                      <span className="text-xs font-semibold text-orange-600">
+                        +{financialAnalytics?.summary?.expenseGrowth?.toFixed(1) || '0.0'}%
+                      </span>
                     </div>
                   </div>
-                </GlassCard>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Total Expenses</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {formatMoney(financialAnalytics?.summary?.totalExpenses || 0)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">Expense growth</p>
+                  </div>
+                </div>
 
-                <GlassCard className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-green-600">Net Profit</p>
-                      <p className="text-2xl font-bold text-green-900">
-                        {formatMoney(financialAnalytics?.summary?.netProfit || 0)}
-                      </p>
-                      <p className="text-xs text-green-600 mt-1">
-                        Profit Growth: {financialAnalytics?.summary?.profitGrowth?.toFixed(1) || '0.0'}%
-                      </p>
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="p-2.5 bg-emerald-50 rounded-xl">
+                      <DollarSign className="w-5 h-5 text-emerald-600" />
                     </div>
-                    <div className="p-3 bg-green-500 rounded-lg">
-                      <DollarSign className="w-6 h-6 text-white" />
+                    <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50">
+                      <span className="text-xs font-semibold text-emerald-600">
+                        +{financialAnalytics?.summary?.profitGrowth?.toFixed(1) || '0.0'}%
+                      </span>
                     </div>
                   </div>
-                </GlassCard>
+                  <div>
+                    <p className="text-sm font-medium text-gray-600 mb-1">Net Profit</p>
+                    <p className="text-3xl font-bold text-gray-900">
+                      {formatMoney(financialAnalytics?.summary?.netProfit || 0)}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-2">Profit growth</p>
+                  </div>
+                </div>
               </div>
 
-              {/* Financial Analytics Charts */}
+              {/* Financial Analytics Charts - Modern Widget Style */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Revenue vs Expenses vs Profit Bar Chart */}
-                <GlassCard className="p-6">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Financial Overview</h3>
-                      <p className="text-sm text-gray-600">Revenue, Expenses & Profit comparison</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <BarChart3 className="w-5 h-5 text-blue-600" />
+                        <h3 className="text-sm font-medium text-gray-900">Financial Overview</h3>
+                      </div>
+                      <p className="text-xs text-gray-500">Revenue, Expenses & Profit comparison</p>
                     </div>
-                    <BarChart3 className="w-5 h-5 text-blue-600" />
                   </div>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1720,27 +1760,28 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                           }
                         ]}
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                         <XAxis 
                           dataKey="name" 
-                          stroke="#6B7280"
-                          fontSize={12}
+                          stroke="#9ca3af"
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
                           tickLine={false}
                           axisLine={false}
                         />
                         <YAxis 
-                          stroke="#6B7280"
-                          fontSize={12}
+                          stroke="#9ca3af"
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
                           tickLine={false}
                           axisLine={false}
                           tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                         />
                         <Tooltip 
                           contentStyle={{
-                            backgroundColor: 'white',
-                            border: '1px solid #E5E7EB',
+                            backgroundColor: '#1f2937',
+                            border: 'none',
                             borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            color: 'white'
                           }}
                           formatter={(value: any) => [formatMoney(value), 'Amount']}
                         />
@@ -1756,16 +1797,18 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </GlassCard>
+                </div>
 
                 {/* Growth Trends Chart */}
-                <GlassCard className="p-6">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Growth Trends</h3>
-                      <p className="text-sm text-gray-600">Year-over-year growth percentages</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp className="w-5 h-5 text-emerald-600" />
+                        <h3 className="text-sm font-medium text-gray-900">Growth Trends</h3>
+                      </div>
+                      <p className="text-xs text-gray-500">Year-over-year growth percentages</p>
                     </div>
-                    <TrendingUp className="w-5 h-5 text-green-600" />
                   </div>
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1789,11 +1832,11 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                         ]}
                         layout="horizontal"
                       >
-                        <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                        <CartesianGrid strokeDasharray="2 2" stroke="#f0f0f0" vertical={false} />
                         <XAxis 
                           type="number"
-                          stroke="#6B7280"
-                          fontSize={12}
+                          stroke="#9ca3af"
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
                           tickLine={false}
                           axisLine={false}
                           tickFormatter={(value) => `${value}%`}
@@ -1801,22 +1844,23 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                         <YAxis 
                           type="category"
                           dataKey="name"
-                          stroke="#6B7280"
-                          fontSize={12}
+                          stroke="#9ca3af"
+                          tick={{ fill: '#6b7280', fontSize: 11 }}
                           tickLine={false}
                           axisLine={false}
                           width={120}
                         />
                         <Tooltip 
                           contentStyle={{
-                            backgroundColor: 'white',
-                            border: '1px solid #E5E7EB',
+                            backgroundColor: '#1f2937',
+                            border: 'none',
                             borderRadius: '8px',
-                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                            color: 'white'
                           }}
                           formatter={(value: any) => [`${value.toFixed(1)}%`, 'Growth']}
                         />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                        <Bar dataKey="value" radius={[0, 8, 8, 0]}>
                           {[
                             { color: '#3B82F6' },
                             { color: '#F59E0B' },
@@ -1828,17 +1872,19 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
-                </GlassCard>
+                </div>
               </div>
 
               {/* Financial Distribution Pie Chart */}
-              <GlassCard className="p-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Financial Distribution</h3>
-                    <p className="text-sm text-gray-600">Revenue vs Expenses breakdown</p>
+                    <div className="flex items-center gap-2 mb-1">
+                      <PieChartIcon className="w-5 h-5 text-purple-600" />
+                      <h3 className="text-sm font-medium text-gray-900">Financial Distribution</h3>
+                    </div>
+                    <p className="text-xs text-gray-500">Revenue vs Expenses breakdown</p>
                   </div>
-                  <PieChartIcon className="w-5 h-5 text-purple-600" />
                 </div>
                 <div className="h-80">
                   <ResponsiveContainer width="100%" height="100%">
@@ -1871,10 +1917,11 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                       </Pie>
                       <Tooltip 
                         contentStyle={{
-                          backgroundColor: 'white',
-                          border: '1px solid #E5E7EB',
+                          backgroundColor: '#1f2937',
+                          border: 'none',
                           borderRadius: '8px',
-                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                          color: 'white'
                         }}
                         formatter={(value: any) => [formatMoney(value), 'Amount']}
                       />
@@ -1886,83 +1933,120 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
-              </GlassCard>
+              </div>
             </>
           )}
 
-          {/* Payment Insights */}
+          {/* Payment Insights - Modern Widget Style */}
           {paymentInsights && (
-            <GlassCard className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Payment Insights</h3>
-                <Activity className="w-5 h-5 text-green-600" />
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-emerald-600" />
+                  <h3 className="text-sm font-medium text-gray-900">Payment Insights</h3>
+                </div>
               </div>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">
+                  <div className="text-center p-4 bg-emerald-50 rounded-xl">
+                    <div className="text-2xl font-bold text-emerald-600">
                       {paymentInsights?.topPaymentMethod || 'N/A'}
                     </div>
-                    <div className="text-xs text-gray-600">Top Method</div>
+                    <div className="text-xs text-gray-500 mt-1">Top Method</div>
                   </div>
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <div className="text-center p-4 bg-blue-50 rounded-xl">
                     <div className="text-2xl font-bold text-blue-600">
                       {formatMoney(paymentInsights?.averageTransactionValue || 0)}
                     </div>
-                    <div className="text-xs text-gray-600">Avg Transaction</div>
+                    <div className="text-xs text-gray-500 mt-1">Avg Transaction</div>
                   </div>
                 </div>
-                <div className="text-center p-3 bg-orange-50 rounded-lg">
+                <div className="text-center p-4 bg-orange-50 rounded-xl">
                   <div className="text-2xl font-bold text-orange-600">
                     {paymentInsights?.peakHour || 'N/A'}
                   </div>
-                  <div className="text-xs text-gray-600">Peak Hour</div>
+                  <div className="text-xs text-gray-500 mt-1">Peak Hour</div>
                 </div>
-                <div className="text-sm text-gray-600">
-                  <div>Success Rate: {paymentInsights?.successRate?.toFixed(1) || '0.0'}%</div>
-                  <div>Failure Rate: {paymentInsights?.failureRate?.toFixed(1) || '0.0'}%</div>
-                  <div>Refund Rate: {paymentInsights?.refundRate?.toFixed(1) || '0.0'}%</div>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div className="text-center p-3 bg-gray-50 rounded-xl">
+                    <div className="font-semibold text-gray-900">{paymentInsights?.successRate?.toFixed(1) || '0.0'}%</div>
+                    <div className="text-xs text-gray-500 mt-1">Success</div>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-xl">
+                    <div className="font-semibold text-gray-900">{paymentInsights?.failureRate?.toFixed(1) || '0.0'}%</div>
+                    <div className="text-xs text-gray-500 mt-1">Failure</div>
+                  </div>
+                  <div className="text-center p-3 bg-gray-50 rounded-xl">
+                    <div className="font-semibold text-gray-900">{paymentInsights?.refundRate?.toFixed(1) || '0.0'}%</div>
+                    <div className="text-xs text-gray-500 mt-1">Refund</div>
+                  </div>
                 </div>
               </div>
-            </GlassCard>
+            </div>
           )}
         </div>
       )}
 
-      {/* Payment Accounts Summary */}
+      {/* Payment Accounts Summary - Modern Widget Style */}
       {financeAccounts.length > 0 && (
-        <GlassCard className="p-6">
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Payment Accounts Summary</h3>
-            <p className="text-sm text-gray-600">Overview of all payment accounts and balances</p>
-          </div>
-
+        <div className="space-y-6">
           {/* Summary Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div className="text-center p-3 bg-green-50 rounded-lg">
-              <div className="text-lg font-bold text-green-600">
-                {financeAccounts.length}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Total Accounts */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-start justify-between mb-3">
+                <div className="p-2.5 bg-emerald-50 rounded-xl">
+                  <Wallet className="w-5 h-5 text-emerald-600" />
+                </div>
               </div>
-              <div className="text-xs text-gray-600">Total Accounts</div>
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Total Accounts</p>
+                <p className="text-3xl font-bold text-gray-900">{financeAccounts.length}</p>
+              </div>
             </div>
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
-              <div className="text-lg font-bold text-blue-600">
-                {financeAccounts.filter(account => account.is_active).length}
+
+            {/* Active Accounts */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-start justify-between mb-3">
+                <div className="p-2.5 bg-blue-50 rounded-xl">
+                  <CheckCircle className="w-5 h-5 text-blue-600" />
+                </div>
               </div>
-              <div className="text-xs text-gray-600">Active Accounts</div>
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Active Accounts</p>
+                <p className="text-3xl font-bold text-gray-900">{financeAccounts.filter(account => account.is_active).length}</p>
+              </div>
             </div>
-            <div className="text-center p-3 bg-purple-50 rounded-lg">
-              <div className="text-lg font-bold text-purple-600">
-                {formatMoney(financeAccounts.reduce((sum, account) => sum + (account.balance || 0), 0))}
+
+            {/* Total Balance */}
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-start justify-between mb-3">
+                <div className="p-2.5 bg-purple-50 rounded-xl">
+                  <DollarSign className="w-5 h-5 text-purple-600" />
+                </div>
               </div>
-              <div className="text-xs text-gray-600">Total Balance</div>
+              <div>
+                <p className="text-sm font-medium text-gray-600 mb-1">Total Balance</p>
+                <p className="text-3xl font-bold text-gray-900">{formatMoney(financeAccounts.reduce((sum, account) => sum + (account.balance || 0), 0))}</p>
+              </div>
             </div>
           </div>
-
 
           {/* Top Accounts by Balance */}
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Top Accounts by Balance</h4>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-sm font-medium text-gray-900">Top Accounts by Balance</h3>
+              </div>
+              {financeAccounts.length > 3 && (
+                <button 
+                  onClick={() => onNavigateToTab?.('providers')}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  View all {financeAccounts.length} accounts →
+                </button>
+              )}
+            </div>
             <div className="space-y-2">
               {financeAccounts
                 .sort((a, b) => (b.balance || 0) - (a.balance || 0))
@@ -2008,54 +2092,43 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
                     </div>
                   );
                 })}
-              
-              {financeAccounts.length > 3 && (
-                <div className="text-center py-2">
-                  <button 
-                    onClick={() => onNavigateToTab?.('providers')}
-                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
-                  >
-                    View all {financeAccounts.length} accounts →
-                  </button>
-                </div>
-              )}
             </div>
           </div>
-        </GlassCard>
+        </div>
       )}
 
-      {/* Quick Actions */}
-      <GlassCard className="p-6">
+      {/* Quick Actions - Modern Widget Style */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-            <p className="text-sm text-gray-600">Common payment management tasks</p>
+            <h3 className="text-sm font-medium text-gray-900">Quick Actions</h3>
+            <p className="text-xs text-gray-500 mt-1">Common payment management tasks</p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => onNavigateToTab?.('transactions')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium shadow-sm"
             >
               <CreditCard size={16} />
               View All Transactions
             </button>
             <button
               onClick={() => onNavigateToTab?.('providers')}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors font-medium shadow-sm"
             >
               <Settings size={16} />
               Manage Accounts
             </button>
             <button
               onClick={() => onNavigateToTab?.('purchase-orders')}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium"
+              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium shadow-sm"
             >
               <Package size={16} />
               Purchase Orders
             </button>
           </div>
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 };

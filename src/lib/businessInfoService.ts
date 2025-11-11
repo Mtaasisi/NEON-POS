@@ -35,7 +35,7 @@ class BusinessInfoService {
 
       if (!error && data) {
         this.cachedInfo = {
-          name: data.business_name || 'My Store',
+          name: data.business_name || 'inauzwa',
           address: data.business_address || 'Dar es Salaam, Tanzania',
           phone: data.business_phone || '+255 123 456 789',
           email: data.business_email || undefined,
@@ -54,7 +54,7 @@ class BusinessInfoService {
 
     // Fallback to defaults
     const defaultInfo: BusinessInfo = {
-      name: 'My Store',
+      name: 'inauzwa',
       address: 'Dar es Salaam, Tanzania',
       phone: '+255 123 456 789',
       email: 'info@mystore.com',

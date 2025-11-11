@@ -278,7 +278,7 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
                 Loyalty Level
               </label>
               <div className="space-y-2">
-                {(['bronze', 'silver', 'gold', 'platinum'] as LoyaltyLevel[]).map(level => (
+                {(['interested', 'engaged', 'payment_customer', 'active', 'regular', 'premium', 'vip'] as LoyaltyLevel[]).map(level => (
                   <label key={level} className="flex items-center gap-3 cursor-pointer group">
                     <input
                       type="checkbox"
@@ -336,25 +336,31 @@ const CustomerFilters: React.FC<CustomerFiltersProps> = ({
                 Tags
               </label>
               <div className="space-y-2 max-h-32 overflow-y-auto">
-                {uniqueTags.map(tag => (
-                  <label key={tag} className="flex items-center gap-3 cursor-pointer group">
-                    <input
-                      type="checkbox"
-                      checked={tagFilter.includes(tag)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          onTagFilterChange([...tagFilter, tag]);
-                        } else {
-                          onTagFilterChange(tagFilter.filter(t => t !== tag));
-                        }
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700 group-hover:text-gray-900 capitalize">
-                      {tag}
-                    </span>
-                  </label>
-                ))}
+                {uniqueTags.length > 0 ? (
+                  uniqueTags.map(tag => (
+                    <label key={tag} className="flex items-center gap-3 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={tagFilter.includes(tag)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            onTagFilterChange([...tagFilter, tag]);
+                          } else {
+                            onTagFilterChange(tagFilter.filter(t => t !== tag));
+                          }
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 group-hover:text-gray-900 capitalize">
+                        {tag}
+                      </span>
+                    </label>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500 italic">
+                    No tags assigned yet. Add tags to customers to filter by them.
+                  </p>
+                )}
               </div>
             </div>
 

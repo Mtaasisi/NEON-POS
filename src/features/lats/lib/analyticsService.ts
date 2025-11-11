@@ -36,22 +36,25 @@ export class AnalyticsService {
     try {
       console.log('🔍 Starting inventory analytics calculation...');
       
-      // Get total variants count
+      // Get total variants count (excluding IMEI children - only count parent/standard variants)
       const { count: totalVariants, error: variantsError } = await supabase
         .from('lats_product_variants')
-        .select('id', { count: 'exact', head: true });
+        .select('id', { count: 'exact', head: true })
+        .is('parent_variant_id', null); // Exclude child variants from count
 
       if (variantsError) throw variantsError;
-      console.log('📊 Total variants found:', totalVariants);
+      console.log('📊 Total variants found (excluding IMEI children):', totalVariants);
 
       // Get products and variants separately (Neon doesn't support PostgREST relationship syntax)
+      // Exclude child variants from analytics - only show parent/standard variants
       const [productsResult, variantsData] = await Promise.allSettled([
         supabase
           .from('lats_products')
           .select('id, name, is_active, stock_quantity'),
         supabase
           .from('lats_product_variants')
-          .select('id, variant_name, product_id, quantity, reserved_quantity, cost_price, unit_price, selling_price')
+          .select('id, name, variant_name, product_id, quantity, reserved_quantity, cost_price, unit_price, selling_price, is_parent, variant_type')
+          .is('parent_variant_id', null) // Exclude IMEI children
       ]);
 
       if (productsResult.status === 'rejected') throw productsResult.reason;

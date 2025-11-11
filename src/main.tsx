@@ -10,6 +10,9 @@ import './utils/consoleFilter';
 import './lib/testSuppliers';
 import './styles/wallpapers.css';
 
+// iOS 17 Mobile UI enhancements
+import './features/mobile/mobile-ios17.css';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

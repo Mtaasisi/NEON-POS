@@ -1,4 +1,6 @@
 // Role-Based Access Control (RBAC) utility for LATS module
+import { hasPermission as checkUserPermission, hasRole as checkUserRole } from '../../../lib/permissionUtils';
+
 export type UserRole = 'admin' | 'customer-care' | 'technician' | 'viewer';
 
 export interface Permission {
@@ -11,6 +13,11 @@ export interface RoutePermission {
   path: string;
   roles: UserRole[];
   exact?: boolean;
+}
+
+export interface User {
+  role: string;
+  permissions?: string[];
 }
 
 // Define permissions for LATS module
@@ -128,6 +135,7 @@ class RBACManager {
 
   /**
    * Check if a user has permission for a specific resource and action
+   * Now supports both role-based and user permission checking
    */
   can(userRole: UserRole, resource: string, action: string): boolean {
     const permission = this.permissions.find(
@@ -142,7 +150,105 @@ class RBACManager {
   }
 
   /**
-   * Check if a user can access a specific route
+   * Check if a user object has permission for a specific resource and action
+   * This checks BOTH user.permissions array AND role-based permissions
+   */
+  canUser(user: User | any, resource: string, action: string): boolean {
+    if (!user) return false;
+
+    // Map resource and action to permission strings
+    const permissionMap: Record<string, Record<string, string>> = {
+      'inventory': {
+        'view': 'view_inventory',
+        'create': 'add_products',
+        'edit': 'edit_products',
+        'delete': 'delete_products',
+        'manage': 'edit_settings'
+      },
+      'products': {
+        'view': 'view_inventory',
+        'create': 'add_products',
+        'edit': 'edit_products',
+        'delete': 'delete_products'
+      },
+      'pos': {
+        'view': 'access_pos',
+        'sell': 'process_sales',
+        'refund': 'process_refunds',
+        'void': 'process_refunds'
+      },
+      'pos-inventory': {
+        'view': 'view_inventory',
+        'search': 'view_inventory',
+        'add-to-cart': 'access_pos'
+      },
+      'sales': {
+        'view': 'view_reports',
+        'create': 'process_sales',
+        'edit': 'process_sales',
+        'delete': 'process_sales',
+        'refund': 'process_refunds'
+      },
+      'reports': {
+        'view': 'view_reports',
+        'export': 'view_reports',
+        'daily-close': 'daily_close'
+      },
+      'settings': {
+        'view': 'view_settings',
+        'edit': 'edit_settings'
+      },
+      'purchase-orders': {
+        'view': 'view_purchase_orders',
+        'create': 'create_purchase_orders',
+        'edit': 'edit_purchase_orders',
+        'delete': 'delete_purchase_orders',
+        'receive': 'edit_purchase_orders'
+      },
+      'spare-parts': {
+        'view': 'view_spare_parts',
+        'create': 'create_spare_parts',
+        'edit': 'edit_spare_parts',
+        'delete': 'delete_spare_parts',
+        'use': 'view_spare_parts'
+      },
+      'categories': {
+        'view': 'view_inventory',
+        'create': 'add_products',
+        'edit': 'edit_products',
+        'delete': 'delete_products'
+      },
+      'suppliers': {
+        'view': 'view_inventory',
+        'create': 'add_products',
+        'edit': 'edit_products',
+        'delete': 'delete_products'
+      },
+      'stock': {
+        'view': 'view_inventory',
+        'adjust': 'adjust_stock',
+        'history': 'view_stock_history'
+      },
+      'analytics': {
+        'view': 'view_financial_reports',
+        'export': 'view_financial_reports'
+      }
+    };
+
+    // Get the permission string for this resource/action
+    const permissionString = permissionMap[resource]?.[action];
+    
+    // Check user permissions first (from their profile)
+    if (permissionString && checkUserPermission(user, permissionString)) {
+      return true;
+    }
+
+    // Fallback to role-based check
+    return this.can(user.role as UserRole, resource, action);
+  }
+
+  /**
+   * Check if a user can access a specific route (role-based)
    */
   canAccessRoute(userRole: UserRole, path: string): boolean {
     // Find matching route permission
@@ -164,6 +270,42 @@ class RBACManager {
   }
 
   /**
+   * Check if a user object can access a specific route (supports user.permissions)
+   */
+  canUserAccessRoute(user: User | any, path: string): boolean {
+    if (!user) return false;
+
+    // Map routes to permission requirements
+    const routePermissionMap: Record<string, string> = {
+      '/lats/pos': 'access_pos',
+      '/lats/inventory/management': 'edit_settings',
+      '/lats/inventory/new': 'add_products',
+      '/lats/inventory/products': 'view_inventory',
+      '/lats/inventory/products/:id/edit': 'edit_products',
+      '/lats/inventory/purchase-orders': 'view_purchase_orders',
+      '/lats/inventory/purchase-orders/new': 'create_purchase_orders',
+      '/lats/add-product': 'add_products',
+      '/lats/spare-parts': 'view_spare_parts',
+      '/lats/pos-inventory': 'view_inventory'
+    };
+
+    // Check for pattern matches
+    for (const [routePath, requiredPermission] of Object.entries(routePermissionMap)) {
+      const routePattern = routePath.replace(/:\w+/g, '[^/]+');
+      const regex = new RegExp(`^${routePattern}$`);
+      
+      if (regex.test(path)) {
+        if (checkUserPermission(user, requiredPermission)) {
+          return true;
+        }
+      }
+    }
+
+    // Fallback to role-based check
+    return this.canAccessRoute(user.role as UserRole, path);
+  }
+
+  /**
    * Check if a user role has a specific permission
    */
   hasPermission(role: UserRole, resource: string, action: string): boolean {
@@ -175,6 +317,14 @@ class RBACManager {
       permission.action === action &&
       permission.roles.some(r => accessibleRoles.includes(r))
     );
+  }
+
+  /**
+   * Check if a user object has a specific permission (supports user.permissions)
+   * This is the preferred method to use throughout the application
+   */
+  hasUserPermission(user: User | any, resource: string, action: string): boolean {
+    return this.canUser(user, resource, action);
   }
 
   /**

@@ -122,8 +122,16 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
         </button>
       </div>
 
-      {/* Growth Metrics */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      {/* Growth Metrics - Auto-fit Grid */}
+      <div 
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))',
+          gap: 'clamp(0.75rem, 2vw, 1rem)',
+          gridAutoRows: '1fr'
+        }}
+        className="mb-8"
+      >
         <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
           <div className="flex items-center gap-2 mb-2">
             {metrics.revenueGrowth > 0 ? (
@@ -169,8 +177,16 @@ export const AnalyticsWidget: React.FC<AnalyticsWidgetProps> = ({ className }) =
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      {/* Key Metrics - Auto-fit Grid */}
+      <div 
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))',
+          gap: 'clamp(0.75rem, 2vw, 1rem)',
+          gridAutoRows: '1fr'
+        }}
+        className="mb-6"
+      >
         <div>
           <p className="text-xs text-gray-400 mb-1.5">Avg Order Value</p>
           <p className="text-xl font-semibold text-gray-900">

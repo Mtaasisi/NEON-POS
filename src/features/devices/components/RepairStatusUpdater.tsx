@@ -557,14 +557,20 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
         return false;
       }
       
-      // Check if user role is allowed
-      if (!transition.allowedRoles.includes(currentUser.role)) {
-        console.log(`❌ [RepairStatusUpdater] Role not allowed: ${currentUser.role} not in ${transition.allowedRoles.join(', ')}`);
+      // Check if user role is allowed OR if they have the required permissions
+      const userPermissions = currentUser.permissions || [];
+      const hasRoleAccess = transition.allowedRoles.includes(currentUser.role);
+      const hasPermissionAccess = userPermissions.includes('all') || 
+                                   userPermissions.includes('update_device_status') ||
+                                   userPermissions.includes('edit_device');
+      
+      if (!hasRoleAccess && !hasPermissionAccess) {
+        console.log(`❌ [RepairStatusUpdater] Access denied: ${currentUser.role} not in ${transition.allowedRoles.join(', ')} and no required permissions`);
         return false;
       }
       
       // Check if user is assigned technician (for technician role)
-      if (currentUser.role === 'technician' && device.assignedTo !== currentUser.id) {
+      if (currentUser.role === 'technician' && !hasPermissionAccess && device.assignedTo !== currentUser.id) {
         console.log(`❌ [RepairStatusUpdater] Technician not assigned: ${device.assignedTo} !== ${currentUser.id}`);
         return false;
       }
@@ -630,7 +636,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
 
     // Check if already in target status
     if (device.status === selectedStatus) {
-      toast.info(`Device is already in "${transition.label}" status`);
+      toast(`Device is already in "${transition.label}" status`);
       setSelectedStatus(null);
       setNotes('');
       return;
@@ -686,7 +692,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
       );
 
       if (pendingParts.length === 0) {
-        toast.info('All parts have already been received');
+        toast('All parts have already been received');
         return;
       }
 
@@ -725,7 +731,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
       );
 
       if (pendingParts.length === 0) {
-        toast.info('All parts have already been received');
+        toast('All parts have already been received');
         return;
       }
 
@@ -914,7 +920,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
                   
                   // Check if already in target status FIRST
                   if (device.status === transition.to) {
-                    toast.info(`Device is already in "${transition.label}" status`);
+                    toast(`Device is already in "${transition.label}" status`);
                     return;
                   }
 
@@ -1026,7 +1032,7 @@ const RepairStatusUpdater: React.FC<RepairStatusUpdaterProps> = ({
                         
                         // Check if already in target status
                         if (device.status === transition.to) {
-                          toast.info(`Device is already in ${transition.label} status`);
+                          toast(`Device is already in ${transition.label} status`);
                           setSelectedStatus(null);
                           setNotes('');
                           return;

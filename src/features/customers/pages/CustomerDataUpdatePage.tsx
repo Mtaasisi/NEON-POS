@@ -98,7 +98,7 @@ const CustomerDataUpdatePage: React.FC = () => {
   const updateCustomer = async (customerData: CustomerUpdateData) => {
     try {
       const { error } = await supabase
-        .from('customers')
+        .from('lats_customers')
         .update({
           name: customerData.name,
           email: customerData.email,

@@ -122,10 +122,12 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
       }
 
       // Don't filter by branch_id since expenses don't have branch_id set
-      // Only show approved expenses (or all for admins)
-      const isAdmin = currentUser?.role === 'admin';
+      // Only show approved expenses (or all for users with permission)
+      const isAdmin = currentUser?.permissions?.includes('all') || 
+                      currentUser?.permissions?.includes('view_financial_reports') ||
+                      currentUser?.role === 'admin';
       
-      // Count pending expenses for admins
+      // Count pending expenses for authorized users
       const pendingCount = isAdmin 
         ? (allTransactions || []).filter(t => {
             const status = t.status || t.metadata?.approval_status || 'approved';
@@ -277,7 +279,7 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-semibold text-gray-900">Expenses</h3>
-              {currentUser?.role === 'admin' && metrics.pendingCount > 0 && (
+              {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('view_financial_reports') || currentUser?.role === 'admin') && metrics.pendingCount > 0 && (
                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                   {metrics.pendingCount} pending
                 </span>
@@ -296,8 +298,16 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
         </button>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-8">
+      {/* Quick Stats - Auto-fit Grid */}
+      <div 
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))',
+          gap: 'clamp(0.75rem, 2vw, 1rem)',
+          gridAutoRows: '1fr'
+        }}
+        className="mb-8"
+      >
         <div className="p-4 rounded-lg bg-red-50 hover:bg-red-100 transition-colors">
           <div className="flex items-center gap-2 mb-2">
             <TrendingDown size={14} className="text-red-500" />
@@ -371,7 +381,7 @@ export const ExpensesWidget: React.FC<ExpensesWidgetProps> = ({ className }) => 
                       <span className="text-sm font-semibold text-red-600">
                         -{formatCurrency(expense.amount)}
                       </span>
-                      {currentUser?.role === 'admin' && expense.status === 'pending' && (
+                      {(currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('view_financial_reports') || currentUser?.role === 'admin') && expense.status === 'pending' && (
                         <div className="flex gap-1">
                           <button
                             onClick={() => handleApproveExpense(expense.id)}

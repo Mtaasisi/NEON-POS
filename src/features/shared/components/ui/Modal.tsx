@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 interface ModalProps {
   isOpen: boolean;
@@ -12,6 +13,9 @@ interface ModalProps {
 }
 
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'lg', maxHeight, actions }) => {
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+  
   if (!isOpen) return null;
   return createPortal(
     <>

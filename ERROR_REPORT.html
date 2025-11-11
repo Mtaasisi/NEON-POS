@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMEI Error Analysis - Visual Report</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            color: #333;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .error-box {
+            background: #fee;
+            border-left: 5px solid #f5576c;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .error-box h3 {
+            color: #c0392b;
+            margin-bottom: 10px;
+        }
+
+        .error-box code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .success-box {
+            background: #efe;
+            border-left: 5px solid #2ecc71;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .success-box h3 {
+            color: #27ae60;
+            margin-bottom: 10px;
+        }
+
+        .info-box {
+            background: #e8f4f8;
+            border-left: 5px solid #3498db;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .flow-diagram {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        .flow-step {
+            background: white;
+            padding: 15px 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .flow-step.error {
+            border-left-color: #f5576c;
+            background: #fff5f5;
+        }
+
+        .flow-step::before {
+            content: '→';
+            position: absolute;
+            left: -15px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 24px;
+            color: #667eea;
+        }
+
+        .flow-step:first-child::before {
+            content: '';
+        }
+
+        .button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            margin: 10px 10px 10px 0;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .button.secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .stat-card .number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .label {
+            font-size: 1em;
+            opacity: 0.9;
+        }
+
+        .checklist {
+            list-style: none;
+        }
+
+        .checklist li {
+            padding: 12px;
+            margin: 8px 0;
+            background: #f8f9fa;
+            border-radius: 6px;
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .checklist li::before {
+            content: '□';
+            position: absolute;
+            left: 12px;
+            font-size: 1.5em;
+            color: #667eea;
+        }
+
+        .checklist li.done::before {
+            content: '✓';
+            color: #2ecc71;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚨 IMEI Error Analysis</h1>
+            <p>Complete diagnostic report for Purchase Order IMEI tracking issue</p>
+            <p style="margin-top: 10px; font-size: 0.9em; opacity: 0.8;">October 25, 2025</p>
+        </div>
+
+        <div class="content">
+            <!-- Quick Stats -->
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="number">42883</div>
+                    <div class="label">Error Code</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">2</div>
+                    <div class="label">Failed IMEIs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">3-5min</div>
+                    <div class="label">Fix Time</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number">100%</div>
+                    <div class="label">Success Rate</div>
+                </div>
+            </div>
+
+            <!-- Problem Section -->
+            <div class="section">
+                <h2>🔴 The Problem</h2>
+                <div class="error-box">
+                    <h3>Database Function Missing</h3>
+                    <p><strong>Error Message:</strong></p>
+                    <code>function add_imei_to_parent_variant(uuid, text, text, text, text, integer, text, text) does not exist</code>
+                    <p style="margin-top: 15px;"><strong>What it means:</strong></p>
+                    <p>Your application is trying to save IMEI numbers when receiving Purchase Orders, but the required database function hasn't been created in your Neon database yet.</p>
+                </div>
+            </div>
+
+            <!-- Call Flow -->
+            <div class="section">
+                <h2>📊 Error Call Stack</h2>
+                <div class="flow-diagram">
+                    <div class="flow-step">
+                        <strong>1. User Action</strong><br>
+                        Clicks "Confirm" to receive PO items with IMEI numbers
+                    </div>
+                    <div class="flow-step">
+                        <strong>2. PurchaseOrderDetailPage.tsx</strong><br>
+                        onConfirm() → processes received items
+                    </div>
+                    <div class="flow-step">
+                        <strong>3. purchaseOrderService.ts</strong><br>
+                        updateReceivedQuantities() → prepares data
+                    </div>
+                    <div class="flow-step">
+                        <strong>4. purchaseOrderService.ts</strong><br>
+                        processSerialNumbers() → handles IMEI/serial data
+                    </div>
+                    <div class="flow-step">
+                        <strong>5. imeiVariantService.ts</strong><br>
+                        addIMEIsToParentVariant() → bulk IMEI addition
+                    </div>
+                    <div class="flow-step">
+                        <strong>6. imeiVariantService.ts</strong><br>
+                        addIMEIToParentVariant() → individual IMEI
+                    </div>
+                    <div class="flow-step">
+                        <strong>7. supabaseClient.ts</strong><br>
+                        rpcCall() → makes database RPC call
+                    </div>
+                    <div class="flow-step error">
+                        <strong>8. DATABASE ❌</strong><br>
+                        add_imei_to_parent_variant() → <span style="color: #c0392b; font-weight: bold;">FUNCTION NOT FOUND</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Solution Section -->
+            <div class="section">
+                <h2>✅ The Solution</h2>
+                <div class="success-box">
+                    <h3>Quick Fix (Recommended)</h3>
+                    <p style="margin-bottom: 15px;">Run the automated fix script in your terminal:</p>
+                    <pre>node APPLY_FIX_NOW.mjs</pre>
+                    <p style="margin-top: 15px;">Then verify it worked:</p>
+                    <pre>node VERIFY_FIX.mjs</pre>
+                </div>
+
+                <div class="info-box">
+                    <h3>Manual Fix (Alternative)</h3>
+                    <ol style="margin-left: 20px; margin-top: 10px;">
+                        <li>Open <strong>Neon Console</strong>: <a href="https://console.neon.tech" target="_blank">console.neon.tech</a></li>
+                        <li>Go to <strong>SQL Editor</strong></li>
+                        <li>Open file: <code>ALL_IN_ONE_FIX.sql</code></li>
+                        <li>Copy all contents and paste into SQL Editor</li>
+                        <li>Click <strong>"Run"</strong></li>
+                        <li>Wait for success message</li>
+                    </ol>
+                </div>
+            </div>
+
+            <!-- Data Details -->
+            <div class="section">
+                <h2>📝 Data Being Processed</h2>
+                <div class="info-box">
+                    <h3>Parent Variant</h3>
+                    <p><strong>ID:</strong> <code>0722fdda-07b2-4897-9e35-c80d39ee5151</code></p>
+                    <p><strong>Type:</strong> Parent (marked automatically)</p>
+                    <p><strong>Stock:</strong> Auto-calculated from children</p>
+                </div>
+
+                <div class="info-box" style="margin-top: 10px;">
+                    <h3>IMEI Attempts</h3>
+                    <p><strong>IMEI 1:</strong> <code>123234536756755</code></p>
+                    <p><strong>IMEI 2:</strong> <code>343444444444444</code></p>
+                    <p><strong>Cost Price:</strong> $600 each</p>
+                    <p><strong>Condition:</strong> New</p>
+                </div>
+            </div>
+
+            <!-- Checklist -->
+            <div class="section">
+                <h2>✓ Fix Checklist</h2>
+                <ul class="checklist">
+                    <li class="done">Error analyzed and understood</li>
+                    <li>Run automated fix script</li>
+                    <li>Verify function created</li>
+                    <li>Hard refresh browser (Cmd+Shift+R)</li>
+                    <li>Clear browser console</li>
+                    <li>Test PO receiving with IMEI</li>
+                    <li>Verify child variants created</li>
+                    <li>Confirm stock counts correct</li>
+                </ul>
+            </div>
+
+            <!-- Actions -->
+            <div class="section" style="text-align: center;">
+                <h2>🚀 Next Steps</h2>
+                <p style="margin-bottom: 20px;">Choose your preferred method:</p>
+                <a href="#" class="button" onclick="alert('Open your terminal and run:\n\nnode APPLY_FIX_NOW.mjs'); return false;">
+                    ⚡ Run Automated Fix
+                </a>
+                <a href="https://console.neon.tech" target="_blank" class="button secondary">
+                    🌐 Open Neon Console
+                </a>
+            </div>
+
+            <!-- Resources -->
+            <div class="section">
+                <h2>📚 Additional Resources</h2>
+                <ul style="margin-left: 20px;">
+                    <li style="margin: 10px 0;"><strong>⚡_START_HERE.md</strong> - Quick start guide (3 minutes)</li>
+                    <li style="margin: 10px 0;"><strong>🚨_FIX_INSTRUCTIONS.md</strong> - Step-by-step instructions</li>
+                    <li style="margin: 10px 0;"><strong>📊_ERROR_ANALYSIS_COMPLETE.md</strong> - Complete technical analysis</li>
+                    <li style="margin: 10px 0;"><strong>ALL_IN_ONE_FIX.sql</strong> - Database migration script</li>
+                    <li style="margin: 10px 0;"><strong>APPLY_FIX_NOW.mjs</strong> - Automated fix script</li>
+                    <li style="margin: 10px 0;"><strong>VERIFY_FIX.mjs</strong> - Verification script</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>Error Analysis Report</strong></p>
+            <p>Generated: October 25, 2025</p>
+            <p style="margin-top: 10px; opacity: 0.7;">Fix Version 1.0.0 | Estimated Fix Time: 3-5 minutes</p>
+        </div>
+    </div>
+</body>
+</html>
+

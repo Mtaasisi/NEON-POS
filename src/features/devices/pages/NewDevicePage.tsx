@@ -417,7 +417,7 @@ const DeviceIntakeUnifiedPage: React.FC = () => {
       if (!isOnline) {
         // Use offline AI analysis
 
-        toast.info('Working offline - using local AI analysis');
+        toast('Working offline - using local AI analysis');
         
         const offlineResult = await offlineAIService.analyzeDevice(
           formData.model,
@@ -1402,7 +1402,7 @@ IMPORTANT INSTRUCTIONS:
     // If not 100% complete, show warning but allow submission
     if (completionPercentage < 100) {
       const warningMsg = `Form is ${completionPercentage}% complete. Some fields are optional but recommended.`;
-      toast.info(warningMsg);
+      toast(warningMsg);
       addErrorToHistory(warningMsg, 'warning');
     }
     

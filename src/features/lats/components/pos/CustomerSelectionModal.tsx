@@ -212,14 +212,20 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
 
   const getLoyaltyIcon = (loyaltyLevel: string) => {
     switch (loyaltyLevel?.toLowerCase()) {
-      case 'platinum':
+      case 'vip':
         return <Star className="w-4 h-4 text-purple-500 fill-current" />;
-      case 'gold':
+      case 'premium':
         return <Star className="w-4 h-4 text-yellow-500 fill-current" />;
-      case 'silver':
+      case 'regular':
+        return <Star className="w-4 h-4 text-blue-500 fill-current" />;
+      case 'active':
+        return <Star className="w-4 h-4 text-green-500 fill-current" />;
+      case 'payment_customer':
+        return <Star className="w-4 h-4 text-teal-500 fill-current" />;
+      case 'engaged':
+        return <Star className="w-4 h-4 text-indigo-500 fill-current" />;
+      case 'interested':
         return <Star className="w-4 h-4 text-gray-400 fill-current" />;
-      case 'bronze':
-        return <Star className="w-4 h-4 text-orange-500 fill-current" />;
       default:
         return null;
     }
@@ -496,6 +502,10 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
         isOpen={showCreateCustomer}
         onClose={() => setShowCreateCustomer(false)}
         onCustomerCreated={handleCustomerCreated}
+        onAddAnother={() => {
+          // Reopen the modal for adding another customer
+          setShowCreateCustomer(true);
+        }}
       />
       </div>
     </>
@@ -557,14 +567,20 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, onSelect, isSelec
 
   const getLoyaltyIcon = (loyaltyLevel: string) => {
     switch (loyaltyLevel?.toLowerCase()) {
-      case 'platinum':
+      case 'vip':
         return <Star className="w-4 h-4 text-purple-500 fill-current" />;
-      case 'gold':
+      case 'premium':
         return <Star className="w-4 h-4 text-yellow-500 fill-current" />;
-      case 'silver':
+      case 'regular':
+        return <Star className="w-4 h-4 text-blue-500 fill-current" />;
+      case 'active':
+        return <Star className="w-4 h-4 text-green-500 fill-current" />;
+      case 'payment_customer':
+        return <Star className="w-4 h-4 text-teal-500 fill-current" />;
+      case 'engaged':
+        return <Star className="w-4 h-4 text-indigo-500 fill-current" />;
+      case 'interested':
         return <Star className="w-4 h-4 text-gray-400 fill-current" />;
-      case 'bronze':
-        return <Star className="w-4 h-4 text-orange-500 fill-current" />;
       default:
         return null;
     }
@@ -609,7 +625,7 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, onSelect, isSelec
           <div className="flex items-center gap-1 transition-transform duration-200 hover:scale-110">
             {getLoyaltyIcon(customer.loyaltyLevel)}
             <span className="text-xs text-gray-500 font-medium">
-              {customer.loyaltyLevel || 'bronze'}
+              {customer.loyaltyLevel || 'interested'}
             </span>
           </div>
         </div>

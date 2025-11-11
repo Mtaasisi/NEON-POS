@@ -17,6 +17,7 @@ import customersRoutes from './routes/customers.js';
 import salesRoutes from './routes/sales.js';
 import cartRoutes from './routes/cart.js';
 import smsRoutes from './routes/sms.js';
+// import neonMigrationRouter from '../routes/neon-migration.mjs';
 
 // Load environment variables
 dotenv.config();
@@ -58,6 +59,7 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api', smsRoutes);
+// app.use('/api/neon', neonMigrationRouter);
 
 // 404 handler
 app.use(notFoundHandler);

@@ -273,7 +273,7 @@ class NotificationSettingsService {
         invoice_no: invoice.invoice_no
       });
 
-      toast.info('Email sending coming soon! 📧');
+      toast('Email sending coming soon! 📧', { icon: 'ℹ️' });
       
       return { success: false, error: 'Email sending not yet implemented' };
     } catch (error: any) {

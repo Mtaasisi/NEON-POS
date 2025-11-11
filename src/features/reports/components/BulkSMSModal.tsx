@@ -4,6 +4,7 @@ import GlassButton from '../../shared/components/ui/GlassButton';
 import { LoyaltyLevel, Customer } from '../../../types';
 import geminiService from '../../../services/geminiService';
 import { toast } from 'react-hot-toast';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface BulkSMSModalProps {
   open: boolean;
@@ -23,6 +24,9 @@ const BulkSMSModal: React.FC<BulkSMSModalProps> = ({ open, onClose, customers, o
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string>('');
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(open);
 
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
@@ -258,10 +262,13 @@ Generate a personalized message template with placeholders like {name}, {loyalty
               onChange={e => setLoyalty(e.target.value as any)}
             >
               <option value="all">All</option>
-              <option value="platinum">Platinum</option>
-              <option value="gold">Gold</option>
-              <option value="silver">Silver</option>
-              <option value="bronze">Bronze</option>
+              <option value="vip">VIP</option>
+              <option value="premium">Premium</option>
+              <option value="regular">Regular</option>
+              <option value="active">Active</option>
+              <option value="payment_customer">Payment Customer</option>
+              <option value="engaged">Engaged</option>
+              <option value="interested">Interested</option>
             </select>
           </div>
           <div>

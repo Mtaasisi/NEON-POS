@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, UserPlus } from 'lucide-react';
+import { X, UserPlus, ArrowLeft } from 'lucide-react';
 import { useCustomers } from '../../../../context/CustomersContext';
 import { toast } from 'react-hot-toast';
 import CustomerForm from './CustomerForm';
@@ -13,9 +13,10 @@ interface AddCustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCustomerCreated?: (customer: Customer) => void;
+  onAddAnother?: () => void; // Callback to reopen modal for adding another customer
 }
 
-const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, onCustomerCreated }) => {
+const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, onCustomerCreated, onAddAnother }) => {
   const { addCustomer } = useCustomers();
   const [isLoading, setIsLoading] = useState(false);
   const successModal = useSuccessModal();
@@ -42,7 +43,7 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
         birthDay: customerData.birthDay,
         notes: [], // Initialize empty notes array
         // These fields will be set by the addCustomer function
-        loyaltyLevel: 'bronze' as const,
+        loyaltyLevel: 'interested' as const,
         colorTag: customerData.customerTag,
         referrals: [],
         totalSpent: 0,
@@ -86,10 +87,15 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
                 label: 'Message on WhatsApp',
                 onClick: () => {
                   const whatsappNumber = customer.whatsapp || customer.phone;
-                  const cleanNumber = whatsappNumber.replace(/\D/g, '');
-                  window.open(`https://wa.me/${cleanNumber}`, '_blank');
+                  const cleanNumber = whatsappNumber?.replace(/\D/g, '');
+                  if (cleanNumber) {
+                    const message = encodeURIComponent(`Hello ${customer.name}, thank you for becoming our customer!`);
+                    window.open(`https://wa.me/${cleanNumber}?text=${message}`, '_blank');
+                  } else {
+                    toast.error('Customer has no phone number');
+                  }
                 },
-                variant: 'primary',
+                variant: 'whatsapp',
               },
               {
                 label: 'View Customer',
@@ -103,7 +109,13 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
               {
                 label: 'Add Another',
                 onClick: () => {
-                  // Form will reset automatically
+                  // Reopen the modal for adding another customer
+                  if (onAddAnother) {
+                    onAddAnother();
+                  } else {
+                    // Fallback: just close the success modal
+                    toast.success('Ready to add another customer!');
+                  }
                 },
                 variant: 'secondary',
               },
@@ -197,28 +209,28 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
               className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
               style={{ pointerEvents: 'auto' }}
             >
-            <div className="p-6">
               {/* Header */}
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
                     <UserPlus className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900">Add New Customer</h3>
-                    <p className="text-xs text-gray-500">Enter customer details below</p>
+                    <p className="text-sm text-gray-500">Enter customer details below</p>
                   </div>
                 </div>
                 <button
                   onClick={onClose}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Close modal"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
               {/* Content */}
-              <div className="space-y-4">
+              <div className="p-6">
                 <CustomerForm
                   onSubmit={handleCustomerCreated}
                   onCancel={onClose}
@@ -227,13 +239,14 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
                 />
                 
                 {/* Action Buttons */}
-                <div className="flex gap-3 mt-6">
+                <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
                   <button
                     type="button"
                     onClick={onClose}
                     disabled={isLoading}
-                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-6 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
+                    <ArrowLeft className="w-4 h-4" />
                     Cancel
                   </button>
                   <button
@@ -245,18 +258,24 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
                       }
                     }}
                     disabled={isLoading}
-                    className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    {isLoading ? 'Adding...' : 'Add Customer'}
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                        Adding...
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        Add Customer
+                      </>
+                    )}
                   </button>
                 </div>
-                <p className="text-xs text-center text-gray-500 mt-2">
-                  All changes are saved automatically
-                </p>
               </div>
             </div>
           </div>
-        </div>
         </>
       )}
       

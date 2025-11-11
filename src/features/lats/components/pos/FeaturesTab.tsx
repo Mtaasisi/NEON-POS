@@ -5,6 +5,7 @@ import UniversalSettingsTab from './UniversalSettingsTab';
 import { SettingsSection } from './UniversalFormComponents';
 import { ToggleSwitch } from './UniversalFormComponents';
 import toast from 'react-hot-toast';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 export interface FeaturesTabRef {
   saveSettings: () => Promise<boolean>;
@@ -19,7 +20,8 @@ interface FeatureState {
   enableDynamicPricing: boolean;
 }
 
-const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
+const FeaturesTab = forwardRef<FeaturesTabRef>((_props, ref) => {
+  const { t } = useTranslation(); // Add translation hook
   const [features, setFeatures] = useState<FeatureState>({
     enableDelivery: false,
     enableLoyaltyProgram: true,
@@ -28,8 +30,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
     enableDynamicPricing: true,
   });
   
-  const [isSaving, setIsSaving] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading] = useState(false);
 
   // Load settings from localStorage
   React.useEffect(() => {
@@ -44,7 +45,6 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
   }, []);
 
   const handleSave = async () => {
-    setIsSaving(true);
     try {
       localStorage.setItem('lats-pos-features', JSON.stringify(features));
       toast.success('Features saved successfully!');
@@ -53,8 +53,6 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
       console.error('Error saving features:', error);
       toast.error('Failed to save features');
       return false;
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -87,20 +85,13 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
 
   return (
     <UniversalSettingsTab
-      title="Features"
-      description="Enable or disable optional POS features based on your business needs"
-      onSave={handleSave}
-      onReset={handleReset}
-      onCancel={() => {}}
       isLoading={isLoading}
-      isSaving={isSaving}
-      isDirty={false}
     >
       {/* Main Features */}
       <SettingsSection
         title="Optional Features"
-        description="Toggle features on or off to customize your POS experience"
         icon={<Package className="w-5 h-5" />}
+        helpText="Chagua features unazotaka. Features ambazo haziko enabled hazitaonekana kwenye POS."
       >
         <div className="space-y-4">
           {/* Delivery Management */}
@@ -113,7 +104,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 mb-1">Delivery Management</h4>
                   <p className="text-sm text-gray-600 mb-2">
-                    Enable delivery orders, driver assignment, and delivery tracking features.
+                    Weka delivery orders, driver assignment, na tracking.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded">Driver Tracking</span>
@@ -123,6 +114,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 </div>
               </div>
               <ToggleSwitch
+                id="enable-delivery"
                 label=""
                 checked={features.enableDelivery}
                 onChange={(checked) => handleFeatureToggle('enableDelivery', checked)}
@@ -133,7 +125,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-medium">Active</span>
-                  <span className="text-gray-500">- Delivery options will appear in sales flow</span>
+                  <span className="text-gray-500">- Delivery options zitaonekana kwenye POS</span>
                 </div>
               </div>
             )}
@@ -149,7 +141,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 mb-1">Loyalty Program</h4>
                   <p className="text-sm text-gray-600 mb-2">
-                    Reward customers with points, track loyalty tiers, and offer member discounts.
+                    Wapa customers points, track loyalty tiers, na discounts.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <span className="text-xs px-2 py-1 bg-purple-50 text-purple-700 rounded">Points System</span>
@@ -159,6 +151,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 </div>
               </div>
               <ToggleSwitch
+                id="enable-loyalty"
                 label=""
                 checked={features.enableLoyaltyProgram}
                 onChange={(checked) => handleFeatureToggle('enableLoyaltyProgram', checked)}
@@ -169,7 +162,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-medium">Active</span>
-                  <span className="text-gray-500">- Loyalty features enabled in POS</span>
+                  <span className="text-gray-500">- Loyalty features ziko enabled kwenye POS</span>
                 </div>
               </div>
             )}
@@ -185,7 +178,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 mb-1">Customer Profiles</h4>
                   <p className="text-sm text-gray-600 mb-2">
-                    Save customer information, purchase history, and preferences for personalized service.
+                    Save taarifa za customers, historia ya manunuzi, na preferences.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <span className="text-xs px-2 py-1 bg-green-50 text-green-700 rounded">Purchase History</span>
@@ -195,6 +188,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 </div>
               </div>
               <ToggleSwitch
+                id="enable-customer-profiles"
                 label=""
                 checked={features.enableCustomerProfiles}
                 onChange={(checked) => handleFeatureToggle('enableCustomerProfiles', checked)}
@@ -205,7 +199,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-medium">Active</span>
-                  <span className="text-gray-500">- Customer selection available in POS</span>
+                  <span className="text-gray-500">- Customer selection inapatikana kwenye POS</span>
                 </div>
               </div>
             )}
@@ -221,7 +215,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 mb-1">Payment Tracking</h4>
                   <p className="text-sm text-gray-600 mb-2">
-                    Track partial payments, payment plans, and outstanding balances for customers.
+                    Track partial payments, payment plans, na deni za customers.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <span className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded">Partial Payments</span>
@@ -231,6 +225,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 </div>
               </div>
               <ToggleSwitch
+                id="enable-payment-tracking"
                 label=""
                 checked={features.enablePaymentTracking}
                 onChange={(checked) => handleFeatureToggle('enablePaymentTracking', checked)}
@@ -241,7 +236,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-medium">Active</span>
-                  <span className="text-gray-500">- Payment tracking enabled</span>
+                  <span className="text-gray-500">- Payment tracking iko enabled</span>
                 </div>
               </div>
             )}
@@ -257,7 +252,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex-1">
                   <h4 className="font-semibold text-gray-900 mb-1">Dynamic Pricing</h4>
                   <p className="text-sm text-gray-600 mb-2">
-                    Enable time-based pricing, bulk discounts, and promotional pricing rules.
+                    Weka bei special kwa wakati fulani, bulk discounts, na promotions.
                   </p>
                   <div className="flex flex-wrap gap-2">
                     <span className="text-xs px-2 py-1 bg-yellow-50 text-yellow-700 rounded">Happy Hour</span>
@@ -267,6 +262,7 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 </div>
               </div>
               <ToggleSwitch
+                id="enable-dynamic-pricing"
                 label=""
                 checked={features.enableDynamicPricing}
                 onChange={(checked) => handleFeatureToggle('enableDynamicPricing', checked)}
@@ -277,29 +273,13 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((props, ref) => {
                 <div className="flex items-center gap-2 text-sm text-green-600">
                   <CheckCircle className="w-4 h-4" />
                   <span className="font-medium">Active</span>
-                  <span className="text-gray-500">- Dynamic pricing rules applied</span>
+                  <span className="text-gray-500">- Dynamic pricing rules ziko applied</span>
                 </div>
               </div>
             )}
           </div>
         </div>
       </SettingsSection>
-
-      {/* Info Section */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <Package className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="font-medium text-blue-900 mb-1">Feature Management</h4>
-            <ul className="text-sm text-blue-700 space-y-1">
-              <li>• Toggle features on/off based on your business needs</li>
-              <li>• Disabled features won't appear in the POS interface</li>
-              <li>• You can enable/disable features anytime without losing data</li>
-              <li>• Some features may require additional configuration</li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </UniversalSettingsTab>
   );
 });

@@ -340,7 +340,6 @@ const StorageRoomModal: React.FC<StorageRoomModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
         </div>
       </div>
     </>

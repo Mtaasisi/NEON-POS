@@ -1,13 +1,83 @@
 [build]
-  command = "npm run build"
-  publish = "dist"
+  command = "npm run build:prod && mkdir -p dist-deploy/lats && cp -r dist/* dist-deploy/lats/ && cp public/_redirects dist-deploy/_redirects"
+  publish = "dist-deploy"
 
 [build.environment]
   NODE_VERSION = "18"
+  NODE_ENV = "production"
+  VITE_APP_ENV = "production"
 
-# SPA redirect rule - this is crucial for React Router to work
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+# Production environment variables (will use .env.production values)
+[context.production.environment]
+  NODE_ENV = "production"
+  VITE_APP_ENV = "production"
+  VITE_BASE_PATH = "/lats/"
+
+# Deploy preview environment (use development database)
+[context.deploy-preview.environment]
+  NODE_ENV = "development"
+  VITE_APP_ENV = "development"
+  VITE_BASE_PATH = "/lats/"
+
+# Branch deploys (use development database)
+[context.branch-deploy.environment]
+  NODE_ENV = "development"
+  VITE_APP_ENV = "development"
+  VITE_BASE_PATH = "/lats/"
+
+# Headers for proper MIME types on static assets in /lats/ subdirectory
+[[headers]]
+  for = "/lats/assets/*.js"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/lats/assets/*.mjs"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/lats/assets/*.css"
+  [headers.values]
+    Content-Type = "text/css; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/lats/*.js"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+
+[[headers]]
+  for = "/lats/*.mjs"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+
+[[headers]]
+  for = "/lats/*.css"
+  [headers.values]
+    Content-Type = "text/css; charset=utf-8"
+
+# Also keep root level headers for backward compatibility
+[[headers]]
+  for = "/assets/*.js"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*.mjs"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*.css"
+  [headers.values]
+    Content-Type = "text/css; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Redirects are now handled by public/_redirects file
+# This provides better control over asset file serving
 

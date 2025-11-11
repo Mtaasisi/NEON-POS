@@ -792,7 +792,6 @@ const ShelfModal: React.FC<ShelfModalProps> = ({
             </button>
           </div>
         </div>
-      </div>
         </div>
       </div>
     </>

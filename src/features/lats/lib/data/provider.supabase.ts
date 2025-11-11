@@ -357,6 +357,51 @@ const supabaseProvider = {
 
   deleteSupplier: async (id: string) => {
     try {
+      // First, check if the supplier has any purchase orders
+      const { data: purchaseOrders, error: checkError } = await supabase
+        .from('lats_purchase_orders')
+        .select('id')
+        .eq('supplier_id', id)
+        .limit(1);
+
+      if (checkError) {
+        console.error('Error checking purchase orders:', checkError);
+        return {
+          ok: false,
+          message: `Failed to check supplier references: ${checkError.message}`
+        };
+      }
+
+      if (purchaseOrders && purchaseOrders.length > 0) {
+        return {
+          ok: false,
+          message: 'Cannot delete supplier: This supplier has associated purchase orders. Please delete or reassign the purchase orders first.'
+        };
+      }
+
+      // Check if the supplier has any products
+      const { data: products, error: productsCheckError } = await supabase
+        .from('lats_products')
+        .select('id')
+        .eq('supplier_id', id)
+        .limit(1);
+
+      if (productsCheckError) {
+        console.error('Error checking products:', productsCheckError);
+        return {
+          ok: false,
+          message: `Failed to check supplier references: ${productsCheckError.message}`
+        };
+      }
+
+      if (products && products.length > 0) {
+        return {
+          ok: false,
+          message: 'Cannot delete supplier: This supplier has associated products. Please delete or reassign the products first.'
+        };
+      }
+
+      // If no references exist, proceed with deletion
       const { error } = await supabase
         .from('lats_suppliers')
         .delete()
@@ -433,32 +478,65 @@ const supabaseProvider = {
 
   getProductVariants: async (productId: string) => {
     try {
+      // ✅ NEW: Filter to show ONLY parent and standard variants
+      // Exclude IMEI children (they will be shown separately when needed)
       const { data: variants, error } = await supabase
         .from('lats_product_variants')
         .select('*')
         .eq('product_id', productId)
-        .order('name');
+        .is('parent_variant_id', null)  // ✅ FIX: Exclude IMEI children
+        .order('variant_name');
 
       if (error) throw error;
 
+      // ✅ For each parent variant, calculate stock from children if applicable
+      const variantsWithStock = await Promise.all(
+        (variants || []).map(async (v: any) => {
+          let actualStock = v.quantity || 0;
+          
+          // If this is a parent variant, recalculate stock from children
+          if (v.is_parent || v.variant_type === 'parent') {
+            try {
+              const { data: children, error: childError } = await supabase
+                .from('lats_product_variants')
+                .select('quantity, is_active')
+                .eq('parent_variant_id', v.id)
+                .eq('variant_type', 'imei_child')
+                .eq('is_active', true);
+              
+              if (!childError && children) {
+                actualStock = children.reduce((sum: number, child: any) => sum + (child.quantity || 0), 0);
+              }
+            } catch (e) {
+              console.warn('Could not calculate stock from children:', e);
+            }
+          }
+
+          return {
+            id: v.id,
+            productId: v.product_id,
+            name: v.variant_name || v.name || 'Unnamed',
+            sku: v.sku,
+            attributes: v.attributes || v.variant_attributes || {},
+            variant_attributes: v.variant_attributes || v.attributes || {},
+            price: v.selling_price || 0,
+            costPrice: v.cost_price || 0,
+            sellingPrice: v.selling_price || 0,
+            stockQuantity: actualStock,  // ✅ Use calculated stock
+            minStockLevel: v.min_quantity || 0,
+            quantity: actualStock,  // ✅ Use calculated stock
+            minQuantity: v.min_quantity || 0,
+            isParent: v.is_parent || false,
+            variantType: v.variant_type || 'standard',
+            createdAt: v.created_at,
+            updatedAt: v.updated_at
+          };
+        })
+      );
+
       return {
         ok: true,
-        data: (variants || []).map((v: any) => ({
-          id: v.id,
-          productId: v.product_id,
-          name: v.name,
-          sku: v.sku,
-          attributes: v.attributes || {},
-          price: v.selling_price || 0,
-          costPrice: v.cost_price || 0,
-          sellingPrice: v.selling_price || 0,
-          stockQuantity: v.quantity || 0,
-          minStockLevel: v.min_quantity || 0,
-          quantity: v.quantity || 0,
-          minQuantity: v.min_quantity || 0,
-          createdAt: v.created_at,
-          updatedAt: v.updated_at
-        }))
+        data: variantsWithStock
       };
     } catch (error) {
       console.error('Error fetching product variants:', error);
@@ -505,7 +583,13 @@ const supabaseProvider = {
         shelfId: data.shelfId,
         attributes: data.attributes,
         isActive: data.isActive !== undefined ? data.isActive : true,
-        metadata: data.metadata,
+        // ✅ CRITICAL FIX: Ensure metadata includes skip_default_variant flag
+        metadata: {
+          ...(data.metadata || {}),
+          skip_default_variant: data.variants && data.variants.length > 0, // ✅ Skip auto-creation if custom variants provided
+          useVariants: data.variants && data.variants.length > 0,
+          variantCount: data.variants ? data.variants.length : 0
+        },
         // Handle variants if provided
         variants: data.variants && data.variants.length > 0 ? data.variants.map((v: any) => ({
           sku: v.sku,
@@ -757,13 +841,25 @@ const supabaseProvider = {
             price: productVariants[0]?.selling_price || 0,
             costPrice: productVariants[0]?.cost_price || 0,
             totalQuantity: p.total_quantity,
+            image_url: p.image_url, // ⭐ ADD: Product image for mobile POS
+            brand: p.brand,
+            model: p.model,
+            description: p.description,
             variants: productVariants.map((v: any) => ({
               id: v.id,
               name: v.name,
               sku: v.sku,
               sellingPrice: v.selling_price || 0,
+              selling_price: v.selling_price || 0,
               costPrice: v.cost_price,
-              stockQuantity: v.quantity
+              cost_price: v.cost_price,
+              stockQuantity: v.quantity,
+              stock_quantity: v.quantity,
+              quantity: v.quantity, // Add quantity field for consistency
+              barcode: v.barcode,
+              variant_name: v.variant_name, // ⭐ ADD: For IMEI extraction
+              variant_attributes: v.variant_attributes || v.attributes || {},  // ⭐ PRESERVE: For trade-in detection
+              attributes: v.attributes || v.variant_attributes || {}
             }))
           };
         })
@@ -1025,7 +1121,14 @@ const supabaseProvider = {
           .select('*')
           .in('id', variantIds);
         
-        variants?.forEach((v: any) => variantsMap.set(v.id, v));
+        // Map variants and ensure name field uses variant_name as primary source
+        variants?.forEach((v: any) => {
+          variantsMap.set(v.id, {
+            ...v,
+            // Ensure name is populated from variant_name first (main field)
+            name: v.variant_name || v.name || 'Default Variant'
+          });
+        });
       }
       
       // Debug supplier data in getPurchaseOrder
@@ -1081,6 +1184,7 @@ const supabaseProvider = {
             quantityOrdered: quantityOrdered,
             receivedQuantity: item.quantity_received || 0,
             costPrice: unitCost,
+            cost_price: unitCost,  // Add snake_case for compatibility with modals
             unitCost: unitCost,
             totalPrice: totalCost,
             subtotal: totalCost,
@@ -1117,10 +1221,14 @@ const supabaseProvider = {
         sum + (item.quantity * item.costPrice), 0
       );
       
+      // Calculate total amount in base currency (TZS)
+      const exchangeRate = data.exchangeRate || 1.0;
+      const totalAmountBaseCurrency = totalAmount * exchangeRate;
+      
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
       
-      // Create the purchase order - using only core columns that exist
+      // Create the purchase order - with currency and exchange rate tracking
       const { data: purchaseOrder, error: poError } = await supabase
         .from('lats_purchase_orders')
         .insert({
@@ -1128,6 +1236,13 @@ const supabaseProvider = {
           supplier_id: data.supplierId,
           status: data.status || 'draft',
           total_amount: totalAmount,
+          currency: data.currency || 'TZS',
+          payment_terms: data.paymentTerms || null,
+          exchange_rate: exchangeRate,
+          base_currency: data.baseCurrency || 'TZS',
+          exchange_rate_source: data.exchangeRateSource || 'manual',
+          exchange_rate_date: data.exchangeRateDate || new Date().toISOString(),
+          total_amount_base_currency: totalAmountBaseCurrency,
           notes: data.notes || '',
           order_date: data.orderDate || new Date().toISOString(),
           expected_delivery_date: data.expectedDelivery || null,
@@ -1201,14 +1316,34 @@ const supabaseProvider = {
   updatePurchaseOrder: async (id: string, data: any) => {
     try {
       
+      // Prepare update object with currency fields if provided
+      const updateData: any = {
+        status: data.status,
+        notes: data.notes,
+        expected_delivery_date: data.expectedDelivery,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Add currency-related fields if provided
+      if (data.currency) updateData.currency = data.currency;
+      if (data.paymentTerms) updateData.payment_terms = data.paymentTerms;
+      if (data.exchangeRate) updateData.exchange_rate = data.exchangeRate;
+      if (data.baseCurrency) updateData.base_currency = data.baseCurrency;
+      if (data.exchangeRateSource) updateData.exchange_rate_source = data.exchangeRateSource;
+      if (data.exchangeRateDate) updateData.exchange_rate_date = data.exchangeRateDate;
+      
+      // Recalculate total_amount_base_currency if exchange rate or items changed
+      if (data.items && data.exchangeRate) {
+        const totalAmount = data.items.reduce((sum: number, item: any) => 
+          sum + (item.quantity * item.costPrice), 0
+        );
+        updateData.total_amount = totalAmount;
+        updateData.total_amount_base_currency = totalAmount * data.exchangeRate;
+      }
+      
       const { data: updatedPO, error: updateError } = await supabase
         .from('lats_purchase_orders')
-        .update({
-          status: data.status,
-          notes: data.notes,
-          expected_delivery_date: data.expectedDelivery,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', id)
         .select()
         .single();
@@ -1224,6 +1359,9 @@ const supabaseProvider = {
         if (data.status) changes.push(`Status: ${data.status}`);
         if (data.notes) changes.push('Notes updated');
         if (data.expectedDelivery) changes.push(`Expected delivery: ${data.expectedDelivery}`);
+        if (data.currency) changes.push(`Currency: ${data.currency}`);
+        if (data.exchangeRate) changes.push(`Exchange rate: ${data.exchangeRate}`);
+        if (data.paymentTerms) changes.push(`Payment terms: ${data.paymentTerms}`);
         
         await PurchaseOrderService.addAuditEntry({
           purchaseOrderId: id,

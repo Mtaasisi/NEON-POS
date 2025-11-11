@@ -671,7 +671,7 @@ async function performFetchAllCustomersSimple() {
               gender: customer.gender || 'other',
               city: customer.city || '',
               colorTag: normalizeColorTag(customer.color_tag || 'new'),
-              loyaltyLevel: customer.loyalty_level || 'bronze',
+              loyaltyLevel: customer.loyalty_level || 'interested',
               points: safeParseNumber(customer.points, 0),
               totalSpent: safeParseNumber(customer.total_spent, 0),
               lastVisit: customer.last_visit || customer.created_at,
@@ -1312,7 +1312,7 @@ export async function updateCustomerInDb(customerId: string, updates: Partial<Cu
 
 
     const { data, error } = await checkSupabase()
-      .from('customers')
+      .from('lats_customers')
       .update(validatedUpdates)
       .eq('id', customerId as any)
       .select()

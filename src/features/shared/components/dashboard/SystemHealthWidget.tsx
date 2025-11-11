@@ -423,8 +423,16 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
         </div>
       </div>
 
-      {/* Metrics - Three Column Grid */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      {/* Metrics - Auto-fit Grid */}
+      <div 
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(120px, 100%), 1fr))',
+          gap: 'clamp(0.75rem, 2vw, 1rem)',
+          gridAutoRows: '1fr'
+        }}
+        className="mb-8"
+      >
         <div>
           <p className="text-xs text-gray-400 mb-1.5">Response Time</p>
           <p className="text-xl font-semibold text-gray-900">{systemStatus.responseTime}<span className="text-sm text-gray-400 ml-1">ms</span></p>
@@ -439,8 +447,16 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
         </div>
       </div>
 
-      {/* Status Grid - Modern Cards */}
-      <div className="grid grid-cols-2 gap-3 mb-6 flex-grow">
+      {/* Status Grid - Modern Cards - Auto-fit */}
+      <div 
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+          gap: 'clamp(0.5rem, 1.5vw, 0.75rem)',
+          gridAutoRows: '1fr'
+        }}
+        className="mb-6 flex-grow"
+      >
         {/* Database Health */}
         <div className="p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
           <div className="flex items-center gap-2 mb-2">

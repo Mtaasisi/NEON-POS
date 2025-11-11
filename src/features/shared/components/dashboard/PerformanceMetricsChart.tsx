@@ -91,11 +91,16 @@ export const PerformanceMetricsChart: React.FC<PerformanceMetricsChartProps> = (
           ? Math.min(100, Math.round((completedDevices / totalDevices) * 100))
           : 85; // Default high performance if no data
         
+        // Validate all metrics before adding to data
+        const validSalesPerf = isNaN(salesPerformance) || !isFinite(salesPerformance) ? 0 : Math.max(0, Math.min(100, salesPerformance));
+        const validServicePerf = isNaN(servicePerformance) || !isFinite(servicePerformance) ? 0 : Math.max(0, Math.min(100, servicePerformance));
+        const validSatisfaction = isNaN(satisfactionScore) || !isFinite(satisfactionScore) ? 0 : Math.max(0, Math.min(100, satisfactionScore));
+        
         data.push({
           date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          sales: salesPerformance,
-          service: servicePerformance,
-          satisfaction: satisfactionScore
+          sales: validSalesPerf,
+          service: validServicePerf,
+          satisfaction: validSatisfaction
         });
       }
       
@@ -156,8 +161,20 @@ export const PerformanceMetricsChart: React.FC<PerformanceMetricsChartProps> = (
     );
   }
 
+  // Filter out any items with invalid values before rendering
+  const validMetricsData = metricsData.filter(item => {
+    const isValid = 
+      !isNaN(item.sales) && isFinite(item.sales) &&
+      !isNaN(item.service) && isFinite(item.service) &&
+      !isNaN(item.satisfaction) && isFinite(item.satisfaction);
+    if (!isValid) {
+      console.warn('⚠️ Filtering out invalid metrics data item:', item);
+    }
+    return isValid;
+  });
+
   return (
-    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col w-full ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
@@ -180,7 +197,7 @@ export const PerformanceMetricsChart: React.FC<PerformanceMetricsChartProps> = (
       {/* Chart */}
       <div className="flex-grow -mx-2 min-h-48">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={metricsData}>
+          <LineChart data={validMetricsData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis 
               dataKey="date" 

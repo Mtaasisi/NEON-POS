@@ -6,6 +6,7 @@ import { saleProcessingService } from '../../../../lib/saleProcessingService';
 import { financeAccountService } from '../../../../lib/financeAccountService';
 import { PaymentFrequency } from '../../../../types/specialOrders';
 import { useBranch } from '../../../../context/BranchContext';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 interface POSInstallmentModalProps {
   isOpen: boolean;
@@ -34,6 +35,9 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
   const { currentBranch } = useBranch();
   const [paymentAccounts, setPaymentAccounts] = useState<any[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
   
   const [formData, setFormData] = useState({
     down_payment: 0,
@@ -280,7 +284,7 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
           pointerEvents: 'none'
         }}
       >
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" style={{ pointerEvents: 'auto' }}>
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-purple-500 to-purple-600">
           <div className="flex items-center gap-3">

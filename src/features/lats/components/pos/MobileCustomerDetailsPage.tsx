@@ -171,10 +171,13 @@ const MobileCustomerDetailsPage: React.FC<MobileCustomerDetailsPageProps> = ({
 
       // Determine loyalty tier based on points or total spent
       const points = customer?.loyalty_points || 0;
-      let loyaltyTier = 'bronze';
-      if (points >= 1000) loyaltyTier = 'platinum';
-      else if (points >= 500) loyaltyTier = 'gold';
-      else if (points >= 200) loyaltyTier = 'silver';
+      let loyaltyTier = 'interested';
+      if (points >= 1000) loyaltyTier = 'vip';
+      else if (points >= 700) loyaltyTier = 'premium';
+      else if (points >= 400) loyaltyTier = 'regular';
+      else if (points >= 200) loyaltyTier = 'active';
+      else if (points >= 100) loyaltyTier = 'payment_customer';
+      else if (points >= 50) loyaltyTier = 'engaged';
 
       setCustomerData({
         id: customer.id,
@@ -223,14 +226,22 @@ const MobileCustomerDetailsPage: React.FC<MobileCustomerDetailsPageProps> = ({
 
   const getTierColor = (tier: string) => {
     switch (tier.toLowerCase()) {
-      case 'platinum':
+      case 'vip':
         return { bg: 'bg-purple-500', text: 'text-purple-600', icon: '👑' };
-      case 'gold':
+      case 'premium':
         return { bg: 'bg-yellow-500', text: 'text-yellow-600', icon: '🏆' };
-      case 'silver':
-        return { bg: 'bg-gray-500', text: 'text-gray-600', icon: '🥈' };
+      case 'regular':
+        return { bg: 'bg-blue-500', text: 'text-blue-600', icon: '⭐' };
+      case 'active':
+        return { bg: 'bg-green-500', text: 'text-green-600', icon: '✓' };
+      case 'payment_customer':
+        return { bg: 'bg-teal-500', text: 'text-teal-600', icon: '💳' };
+      case 'engaged':
+        return { bg: 'bg-indigo-500', text: 'text-indigo-600', icon: '📊' };
+      case 'interested':
+        return { bg: 'bg-gray-500', text: 'text-gray-600', icon: '👀' };
       default:
-        return { bg: 'bg-orange-500', text: 'text-orange-600', icon: '🥉' };
+        return { bg: 'bg-gray-500', text: 'text-gray-600', icon: '👤' };
     }
   };
 

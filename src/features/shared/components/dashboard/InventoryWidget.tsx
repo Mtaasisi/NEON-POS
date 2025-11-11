@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Package, AlertTriangle, TrendingDown, Plus, ExternalLink } from 'lucide-react';
 import { dashboardService, InventoryAlert } from '../../../../services/dashboardService';
 import { useAuth } from '../../../../context/AuthContext';
+import AddProductModal from '../../../lats/components/product/AddProductModal';
 
 interface InventoryWidgetProps {
   className?: string;
@@ -19,6 +20,7 @@ export const InventoryWidget: React.FC<InventoryWidgetProps> = ({ className }) =
     value: 0
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
 
   useEffect(() => {
     loadInventoryData();
@@ -197,13 +199,23 @@ export const InventoryWidget: React.FC<InventoryWidgetProps> = ({ className }) =
       {/* Actions - Always at bottom */}
       <div className="flex gap-2 mt-auto pt-6">
         <button
-          onClick={() => navigate('/lats/add-product')}
+          onClick={() => setShowAddProductModal(true)}
           className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg bg-gray-900 text-sm text-white hover:bg-gray-800 transition-colors"
         >
           <Plus size={14} />
           <span>Add Product</span>
         </button>
       </div>
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onProductCreated={() => {
+          setShowAddProductModal(false);
+          loadInventoryData();
+        }}
+      />
 
     </div>
   );

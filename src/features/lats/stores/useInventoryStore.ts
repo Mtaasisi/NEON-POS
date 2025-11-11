@@ -192,7 +192,8 @@ export const useInventoryStore = create<InventoryState>()(
       isSuppliersLoading: false,
       lastDataLoadTime: 0,
 
-      // Cache management - Increased cache duration for better POS performance
+      // Cache management - Optimized cache duration for better POS performance
+      // Longer cache reduces unnecessary database queries and improves load times
       dataCache: {
         categories: null,
         suppliers: null,
@@ -202,7 +203,7 @@ export const useInventoryStore = create<InventoryState>()(
         spareParts: null,
       },
       cacheTimestamp: 0,
-      CACHE_DURATION: 10 * 60 * 1000, // 10 minutes (increased for POS performance)
+      CACHE_DURATION: 15 * 60 * 1000, // 15 minutes (increased from 10min for better performance)
 
       categories: [],
       suppliers: [],
@@ -724,7 +725,7 @@ export const useInventoryStore = create<InventoryState>()(
         // Ensure filters has default pagination values
         const safeFilters = {
           page: 1,
-          limit: 200, // Increased to 200 for POS - most shops won't have more than this
+          limit: 500, // Increased to 500 for better mobile POS performance - covers most shops
           ...filters
         };
 
@@ -750,9 +751,10 @@ export const useInventoryStore = create<InventoryState>()(
         const startTime = Date.now();
         set({ isLoading: true, error: null, isDataLoading: true });
         
-        // Add timeout to prevent infinite loading (45 seconds to account for Neon cold starts)
+        // Add timeout to prevent infinite loading (75 seconds to account for Neon cold starts + query optimization)
+        // Increased from 45s to 75s to handle cold starts more gracefully
         const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Products loading timeout after 45 seconds')), 45000);
+          setTimeout(() => reject(new Error('Products loading timeout after 75 seconds. This may indicate a database connectivity issue.')), 75000);
         });
         
         try {
@@ -777,22 +779,21 @@ export const useInventoryStore = create<InventoryState>()(
             // Handle paginated response structure
             const rawProducts = response.data?.data || response.data || [];
 
-            // Validate data integrity before processing
-            if (rawProducts.length > 0) {
-
-              validateDataIntegrity(rawProducts, 'Products');
-            }
-            
             // Process and clean up product data to prevent HTTP 431 errors
-
+            // NOTE: Processing happens BEFORE validation so we validate the CLEANED data
             const processedProducts = processProductsOnly(rawProducts);
+            
+            // Validate data integrity after processing (should be clean now)
+            if (processedProducts.length > 0) {
+              validateDataIntegrity(processedProducts, 'Products');
+            }
 
             // Update pagination info
             const paginationInfo = {
               currentPage: response.data?.page || 1,
               totalItems: response.data?.total || processedProducts.length,
               totalPages: response.data?.totalPages || 1,
-              itemsPerPage: response.data?.limit || 200 // Increased to 200 for POS
+              itemsPerPage: response.data?.limit || 500 // Increased to 500 for better mobile POS performance
             };
 
             

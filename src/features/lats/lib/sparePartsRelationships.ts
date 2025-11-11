@@ -438,14 +438,7 @@ class SparePartsRelationshipService {
     try {
       const { data, error } = await supabase
         .from('lats_device_compatibility')
-        .select(`
-          *,
-          lats_spare_parts(
-            *,
-            category:lats_categories(name),
-            supplier:lats_suppliers(name)
-          )
-        `)
+        .select('*')
         .eq('device_brand', deviceBrand)
         .eq('device_model', deviceModel)
         .eq('device_type', deviceType)
@@ -456,7 +449,31 @@ class SparePartsRelationshipService {
         return [];
       }
 
-      return data?.map((item: any) => item.spare_part).filter(Boolean) || [];
+      // Fetch spare parts separately to avoid SQL syntax issues
+      if (!data || data.length === 0) {
+        return [];
+      }
+
+      const sparePartIds = [...new Set(data.map((item: any) => item.spare_part_id).filter(Boolean))];
+      if (sparePartIds.length === 0) {
+        return [];
+      }
+
+      const { data: spareParts, error: spError } = await supabase
+        .from('lats_spare_parts')
+        .select(`
+          *,
+          category:lats_categories(name),
+          supplier:lats_suppliers(name)
+        `)
+        .in('id', sparePartIds);
+
+      if (spError) {
+        console.error('❌ Error fetching spare parts:', spError);
+        return [];
+      }
+
+      return spareParts || [];
     } catch (error) {
       console.error('❌ Error searching spare parts by device:', error);
       return [];

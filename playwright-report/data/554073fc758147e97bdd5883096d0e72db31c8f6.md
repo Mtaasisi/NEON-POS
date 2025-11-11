@@ -1,0 +1,937 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e6]:
+        - button "Go to Dashboard" [ref=e8] [cursor=pointer]:
+          - img [ref=e9]
+        - generic [ref=e11]:
+          - button "Search (⌘K)" [ref=e12] [cursor=pointer]:
+            - img [ref=e13]
+          - generic [ref=e16]:
+            - button "Expense" [ref=e17] [cursor=pointer]:
+              - img [ref=e18]
+              - generic [ref=e20]: Expense
+            - button "Reminder" [ref=e21] [cursor=pointer]:
+              - img [ref=e22]
+              - generic [ref=e25]: Reminder
+            - button "Create" [ref=e27] [cursor=pointer]:
+              - generic [ref=e28]: Create
+              - img [ref=e29]
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - button "POS System" [ref=e33] [cursor=pointer]:
+              - img [ref=e34]
+            - generic [ref=e38]: POS System
+          - generic [ref=e40]:
+            - button "Customers" [ref=e41] [cursor=pointer]:
+              - img [ref=e42]
+            - generic [ref=e47]: Customers
+          - generic [ref=e49]:
+            - button "Devices" [ref=e50] [cursor=pointer]:
+              - img [ref=e51]
+            - generic [ref=e53]: Devices
+          - generic [ref=e55]:
+            - button "Reminders" [ref=e56] [cursor=pointer]:
+              - img [ref=e57]
+            - generic [ref=e60]: Reminders
+          - generic [ref=e62]:
+            - button "Inventory" [ref=e63] [cursor=pointer]:
+              - img [ref=e64]
+            - generic [ref=e67]: Inventory
+        - generic [ref=e69]:
+          - button "Enter Fullscreen" [ref=e72] [cursor=pointer]:
+            - img [ref=e73]
+          - button "9+" [ref=e79] [cursor=pointer]:
+            - img [ref=e80]
+            - generic [ref=e84]: 9+
+          - button "DAR Dar es Salaam" [ref=e86] [cursor=pointer]:
+            - img [ref=e88]
+            - generic [ref=e92]:
+              - generic [ref=e93]: DAR
+              - generic [ref=e94]:
+                - img [ref=e95]
+                - generic [ref=e98]: Dar es Salaam
+            - img [ref=e99]
+    - generic [ref=e102] [cursor=pointer]:
+      - img "My Store" [ref=e107]
+      - navigation [ref=e108]:
+        - list [ref=e109]:
+          - listitem [ref=e110]:
+            - generic [ref=e111]:
+              - link [ref=e112]:
+                - /url: /dashboard
+                - img [ref=e114]
+              - generic [ref=e119]: Dashboard
+          - listitem [ref=e121]:
+            - generic [ref=e122]:
+              - link [ref=e123]:
+                - /url: /pos
+                - img [ref=e125]
+              - generic [ref=e129]: POS System
+          - listitem [ref=e131]:
+            - generic [ref=e132]:
+              - link [ref=e133]:
+                - /url: /lats/trade-in/management
+                - img [ref=e135]
+              - generic [ref=e140]: Trade-in
+          - listitem [ref=e142]:
+            - generic [ref=e143]:
+              - link [ref=e144]:
+                - /url: /devices
+                - img [ref=e146]
+              - generic [ref=e148]: Devices
+          - listitem [ref=e150]:
+            - generic [ref=e151]:
+              - link [ref=e152]:
+                - /url: /customers
+                - img [ref=e154]
+              - generic [ref=e159]: Customers
+          - listitem [ref=e161]:
+            - generic [ref=e162]:
+              - link [ref=e163]:
+                - /url: /appointments
+                - img [ref=e165]
+              - generic [ref=e167]: Appointments
+          - listitem [ref=e169]:
+            - generic [ref=e170]:
+              - link [ref=e171]:
+                - /url: /reminders
+                - img [ref=e173]
+              - generic [ref=e176]: Reminders
+          - listitem [ref=e178]:
+            - generic [ref=e179]:
+              - link [ref=e180]:
+                - /url: /lats/unified-inventory
+                - img [ref=e182]
+              - generic [ref=e186]: Inventory
+          - listitem [ref=e188]:
+            - generic [ref=e189]:
+              - link [ref=e190]:
+                - /url: /lats/spare-parts
+                - img [ref=e192]
+              - generic [ref=e194]: Spare Parts
+          - listitem [ref=e196]:
+            - generic [ref=e197]:
+              - link [ref=e198]:
+                - /url: /lats/storage-rooms
+                - img [ref=e200]
+              - generic [ref=e203]: Storage Rooms
+          - listitem [ref=e205]:
+            - generic [ref=e206]:
+              - link [ref=e207]:
+                - /url: /lats/stock-transfers
+                - img [ref=e209]
+              - generic [ref=e212]: Stock Transfers
+          - listitem [ref=e214]:
+            - generic [ref=e215]:
+              - link [ref=e216]:
+                - /url: /lats/purchase-orders
+                - img [ref=e218]
+              - generic [ref=e221]: Purchase Orders
+          - listitem [ref=e223]:
+            - generic [ref=e224]:
+              - link [ref=e225]:
+                - /url: /special-orders
+                - img [ref=e227]
+              - generic [ref=e232]: Special Orders
+          - listitem [ref=e234]:
+            - generic [ref=e235]:
+              - link [ref=e236]:
+                - /url: /installments
+                - img [ref=e238]
+              - generic [ref=e240]: Installment Plans
+          - listitem [ref=e242]:
+            - generic [ref=e243]:
+              - link [ref=e244]:
+                - /url: /lats/sales-reports
+                - img [ref=e246]
+              - generic [ref=e247]: Sales Reports
+          - listitem [ref=e249]:
+            - generic [ref=e250]:
+              - link [ref=e251]:
+                - /url: /payments
+                - img [ref=e253]
+              - generic [ref=e255]: Payments
+          - listitem [ref=e257]:
+            - generic [ref=e258]:
+              - link [ref=e259]:
+                - /url: /lats/loyalty
+                - img [ref=e261]
+              - generic [ref=e263]: Loyalty Program
+          - listitem [ref=e265]:
+            - generic [ref=e266]:
+              - link [ref=e267]:
+                - /url: /employees
+                - img [ref=e269]
+              - generic [ref=e273]: Employees
+          - listitem [ref=e275]:
+            - generic [ref=e276]:
+              - link [ref=e277]:
+                - /url: /my-attendance
+                - img [ref=e279]
+              - generic [ref=e282]: My Attendance
+          - listitem [ref=e284]:
+            - generic [ref=e285]:
+              - link [ref=e286]:
+                - /url: /lats/whatsapp-chat
+                - img [ref=e288]
+              - generic [ref=e290]: WhatsApp
+          - listitem [ref=e292]:
+            - generic [ref=e293]:
+              - link [ref=e294]:
+                - /url: /sms
+                - img [ref=e296]
+              - generic [ref=e298]: SMS
+          - listitem [ref=e300]:
+            - generic [ref=e301]:
+              - link [ref=e302]:
+                - /url: /customer-portal/products
+                - img [ref=e304]
+              - generic [ref=e307]: Customer Portal
+      - generic [ref=e309]:
+        - img [ref=e312]
+        - button [ref=e315]:
+          - img [ref=e316]
+    - main [ref=e319]:
+      - generic [ref=e321]:
+        - generic [ref=e322]:
+          - generic [ref=e323]:
+            - heading "Admin Dashboard" [level=1] [ref=e324]
+            - paragraph [ref=e325]: Welcome back, care@care.com - Full system access
+          - generic [ref=e326]:
+            - button "DAR (DAR-01)" [ref=e328] [cursor=pointer]:
+              - img [ref=e329]
+              - generic [ref=e333]: DAR (DAR-01)
+              - img [ref=e334]
+            - button "Last 7 Days" [ref=e337] [cursor=pointer]:
+              - img [ref=e338]
+              - generic [ref=e340]: Last 7 Days
+              - img [ref=e341]
+            - button "Add Device" [ref=e343] [cursor=pointer]:
+              - img [ref=e344]
+              - text: Add Device
+            - button [ref=e345] [cursor=pointer]:
+              - img [ref=e346]
+        - generic [ref=e351]:
+          - generic [ref=e352]:
+            - img [ref=e354]
+            - generic [ref=e356]:
+              - heading "Quick Actions" [level=3] [ref=e357]
+              - paragraph [ref=e358]: Access frequently used features
+          - generic [ref=e359]:
+            - button "Devices Manage devices" [ref=e360] [cursor=pointer]:
+              - img [ref=e362]
+              - heading "Devices" [level=4] [ref=e364]
+              - paragraph [ref=e365]: Manage devices
+            - button "Add Device New device" [ref=e366] [cursor=pointer]:
+              - img [ref=e368]
+              - heading "Add Device" [level=4] [ref=e369]
+              - paragraph [ref=e370]: New device
+            - button "Customers Customer data" [ref=e371] [cursor=pointer]:
+              - img [ref=e373]
+              - heading "Customers" [level=4] [ref=e378]
+              - paragraph [ref=e379]: Customer data
+            - button "Inventory Stock & parts" [ref=e380] [cursor=pointer]:
+              - img [ref=e382]
+              - heading "Inventory" [level=4] [ref=e386]
+              - paragraph [ref=e387]: Stock & parts
+            - button "Purchase Orders Manage orders" [ref=e388] [cursor=pointer]:
+              - img [ref=e390]
+              - heading "Purchase Orders" [level=4] [ref=e394]
+              - paragraph [ref=e395]: Manage orders
+            - button "Payments Payment management" [ref=e396] [cursor=pointer]:
+              - img [ref=e398]
+              - heading "Payments" [level=4] [ref=e400]
+              - paragraph [ref=e401]: Payment management
+        - generic [ref=e402]:
+          - generic [ref=e404]:
+            - generic [ref=e405]:
+              - generic [ref=e406]:
+                - generic [ref=e407]:
+                  - img [ref=e408]
+                  - heading "Sales This Week" [level=3] [ref=e410]
+                - paragraph [ref=e411]: TSh 0
+              - generic [ref=e412]:
+                - img [ref=e413]
+                - generic [ref=e416]: +0%
+            - img [ref=e420]:
+              - generic [ref=e424]:
+                - generic [ref=e426]: Wed
+                - generic [ref=e428]: Thu
+                - generic [ref=e430]: Fri
+                - generic [ref=e432]: Sat
+                - generic [ref=e434]: Sun
+                - generic [ref=e436]: Mon
+                - generic [ref=e438]: Tue
+              - generic [ref=e440]:
+                - generic [ref=e442]: "0"
+                - generic [ref=e444]: "1"
+                - generic [ref=e446]: "2"
+                - generic [ref=e448]: "3"
+                - generic [ref=e450]: "4"
+          - generic [ref=e452]:
+            - generic [ref=e453]:
+              - generic [ref=e454]:
+                - generic [ref=e455]:
+                  - img [ref=e456]
+                  - heading "Repair Status" [level=3] [ref=e458]
+                  - generic [ref=e459]:
+                    - generic [ref=e460]: Just now
+                    - button "Refresh data" [ref=e461] [cursor=pointer]:
+                      - img [ref=e462]
+                - paragraph [ref=e467]: "0"
+                - paragraph [ref=e469]: Total Repairs • Live Data
+              - img [ref=e474]
+            - generic [ref=e477]:
+              - img [ref=e478]
+              - paragraph [ref=e480]: No repairs found
+              - paragraph [ref=e481]: Device repairs will appear here when added
+          - generic [ref=e483]:
+            - generic [ref=e484]:
+              - generic [ref=e485]:
+                - generic [ref=e486]:
+                  - img [ref=e487]
+                  - heading "Purchase Orders This Week" [level=3] [ref=e491]
+                - paragraph [ref=e492]: "0"
+                - paragraph [ref=e493]: Total orders created
+              - generic [ref=e494]:
+                - img [ref=e495]
+                - generic [ref=e498]: +0%
+            - generic [ref=e499]:
+              - img [ref=e500]
+              - paragraph [ref=e504]: No purchase orders this week
+              - paragraph [ref=e505]: Create your first order to see trends
+        - generic [ref=e506]:
+          - generic [ref=e508]:
+            - generic [ref=e510]:
+              - generic [ref=e511]:
+                - img [ref=e512]
+                - heading "Payment Methods" [level=3] [ref=e516]
+              - paragraph [ref=e517]: "0"
+              - paragraph [ref=e518]: "Total: TSh 0"
+            - generic [ref=e519]:
+              - img [ref=e520]
+              - paragraph [ref=e522]: No payment data available
+              - paragraph [ref=e523]: Make sales to see payment distribution
+          - generic [ref=e525]:
+            - generic [ref=e526]:
+              - generic [ref=e527]:
+                - img [ref=e529]
+                - generic [ref=e531]:
+                  - heading "Business Analytics" [level=3] [ref=e532]
+                  - paragraph [ref=e533]: Key performance indicators
+              - button "View All" [ref=e534] [cursor=pointer]:
+                - img [ref=e535]
+                - generic [ref=e539]: View All
+            - generic [ref=e540]:
+              - generic [ref=e541]:
+                - generic [ref=e542]:
+                  - img [ref=e543]
+                  - generic [ref=e547]: Revenue Growth
+                - generic [ref=e549]: 0%
+              - generic [ref=e550]:
+                - generic [ref=e551]:
+                  - img [ref=e552]
+                  - generic [ref=e557]: Customer Growth
+                - generic [ref=e559]: 0%
+            - generic [ref=e560]:
+              - generic [ref=e561]:
+                - paragraph [ref=e562]: Avg Order Value
+                - paragraph [ref=e563]: TSh 0
+              - generic [ref=e564]:
+                - paragraph [ref=e565]: Orders Today
+                - paragraph [ref=e566]: "0"
+          - generic [ref=e568]:
+            - generic [ref=e569]:
+              - generic [ref=e570]:
+                - generic [ref=e571]:
+                  - img [ref=e572]
+                  - heading "Profit & Margin" [level=3] [ref=e575]
+                - paragraph [ref=e576]: TSh 0
+                - paragraph [ref=e577]: "Avg Margin: 0.0%"
+              - paragraph [ref=e579]: Week Profit
+            - img [ref=e583]:
+              - generic [ref=e587]:
+                - generic [ref=e589]: Wed
+                - generic [ref=e591]: Thu
+                - generic [ref=e593]: Fri
+                - generic [ref=e595]: Sat
+                - generic [ref=e597]: Sun
+                - generic [ref=e599]: Mon
+                - generic [ref=e601]: Tue
+              - generic [ref=e603]:
+                - generic [ref=e605]: "0"
+                - generic [ref=e607]: "1"
+                - generic [ref=e609]: "2"
+                - generic [ref=e611]: "3"
+                - generic [ref=e613]: "4"
+              - generic [ref=e615]:
+                - generic [ref=e617]: 0%
+                - generic [ref=e619]: 1%
+                - generic [ref=e621]: 2%
+                - generic [ref=e623]: 3%
+                - generic [ref=e625]: 4%
+            - generic [ref=e635]:
+              - generic [ref=e638]: Profit (TSh)
+              - generic [ref=e641]: Margin (%)
+        - generic [ref=e657]:
+          - generic [ref=e658]:
+            - generic [ref=e660]:
+              - generic [ref=e661]:
+                - generic [ref=e662]:
+                  - img [ref=e664]
+                  - generic [ref=e666]:
+                    - heading "Today's Schedule" [level=3] [ref=e667]
+                    - paragraph [ref=e668]: 0 appointments • 0% done
+                - button "View All" [ref=e669] [cursor=pointer]:
+                  - img [ref=e670]
+                  - generic [ref=e674]: View All
+              - generic [ref=e675]:
+                - generic [ref=e676]:
+                  - paragraph [ref=e677]: Today
+                  - paragraph [ref=e678]: "0"
+                - generic [ref=e679]:
+                  - paragraph [ref=e680]: Upcoming
+                  - paragraph [ref=e681]: "0"
+                - generic [ref=e682]:
+                  - paragraph [ref=e683]: Done
+                  - paragraph [ref=e684]: 0%
+              - generic [ref=e686]:
+                - img [ref=e688]
+                - paragraph [ref=e690]: No appointments today
+              - button "Add Appointment" [ref=e692] [cursor=pointer]:
+                - img [ref=e693]
+                - generic [ref=e694]: Add Appointment
+            - generic [ref=e696]:
+              - generic [ref=e697]:
+                - generic [ref=e698]:
+                  - img [ref=e700]
+                  - generic [ref=e705]:
+                    - heading "Staff Today" [level=3] [ref=e706]
+                    - paragraph [ref=e707]: 0/1 present • 0%
+                - button "View All" [ref=e708] [cursor=pointer]:
+                  - img [ref=e709]
+                  - generic [ref=e713]: View All
+              - generic [ref=e714]:
+                - generic [ref=e715]:
+                  - paragraph [ref=e716]: Present
+                  - paragraph [ref=e717]: "0"
+                - generic [ref=e718]:
+                  - paragraph [ref=e719]: On Leave
+                  - paragraph [ref=e720]: "0"
+                - generic [ref=e721]:
+                  - paragraph [ref=e722]: Rate
+                  - paragraph [ref=e723]: 0%
+              - generic [ref=e725]:
+                - generic [ref=e727]: U
+                - generic [ref=e728]:
+                  - paragraph [ref=e729]: Unknown
+                  - paragraph [ref=e730]: No check-in
+                - generic [ref=e731]: absent
+              - button "Add Employee" [ref=e733] [cursor=pointer]:
+                - img [ref=e734]
+                - generic [ref=e735]: Add Employee
+            - generic [ref=e737]:
+              - generic [ref=e738]:
+                - generic [ref=e739]:
+                  - img [ref=e741]
+                  - generic [ref=e744]:
+                    - heading "Notifications" [level=3] [ref=e745]
+                    - paragraph [ref=e746]: All caught up
+                - button "View All" [ref=e748] [cursor=pointer]:
+                  - img [ref=e749]
+                  - generic [ref=e753]: View All
+              - generic [ref=e755]:
+                - img [ref=e757]
+                - paragraph [ref=e760]: No notifications yet
+          - generic [ref=e761]:
+            - generic [ref=e763]:
+              - generic [ref=e764]:
+                - generic [ref=e765]:
+                  - img [ref=e767]
+                  - generic [ref=e769]:
+                    - heading "Financial Overview" [level=3] [ref=e770]
+                    - paragraph [ref=e772]: TSh 0 this month
+                - button "View All" [ref=e774] [cursor=pointer]:
+                  - img [ref=e775]
+                  - generic [ref=e779]: View All
+              - generic [ref=e780]:
+                - generic [ref=e781]:
+                  - paragraph [ref=e782]: Today
+                  - paragraph [ref=e783]: TSh 0
+                - generic [ref=e784]:
+                  - paragraph [ref=e785]: This Week
+                  - paragraph [ref=e786]: TSh 0
+                - generic [ref=e787]:
+                  - paragraph [ref=e788]: Payments
+                  - paragraph [ref=e789]: "0"
+              - generic [ref=e790]:
+                - heading "Payment Methods" [level=4] [ref=e791]
+                - paragraph [ref=e793]: No payment data
+            - generic [ref=e795]:
+              - generic [ref=e796]:
+                - generic [ref=e797]:
+                  - generic [ref=e798]:
+                    - img [ref=e799]
+                    - heading "Sales Funnel" [level=3] [ref=e801]
+                  - paragraph [ref=e802]: Conversion pipeline analysis
+                - generic [ref=e804]:
+                  - img [ref=e805]
+                  - generic [ref=e808]: 0%
+              - generic [ref=e809]:
+                - generic [ref=e810]:
+                  - generic [ref=e811]:
+                    - generic [ref=e812]: Leads
+                    - generic [ref=e813]: "0"
+                  - generic [ref=e816]: 0%
+                - generic [ref=e817]:
+                  - generic [ref=e818]:
+                    - generic [ref=e819]: Initiated
+                    - generic [ref=e820]: "0"
+                  - generic [ref=e823]: 0%
+                - generic [ref=e824]:
+                  - generic [ref=e825]:
+                    - generic [ref=e826]: Pending
+                    - generic [ref=e827]: "0"
+                  - generic [ref=e830]: 0%
+                - generic [ref=e831]:
+                  - generic [ref=e832]:
+                    - generic [ref=e833]: Completed
+                    - generic [ref=e834]: "0"
+                  - generic [ref=e837]: 0%
+                - generic [ref=e838]:
+                  - generic [ref=e839]:
+                    - generic [ref=e840]: Revenue
+                    - generic [ref=e841]: TSh 0
+                  - generic [ref=e844]: 0%
+              - generic [ref=e845]:
+                - generic [ref=e846]:
+                  - paragraph [ref=e847]: Leads
+                  - paragraph [ref=e848]: "0"
+                - generic [ref=e849]:
+                  - paragraph [ref=e850]: Drop-off
+                  - paragraph [ref=e851]: "0"
+                - generic [ref=e852]:
+                  - paragraph [ref=e853]: Revenue
+                  - paragraph [ref=e854]: TSh 0
+            - generic [ref=e856]:
+              - generic [ref=e857]:
+                - generic [ref=e858]:
+                  - img [ref=e860]
+                  - generic [ref=e862]:
+                    - heading "Customer Insights" [level=3] [ref=e863]
+                    - paragraph [ref=e864]: 0 customers • 0% retention
+                - button "View All" [ref=e865] [cursor=pointer]:
+                  - img [ref=e866]
+                  - generic [ref=e870]: View All
+              - generic [ref=e871]:
+                - generic [ref=e872]:
+                  - paragraph [ref=e873]: New
+                  - paragraph [ref=e874]: "0"
+                - generic [ref=e875]:
+                  - paragraph [ref=e876]: Loyalty
+                  - paragraph [ref=e877]: "0"
+                - generic [ref=e878]:
+                  - paragraph [ref=e879]: Retention
+                  - paragraph [ref=e880]: 0%
+              - generic [ref=e882]:
+                - generic [ref=e883]:
+                  - paragraph [ref=e884]: Customer Satisfaction
+                  - generic [ref=e885]:
+                    - img [ref=e886]
+                    - img [ref=e888]
+                    - img [ref=e890]
+                    - img [ref=e892]
+                    - img [ref=e894]
+                    - generic [ref=e896]: "4.5"
+                - generic [ref=e897]:
+                  - img [ref=e898]
+                  - generic [ref=e901]: +8.5%
+              - heading "Top Customers" [level=4] [ref=e903]
+              - button "Loyalty Program" [ref=e905] [cursor=pointer]:
+                - img [ref=e906]
+                - generic [ref=e909]: Loyalty Program
+          - generic [ref=e910]:
+            - generic [ref=e912]:
+              - generic [ref=e913]:
+                - generic [ref=e914]:
+                  - img [ref=e916]
+                  - generic [ref=e918]:
+                    - heading "Service Tracking" [level=3] [ref=e919]
+                    - paragraph [ref=e920]: Repair & maintenance overview
+                - button "View All" [ref=e921] [cursor=pointer]:
+                  - img [ref=e922]
+                  - generic [ref=e926]: View All
+              - generic [ref=e927]:
+                - generic [ref=e928]:
+                  - generic [ref=e929]:
+                    - img [ref=e930]
+                    - generic [ref=e933]: Active Services
+                  - generic [ref=e935]: "0"
+                - generic [ref=e936]:
+                  - generic [ref=e937]:
+                    - img [ref=e938]
+                    - generic [ref=e941]: Completed Today
+                  - generic [ref=e943]: "0"
+              - generic [ref=e944]:
+                - generic [ref=e945]:
+                  - paragraph [ref=e946]: In Progress
+                  - generic [ref=e947]:
+                    - paragraph [ref=e948]: "0"
+                    - img [ref=e949]
+                - generic [ref=e951]:
+                  - paragraph [ref=e952]: Completion Rate
+                  - paragraph [ref=e954]: 0%
+              - generic [ref=e956]:
+                - generic [ref=e957]: Completed This Week
+                - generic [ref=e958]: "0"
+              - button "Add Service" [ref=e960] [cursor=pointer]:
+                - img [ref=e961]
+                - generic [ref=e962]: Add Service
+            - generic [ref=e964]:
+              - generic [ref=e965]:
+                - generic [ref=e966]:
+                  - img [ref=e968]
+                  - generic [ref=e971]:
+                    - heading "Reminders" [level=3] [ref=e972]
+                    - paragraph [ref=e973]: Stay on track
+                - button "View All" [ref=e974] [cursor=pointer]:
+                  - img [ref=e975]
+                  - generic [ref=e979]: View All
+              - generic [ref=e980]:
+                - generic [ref=e981]:
+                  - generic [ref=e982]:
+                    - img [ref=e983]
+                    - generic [ref=e986]: Upcoming
+                  - generic [ref=e988]: "1"
+                - generic [ref=e989]:
+                  - generic [ref=e990]:
+                    - img [ref=e991]
+                    - generic [ref=e993]: Overdue
+                  - generic [ref=e995]: "0"
+              - generic [ref=e998]:
+                - generic [ref=e999] [cursor=pointer]:
+                  - heading "Call customer about pickup" [level=4] [ref=e1001]
+                  - generic [ref=e1002]:
+                    - generic [ref=e1003]: medium
+                    - generic [ref=e1004]: in NaNm
+                - button "Mark as completed" [ref=e1005] [cursor=pointer]:
+                  - img [ref=e1006]
+              - button "Add Reminder" [ref=e1009] [cursor=pointer]:
+                - img [ref=e1010]
+                - generic [ref=e1011]: Add Reminder
+            - generic [ref=e1013]:
+              - generic [ref=e1014]:
+                - generic [ref=e1015]:
+                  - img [ref=e1017]
+                  - generic [ref=e1019]:
+                    - heading "System Health" [level=3] [ref=e1020]
+                    - paragraph [ref=e1021]: Real-time monitoring
+                - generic [ref=e1022]:
+                  - generic [ref=e1025]: healthy
+                  - button "View All" [ref=e1026] [cursor=pointer]:
+                    - img [ref=e1027]
+                    - generic [ref=e1031]: View All
+              - generic [ref=e1032]:
+                - generic [ref=e1033]:
+                  - paragraph [ref=e1034]: Response Time
+                  - paragraph [ref=e1035]: 958ms
+                - generic [ref=e1036]:
+                  - paragraph [ref=e1037]: Total Records
+                  - paragraph [ref=e1038]: "94"
+                - generic [ref=e1039]:
+                  - paragraph [ref=e1040]: DB Size
+                  - paragraph [ref=e1041]: 188 KB
+              - generic [ref=e1042]:
+                - generic [ref=e1043]:
+                  - generic [ref=e1044]:
+                    - img [ref=e1045]
+                    - generic [ref=e1049]: Database
+                  - paragraph [ref=e1050]: healthy
+                - generic [ref=e1051]:
+                  - generic [ref=e1052]:
+                    - img [ref=e1053]
+                    - generic [ref=e1055]: Backup
+                  - paragraph [ref=e1056]: current
+                - generic [ref=e1057]:
+                  - generic [ref=e1058]:
+                    - img [ref=e1059]
+                    - generic [ref=e1061]: Security
+                  - paragraph [ref=e1062]: secure
+                - generic [ref=e1063]:
+                  - generic [ref=e1064]:
+                    - img [ref=e1065]
+                    - generic [ref=e1069]: Images
+                  - paragraph [ref=e1070]: 0 KB
+                - generic [ref=e1071]:
+                  - generic [ref=e1072]:
+                    - img [ref=e1073]
+                    - generic [ref=e1077]: Active Tables
+                  - paragraph [ref=e1078]: "2"
+                - generic [ref=e1079]:
+                  - generic [ref=e1080]:
+                    - img [ref=e1081]
+                    - generic [ref=e1084]: Growth Rate
+                  - paragraph [ref=e1085]: 0 KB/day
+              - generic [ref=e1086]:
+                - generic [ref=e1087]:
+                  - generic [ref=e1088]: Largest table
+                  - generic [ref=e1089]: Products (186 KB)
+                - generic [ref=e1090]:
+                  - generic [ref=e1091]: Last backup completed
+                  - generic [ref=e1092]: Just now
+              - button "Refresh" [ref=e1094] [cursor=pointer]:
+                - img [ref=e1095]
+                - generic [ref=e1097]: Refresh
+          - generic [ref=e1098]:
+            - generic [ref=e1100]:
+              - generic [ref=e1101]:
+                - generic [ref=e1102]:
+                  - img [ref=e1104]
+                  - generic [ref=e1108]:
+                    - heading "Inventory Status" [level=3] [ref=e1109]
+                    - paragraph [ref=e1110]: 94 products tracked
+                - button "View All" [ref=e1111] [cursor=pointer]:
+                  - img [ref=e1112]
+                  - generic [ref=e1116]: View All
+              - generic [ref=e1117]:
+                - generic [ref=e1118]:
+                  - paragraph [ref=e1119]: Critical
+                  - paragraph [ref=e1120]: "1"
+                - generic [ref=e1121]:
+                  - paragraph [ref=e1122]: Low Stock
+                  - paragraph [ref=e1123]: "63"
+                - generic [ref=e1124]:
+                  - paragraph [ref=e1125]: Value
+                  - paragraph [ref=e1126]: TSh 28.3M
+              - generic [ref=e1127]:
+                - generic [ref=e1130]:
+                  - paragraph [ref=e1131]: Samsung-KM 45
+                  - generic [ref=e1132]:
+                    - generic [ref=e1133]: Soundbars
+                    - generic [ref=e1134]: 0/5 units
+                - generic [ref=e1137]:
+                  - paragraph [ref=e1138]: JBL Partybox On The Go Essential
+                  - generic [ref=e1139]:
+                    - generic [ref=e1140]: Bluetooth Speakers
+                    - generic [ref=e1141]: 1/5 units
+                - generic [ref=e1144]:
+                  - paragraph [ref=e1145]: iPhone 15
+                  - generic [ref=e1146]:
+                    - generic [ref=e1147]: iPhones
+                    - generic [ref=e1148]: 1/5 units
+                - generic [ref=e1151]:
+                  - paragraph [ref=e1152]: iPhone13 Pro max
+                  - generic [ref=e1153]:
+                    - generic [ref=e1154]: iPhones
+                    - generic [ref=e1155]: 1/5 units
+                - generic [ref=e1158]:
+                  - paragraph [ref=e1159]: iPhone 12 Pro Max
+                  - generic [ref=e1160]:
+                    - generic [ref=e1161]: iPhones
+                    - generic [ref=e1162]: 1/5 units
+                - generic [ref=e1165]:
+                  - paragraph [ref=e1166]: iPhone 12 Plain
+                  - generic [ref=e1167]:
+                    - generic [ref=e1168]: iPhones
+                    - generic [ref=e1169]: 1/5 units
+                - generic [ref=e1172]:
+                  - paragraph [ref=e1173]: HP P27qG4
+                  - generic [ref=e1174]:
+                    - generic [ref=e1175]: Monitors
+                    - generic [ref=e1176]: 1/5 units
+                - generic [ref=e1179]:
+                  - paragraph [ref=e1180]: Hp HSTND-9581-A
+                  - generic [ref=e1181]:
+                    - generic [ref=e1182]: Monitors
+                    - generic [ref=e1183]: 1/5 units
+                - generic [ref=e1186]:
+                  - paragraph [ref=e1187]: Dell C2422HE
+                  - generic [ref=e1188]:
+                    - generic [ref=e1189]: Monitors
+                    - generic [ref=e1190]: 1/5 units
+                - generic [ref=e1193]:
+                  - paragraph [ref=e1194]: Anker Work M650 Wireless Microphone
+                  - generic [ref=e1195]:
+                    - generic [ref=e1196]: Accessories
+                    - generic [ref=e1197]: 1/5 units
+              - button "Add Product" [ref=e1199] [cursor=pointer]:
+                - img [ref=e1200]
+                - generic [ref=e1201]: Add Product
+            - generic [ref=e1203]:
+              - generic [ref=e1204]:
+                - generic [ref=e1205]:
+                  - img [ref=e1207]
+                  - generic [ref=e1209]:
+                    - heading "Recent Activity" [level=3] [ref=e1210]
+                    - paragraph [ref=e1211]: Live system activities
+                - generic [ref=e1212]:
+                  - generic [ref=e1215]: Live
+                  - button "View All" [ref=e1216] [cursor=pointer]:
+                    - img [ref=e1217]
+                    - generic [ref=e1221]: View All
+              - generic [ref=e1223]:
+                - img [ref=e1225]
+                - paragraph [ref=e1227]: No recent activities
+            - generic [ref=e1229]:
+              - generic [ref=e1230]:
+                - generic [ref=e1231]:
+                  - img [ref=e1233]
+                  - generic [ref=e1237]:
+                    - heading "Purchase Orders" [level=3] [ref=e1238]
+                    - paragraph [ref=e1239]: 0 orders tracked
+                - button "View All" [ref=e1240] [cursor=pointer]:
+                  - img [ref=e1241]
+                  - generic [ref=e1245]: View All
+              - generic [ref=e1246]:
+                - generic [ref=e1247]:
+                  - generic [ref=e1248]:
+                    - img [ref=e1249]
+                    - generic [ref=e1252]: Pending
+                  - generic [ref=e1254]: "0"
+                - generic [ref=e1255]:
+                  - generic [ref=e1256]:
+                    - img [ref=e1257]
+                    - generic [ref=e1260]: Received
+                  - generic [ref=e1262]: "0"
+              - generic [ref=e1264]:
+                - img [ref=e1266]
+                - paragraph [ref=e1270]: No purchase orders yet
+              - generic [ref=e1271]:
+                - button "Create Order" [ref=e1272] [cursor=pointer]:
+                  - img [ref=e1273]
+                  - generic [ref=e1274]: Create Order
+                - button "View All" [ref=e1275] [cursor=pointer]:
+                  - img [ref=e1276]
+                  - generic [ref=e1280]: View All
+          - generic [ref=e1281]:
+            - generic [ref=e1283]:
+              - generic [ref=e1284]:
+                - generic [ref=e1285]:
+                  - img [ref=e1287]
+                  - generic [ref=e1289]:
+                    - heading "Messages" [level=3] [ref=e1290]
+                    - paragraph [ref=e1291]: 0 active conversations
+                - button "View All" [ref=e1292] [cursor=pointer]:
+                  - img [ref=e1293]
+                  - generic [ref=e1297]: View All
+              - generic [ref=e1298]:
+                - generic [ref=e1299]:
+                  - generic [ref=e1300]:
+                    - img [ref=e1301]
+                    - generic [ref=e1303]: Unread
+                  - generic [ref=e1305]: "0"
+                - generic [ref=e1306]:
+                  - generic [ref=e1307]:
+                    - img [ref=e1308]
+                    - generic [ref=e1311]: Active
+                  - generic [ref=e1313]: "0"
+              - generic [ref=e1315]:
+                - img [ref=e1317]
+                - paragraph [ref=e1319]: No messages yet
+              - generic [ref=e1320]:
+                - button "New Message" [ref=e1321] [cursor=pointer]:
+                  - img [ref=e1322]
+                  - generic [ref=e1323]: New Message
+                - button "All Chats" [ref=e1324] [cursor=pointer]:
+                  - img [ref=e1325]
+                  - generic [ref=e1328]: All Chats
+            - generic [ref=e1330]:
+              - generic [ref=e1331]:
+                - generic [ref=e1332]:
+                  - img [ref=e1334]
+                  - generic [ref=e1336]:
+                    - heading "Today's Sales" [level=3] [ref=e1337]
+                    - paragraph [ref=e1338]: 0 transactions
+                - button "View All" [ref=e1339] [cursor=pointer]:
+                  - img [ref=e1340]
+                  - generic [ref=e1344]: View All
+              - generic [ref=e1345]:
+                - generic [ref=e1347]: TSh 0
+                - paragraph [ref=e1348]: "vs yesterday: TSh 0"
+              - generic [ref=e1349]:
+                - generic [ref=e1350]:
+                  - generic [ref=e1351]:
+                    - img [ref=e1352]
+                    - generic [ref=e1355]: Transactions
+                  - text: "0"
+                - generic [ref=e1356]:
+                  - generic [ref=e1357]:
+                    - img [ref=e1358]
+                    - generic [ref=e1360]: Avg Sale
+                  - text: TSh 0
+              - generic [ref=e1361]:
+                - button "New Sale" [ref=e1362] [cursor=pointer]:
+                  - img [ref=e1363]
+                  - generic [ref=e1364]: New Sale
+                - button "All Sales" [ref=e1365] [cursor=pointer]:
+                  - img [ref=e1366]
+                  - generic [ref=e1370]: All Sales
+            - generic [ref=e1372]:
+              - generic [ref=e1373]:
+                - generic [ref=e1374]:
+                  - img [ref=e1376]
+                  - generic [ref=e1379]:
+                    - heading "Top Products" [level=3] [ref=e1380]
+                    - paragraph [ref=e1381]: Last 7 days
+                - button "View All" [ref=e1382] [cursor=pointer]:
+                  - img [ref=e1383]
+                  - generic [ref=e1387]: View All
+              - generic [ref=e1388]:
+                - paragraph [ref=e1389]: Total Revenue (Top 5)
+                - paragraph [ref=e1390]: TSh 0
+              - generic [ref=e1392]:
+                - img [ref=e1394]
+                - paragraph [ref=e1398]: No sales data yet
+                - paragraph [ref=e1399]: Start selling to see top products
+              - button "View All Products" [ref=e1401] [cursor=pointer]:
+                - img [ref=e1402]
+                - generic [ref=e1406]: View All Products
+          - generic [ref=e1407]:
+            - generic [ref=e1409]:
+              - generic [ref=e1410]:
+                - generic [ref=e1411]:
+                  - img [ref=e1413]
+                  - generic [ref=e1416]:
+                    - heading "Expenses" [level=3] [ref=e1418]
+                    - paragraph [ref=e1419]: Track your spending
+                - button "View All" [ref=e1420] [cursor=pointer]:
+                  - img [ref=e1421]
+                  - generic [ref=e1425]: View All
+              - generic [ref=e1426]:
+                - generic [ref=e1427]:
+                  - generic [ref=e1428]:
+                    - img [ref=e1429]
+                    - generic [ref=e1432]: Today
+                  - text: TSh 0
+                - generic [ref=e1433]:
+                  - generic [ref=e1434]:
+                    - img [ref=e1435]
+                    - generic [ref=e1437]: This Month
+                  - text: TSh 0
+              - generic [ref=e1439]:
+                - img [ref=e1441]
+                - paragraph [ref=e1444]: No recent expenses
+                - paragraph [ref=e1445]: Last 30 days
+              - button "Add Expense" [ref=e1447] [cursor=pointer]:
+                - img [ref=e1448]
+                - generic [ref=e1449]: Add Expense
+            - generic [ref=e1451]:
+              - generic [ref=e1452]:
+                - generic [ref=e1453]:
+                  - img [ref=e1455]
+                  - generic [ref=e1460]:
+                    - heading "Staff Performance" [level=3] [ref=e1461]
+                    - paragraph [ref=e1462]: 0 active members · Last 7 days
+                - button "View All" [ref=e1463] [cursor=pointer]:
+                  - img [ref=e1464]
+                  - generic [ref=e1468]: View All
+              - generic [ref=e1470]:
+                - img [ref=e1472]
+                - paragraph [ref=e1477]: No staff activity yet
+                - paragraph [ref=e1478]: Sales data will appear here
+  - generic [ref=e1479]: 0%
+```

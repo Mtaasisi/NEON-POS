@@ -20,7 +20,7 @@ import {
 // Default settings for each type
 const defaultGeneralSettings: GeneralSettings = {
   // Business Information
-  business_name: 'My Store',
+  business_name: 'inauzwa',
   business_address: '',
   business_phone: '',
   business_email: '',
@@ -456,12 +456,17 @@ export function usePOSSettings<T>(
       if (loadedSettings) {
         // Only log occasionally to reduce spam
         if (Math.random() < 0.1) { // 10% chance to log
-
+          console.log(`✅ Loaded ${settingsType} settings:`, loadedSettings);
         }
         setSettings(loadedSettings as T);
+        
+        // Dispatch event to notify context that settings have been loaded
+        window.dispatchEvent(new CustomEvent('posSettingsLoaded', { 
+          detail: { type: settingsType, settings: loadedSettings } 
+        }));
       } else {
         // Use default settings if none found
-
+        console.log(`No ${settingsType} settings found, using defaults`);
         setSettings(defaultSettings);
       }
     } catch (err) {
@@ -501,10 +506,15 @@ export function usePOSSettings<T>(
         // Update local state with the saved data from database
         setSettings(savedSettings as T);
 
+        console.log(`✅ ${settingsType} settings saved successfully:`, savedSettings);
         toast.success(`${settingsType.charAt(0).toUpperCase() + settingsType.slice(1)} settings saved successfully`);
         
+        // Dispatch event immediately with saved settings
+        window.dispatchEvent(new CustomEvent('settingsSaved', { 
+          detail: { type: settingsType, settings: savedSettings } 
+        }));
+        
         // Refresh data from database to ensure consistency
-
         await loadSettings();
         
         return true;

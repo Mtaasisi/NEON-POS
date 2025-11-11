@@ -15,13 +15,12 @@ import {
   getBestVariant 
 } from '../../lib/productUtils';
 import { RealTimeStockService } from '../../lib/realTimeStock';
-import VariantSelectionModal from './VariantSelectionModal';
 import { SafeImage } from '../../../../components/SafeImage';
 import { ProductImage } from '../../../../lib/robustImageService';
 import { ImagePopupModal } from '../../../../components/ImagePopupModal';
-import ProductInfoModal from './ProductInfoModal';
 import { useGeneralSettingsUI } from '../../../../hooks/useGeneralSettingsUI';
 import { getSpecificationIcon, getSpecificationTooltip, getShelfDisplay, getShelfIcon, formatSpecificationValue } from '../../lib/specificationUtils';
+import VariantSelectionModal from './VariantSelectionModal';
 
 interface VariantProductCardProps {
   product: ProductSearchResult;
@@ -84,10 +83,9 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
 
   const navigate = useNavigate();
   const [selectedVariant, setSelectedVariant] = useState<ProductSearchVariant | null>(null);
-  const [showVariantModal, setShowVariantModal] = useState(false);
   const [isImagePopupOpen, setIsImagePopupOpen] = useState(false);
-  const [isProductInfoOpen, setIsProductInfoOpen] = useState(false);
   const [showAllSpecifications, setShowAllSpecifications] = useState(false);
+  const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
 
   // Reset error state on mount/remount (helps with React refresh)
   useEffect(() => {
@@ -192,13 +190,19 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
     
     if (!primaryVariant) return null;
     
-    switch (stockStatus) {
-      case 'out-of-stock':
-        return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">Out of Stock</span>;
-      case 'low-stock':
-        return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">Low Stock</span>;
-      default:
-        return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">In Stock</span>;
+    // Check if all variants are out of stock
+    const allVariantsOutOfStock = product.variants.every(v => (v.quantity ?? 0) <= 0);
+    const someVariantsOutOfStock = product.variants.some(v => (v.quantity ?? 0) <= 0);
+    const totalStock = product.variants.reduce((sum, v) => sum + (v.quantity ?? 0), 0);
+    
+    if (allVariantsOutOfStock) {
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">Out of Stock</span>;
+    } else if (someVariantsOutOfStock && product.variants.length > 1) {
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">Limited Stock</span>;
+    } else if (totalStock <= 10) {
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">Low Stock</span>;
+    } else {
+      return <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">In Stock</span>;
     }
   };
 
@@ -254,17 +258,15 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
     return realTimeStock.get(product.id) || 0;
   };
 
-  // Get total stock using real-time data if available, otherwise fall back to cached data
+  // Get total stock using adjusted variants (includes cart adjustments)
   const getTotalStock = () => {
-    const realTimeStockValue = getRealTimeStockForProduct();
-    if (realTimeStockValue > 0 || realTimeStock.has(product.id)) {
-      return realTimeStockValue;
-    }
+    // Always use product variants directly since they already have stock adjustments applied
+    // from POSPageOptimized.tsx transformation
     return getProductTotalStock(product);
   };
 
   // Handle card click
-  const handleCardClick = () => {
+  const handleCardClick = async () => {
     // In inventory management mode, clicking opens details modal
     if (showActions && onView) {
       onView(product);
@@ -283,29 +285,69 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
       return;
     }
     
-    // For purchase orders, allow out-of-stock products; for POS, block them
-    if (!primaryVariant || (!allowOutOfStockSelection && primaryVariant.quantity <= 0)) {
-      if (!allowOutOfStockSelection) {
-        return; // Don't do anything if out of stock in POS mode
+    // For purchase orders, allow out-of-stock products; for POS, block only if ALL variants are out of stock
+    const allVariantsOutOfStock = product.variants?.every(v => (v.quantity ?? 0) <= 0) ?? true;
+    if (!allowOutOfStockSelection && allVariantsOutOfStock) {
+      return; // Don't do anything if all variants are out of stock in POS mode
+    }
+    
+    // Check if product has variants (including parent-child structure)
+    const hasMultipleVariants = product.variants && product.variants.length > 1;
+    const hasSingleVariant = product.variants && product.variants.length === 1;
+    
+    // ✅ ENHANCED: Check for parent variants with better detection
+    if (hasMultipleVariants) {
+      setIsVariantModalOpen(true);
+      return;
+    }
+    
+    if (hasSingleVariant) {
+      const variant = product.variants[0];
+      const isParentByFlag = variant.is_parent || variant.variant_type === 'parent';
+      
+      // Also check if variant has IMEI children in database
+      let hasChildren = false;
+      if (!isParentByFlag) {
+        try {
+          const { supabase } = await import('../../../../lib/supabaseClient');
+          const { count } = await supabase
+            .from('lats_product_variants')
+            .select('id', { count: 'exact', head: true })
+            .eq('parent_variant_id', variant.id)
+            .eq('variant_type', 'imei_child')
+            .eq('is_active', true)
+            .gt('quantity', 0);
+          
+          hasChildren = (count || 0) > 0;
+          console.log(`🔍 Checking variant ${variant.id} for children: ${hasChildren ? 'HAS CHILDREN' : 'NO CHILDREN'}`);
+        } catch (error) {
+          console.error('Error checking for children:', error);
+        }
+      }
+      
+      if (isParentByFlag || hasChildren) {
+        console.log('✅ Opening variant modal - parent variant detected');
+        setIsVariantModalOpen(true);
+        return;
       }
     }
     
-    if (isMultiVariantProduct(product)) {
-      // If product has multiple variants, open the variant selection modal
-      setShowVariantModal(true);
-    } else {
-      // If single variant, directly add to cart
+    // Single non-parent variant: Add directly to cart
+    if (primaryVariant && (primaryVariant.quantity ?? 0) > 0) {
       if (onAddToCart) {
         onAddToCart(product, primaryVariant, 1);
       }
+    } else if (!allowOutOfStockSelection) {
+      // Variant is out of stock
+      return;
     }
   };
 
-  // Handle variant selection
-  const handleVariantSelect = (variant: ProductSearchVariant) => {
-    setSelectedVariant(variant);
-    onAddToCart(product, variant, 1); // Add selected variant to cart
-    setShowVariantModal(false); // Close modal after selection
+  // Handle variant selection from modal
+  const handleVariantSelect = (selectedProduct: any, selectedVariant: any, quantity: number) => {
+    if (onAddToCart) {
+      onAddToCart(selectedProduct, selectedVariant, quantity);
+    }
   };
 
   // Check if product has multiple variants using utility function
@@ -335,64 +377,71 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
   // Compact variant with subtle colors
   if (variant === 'compact') {
     const hasNoVariants = !product.variants || product.variants.length === 0;
-    const isDisabled = hasNoVariants || !primaryVariant || (!allowOutOfStockSelection && primaryVariant.quantity <= 0);
+    
+    // Check if ALL variants are out of stock (not just the primary one)
+    const allVariantsOutOfStock = product.variants?.every(v => (v.quantity ?? 0) <= 0) ?? true;
+    
+    // For purchase orders (allowOutOfStockSelection = true), allow clicking even without variants
+    // Only disable if: has no variants AND not in purchase order mode, OR all out of stock AND not allowing out of stock
+    const isDisabled = (hasNoVariants && !allowOutOfStockSelection) || (!allowOutOfStockSelection && allVariantsOutOfStock);
     
     return (
       <>
         <div 
-          className={`bg-white border border-gray-200 rounded-lg p-4 transition-all duration-200 ${className} ${
-            isDisabled ? 'opacity-50 cursor-not-allowed' : `cursor-pointer ${theme.hoverBorder} hover:shadow-md active:scale-95`
-          } ${hasNoVariants ? 'border-gray-300 bg-gray-50' : ''}`}
+          className={`bg-white border border-gray-200 rounded-lg p-4 transition-all duration-200 flex flex-col h-full ${className} ${
+            isDisabled ? 'opacity-50 cursor-not-allowed' : `cursor-pointer ${theme.hoverBorder} hover:shadow-lg active:scale-98`
+          } ${hasNoVariants && !allowOutOfStockSelection ? 'border-gray-300 bg-gray-50' : ''}`}
           onClick={handleCardClick}
-          style={{ minHeight: '60px' }}
-          title={hasNoVariants ? 'This product has no variants and cannot be added to cart. Please add variants in the inventory management.' : `Click to ${actionText.toLowerCase()}`}
+          title={hasNoVariants && !allowOutOfStockSelection ? 'This product has no variants and cannot be added to cart. Please add variants in the inventory management.' : ''}
         >
           
+          {/* Product Image - Top */}
+          <div 
+            className="w-full mb-3 cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Info modal removed
+            }}
+          >
+            <SimpleImageDisplay
+              images={productImages.map(img => img.url)}
+              productName={product.name}
+              size="md"
+              className="w-full h-32 sm:h-36 md:h-40 object-cover rounded-lg"
+            />
+          </div>
 
-          <div className="flex items-center gap-2">
-            {/* Product Image */}
-            <div 
-              className="flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsProductInfoOpen(true);
-              }}
+          {/* Product Info - Flex grow to fill space */}
+          <div className="flex-1 flex flex-col">
+            {/* Product Title - Single line with ellipsis */}
+            <h3 
+              className={`font-semibold text-sm sm:text-base mb-2 truncate ${hasNoVariants && !allowOutOfStockSelection ? 'text-gray-500' : 'text-gray-900'}`} 
+              title={product.name}
             >
-              <SimpleImageDisplay
-                images={productImages.map(img => img.url)}
-                productName={product.name}
-                size="sm"
-                className="w-10 h-10"
-              />
-            </div>
-
-            {/* Product Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className={`font-medium truncate text-base ${hasNoVariants ? 'text-gray-500' : 'text-gray-900'}`} title={product.name}>{product.name}</h3>
-                {getStockStatusBadge()}
+              {product.name}
+            </h3>
+            
+            {/* SKU */}
+            <p className="text-xs text-gray-500 font-mono mb-2 truncate">{primaryVariant?.sku || 'N/A'}</p>
+            
+            {/* Category Display */}
+            {showCategory && (product.categoryName || product.category?.name) && (
+              <div className="mb-2">
+                <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200 font-medium truncate max-w-full">
+                  📦 {product.categoryName || product.category?.name}
+                </span>
               </div>
-              <p className="text-xs text-gray-500 font-mono">{primaryVariant?.sku || 'N/A'}</p>
-              
-              {/* Category Display */}
-              {showCategory && (product.categoryName || product.category?.name) && (
-                <div className="mt-1">
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-700 border border-purple-200 font-medium">
-                    📦 {product.categoryName || product.category?.name}
-                  </span>
-                </div>
-              )}
-              
-              {/* Compact Specifications Display - Hidden */}
-            </div>
-
-            {/* Price */}
-            <div className="text-right">
+            )}
+            
+            {/* Spacer to push price to bottom */}
+            <div className="flex-1"></div>
+            
+            {/* Price - Single line, at bottom */}
+            <div className="mt-auto pt-2 border-t border-gray-100">
               {showPrices && (
-                <div className={`font-semibold text-base ${hasNoVariants ? 'text-gray-500' : theme.priceColor}`} title={getPriceDisplay()}>{getPriceDisplay()}</div>
-              )}
-              {showStockLevels && (
-                <div className="text-xs text-gray-500">Stock: {getTotalStock()}</div>
+                <div className={`font-bold text-lg truncate ${hasNoVariants && !allowOutOfStockSelection ? 'text-gray-500' : theme.priceColor}`} title={getPriceDisplay()}>
+                  {getPriceDisplay()}
+                </div>
               )}
             </div>
           </div>
@@ -404,7 +453,13 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
 
   // Default detailed variant with cart-style UI
   const hasNoVariants = !product.variants || product.variants.length === 0;
-  const isDisabled = hasNoVariants || !primaryVariant || (!allowOutOfStockSelection && primaryVariant.quantity <= 0);
+  
+  // Check if ALL variants are out of stock (not just the primary one)
+  const allVariantsOutOfStock = product.variants?.every(v => (v.quantity ?? 0) <= 0) ?? true;
+  
+  // For purchase orders (allowOutOfStockSelection = true), allow clicking even without variants
+  // Only disable if: has no variants AND not in purchase order mode, OR all out of stock AND not allowing out of stock
+  const isDisabled = (hasNoVariants && !allowOutOfStockSelection) || (!allowOutOfStockSelection && allVariantsOutOfStock);
   
   // Calculate profit margin
   const costPrice = primaryVariant?.costPrice || 0;
@@ -416,7 +471,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
       <div 
         className={`pos-product-card relative bg-white border-2 rounded-xl transition-all duration-300 overflow-hidden ${className} ${
           isDisabled ? 'opacity-50 cursor-not-allowed' : `cursor-pointer ${theme.hoverBorder} hover:shadow-lg active:scale-98`
-        } ${hasNoVariants ? 'border-gray-300 bg-gray-50' : 'border-gray-200'} ${isSelected ? 'ring-4 ring-blue-400 border-blue-500' : ''}`}
+        } ${hasNoVariants && !allowOutOfStockSelection ? 'border-gray-300 bg-gray-50' : 'border-gray-200'} ${isSelected ? 'ring-4 ring-blue-400 border-blue-500' : ''}`}
         onClick={(e) => {
           // Don't trigger onClick if clicking on action buttons or checkboxes
           if ((e.target as HTMLElement).closest('.action-button')) return;
@@ -429,13 +484,13 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
             handleCardClick();
           }
         }}
-        title={hasNoVariants ? 'This product has no variants and cannot be added to cart. Please add variants in the inventory management.' : showActions ? 'Click to view details' : `Click to ${actionText.toLowerCase()}`}
+        title={hasNoVariants && !allowOutOfStockSelection ? 'This product has no variants and cannot be added to cart. Please add variants in the inventory management.' : ''}
       >
         
         
         {/* Checkbox for Selection - Only show when parent enables selection mode */}
         {showCheckbox && (
-          <div className="absolute top-3 left-3 z-30 action-button">
+          <div className="absolute top-3 left-3 z-30 action-button" onClick={(e) => e.stopPropagation()}>
             <input
               type="checkbox"
               checked={isSelected}
@@ -448,31 +503,32 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
           </div>
         )}
         
-        {/* Stock Count Badge - Card Corner */}
-        {showStockLevels && showStockInfo && getTotalStock() > 0 && (
-          <div className={`absolute top-2 right-2 p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 w-10 h-10 ${
+        {/* Stock Count Badge - Card Corner - Always show for live updates */}
+        {showStockLevels && showStockInfo && (
+          <div className={`absolute top-1 right-1 sm:top-2 sm:right-2 p-1.5 sm:p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 w-8 h-8 sm:w-10 sm:h-10 transition-all duration-300 ${
+            getTotalStock() <= 0 ? 'bg-gradient-to-r from-red-500 to-red-600' :
             getTotalStock() <= 5 ? 'bg-gradient-to-r from-red-500 to-red-600' :
             getTotalStock() <= 10 ? 'bg-gradient-to-r from-orange-500 to-orange-600' :
             'bg-gradient-to-r from-green-500 to-emerald-500'
           }`}>
-            <span className="text-sm font-bold text-white">
+            <span className="text-xs sm:text-sm font-bold text-white">
               {isLoadingStock ? '...' : (getTotalStock() >= 1000 ? `${(getTotalStock() / 1000).toFixed(1)}K` : getTotalStock())}
             </span>
             {isLoadingStock && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
               </div>
             )}
           </div>
         )}
         {/* Product Card Header */}
-        <div className="p-6 cursor-pointer">
+        <div className="p-3 sm:p-4 md:p-6 cursor-pointer flex flex-col h-full">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4 flex-1 min-w-0">
               {/* Product Icon */}
               {showProductImages && (
                 <div 
-                  className={`relative w-20 h-20 rounded-xl flex items-center justify-center text-lg font-bold ${theme.iconColor} cursor-pointer hover:opacity-90 transition-opacity`}
+                  className={`relative w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-xl flex items-center justify-center text-lg font-bold ${theme.iconColor} cursor-pointer hover:opacity-90 transition-opacity`}
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsProductInfoOpen(true);
@@ -487,8 +543,8 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                 
                 {/* Variant Count Badge */}
                 {product.variants && product.variants.length > 1 && (
-                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
-                    <span className="text-xs font-bold text-white">
+                  <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 w-5 h-5 sm:w-6 sm:h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full border-2 border-white shadow-lg flex items-center justify-center">
+                    <span className="text-[10px] sm:text-xs font-bold text-white">
                       {product.variants.length}
                     </span>
                   </div>
@@ -498,10 +554,10 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
 
               {/* Product Info */}
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-800 truncate text-xl leading-tight">
+                <div className="font-medium text-gray-800 truncate text-sm sm:text-base md:text-lg lg:text-xl leading-tight" title={product.name}>
                   {product.name}
                 </div>
-                <div className="text-2xl text-gray-700 mt-1 font-bold">
+                <div className="text-lg sm:text-xl md:text-2xl text-gray-700 mt-0.5 sm:mt-1 font-bold">
                   TSh {getPriceDisplay().replace('$', '').replace('.00', '').replace('.0', '')}
                 </div>
               </div>
@@ -602,9 +658,12 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
             </div>
           )}
 
+          {/* Spacer to push action buttons to bottom */}
+          <div className="flex-1"></div>
+
           {/* Action Buttons for Inventory Management */}
           {showActions ? (
-            <div className="mt-4 pt-4 border-t border-gray-200 space-y-2 action-button">
+            <div className="mt-auto pt-4 border-t border-gray-200 space-y-2 action-button">
               {/* Quick Action Buttons */}
               <div className="grid grid-cols-3 gap-2">
                 {onView && (
@@ -653,33 +712,16 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                 </span>
               </div>
             </div>
-          ) : !isDisabled ? (
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <div className={`text-center text-sm font-medium ${theme.textColor} opacity-70 hover:opacity-100 transition-opacity`}>
-                Click to {actionText}
-              </div>
-            </div>
           ) : null}
         </div>
       </div>
 
-      {/* Variant Selection Modal - Rendered at root level */}
-      {showVariantModal && createPortal(
-        <VariantSelectionModal
-          isOpen={showVariantModal}
-          onClose={() => setShowVariantModal(false)}
-          product={product}
-          onSelectVariant={handleVariantSelect}
-        />,
-        document.body
-      )}
-
-      {/* Product Info Modal */}
-      <ProductInfoModal
-        isOpen={isProductInfoOpen}
-        onClose={() => setIsProductInfoOpen(false)}
+      {/* Variant Selection Modal */}
+      <VariantSelectionModal
+        isOpen={isVariantModalOpen}
+        onClose={() => setIsVariantModalOpen(false)}
         product={product}
-        onAddToCart={onAddToCart}
+        onSelectVariant={handleVariantSelect}
       />
     </>
   );

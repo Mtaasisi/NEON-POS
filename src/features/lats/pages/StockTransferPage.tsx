@@ -530,7 +530,7 @@ const TransferRow: React.FC<TransferRowProps> = ({
       <td className="px-6 py-4">
         <div className="text-sm">
           <div className="font-medium text-gray-900">
-            {(transfer.variant?.product as any)?.name || transfer.variant?.variant_name || 'N/A'}
+            {(transfer.variant?.product as any)?.name || 'N/A'}
             {isBatch && (
               <span className="ml-1 text-xs font-normal text-blue-600">
                 and {batchProductCount - 1} more
@@ -544,7 +544,12 @@ const TransferRow: React.FC<TransferRowProps> = ({
               </span>
             ) : (
               <>
-                {transfer.variant?.variant_name && transfer.variant.variant_name !== 'Default Variant' && (
+                {/* Display user-defined variant name if it's not just "Default Variant" */}
+                {transfer.variant?.name && transfer.variant.name !== 'Default Variant' && (
+                  <span>{transfer.variant.name} • </span>
+                )}
+                {/* Fall back to variant_name for trade-ins */}
+                {!transfer.variant?.name && transfer.variant?.variant_name && transfer.variant.variant_name !== 'Default Variant' && (
                   <span>{transfer.variant.variant_name} • </span>
                 )}
                 SKU: {transfer.variant?.sku || 'N/A'}
@@ -655,25 +660,40 @@ const TransferRow: React.FC<TransferRowProps> = ({
             </button>
           )}
 
-          {!isSent && (transfer.status === 'in_transit' || transfer.status === 'approved') && transfer.status !== 'completed' && (
-            <button
-              onClick={handleComplete}
-              disabled={processing}
-              className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
-              title="Confirm receipt and update inventory"
-            >
-              {processing ? (
-                <div className="flex items-center gap-1.5">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Receiving...
-                </div>
-              ) : (
-                <>
-                  <CheckCircle className="w-4 h-4" />
-                  Receive
-                </>
-              )}
-            </button>
+          {/* Show In Transit status for receiver */}
+          {!isSent && transfer.status === 'in_transit' && (
+            <div className="flex items-center gap-2">
+              <div className="px-3 py-1.5 text-sm font-medium text-blue-700 bg-blue-100 rounded-lg border border-blue-200 flex items-center gap-1.5">
+                <Truck className="w-4 h-4" />
+                In Transit
+              </div>
+              <button
+                onClick={handleComplete}
+                disabled={processing}
+                className="px-3 py-1.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                title="Click when items arrive"
+              >
+                {processing ? (
+                  <div className="flex items-center gap-1.5">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Receiving...
+                  </div>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Receive
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Show waiting message if only approved (not shipped yet) */}
+          {!isSent && transfer.status === 'approved' && (
+            <div className="px-3 py-1.5 text-sm font-medium text-amber-700 bg-amber-100 rounded-lg border border-amber-200 flex items-center gap-1.5">
+              <Clock className="w-4 h-4" />
+              Not Shipped Yet
+            </div>
           )}
 
           {/* Cancel button for senders */}
@@ -729,23 +749,54 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
     to_branch_id: '',
     notes: ''
   });
-  const [tempSelection, setTempSelection] = useState({
-    entity_id: '',
-    quantity: 1
-  });
   const [selectedProduct, setSelectedProduct] = useState<{product: any, variants: ProductVariant[]} | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [recentlyAdded, setRecentlyAdded] = useState<string[]>([]);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
-  const quantityInputRef = React.useRef<HTMLInputElement>(null);
+  const [tempSelection, setTempSelection] = useState({ entity_id: '', quantity: 1 });
 
   useEffect(() => {
     loadBranches();
     loadVariants();
+  }, [currentBranchId]);
+  
+  // Separate effect to handle auto-selection after variants are loaded
+  useEffect(() => {
+    if (loadingProducts || variants.length === 0) return;
     
-    // Check for preselected product from inventory
+    // Check for preselected product from ProductModal (using localStorage)
+    const quickAddData = localStorage.getItem('stock_transfer_quick_add');
+    if (quickAddData) {
+      try {
+        const productData = JSON.parse(quickAddData);
+        // Clear the storage immediately
+        localStorage.removeItem('stock_transfer_quick_add');
+        
+        // Add all variants from the preselected product that have stock
+        if (productData.variants && productData.variants.length > 0) {
+          const variantsWithStock = productData.variants.filter((v: any) => (v.quantity || 0) > 0);
+          if (variantsWithStock.length > 0) {
+            const items: TransferItem[] = variantsWithStock.map((variant: any) => ({
+              variant: variant,
+              quantity: 1 // Default quantity, user can adjust
+            }));
+            setSelectedItems(items);
+            toast.success(`✅ ${productData.productName} ready to transfer!`, {
+              duration: 3000
+            });
+          } else {
+            toast.error('Product has no stock available for transfer');
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load quick add product:', error);
+      }
+      return; // Don't check sessionStorage if we used localStorage
+    }
+    
+    // Also check for preselected product from inventory (using sessionStorage)
     const preselectedData = sessionStorage.getItem('preselectedTransferProduct');
     if (preselectedData) {
       try {
@@ -768,11 +819,12 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
       } catch (error) {
         console.error('Failed to load preselected product:', error);
       }
-    } else {
-      // Auto-focus search input when modal opens (only if no preselected product)
-      setTimeout(() => searchInputRef.current?.focus(), 100);
+      return; // Don't focus search if we had a preselected product
     }
-  }, [currentBranchId]);
+    
+    // Auto-focus search input when modal opens (only if no preselected product)
+    setTimeout(() => searchInputRef.current?.focus(), 100);
+  }, [loadingProducts, variants]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -781,17 +833,8 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
       if (e.key === 'Escape') {
         if (selectedProduct) {
           setSelectedProduct(null);
-        } else if (tempSelection.entity_id) {
-          setTempSelection({ entity_id: '', quantity: 1 });
         } else {
           onClose();
-        }
-      }
-      
-      // Ctrl/Cmd + Enter to submit form
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        if (formData.to_branch_id && selectedItems.length > 0) {
-          handleSubmit(e as any);
         }
       }
       
@@ -804,7 +847,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onClose, selectedProduct, tempSelection, formData, selectedItems]);
+  }, [onClose, selectedProduct]);
 
   const loadBranches = async () => {
     try {
@@ -830,6 +873,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
         .select(`
           id,
           product_id,
+          name,
           variant_name,
           sku,
           quantity,
@@ -839,7 +883,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
         `)
         .eq('branch_id', currentBranchId)
         .gt('quantity', 0)
-        .order('variant_name');
+        .order('name');  // 🔧 FIX: Order by 'name' (user-defined)
 
       if (error) {
         console.error('❌ Variants query error:', error);
@@ -1061,59 +1105,58 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
   const tempSelectedVariant = variants.find(v => v.id === tempSelection.entity_id);
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <GlassCard className="max-w-6xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-              <Package className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Create Stock Transfer</h2>
-              <p className="text-sm text-gray-500">Transfer inventory to another branch</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {/* Keyboard shortcuts hint */}
-            <div className="hidden lg:flex items-center gap-3 text-xs text-gray-400 mr-2">
-              <div className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">⌘K</kbd>
-                <span>Search</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">ESC</kbd>
-                <span>Close</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-              title="Close (ESC)"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-            {/* Left Column - Product Selection */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Search className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Product Selection</h3>
-              </div>
-
-              {/* Step Indicator */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
-                <div className="flex items-center gap-2 text-sm text-blue-900">
-                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-                    1
-                  </div>
-                  <span className="font-medium">Search and select products to transfer</span>
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/50 z-40"
+        onClick={onClose}
+      />
+      
+      {/* Modal Container */}
+      <div className="fixed inset-0 flex items-center justify-center p-4 z-50 pointer-events-none">
+        <div 
+          className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto pointer-events-auto"
+        >
+          <div className="p-6">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                  <Package className="w-5 h-5 text-blue-600" />
                 </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">Create Stock Transfer</h3>
+                  <p className="text-xs text-gray-500">Transfer products to another branch</p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Form Content */}
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Destination Branch Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Destination Branch
+                </label>
+                <select
+                  value={formData.to_branch_id}
+                  onChange={(e) => setFormData({ ...formData, to_branch_id: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  required
+                >
+                  <option value="">Select destination branch...</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name} ({branch.code}) - {branch.city}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Product Search */}
@@ -1129,7 +1172,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                     placeholder="Type product name or scan barcode..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-10 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
                   />
                   {searchTerm && (
                     <button
@@ -1143,34 +1186,37 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                 </div>
               </div>
 
-              {/* Product List */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Available Products
-                  {!loadingProducts && filteredProducts.length > 0 && (
-                    <span className="ml-2 text-xs text-gray-500">
-                      ({filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'})
-                    </span>
-                  )}
-                </label>
-                <div className="border border-gray-200 rounded-lg max-h-80 overflow-y-auto bg-gray-50">
-                  {loadingProducts ? (
-                    <div className="p-8 text-center">
-                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto mb-3"></div>
-                      <p className="text-sm text-gray-600">Loading products...</p>
-                    </div>
-                  ) : filteredProducts.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500">
-                      <Package className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p className="font-medium mb-1">
-                        {selectedItems.length > 0 ? 'All products added!' : searchTerm ? 'No products found' : 'No products available'}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {searchTerm ? 'Try a different search term' : 'Start by searching for products above'}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-200">
+              {/* Product List and Selected Items */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Available Products */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Available Products
+                    {!loadingProducts && filteredProducts.length > 0 && (
+                      <span className="ml-2 text-xs text-gray-500">
+                        ({filteredProducts.length})
+                      </span>
+                    )}
+                  </label>
+                  <div className="border-2 border-gray-200 rounded-lg h-96 overflow-y-auto bg-gray-50 p-3">
+                    {loadingProducts ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                          <p className="text-sm text-gray-600">Loading...</p>
+                        </div>
+                      </div>
+                    ) : filteredProducts.length === 0 ? (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                          <p className="text-sm text-gray-600">
+                            {selectedItems.length > 0 ? 'All products added' : searchTerm ? 'No products found' : 'No products available'}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
                       {filteredProducts.map((group) => {
                         // Filter out already selected variants
                         const availableVariants = group.variants.filter(v => 
@@ -1186,359 +1232,190 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                         return (
                           <div
                             key={group.product.id}
-                            className={`flex items-center gap-2 px-4 py-3 hover:bg-white transition-colors ${
-                              selectedProduct?.product.id === group.product.id ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                            }`}
+                            className="bg-white border border-gray-300 rounded-lg p-3 hover:border-blue-500 transition-colors"
                           >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (hasMultipleVariants) {
-                                  setSelectedProduct(group);
-                                } else {
-                                  setTempSelection({ ...tempSelection, entity_id: availableVariants[0].id });
-                                }
-                              }}
-                              className="flex-1 text-left"
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <div className="font-medium text-gray-900">
-                                    {group.product.name}
-                                  </div>
-                                  <div className="text-sm text-gray-600 mt-1">
-                                    {hasMultipleVariants ? (
-                                      <span className="text-blue-600 font-medium">
-                                        {availableVariants.length} variants
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-500">SKU: {availableVariants[0].sku}</span>
-                                    )}
-                                  </div>
-                                </div>
-                              <div className="text-right ml-3">
-                                <div className="text-sm font-semibold text-gray-900">
-                                  {totalStock} in stock
-                                </div>
-                                {!hasMultipleVariants && (
-                                  <div className="text-xs text-gray-500">
-                                    TSh {Number(availableVariants[0].selling_price || 0).toLocaleString()}
-                                  </div>
-                                )}
-                              </div>
-                              </div>
-                            </button>
-                            
-                            {/* Quick Add Button (only for single variant products) */}
-                            {!hasMultipleVariants && singleVariant && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleQuickAdd(singleVariant);
-                                }}
-                                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-all flex items-center gap-1 shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
-                                title="Quick add 1 unit (shortcut)"
-                              >
-                                <Plus className="w-3 h-3" />
-                                <span>Add</span>
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-
-            {/* Right Column - Transfer Details */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Building2 className="w-5 h-5 text-green-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Transfer Details</h3>
-              </div>
-
-              {/* Step Indicator */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
-                <div className="flex items-center gap-2 text-sm text-green-900">
-                  <div className="w-6 h-6 rounded-full bg-green-600 text-white flex items-center justify-center font-bold text-xs">
-                    2
-                  </div>
-                  <span className="font-medium">Select destination and confirm transfer</span>
-                </div>
-              </div>
-
-              {/* Destination Branch */}
-              <div>
-                <label className="flex items-center justify-between text-sm font-medium text-gray-700 mb-2">
-                  <span>
-                    Destination Branch <span className="text-red-500">*</span>
-                  </span>
-                  {formData.to_branch_id && (
-                    <span className="text-xs text-green-600 flex items-center gap-1">
-                      <CheckCircle className="w-3 h-3" />
-                      Selected
-                    </span>
-                  )}
-                </label>
-                <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
-                  <select
-                    value={formData.to_branch_id}
-                    onChange={(e) => {
-                      setFormData({ ...formData, to_branch_id: e.target.value });
-                      if (e.target.value) {
-                        toast.success('Destination branch selected');
-                      }
-                    }}
-                    className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 focus:border-blue-500 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white appearance-none cursor-pointer transition-all"
-                    required
-                  >
-                    <option value="">Select destination branch...</option>
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name} ({branch.code}) - {branch.city}
-                      </option>
-                    ))}
-                  </select>
-                  <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Selected Items Cart */}
-              {selectedItems.length > 0 ? (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
-                        {selectedItems.length}
-                      </span>
-                      Products to Transfer
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleClearAll}
-                      className="text-xs text-red-600 hover:text-red-700 font-medium"
-                    >
-                      Clear All
-                    </button>
-                  </div>
-                  
-                  <div className="border border-gray-200 rounded-lg bg-white max-h-[400px] overflow-y-auto">
-                    {selectedItems.map((item, index) => {
-                      const isRecentlyAdded = recentlyAdded.includes(item.variant.id);
-                      return (
-                        <div 
-                          key={item.variant.id} 
-                          className={`group flex items-center gap-2 p-2 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${
-                            isRecentlyAdded ? 'bg-green-50' : ''
-                          }`}
-                        >
-                          {/* Product Info - Compact */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-bold text-gray-400 w-4">{index + 1}.</span>
+                            <div className="flex items-center justify-between gap-2">
                               <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm text-gray-900 truncate">
-                                  {(item.variant.product as any)?.name || item.variant.variant_name}
-                                </div>
-                                <div className="text-xs text-gray-500 truncate">
-                                  {item.variant.sku}
-                                </div>
+                                <p className="font-medium text-sm text-gray-900 truncate">
+                                  {group.product.name}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {hasMultipleVariants ? `${availableVariants.length} variants` : availableVariants[0].sku} • {totalStock} in stock
+                                </p>
                               </div>
+                              
+                              {!hasMultipleVariants && singleVariant ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickAdd(singleVariant)}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  Add
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedProduct(group)}
+                                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
+                                >
+                                  Select
+                                </button>
+                              )}
                             </div>
                           </div>
+                        );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
-                          {/* Compact Quantity Controls */}
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateItemQuantity(item.variant.id, Math.max(1, item.quantity - 1))}
-                              className="w-6 h-6 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-bold transition-colors"
-                            >
-                              −
-                            </button>
-                            
-                            <div className="relative">
+                {/* Selected Items */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Selected Products ({selectedItems.length})
+                    </label>
+                    {selectedItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearAll}
+                        className="text-xs text-red-600 hover:text-red-700 font-medium"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="border-2 border-gray-200 rounded-lg h-96 overflow-y-auto bg-gray-50 p-3">
+                    {selectedItems.length > 0 ? (
+                      <div className="space-y-2">
+                        {selectedItems.map((item) => (
+                          <div 
+                            key={item.variant.id} 
+                            className="bg-white border border-gray-300 rounded-lg p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm text-gray-900 truncate">
+                                  {(item.variant.product as any)?.name || item.variant.variant_name}
+                                </p>
+                                <p className="text-xs text-gray-500">{item.variant.sku}</p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(item.variant.id)}
+                                className="text-gray-400 hover:text-red-600 transition-colors"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQuantity(item.variant.id, Math.max(1, item.quantity - 1))}
+                                className="w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold transition-colors"
+                              >
+                                −
+                              </button>
+                              
                               <input
                                 type="number"
                                 min="1"
                                 max={item.variant.quantity}
                                 value={item.quantity}
                                 onChange={(e) => handleUpdateItemQuantity(item.variant.id, parseInt(e.target.value) || 1)}
-                                className="w-16 h-6 px-1 text-center text-sm font-semibold bg-blue-50 border border-blue-200 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                className="flex-1 px-2 py-1 text-center border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 font-semibold"
                               />
-                              <div className="absolute -bottom-4 left-0 right-0 text-center text-xs text-gray-400 pointer-events-none">
-                                /{item.variant.quantity}
-                              </div>
+                              
+                              <button
+                                type="button"
+                                onClick={() => handleUpdateItemQuantity(item.variant.id, Math.min(item.variant.quantity, item.quantity + 1))}
+                                disabled={item.quantity >= item.variant.quantity}
+                                className="w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded-lg font-bold transition-colors"
+                              >
+                                +
+                              </button>
                             </div>
                             
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateItemQuantity(item.variant.id, Math.min(item.variant.quantity, item.quantity + 1))}
-                              disabled={item.quantity >= item.variant.quantity}
-                              className="w-6 h-6 flex items-center justify-center bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded text-sm font-bold transition-colors"
-                            >
-                              +
-                            </button>
-                            
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(item.variant.id)}
-                              className="w-6 h-6 flex items-center justify-center text-red-600 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
+                            <p className="text-xs text-gray-500 text-right mt-1">
+                              Max: {item.variant.quantity}
+                            </p>
                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                          <Package className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                          <p className="text-sm text-gray-600">No products selected</p>
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Compact Summary */}
-                  <div className="mt-2 flex items-center justify-between text-xs bg-blue-50 px-3 py-2 rounded-lg">
-                    <span className="text-gray-600">Total Units:</span>
-                    <span className="font-bold text-blue-900">{selectedItems.reduce((sum, item) => sum + item.quantity, 0)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              ) : (
-                <div className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center">
-                  <Package className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p className="text-xs font-medium text-gray-500">No products selected</p>
-                  <p className="text-xs text-gray-400 mt-1">Add products from the left</p>
-                </div>
-              )}
+              </div>
 
-              {/* Variant Selection (for multi-variant products) */}
-              {selectedProduct && selectedProduct.variants.filter(v => !selectedItems.some(item => item.variant.id === v.id)).length > 1 && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Select Variant
-                    </label>
+              {/* Variant Selection Modal */}
+              {selectedProduct && selectedProduct.variants.filter(v => !selectedItems.some(item => item.variant.id === v.id)).length > 0 && (
+                <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      <span className="font-bold">{selectedProduct.product.name}</span> - Select Variant
+                    </p>
                     <button
                       type="button"
                       onClick={() => setSelectedProduct(null)}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                      className="text-xs text-gray-600 hover:text-gray-900 font-medium"
                     >
                       Cancel
                     </button>
                   </div>
-                  <div className="mb-2 p-2 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-900">
-                      <span className="font-semibold">{selectedProduct.product.name}</span>
-                    </p>
-                  </div>
-                  <div className="border border-gray-200 rounded-lg bg-gray-50 max-h-48 overflow-y-auto">
-                    <div className="divide-y divide-gray-200">
-                      {selectedProduct.variants.filter(v => !selectedItems.some(item => item.variant.id === v.id)).map((variant) => (
-                        <button
-                          key={variant.id}
-                          type="button"
-                          onClick={() => {
-                            setTempSelection({ ...tempSelection, entity_id: variant.id });
-                            setSelectedProduct(null);
-                          }}
-                          className={`w-full text-left px-4 py-3 hover:bg-white transition-colors ${
-                            tempSelection.entity_id === variant.id ? 'bg-green-50 border-l-4 border-l-green-500' : ''
-                          }`}
-                        >
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <div className="font-medium text-gray-900 text-sm">{variant.variant_name}</div>
-                              <div className="text-xs text-gray-500 mt-1">SKU: {variant.sku}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm font-semibold text-gray-900">
-                                {variant.quantity} in stock
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                TSh {Number(variant.selling_price || 0).toLocaleString()}
-                              </div>
-                            </div>
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {selectedProduct.variants.filter(v => !selectedItems.some(item => item.variant.id === v.id)).map((variant) => (
+                      <button
+                        key={variant.id}
+                        type="button"
+                        onClick={() => {
+                          handleQuickAdd(variant);
+                          setSelectedProduct(null);
+                        }}
+                        className="w-full text-left px-4 py-3 bg-white border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                      >
+                        <div className="flex justify-between items-center gap-3">
+                          <div className="flex-1">
+                            <p className="font-medium text-sm text-gray-900 mb-1">{variant.variant_name}</p>
+                            <p className="text-xs text-gray-500">SKU: {variant.sku}</p>
                           </div>
-                        </button>
-                      ))}
-                    </div>
+                          <div className="text-right">
+                            <p className="text-sm font-semibold text-gray-900">{variant.quantity} in stock</p>
+                            <p className="text-xs text-gray-500">TSh {Number(variant.selling_price || 0).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
                   </div>
+                  <p className="text-xs text-gray-500 mt-3 text-center">
+                    Click any variant to add it to your transfer
+                  </p>
                 </div>
               )}
 
-              {/* Quantity & Add Button */}
-              {tempSelectedVariant && (
-                <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border-2 border-green-300 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="mb-3">
-                    <p className="text-sm font-semibold text-gray-900">
-                      {(tempSelectedVariant.product as any)?.name || tempSelectedVariant.variant_name}
-                    </p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      {tempSelectedVariant.variant_name !== 'Default Variant' && (
-                        <span>{tempSelectedVariant.variant_name} • </span>
-                      )}
-                      SKU: {tempSelectedVariant.sku}
-                    </p>
-                  </div>
-                  
-                  {/* Quick Quantity Presets */}
-                  <div className="mb-3">
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                      Quick Quantity
-                    </label>
-                    <div className="flex gap-2">
-                      {[1, 5, 10, 20].map((qty) => (
-                        <button
-                          key={qty}
-                          type="button"
-                          onClick={() => setQuickQuantity(Math.min(qty, tempSelectedVariant.quantity))}
-                          disabled={qty > tempSelectedVariant.quantity}
-                          className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                            tempSelection.quantity === qty
-                              ? 'bg-green-600 text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed'
-                          }`}
-                        >
-                          {qty}
-                        </button>
-                      ))}
+              {/* Summary Display */}
+              {selectedItems.length > 0 && (
+                <div className="bg-blue-50 rounded-lg p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 mb-1">Total Products</p>
+                      <p className="text-4xl font-bold text-blue-600">{selectedItems.length}</p>
                     </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Custom Quantity
-                      </label>
-                      <input
-                        ref={quantityInputRef}
-                        type="number"
-                        min="1"
-                        max={tempSelectedVariant.quantity}
-                        value={tempSelection.quantity}
-                        onChange={(e) => setTempSelection({ ...tempSelection, quantity: parseInt(e.target.value) || 1 })}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddItem();
-                          }
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-white"
-                      />
-                      <p className="mt-1 text-xs text-gray-600">
-                        Max: {tempSelectedVariant.quantity} units
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600 mb-1">Total Units</p>
+                      <p className="text-3xl font-bold text-green-600">
+                        {selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
                       </p>
-                    </div>
-                    <div className="flex items-end">
-                      <GlassButton
-                        type="button"
-                        onClick={handleAddItem}
-                        icon={<Plus size={16} />}
-                        className="bg-gradient-to-r from-green-500 to-green-600 text-white whitespace-nowrap h-[42px] hover:shadow-lg transition-shadow"
-                      >
-                        Add
-                      </GlassButton>
                     </div>
                   </div>
                 </div>
@@ -1553,110 +1430,34 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   rows={3}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors resize-none text-gray-900"
                   placeholder="Add any notes about this transfer..."
                 />
               </div>
-            </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={loading}
+                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || !formData.to_branch_id || selectedItems.length === 0}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Creating...' : 'Create Transfer'}
+                </button>
+              </div>
+            </form>
           </div>
-
-          {/* Footer Actions */}
-          <div className="border-t border-gray-100 p-6 bg-gray-50">
-            {/* Validation Warnings */}
-            {selectedItems.length > 0 && !formData.to_branch_id && (
-              <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-orange-800">
-                  <span className="font-medium">Almost there!</span> Please select a destination branch to continue.
-                </div>
-              </div>
-            )}
-            
-            {formData.to_branch_id && selectedItems.length === 0 && (
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-                <Package className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-blue-800">
-                  Add products from the left panel to create a transfer.
-                </div>
-              </div>
-            )}
-
-            {/* Summary */}
-            {selectedItems.length > 0 && (
-              <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-900">{selectedItems.length}</div>
-                      <div className="text-xs text-blue-700">Products</div>
-                    </div>
-                    <div className="w-px h-8 bg-blue-300"></div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-900">
-                        {selectedItems.reduce((sum, item) => sum + item.quantity, 0)}
-                      </div>
-                      <div className="text-xs text-blue-700">Total Units</div>
-                    </div>
-                  </div>
-                  {formData.to_branch_id && (
-                    <div className="text-right">
-                      <div className="text-xs text-blue-700 mb-0.5">Destination</div>
-                      <div className="text-sm font-semibold text-blue-900">
-                        {branches.find(b => b.id === formData.to_branch_id)?.name || 'Selected'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <GlassButton
-                type="button"
-                onClick={onClose}
-                variant="secondary"
-                className="px-8"
-                disabled={loading}
-              >
-                Cancel
-              </GlassButton>
-              <GlassButton
-                type="submit"
-                className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl transition-all relative overflow-hidden group"
-                icon={loading ? undefined : <Send size={18} />}
-                disabled={loading || !formData.to_branch_id || selectedItems.length === 0}
-              >
-                {loading ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    <span>Creating {selectedItems.length} Transfer{selectedItems.length > 1 ? 's' : ''}...</span>
-                  </div>
-                ) : (
-                  <>
-                    <span className="relative z-10">
-                      {selectedItems.length > 0 
-                        ? `Create ${selectedItems.length} Transfer${selectedItems.length > 1 ? 's' : ''}`
-                        : 'Create Transfer'}
-                    </span>
-                    {/* Hover effect */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-700 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  </>
-                )}
-              </GlassButton>
-            </div>
-            
-            {/* Keyboard hint */}
-            {selectedItems.length > 0 && formData.to_branch_id && !loading && (
-              <div className="mt-3 text-center">
-                <p className="text-xs text-gray-500">
-                  Press <kbd className="px-1.5 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs mx-1">⌘Enter</kbd> to create transfer
-                </p>
-              </div>
-            )}
-          </div>
-        </form>
-      </GlassCard>
-    </div>
+        </div>
+      </div>
+    </>
   );
 };
 
@@ -2013,10 +1814,15 @@ const TransferDetailsModal: React.FC<TransferDetailsModalProps> = ({
                         <span className="text-xs font-bold text-gray-400">{index + 1}.</span>
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm text-gray-900 truncate">
-                            {(item.variant?.product as any)?.name || item.variant?.variant_name || 'N/A'}
+                            {(item.variant?.product as any)?.name || 'N/A'}
                           </div>
                           <div className="text-xs text-gray-500 truncate">
-                            {item.variant?.variant_name && item.variant.variant_name !== 'Default Variant' && (
+                            {/* Display user-defined variant name first */}
+                            {item.variant?.name && item.variant.name !== 'Default Variant' && (
+                              <span>{item.variant.name} • </span>
+                            )}
+                            {/* Fall back to variant_name for trade-ins */}
+                            {!item.variant?.name && item.variant?.variant_name && item.variant.variant_name !== 'Default Variant' && (
                               <span>{item.variant.variant_name} • </span>
                             )}
                             SKU: {item.variant?.sku || 'N/A'}
@@ -2159,8 +1965,13 @@ const TransferDetailsModal: React.FC<TransferDetailsModalProps> = ({
               </GlassButton>
             )}
 
-            {!isSent && (transfer.status === 'in_transit' || transfer.status === 'approved') && transfer.status !== 'completed' && (
+            {/* Show In Transit status for receiver (modal view) */}
+            {!isSent && transfer.status === 'in_transit' && (
               <>
+                <div className="flex-1 px-4 py-3 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-center gap-2">
+                  <Truck size={18} />
+                  In Transit
+                </div>
                 {isBatchTransfer && selectedItems.length < batchTransfers.length && (
                   <div className="flex-1 text-center">
                     <div className="text-xs text-gray-600 mb-1">
@@ -2176,11 +1987,19 @@ const TransferDetailsModal: React.FC<TransferDetailsModalProps> = ({
                 >
                   {processing ? 'Processing...' : 
                    isBatchTransfer 
-                     ? `Receive ${selectedItems.length === batchTransfers.length ? 'All' : selectedItems.length} Product${selectedItems.length !== 1 ? 's' : ''}`
-                     : 'Complete Transfer'
+                     ? `Receive ${selectedItems.length === batchTransfers.length ? 'All' : selectedItems.length}`
+                     : 'Receive'
                   }
                 </GlassButton>
               </>
+            )}
+
+            {/* Show waiting message if only approved (not shipped yet) */}
+            {!isSent && transfer.status === 'approved' && (
+              <div className="flex-1 px-4 py-3 text-sm font-medium text-amber-700 bg-amber-50 rounded-lg border border-amber-200 flex items-center justify-center gap-2">
+                <Clock size={18} />
+                Not Shipped Yet
+              </div>
             )}
 
             {(transfer.status === 'pending' || transfer.status === 'approved') && isSent && (

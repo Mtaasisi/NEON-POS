@@ -20,7 +20,6 @@ interface POTopBarProps {
   onViewPurchaseOrders?: () => void;
   isCreatingPO: boolean;
   hasSelectedSupplier: boolean;
-  onTestPOFetch?: () => void;
 }
 
 const POTopBar: React.FC<POTopBarProps> = ({
@@ -35,8 +34,7 @@ const POTopBar: React.FC<POTopBarProps> = ({
   onAddProduct,
   onViewPurchaseOrders,
   isCreatingPO,
-  hasSelectedSupplier,
-  onTestPOFetch
+  hasSelectedSupplier
 }) => {
 
   return (
@@ -81,18 +79,6 @@ const POTopBar: React.FC<POTopBarProps> = ({
                 icon={<Building size={18} />}
               >
                 <span className="hidden sm:inline">Add Supplier</span>
-              </GlassButton>
-            )}
-
-            {/* Test Purchase Order Fetch */}
-            {onTestPOFetch && (
-              <GlassButton
-                onClick={onTestPOFetch}
-                variant="outline"
-                className="bg-blue-500/20 hover:bg-blue-500/30 text-white border-blue-300/50 hover:border-blue-300/70"
-                icon={<RefreshCw size={18} />}
-              >
-                <span className="hidden sm:inline">🧪 Test PO</span>
               </GlassButton>
             )}
 

@@ -4,7 +4,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { 
   Package, Search, Plus, RefreshCw,
   AlertCircle, Edit, Eye, Trash2, DollarSign, FileText, 
-  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle, MoreVertical
+  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle, MoreVertical, Zap, Truck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -12,6 +12,9 @@ import { useDialog } from '../../shared/hooks/useDialog';
 import { BackButton } from '../../shared/components/ui/BackButton';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import CBMCalculatorModal from '../../calculator/components/CBMCalculatorModal';
+import { supabase } from '../../../lib/supabaseClient';
+import EnhancedSupplierManagementPage from '../../settings/pages/EnhancedSupplierManagementPage';
+import StyledActionMenu, { ActionMenuItem } from '../components/purchase-order/StyledActionMenu';
 
 const PurchaseOrdersPage: React.FC = () => {
   const {} = useAuth(); // Destructure to avoid unused variable warning
@@ -29,6 +32,9 @@ const PurchaseOrdersPage: React.FC = () => {
     updatePurchaseOrder,
   } = useInventoryStore();
 
+  // Tab state for navigation between Purchase Orders and Manage Suppliers
+  const [activeTab, setActiveTab] = useState<'purchase-orders' | 'suppliers'>('purchase-orders');
+
   // Local state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'sent' | 'received'>('all');
@@ -37,6 +43,19 @@ const PurchaseOrdersPage: React.FC = () => {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [showCbmCalculator, setShowCbmCalculator] = useState(false);
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const moreButtonRefs = React.useRef<{ [key: string]: HTMLButtonElement | null }>({});
+
+  // Close dropdown when clicking outside or on escape
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && openDropdownId) {
+        setOpenDropdownId(null);
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [openDropdownId]);
 
   // Enhanced load function with timestamp
   const handleLoadPurchaseOrders = async () => {
@@ -338,79 +357,98 @@ const PurchaseOrdersPage: React.FC = () => {
     return actions;
   };
 
-  // Get all dropdown actions for the More button
-  const getMoreDropdownActions = (order: any) => {
-    const dropdownActions = [];
+  // Get all dropdown actions for the More button in styled format
+  const getStyledMenuActions = (order: any): ActionMenuItem[] => {
+    const actions: ActionMenuItem[] = [];
 
     // View Details (always available)
-    dropdownActions.push({
+    actions.push({
+      id: 'view',
       label: 'View Details',
-      icon: <Eye className="w-4 h-4" />,
-      onClick: () => navigate(`/lats/purchase-orders/${order.id}`),
-      color: 'text-blue-600 hover:bg-blue-50'
+      description: 'See complete order information',
+      icon: <Eye className="w-5 h-5" />,
+      color: 'bg-blue-500',
+      hoverColor: 'hover:bg-blue-50',
+      onClick: () => navigate(`/lats/purchase-orders/${order.id}`)
     });
 
     // Edit (for draft orders)
     if (order.status === 'draft') {
-      dropdownActions.push({
+      actions.push({
+        id: 'edit',
         label: 'Edit Order',
-        icon: <Edit className="w-4 h-4" />,
-        onClick: () => navigate(`/lats/purchase-orders/${order.id}?edit=true`),
-        color: 'text-green-600 hover:bg-green-50'
+        description: 'Modify order details and items',
+        icon: <Edit className="w-5 h-5" />,
+        color: 'bg-green-500',
+        hoverColor: 'hover:bg-green-50',
+        onClick: () => navigate(`/lats/purchase-orders/${order.id}?edit=true`)
       });
     }
 
     // Duplicate (always available)
-    dropdownActions.push({
+    actions.push({
+      id: 'duplicate',
       label: 'Duplicate Order',
-      icon: <Copy className="w-4 h-4" />,
-      onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`),
-      color: 'text-purple-600 hover:bg-purple-50'
+      description: 'Create a copy of this order',
+      icon: <Copy className="w-5 h-5" />,
+      color: 'bg-purple-500',
+      hoverColor: 'hover:bg-purple-50',
+      onClick: () => navigate(`/lats/purchase-order/create?duplicate=${order.id}`)
     });
 
     // Generate Documents
-    dropdownActions.push({
+    actions.push({
+      id: 'pdf',
       label: 'Generate PDF',
-      icon: <FileText className="w-4 h-4" />,
+      description: 'Download order as PDF document',
+      icon: <FileText className="w-5 h-5" />,
+      color: 'bg-orange-500',
+      hoverColor: 'hover:bg-orange-50',
       onClick: () => {
         toast.success('Generating PDF...');
         navigate(`/lats/purchase-orders/${order.id}?action=print`);
-      },
-      color: 'text-orange-600 hover:bg-orange-50'
+      }
     });
 
     // Payment (if not completed)
     if (order.status !== 'completed' && order.status !== 'cancelled') {
-      dropdownActions.push({
+      actions.push({
+        id: 'payment',
         label: 'Manage Payment',
-        icon: <CreditCard className="w-4 h-4" />,
-        onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=payment`),
-        color: 'text-indigo-600 hover:bg-indigo-50'
+        description: 'Record or update payment status',
+        icon: <CreditCard className="w-5 h-5" />,
+        color: 'bg-indigo-500',
+        hoverColor: 'hover:bg-indigo-50',
+        onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=payment`)
       });
     }
 
     // Quality Check (for received orders)
     if (order.status === 'received' || order.status === 'partial_received') {
-      dropdownActions.push({
+      actions.push({
+        id: 'quality',
         label: 'Quality Check',
-        icon: <PackageCheck className="w-4 h-4" />,
-        onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=quality`),
-        color: 'text-teal-600 hover:bg-teal-50'
+        description: 'Mark items as quality verified',
+        icon: <PackageCheck className="w-5 h-5" />,
+        color: 'bg-teal-500',
+        hoverColor: 'hover:bg-teal-50',
+        onClick: () => navigate(`/lats/purchase-orders/${order.id}?tab=quality`)
       });
     }
 
-    // Delete (for draft orders only)
-    if (order.status === 'draft' && hasPermission('delete')) {
-      dropdownActions.push({
-        label: 'Delete Order',
-        icon: <Trash2 className="w-4 h-4" />,
-        onClick: () => handleDeleteOrder(order.id),
-        color: 'text-red-600 hover:bg-red-50',
-        divider: true
-      });
-    }
+    // Delete (always available - add divider for separation)
+    actions.push({
+      id: 'delete',
+      label: 'Delete Order',
+      description: 'Permanently remove this order from database',
+      icon: <Trash2 className="w-5 h-5" />,
+      color: 'bg-red-500',
+      hoverColor: 'hover:bg-red-50',
+      onClick: () => handleDeleteOrder(order.id),
+      divider: true // Add visual separation before destructive action
+    });
 
-    return dropdownActions;
+    return actions;
   };
   
   // Combined approve and send handler
@@ -455,6 +493,93 @@ const PurchaseOrdersPage: React.FC = () => {
     }
   };
 
+  // Auto-create PO for iPhone 14 Pro 256GB Deep Purple
+  const handleAutoCreateiPhonePO = async () => {
+    try {
+      toast.loading('Creating automatic PO for iPhone 14 Pro 256GB Deep Purple...', { id: 'auto-po' });
+
+      // Find the product and variant by SKU
+      const { data: variants, error: variantError } = await supabase
+        .from('lats_product_variants')
+        .select(`
+          id,
+          product_id,
+          variant_name,
+          sku,
+          cost_price,
+          selling_price
+        `)
+        .eq('variant_name', 'iPhone 14 Pro 256GB Deep Purple')
+        .limit(1);
+
+      if (variantError || !variants || variants.length === 0) {
+        toast.error('Could not find iPhone 14 Pro 256GB Deep Purple variant', { id: 'auto-po' });
+        return;
+      }
+
+      const variant = variants[0];
+
+      // Get the first active supplier
+      const { data: suppliers, error: supplierError } = await supabase
+        .from('lats_suppliers')
+        .select('id, name')
+        .eq('is_active', true)
+        .limit(1);
+
+      if (supplierError || !suppliers || suppliers.length === 0) {
+        toast.error('No active suppliers found', { id: 'auto-po' });
+        return;
+      }
+
+      const supplier = suppliers[0];
+
+      // Prepare PO data
+      const poData = {
+        supplierId: supplier.id,
+        expectedDelivery: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // 30 days from now
+        notes: `Auto-created PO for iPhone 14 Pro 256GB Deep Purple - Quantity: 2 | Status: Approved & Sent to Supplier`,
+        status: 'sent', // Already approved and sent to supplier
+        currency: 'USD',
+        paymentTerms: 'Net 30',
+        exchangeRate: 1.0,
+        baseCurrency: 'TZS',
+        exchangeRateSource: 'manual',
+        exchangeRateDate: new Date().toISOString(),
+        items: [
+          {
+            productId: variant.product_id,
+            variantId: variant.id,
+            quantity: 2,
+            costPrice: 1000, // As specified
+            sellingPrice: variant.selling_price || 1200,
+            minimumOrderQty: 1,
+            notes: 'iPhone 14 Pro 256GB Deep Purple - Auto-generated'
+          }
+        ]
+      };
+
+      // Create the purchase order
+      const result = await useInventoryStore.getState().createPurchaseOrder(poData);
+
+      if (result.ok) {
+        toast.success(`✅ PO Created & Sent to Supplier! Total: $2000 | Ready for Payment`, { id: 'auto-po', duration: 4000 });
+        await handleLoadPurchaseOrders();
+        
+        // Navigate to the newly created PO with payment tab
+        if (result.data?.id) {
+          setTimeout(() => {
+            navigate(`/lats/purchase-orders/${result.data.id}?tab=payment`);
+          }, 1500);
+        }
+      } else {
+        toast.error(result.message || 'Failed to create purchase order', { id: 'auto-po' });
+      }
+    } catch (error) {
+      console.error('Error creating automatic PO:', error);
+      toast.error('Failed to create automatic purchase order', { id: 'auto-po' });
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* Header - Flat Design with Back Button */}
@@ -478,6 +603,15 @@ const PurchaseOrdersPage: React.FC = () => {
           </button>
           
           <button
+            onClick={handleAutoCreateiPhonePO}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors text-sm shadow-lg hover:shadow-xl"
+            title="Auto-create PO for iPhone 14 Pro 256GB Deep Purple"
+          >
+            <Zap size={18} />
+            Auto iPhone PO
+          </button>
+          
+          <button
             onClick={() => navigate('/lats/purchase-order/create')}
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-orange-600 text-white hover:bg-orange-700 transition-colors text-sm"
           >
@@ -487,8 +621,48 @@ const PurchaseOrdersPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Statistics - Flat Design */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Tab Navigation */}
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('purchase-orders')}
+          className={`px-6 py-3 font-semibold text-sm rounded-t-lg transition-all duration-200 ${
+            activeTab === 'purchase-orders'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Package size={18} />
+            <span>Purchase Orders</span>
+          </div>
+        </button>
+        <button
+          onClick={() => setActiveTab('suppliers')}
+          className={`px-6 py-3 font-semibold text-sm rounded-t-lg transition-all duration-200 ${
+            activeTab === 'suppliers'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Truck size={18} />
+            <span>Manage Suppliers</span>
+          </div>
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'purchase-orders' ? (
+        <>
+          {/* Statistics - Flat Design - Responsive */}
+          <div className="w-full max-w-full mx-auto px-2 sm:px-3 md:px-4">
+            <div 
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+                gap: 'clamp(0.75rem, 1.5vw, 1rem)'
+              }}
+            >
         <div className="bg-blue-50 rounded-lg p-5 hover:bg-blue-100 transition-colors">
           <div className="flex items-center gap-3">
             <Package className="w-7 h-7 text-blue-600 flex-shrink-0" />
@@ -546,10 +720,11 @@ const PurchaseOrdersPage: React.FC = () => {
           </div>
         </div>
       </div>
+      </div>
 
       {/* Search and Filters */}
-      <GlassCard className="p-6">
-        <div className="flex flex-col lg:flex-row gap-4">
+      <GlassCard className="p-3 sm:p-4 md:p-6">
+        <div className="flex flex-col lg:flex-row gap-3 sm:gap-4">
           {/* Search Bar */}
           <div className="flex-1">
             <div className="relative">
@@ -651,9 +826,9 @@ const PurchaseOrdersPage: React.FC = () => {
         </GlassCard>
       ) : (
         <GlassCard className="overflow-hidden">
-          {/* Table Header - Flat Style */}
-          <div className="bg-gray-50 border-b border-gray-200 px-6 py-3">
-            <div className="grid grid-cols-12 gap-4 items-center text-xs font-semibold text-gray-700 uppercase">
+          {/* Table Header - Flat Style - Hidden on mobile, shown on md+ */}
+          <div className="hidden md:block bg-gray-50 border-b border-gray-200 px-3 sm:px-4 md:px-6 py-3">
+            <div className="grid grid-cols-12 gap-2 sm:gap-3 md:gap-4 items-center text-xs font-semibold text-gray-700 uppercase">
               <div className="col-span-2">Order Details</div>
               <div className="col-span-2">Supplier</div>
               <div className="col-span-2">Financial</div>
@@ -664,11 +839,101 @@ const PurchaseOrdersPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Table Body - Flat Style */}
+          {/* Table Body - Flat Style - Responsive cards on mobile */}
           <div className="divide-y divide-gray-200">
             {filteredOrders.map((order) => (
               <div key={order.id} className="hover:bg-gray-50 transition-colors">
-                <div className="grid grid-cols-12 gap-4 items-center px-6 py-4">
+                {/* Mobile Card View - shown on small screens */}
+                <div className="md:hidden px-3 sm:px-4 py-4">
+                  <div className="space-y-3">
+                    {/* Order Number and Status */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+                          <Package className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-bold text-gray-900 text-sm">{order.orderNumber}</h3>
+                          <p className="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
+                        </div>
+                      </div>
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(order.status)}`}>
+                        {getStatusIcon(order.status)}
+                        <span className="capitalize">{order.status.replace('_', ' ')}</span>
+                      </span>
+                    </div>
+                    
+                    {/* Supplier */}
+                    {order.supplier && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-orange-500 rounded-lg flex items-center justify-center">
+                          <span className="text-white text-xs font-bold">
+                            {order.supplier.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-900">{order.supplier.name}</span>
+                      </div>
+                    )}
+                    
+                    {/* Financial Info */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-gray-900">
+                        {(() => {
+                          if (order.totalAmount && order.totalAmount > 0) {
+                            return formatCurrency(order.totalAmount, order.currency);
+                          }
+                          if (order.items && order.items.length > 0) {
+                            const totalFromItems = order.items.reduce((sum, item) => {
+                              return sum + (item.totalPrice || (item.quantity * item.costPrice));
+                            }, 0);
+                            if (totalFromItems > 0) {
+                              return formatCurrency(totalFromItems, order.currency);
+                            }
+                          }
+                          return formatCurrency(0, order.currency || 'TSh');
+                        })()}
+                      </span>
+                      <span className="text-xs text-gray-600">
+                        {order.items?.reduce((total, item) => total + (item.quantity || 0), 0) || 0} items
+                      </span>
+                    </div>
+                    
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-2">
+                      {getSmartActionButtons(order).map((action, index) => (
+                        <div key={`${action.type}-${index}`} className="relative flex-1">
+                          <button
+                            ref={action.type === 'more' ? (el) => { moreButtonRefs.current[order.id] = el; } : undefined}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              action.onClick(e);
+                            }}
+                            className={`w-full flex items-center justify-center gap-1.5 px-2 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
+                            title={action.label}
+                          >
+                            {action.icon}
+                            <span>{action.label}</span>
+                          </button>
+
+                          {/* Styled Action Menu for More button */}
+                          {action.type === 'more' && (
+                            <StyledActionMenu
+                              isOpen={openDropdownId === order.id}
+                              onClose={() => setOpenDropdownId(null)}
+                              position="right"
+                              items={getStyledMenuActions(order)}
+                              triggerRef={{ current: moreButtonRefs.current[order.id] }}
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Desktop Table View - shown on md+ screens */}
+                <div className="hidden md:grid grid-cols-12 gap-2 sm:gap-3 md:gap-4 items-center px-3 sm:px-4 md:px-6 py-4">
                     {/* Order Details */}
                     <div className="col-span-2">
                       <div className="flex items-center gap-3">
@@ -802,63 +1067,49 @@ const PurchaseOrdersPage: React.FC = () => {
                       </div>
                     </div>
 
-                  {/* Smart Actions - Simplified */}
-                  <div className="col-span-1">
-                    <div className="flex items-center justify-end gap-2 relative">
-                      {getSmartActionButtons(order).map((action, index) => (
-                        <div key={`${action.type}-${index}`} className="relative">
-                          <button
-                            onClick={action.onClick}
-                            className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
-                            title={action.label}
-                          >
-                            {action.icon}
-                            <span className="hidden lg:inline">{action.label}</span>
-                          </button>
+                    {/* Smart Actions - Simplified */}
+                    <div className="col-span-1">
+                      <div className="flex items-center justify-end gap-2 relative">
+                        {getSmartActionButtons(order).map((action, index) => (
+                          <div key={`${action.type}-${index}`} className="relative">
+                            <button
+                              ref={action.type === 'more' ? (el) => { moreButtonRefs.current[order.id] = el; } : undefined}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                action.onClick(e);
+                              }}
+                              className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg transition-colors text-xs font-medium ${action.color}`}
+                              title={action.label}
+                            >
+                              {action.icon}
+                              <span className="hidden lg:inline">{action.label}</span>
+                            </button>
 
-                          {/* Dropdown Menu for More button */}
-                          {action.type === 'more' && openDropdownId === order.id && (
-                            <>
-                              {/* Backdrop to close dropdown when clicking outside */}
-                              <div 
-                                className="fixed inset-0 z-10" 
-                                onClick={() => setOpenDropdownId(null)}
+                            {/* Styled Action Menu for More button */}
+                            {action.type === 'more' && (
+                              <StyledActionMenu
+                                isOpen={openDropdownId === order.id}
+                                onClose={() => setOpenDropdownId(null)}
+                                position="right"
+                                items={getStyledMenuActions(order)}
+                                triggerRef={{ current: moreButtonRefs.current[order.id] }}
                               />
-                              
-                              {/* Dropdown Content */}
-                              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 overflow-hidden">
-                                <div className="py-2">
-                                  {getMoreDropdownActions(order).map((dropdownAction, idx) => (
-                                    <React.Fragment key={idx}>
-                                      {dropdownAction.divider && (
-                                        <div className="my-2 border-t border-gray-200" />
-                                      )}
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          dropdownAction.onClick();
-                                          setOpenDropdownId(null);
-                                        }}
-                                        className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${dropdownAction.color}`}
-                                      >
-                                        {dropdownAction.icon}
-                                        <span className="font-medium text-sm">{dropdownAction.label}</span>
-                                      </button>
-                                    </React.Fragment>
-                                  ))}
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      ))}
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+              ))}
+            </div>
+          </GlassCard>
+        )}
+      </>
+    ) : (
+        /* Suppliers Tab Content - Enhanced Supplier Management */
+        <EnhancedSupplierManagementPage embedded={true} />
       )}
 
       {/* CBM Calculator Modal */}

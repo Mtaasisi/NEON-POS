@@ -272,16 +272,19 @@ export class LatsDataTransformer {
       variants: (product.variants || []).map((variant: any) => ({
         id: variant.id,
         sku: variant.sku,
-        name: variant.name,
+        name: variant.variant_name || variant.name,
         barcode: variant.barcode,
+        variant_name: variant.variant_name, // ⭐ ADD: For IMEI extraction
         price: variant.selling_price || variant.sellingPrice || variant.price || 0,
         sellingPrice: variant.selling_price || variant.sellingPrice || variant.price || 0,
         costPrice: variant.costPrice || variant.cost_price || 0,
+        quantity: variant.quantity || variant.stockQuantity || variant.stock_quantity || 0,
         stockQuantity: variant.stockQuantity || variant.quantity || variant.stock_quantity || 0,
         minStockLevel: variant.minStockLevel || variant.minQuantity || variant.min_quantity || 0,
         weight: variant.weight || undefined,
         dimensions: variant.dimensions || undefined,
         attributes: typeof variant.attributes === 'string' ? JSON.parse(variant.attributes) : (variant.attributes || {}),
+        variant_attributes: typeof variant.variant_attributes === 'string' ? JSON.parse(variant.variant_attributes) : (variant.variant_attributes || {}), // ⭐ ADD: For IMEI extraction
         isActive: variant.isActive ?? (variant.status === 'active') ?? true
       })),
       category: product.category,

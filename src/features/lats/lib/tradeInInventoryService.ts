@@ -3,7 +3,7 @@
  * Handles adding traded-in devices to inventory and tracking repair status
  */
 
-import { supabase } from '../../../lib/supabase';
+import { supabase } from '../../../lib/supabaseClient';
 import type { TradeInTransaction } from '../types/tradeIn';
 
 export interface AddToInventoryParams {
@@ -20,21 +20,21 @@ export interface AddToInventoryParams {
  */
 export const getOrCreateTradeInCategory = async (): Promise<string> => {
   try {
-    const activeBranchId = localStorage.getItem('activeBranchId') || '00000000-0000-0000-0000-000000000001';
+    const activeBranchId = localStorage.getItem('current_branch_id');
     
-    // Try to find existing "Trade-In Items" category
+    // Try to find existing "Trade-In Items" category (check all branches first)
     const { data: existingCategory } = await supabase
       .from('lats_categories')
       .select('id')
       .eq('name', 'Trade-In Items')
-      .eq('branch_id', activeBranchId)
       .maybeSingle();
 
     if (existingCategory) {
+      console.log('✅ Found existing Trade-In category:', existingCategory.id);
       return existingCategory.id;
     }
 
-    // Create new category if it doesn't exist
+    // Try to create new category
     const { data: newCategory, error } = await supabase
       .from('lats_categories')
       .insert({
@@ -46,27 +46,62 @@ export const getOrCreateTradeInCategory = async (): Promise<string> => {
       .select('id')
       .single();
 
-    if (error) {
-      console.error('Error creating Trade-In category:', error);
-      // Fall back to first available category
-      const { data: fallbackCategory } = await supabase
+    if (!error && newCategory) {
+      console.log('✅ Created new Trade-In category:', newCategory.id);
+      return newCategory.id;
+    }
+
+    console.warn('⚠️ Failed to create Trade-In category, using fallback:', error);
+    
+    // Fall back to any existing category
+    const { data: fallbackCategory } = await supabase
+      .from('lats_categories')
+      .select('id')
+      .limit(1)
+      .single();
+      
+    if (fallbackCategory) {
+      console.log('✅ Using fallback category:', fallbackCategory.id);
+      return fallbackCategory.id;
+    }
+
+    // Last resort: Use "Uncategorized" if it exists or return error
+    throw new Error('No categories available in database');
+  } catch (error) {
+    console.error('❌ Error in getOrCreateTradeInCategory:', error);
+    
+    // Final fallback: try to get ANY category
+    try {
+      const { data: anyCategory } = await supabase
         .from('lats_categories')
         .select('id')
         .limit(1)
         .single();
       
-      return fallbackCategory?.id || '00000000-0000-0000-0000-000000000001';
+      if (anyCategory) {
+        console.log('⚠️ Using emergency fallback category:', anyCategory.id);
+        return anyCategory.id;
+      }
+    } catch (finalError) {
+      console.error('❌ Cannot get any category:', finalError);
     }
-
-    return newCategory.id;
-  } catch (error) {
-    console.error('Error in getOrCreateTradeInCategory:', error);
-    return '00000000-0000-0000-0000-000000000001'; // Fallback
+    
+    throw new Error('Failed to get or create category for trade-in');
   }
 };
 
 /**
  * Add traded-in device to inventory
+ * 
+ * Role-based permissions:
+ * - Admin: Can add trade-ins at ANY status (pending, approved, completed)
+ * - Non-admin (e.g., Customer Care): Can only add completed or approved trade-ins
+ * 
+ * When adding a trade-in to inventory:
+ * - 'pending' or 'approved' status → automatically marked as 'completed'
+ * - Creates product and variant with IMEI tracking
+ * - Creates stock movement record
+ * - Links customer as supplier for resale tracking
  */
 export const addTradeInDeviceToInventory = async (params: AddToInventoryParams) => {
   const {
@@ -80,108 +115,260 @@ export const addTradeInDeviceToInventory = async (params: AddToInventoryParams) 
 
   try {
     const { data: userData } = await supabase.auth.getUser();
-    const activeBranchId = localStorage.getItem('activeBranchId') || '00000000-0000-0000-0000-000000000001';
+    const activeBranchId = localStorage.getItem('current_branch_id') || transaction.branch_id;
 
-    // Create product name
+    // Get current user's role to determine permissions
+    let userRole = null;
+    if (userData?.user?.id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userData.user.id)
+        .single();
+      userRole = profile?.role;
+    }
+    
+    const isAdmin = userRole === 'admin';
+
+    // ✅ Role-based validation:
+    // - Admin: Can add trade-ins at any status (full control)
+    // - Non-admin: Only completed or approved transactions
+    if (!isAdmin && transaction.status !== 'completed' && transaction.status !== 'approved') {
+      console.error('❌ Cannot add non-completed/non-approved trade-in to inventory:', {
+        transaction_id: transaction.id,
+        transaction_number: transaction.transaction_number,
+        current_status: transaction.status,
+        user_role: userRole
+      });
+      throw new Error(`Only completed or approved trade-in transactions can be added to inventory. Current status: ${transaction.status}. Please complete the transaction first in Trade-In Management.`);
+    }
+    
+    if (isAdmin && transaction.status === 'pending') {
+      console.log('✅ [ADMIN] Adding pending trade-in to inventory (admin override)');
+    }
+
+    // ✅ Check for duplicate IMEI
+    if (transaction.device_imei) {
+      const { data: existingIMEI } = await supabase
+        .from('lats_product_variants')
+        .select('id, product_id, variant_attributes')
+        .filter('variant_attributes->imei', 'eq', transaction.device_imei)
+        .maybeSingle();
+      
+      if (existingIMEI) {
+        console.warn('⚠️ Duplicate IMEI detected:', transaction.device_imei);
+        throw new Error(`Device with IMEI ${transaction.device_imei} already exists in inventory. Cannot add duplicate devices.`);
+      }
+    }
+
+    // Create product name based on device model (not unique per device)
     const productName = `${transaction.device_name} - ${transaction.device_model} (Trade-In)`;
-    const sku = `TI-${transaction.device_imei || Date.now()}`;
+    const variantSku = `TI-${Date.now()}-${transaction.device_imei || 'NOIMEI'}`;
 
-    // Step 1: Create the product
-    const { data: product, error: productError } = await supabase
+    // Get customer name for supplier display
+    const customerName = transaction.customer?.name || 
+                        `${transaction.customer?.first_name || ''} ${transaction.customer?.last_name || ''}`.trim() ||
+                        'Trade-In Customer';
+    
+    // Step 1: Create or get supplier entry for customer
+    // Use customer name as "supplier" for trade-in devices
+    let supplierId = null;
+    try {
+      // Check if supplier exists with this customer name
+      const { data: existingSupplier } = await supabase
+        .from('lats_suppliers')
+        .select('id')
+        .eq('name', `Trade-In: ${customerName}`)
+        .maybeSingle();
+      
+      if (existingSupplier) {
+        supplierId = existingSupplier.id;
+      } else {
+        // Create new supplier entry for this customer
+        // Mark as trade-in customer so they don't appear in supplier management pages
+        const { data: newSupplier } = await supabase
+          .from('lats_suppliers')
+          .insert({
+            name: `Trade-In: ${customerName}`,
+            contact_person: customerName,
+            phone: transaction.customer?.phone || transaction.customer?.mobile,
+            email: transaction.customer?.email,
+            is_active: true,
+            is_trade_in_customer: true, // Flag to exclude from supplier lists
+          })
+          .select('id')
+          .single();
+        
+        supplierId = newSupplier?.id;
+      }
+    } catch (supplierError) {
+      console.warn('⚠️ Could not create supplier entry for customer:', supplierError);
+    }
+    
+    // Step 2: Check if a product already exists for this device model
+    // This prevents duplicate products in the POS
+    const { data: existingProduct } = await supabase
       .from('lats_products')
-      .insert({
-        name: productName,
-        description: `Trade-in device - ${transaction.condition_rating} condition. ${transaction.condition_description || ''}`,
-        sku: sku,
-        category_id: categoryId,
-        branch_id: activeBranchId,
-        cost_price: transaction.final_trade_in_value, // What we paid for it
-        selling_price: resalePrice || transaction.final_trade_in_value * 1.2, // 20% markup by default
-        stock_quantity: 1,
-        is_active: !needsRepair, // Only active if doesn't need repair
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+      .select('id, name, stock_quantity')
+      .eq('name', productName)
+      .eq('branch_id', activeBranchId)
+      .maybeSingle();
+    
+    let product: any;
+    
+    if (existingProduct) {
+      // Product already exists - we'll add a new variant to it
+      console.log('✅ Found existing product for this device model:', existingProduct.id);
+      product = existingProduct;
+      
+      // Update stock quantity (increment by 1)
+      await supabase
+        .from('lats_products')
+        .update({ 
+          stock_quantity: (existingProduct.stock_quantity || 0) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingProduct.id);
+    } else {
+      // Create new product for this device model
+      console.log('✅ Creating new product for device model:', productName);
+      const { data: newProduct, error: productError } = await supabase
+        .from('lats_products')
+        .insert({
+          name: productName,
+          description: `Trade-in devices - ${transaction.device_name} ${transaction.device_model}`,
+          sku: `TI-${transaction.device_name}-${transaction.device_model}`.replace(/\s+/g, '-'),
+          category_id: categoryId,
+          branch_id: activeBranchId,
+          supplier_id: supplierId,
+          cost_price: transaction.final_trade_in_value,
+          selling_price: resalePrice || transaction.final_trade_in_value * 1.2,
+          stock_quantity: 1,
+          min_stock_level: 0, // Don't reorder trade-ins
+          is_active: !needsRepair, // Only active if doesn't need repair
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .select()
+        .single();
 
-    if (productError) throw productError;
+      if (productError) throw productError;
+      product = newProduct;
+    }
 
-    // Step 2: Create a variant with the IMEI
+    // Step 3: Check if a parent variant exists for this product
+    // If the product has variants, try to find a matching parent to link to
+    let parentVariantId: string | null = null;
+    
+    if (transaction.device_imei) {
+      // Look for an existing parent variant that matches the model/specs
+      const { data: existingParents } = await supabase
+        .from('lats_product_variants')
+        .select('id, variant_name, is_parent, variant_type')
+        .eq('product_id', product.id)
+        .or('is_parent.eq.true,variant_type.eq.parent')
+        .is('parent_variant_id', null)
+        .limit(1);
+      
+      // If a parent exists, we'll link to it
+      if (existingParents && existingParents.length > 0) {
+        parentVariantId = existingParents[0].id;
+        console.log(`✅ Found existing parent variant to link trade-in device to: ${parentVariantId}`);
+      }
+    }
+    
+    // Step 4: Create a variant with the IMEI and customer info
+    // If linked to parent, create as child; otherwise create as standalone
+    const variantData: any = {
+      product_id: product.id,
+      variant_name: transaction.device_imei ? `IMEI: ${transaction.device_imei}` : `Unit ${Date.now()}`,
+      sku: variantSku,
+      cost_price: transaction.final_trade_in_value,
+      selling_price: resalePrice || transaction.final_trade_in_value * 1.2,
+      quantity: 1, // Each variant has 1 unit
+      is_active: !needsRepair,
+      variant_attributes: {
+        imei: transaction.device_imei,
+        serial_number: transaction.device_serial_number,
+        condition: transaction.condition_rating,
+        trade_in_transaction: transaction.id,
+        transaction_number: transaction.transaction_number,
+        original_owner: transaction.customer_id,
+        customer_name: customerName,
+        customer_phone: transaction.customer?.phone || transaction.customer?.mobile,
+        damage_items: transaction.damage_items,
+        source: 'trade-in',
+      },
+      branch_id: activeBranchId,
+    };
+    
+    // If we have a parent variant and an IMEI, create as child
+    if (parentVariantId && transaction.device_imei) {
+      variantData.parent_variant_id = parentVariantId;
+      variantData.variant_type = 'imei_child';
+      variantData.is_parent = false;
+      console.log(`✅ Creating trade-in device as child variant under parent ${parentVariantId}`);
+    }
+    
     const { data: variant, error: variantError } = await supabase
       .from('lats_product_variants')
-      .insert({
-        product_id: product.id,
-        variant_name: transaction.device_imei ? `IMEI: ${transaction.device_imei}` : 'Default',
-        sku: sku,
-        cost_price: transaction.final_trade_in_value,
-        selling_price: resalePrice || transaction.final_trade_in_value * 1.2,
-        stock_quantity: 1,
-        is_active: !needsRepair,
-        variant_attributes: {
-          imei: transaction.device_imei,
-          serial_number: transaction.device_serial_number,
-          condition: transaction.condition_rating,
-          trade_in_transaction: transaction.id,
-          original_owner: transaction.customer_id,
-          damage_items: transaction.damage_items,
-        },
-      })
+      .insert(variantData)
       .select()
       .single();
 
     if (variantError) throw variantError;
 
-    // Step 3: Create inventory item record
-    const { data: inventoryItem, error: inventoryError } = await supabase
-      .from('lats_inventory_items')
-      .insert({
+    // Step 5: Update trade-in transaction with product reference
+    // If transaction was 'approved' or 'pending' (admin override), mark it as 'completed' now
+    const updateData: any = {
+      new_product_id: product.id,
+      new_variant_id: variant.id,
+      needs_repair: needsRepair,
+      repair_status: needsRepair ? 'pending' : 'completed',
+      ready_for_resale: !needsRepair,
+      resale_price: resalePrice || transaction.final_trade_in_value * 1.2,
+    };
+    
+    // If status is 'approved' or 'pending', mark as 'completed' since it's now added to inventory
+    if (transaction.status === 'approved' || transaction.status === 'pending') {
+      updateData.status = 'completed';
+      updateData.completed_at = new Date().toISOString();
+      console.log(`✅ Marking ${transaction.status} transaction as completed after adding to inventory`);
+    }
+    
+    const { error: updateError } = await supabase
+      .from('lats_trade_in_transactions')
+      .update(updateData)
+      .eq('id', transaction.id);
+
+    if (updateError) {
+      console.warn('⚠️ Could not update trade-in transaction with product link:', updateError);
+      // Don't fail the entire operation if this update fails
+    }
+
+    // Step 6: Create stock movement record
+    try {
+      await supabase.from('lats_stock_movements').insert({
         product_id: product.id,
         variant_id: variant.id,
         branch_id: activeBranchId,
+        movement_type: 'trade_in',
         quantity: 1,
-        location_id: locationId,
-        status: needsRepair ? 'needs_repair' : 'available',
-        notes: needsRepair ? repairNotes : 'Trade-in device ready for sale',
+        reference_type: 'trade_in_transaction',
+        reference_id: transaction.id,
+        notes: `Trade-in from customer: ${transaction.customer?.name || 'Unknown'}`,
         created_by: userData?.user?.id,
-      })
-      .select()
-      .single();
-
-    if (inventoryError) throw inventoryError;
-
-    // Step 4: Update trade-in transaction with inventory references
-    const { error: updateError } = await supabase
-      .from('lats_trade_in_transactions')
-      .update({
-        inventory_item_id: inventoryItem.id,
-        needs_repair: needsRepair,
-        repair_status: needsRepair ? 'pending' : 'completed',
-        ready_for_resale: !needsRepair,
-        resale_price: resalePrice || transaction.final_trade_in_value * 1.2,
-      })
-      .eq('id', transaction.id);
-
-    if (updateError) throw updateError;
-
-    // Step 5: Create stock movement record
-    await supabase.from('lats_stock_movements').insert({
-      product_id: product.id,
-      variant_id: variant.id,
-      branch_id: activeBranchId,
-      movement_type: 'trade_in',
-      quantity: 1,
-      reference_type: 'trade_in_transaction',
-      reference_id: transaction.id,
-      notes: `Trade-in from customer: ${transaction.customer?.name}`,
-      created_by: userData?.user?.id,
-    });
+      });
+    } catch (movementError) {
+      console.warn('⚠️ Could not create stock movement record:', movementError);
+      // Don't fail if stock movement fails
+    }
 
     return {
       success: true,
       data: {
         product,
         variant,
-        inventoryItem,
       },
     };
   } catch (error) {

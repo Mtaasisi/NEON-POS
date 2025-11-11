@@ -3,6 +3,7 @@ import { Bug, RefreshCw, Database, Image, X, AlertTriangle, CheckCircle } from '
 import { fixTemporaryImages, TemporaryImageFixer } from '../../lib/fixTemporaryImages';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
+import CircularProgress from '../../../../components/ui/CircularProgress';
 
 interface TemporaryImageFixerProps {
   isOpen: boolean;
@@ -121,8 +122,8 @@ const TemporaryImageFixerComponent: React.FC<TemporaryImageFixerProps> = ({
 
           {isRunning && (
             <div className="text-center py-8">
-              <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-blue-600" />
-              <p>Running image fix...</p>
+              <CircularProgress size={64} strokeWidth={5} color="blue" className="mx-auto mb-4" />
+              <p className="text-gray-700 font-medium">Running image fix...</p>
             </div>
           )}
 

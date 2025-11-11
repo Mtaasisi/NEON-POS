@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Truck, MapPin, Package, Calendar } from 'lucide-react';
+import { X, Save, Truck, MapPin, Package, Calendar, Ship, Plane, User, Building } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import shippingApi, { ShippingAgent, ShippingMethod, ShippingSettings } from '../../../../lib/shippingApi';
 
 interface ShippingInfo {
   expectedDelivery: string;
@@ -59,6 +60,59 @@ const ShippingConfigurationModal: React.FC<ShippingConfigurationModalProps> = ({
 
   const [useSameAddress, setUseSameAddress] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Shipping data from database
+  const [agents, setAgents] = useState<ShippingAgent[]>([]);
+  const [methods, setMethods] = useState<ShippingMethod[]>([]);
+  const [settings, setSettings] = useState<ShippingSettings | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Load shipping data from database
+  useEffect(() => {
+    if (isOpen) {
+      loadShippingData();
+    }
+  }, [isOpen]);
+
+  const loadShippingData = async () => {
+    setLoadingData(true);
+    try {
+      const [agentsData, methodsData, settingsData] = await Promise.all([
+        shippingApi.agents.getAll(true), // Only active agents
+        shippingApi.methods.getAll(true), // Only active methods
+        shippingApi.settings.get(),
+      ]);
+
+      setAgents(agentsData);
+      setMethods(methodsData);
+      setSettings(settingsData);
+
+      // Apply default settings if available
+      if (settingsData && !initialData) {
+        setShippingInfo(prev => ({
+          ...prev,
+          shippingAddress: {
+            ...prev.shippingAddress,
+            street: settingsData.default_shipping_address_street || prev.shippingAddress.street,
+            city: settingsData.default_shipping_address_city || prev.shippingAddress.city,
+            region: settingsData.default_shipping_address_region || prev.shippingAddress.region,
+            country: settingsData.default_shipping_address_country || prev.shippingAddress.country,
+            postalCode: settingsData.default_shipping_address_postal_code || prev.shippingAddress.postalCode,
+          }
+        }));
+
+        if (settingsData.default_agent_id) {
+          setSelectedAgent(settingsData.default_agent_id);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading shipping data:', error);
+      toast.error('Failed to load shipping configuration');
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   // Initialize with default data
   useEffect(() => {
@@ -135,14 +189,20 @@ const ShippingConfigurationModal: React.FC<ShippingConfigurationModalProps> = ({
     }
   };
 
-  const shippingMethods = [
-    { value: 'standard', label: 'Standard Shipping', description: '5-7 business days' },
-    { value: 'express', label: 'Express Shipping', description: '2-3 business days' },
-    { value: 'overnight', label: 'Overnight Shipping', description: 'Next business day' },
-    { value: 'pickup', label: 'Store Pickup', description: 'Available for pickup' }
-  ];
-
   if (!isOpen) return null;
+
+  if (loadingData) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl p-8 max-w-md">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading shipping configuration...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -174,31 +234,100 @@ const ShippingConfigurationModal: React.FC<ShippingConfigurationModalProps> = ({
               />
             </div>
 
-            {/* Shipping Method */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Truck className="w-4 h-4 inline mr-2" />
-                Shipping Method
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                {shippingMethods.map((method) => (
-                  <label key={method.value} className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50">
-                    <input
-                      type="radio"
-                      name="shippingMethod"
-                      value={method.value}
-                      checked={shippingInfo.shippingMethod === method.value}
-                      onChange={(e) => handleInputChange('shippingMethod', e.target.value)}
-                      className="mr-3"
-                    />
-                    <div>
-                      <div className="font-medium text-gray-900">{method.label}</div>
-                      <div className="text-sm text-gray-600">{method.description}</div>
+            {/* Shipping Agent */}
+            {agents.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <User className="w-4 h-4 inline mr-2" />
+                  Shipping Agent / Freight Forwarder
+                </label>
+                <select
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select shipping agent (optional)</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name} {agent.is_preferred && '⭐'}
+                      {agent.company_name && ` - ${agent.company_name}`}
+                    </option>
+                  ))}
+                </select>
+                {selectedAgent && (() => {
+                  const agent = agents.find(a => a.id === selectedAgent);
+                  return agent ? (
+                    <div className="mt-2 p-3 bg-blue-50 rounded-lg text-sm">
+                      <div className="flex items-center gap-2 text-blue-900 font-medium mb-1">
+                        <Building className="w-4 h-4" />
+                        {agent.name}
+                      </div>
+                      {agent.phone && (
+                        <div className="text-blue-700">📞 {agent.phone}</div>
+                      )}
+                      {agent.email && (
+                        <div className="text-blue-700">📧 {agent.email}</div>
+                      )}
+                      <div className="flex gap-2 mt-2">
+                        {agent.shipping_methods.map((method) => (
+                          <span
+                            key={method}
+                            className="px-2 py-0.5 text-xs bg-blue-200 text-blue-800 rounded-full"
+                          >
+                            {method === 'sea' && '🚢'}
+                            {method === 'air' && '✈️'}
+                            {method === 'road' && '🚛'}
+                            {' '}{method.charAt(0).toUpperCase() + method.slice(1)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  </label>
-                ))}
+                  ) : null;
+                })()}
               </div>
-            </div>
+            )}
+
+            {/* Shipping Method */}
+            {methods.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Truck className="w-4 h-4 inline mr-2" />
+                  Shipping Method
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  {methods.map((method) => (
+                    <label 
+                      key={method.id} 
+                      className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                        shippingInfo.shippingMethod === method.code
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="shippingMethod"
+                        value={method.code}
+                        checked={shippingInfo.shippingMethod === method.code}
+                        onChange={(e) => handleInputChange('shippingMethod', e.target.value)}
+                        className="sr-only"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          {method.code === 'sea' && <Ship className="w-4 h-4 text-blue-600" />}
+                          {method.code.includes('air') && <Plane className="w-4 h-4 text-blue-600" />}
+                          {method.code === 'road' && <Truck className="w-4 h-4 text-blue-600" />}
+                          <span className="font-medium text-gray-900">{method.name}</span>
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {method.estimated_days_min}-{method.estimated_days_max} days
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Shipping Address */}
             <div>

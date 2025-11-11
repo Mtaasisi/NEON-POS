@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
+import CircularProgress from '../../../../components/ui/CircularProgress';
+import ModernLoadingOverlay from '../../../../components/ui/ModernLoadingOverlay';
 import { 
   ShoppingCart, Plus, CheckCircle, FileText, Send, Truck, Eye,
   Package, Search, RefreshCw, AlertCircle, Edit, Trash2, 
@@ -47,9 +49,10 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
   // View mode state (NEW!)
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
+  // Pagination state (now for infinite scroll)
+  const [displayCount, setDisplayCount] = useState(25); // For infinite scroll
   const [pageSize, setPageSize] = useState(25);
+  const loaderRef = useRef<HTMLDivElement>(null);
 
   // Bulk selection state
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
@@ -175,16 +178,37 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
     return filtered;
   }, [purchaseOrders, searchQuery, statusFilter, sortBy, sortOrder, supplierFilter, paymentStatusFilter, dateFrom, dateTo, minAmount, maxAmount]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredOrders.length / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+  // Infinite scroll - show items up to displayCount
+  const displayedOrders = filteredOrders.slice(0, displayCount);
+  const hasMore = displayCount < filteredOrders.length;
 
-  // Reset to page 1 when filters change
+  // Reset display count when filters change
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter, supplierFilter, paymentStatusFilter, dateFrom, dateTo, minAmount, maxAmount]);
+    setDisplayCount(25);
+  }, [searchQuery, statusFilter, supplierFilter, paymentStatusFilter, dateFrom, dateTo, minAmount, maxAmount, pageSize]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          setDisplayCount(prev => prev + pageSize);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentLoader = loaderRef.current;
+    if (currentLoader) {
+      observer.observe(currentLoader);
+    }
+
+    return () => {
+      if (currentLoader) {
+        observer.unobserve(currentLoader);
+      }
+    };
+  }, [hasMore, isLoading, pageSize]);
 
   // Bulk selection handlers
   const toggleOrderSelection = (orderId: string) => {
@@ -198,10 +222,10 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
   };
 
   const toggleSelectAll = () => {
-    if (selectedOrders.size === paginatedOrders.length) {
+    if (selectedOrders.size === displayedOrders.length) {
       setSelectedOrders(new Set());
     } else {
-      setSelectedOrders(new Set(paginatedOrders.map(order => order.id)));
+      setSelectedOrders(new Set(displayedOrders.map(order => order.id)));
     }
   };
 
@@ -995,14 +1019,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
 
       {/* Purchase Orders Display - LIST OR GRID */}
       {isLoading ? (
-        <GlassCard>
-          <div className="flex items-center justify-center py-12">
-            <div className="flex items-center gap-2 text-gray-500 text-sm opacity-70">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>Loading...</span>
-            </div>
-          </div>
-        </GlassCard>
+        <ModernLoadingOverlay />
       ) : filteredOrders.length === 0 ? (
         <GlassCard className="p-12 text-center">
           <Package className="w-20 h-20 text-gray-300 mx-auto mb-6" />
@@ -1033,7 +1050,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
                   <th className="text-left py-4 px-4 font-medium text-gray-700">
                     <input
                       type="checkbox"
-                      checked={selectedOrders.size === paginatedOrders.length && paginatedOrders.length > 0}
+                      checked={selectedOrders.size === displayedOrders.length && displayedOrders.length > 0}
                       onChange={toggleSelectAll}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
@@ -1048,7 +1065,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {paginatedOrders.map(order => (
+                {displayedOrders.map(order => (
                   <tr
                     key={order.id}
                     className="border-b border-gray-200/30 hover:bg-blue-50 cursor-pointer transition-colors"
@@ -1173,8 +1190,16 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
         </GlassCard>
       ) : (
         /* GRID VIEW (NEW!) */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginatedOrders.map(order => (
+        <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6">
+          <div 
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(350px, 100%), 1fr))',
+              gap: 'clamp(1rem, 2vw, 1.5rem)',
+              gridAutoRows: '1fr'
+            }}
+          >
+          {displayedOrders.map(order => (
             <GlassCard key={order.id} className="p-6 hover:shadow-lg transition-shadow cursor-pointer"
               onClick={() => navigate(`/lats/purchase-orders/${order.id}`)}
             >
@@ -1266,6 +1291,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
               </div>
             </GlassCard>
           ))}
+          </div>
         </div>
       )}
 
@@ -1292,58 +1318,24 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
               <span className="text-sm text-gray-600">per page</span>
             </div>
 
-            {/* Page Info */}
+            {/* Infinite Scroll Info */}
             <div className="text-sm text-gray-600">
-              Showing {startIndex + 1} to {Math.min(endIndex, filteredOrders.length)} of {filteredOrders.length} orders
+              Showing {displayedOrders.length} of {filteredOrders.length} orders
             </div>
 
-            {/* Page Navigation */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-
-              {/* Page Numbers */}
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pageNum;
-                  if (totalPages <= 5) {
-                    pageNum = i + 1;
-                  } else if (currentPage <= 3) {
-                    pageNum = i + 1;
-                  } else if (currentPage >= totalPages - 2) {
-                    pageNum = totalPages - 4 + i;
-                  } else {
-                    pageNum = currentPage - 2 + i;
-                  }
-
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                        currentPage === pageNum
-                          ? 'bg-blue-600 text-white'
-                          : 'border border-gray-200 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <button
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-                className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+            {/* Infinite Scroll Loading Indicator */}
+            <div ref={loaderRef} className="py-2">
+              {hasMore && !isLoading && (
+                <div className="flex items-center justify-center gap-2 text-blue-600">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Loading more orders...</span>
+                </div>
+              )}
+              {!hasMore && displayedOrders.length > 0 && (
+                <div className="text-gray-500 text-sm">
+                  ✓ All orders loaded
+                </div>
+              )}
             </div>
           </div>
         </GlassCard>

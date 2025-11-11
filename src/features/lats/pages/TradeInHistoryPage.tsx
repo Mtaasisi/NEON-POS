@@ -23,12 +23,14 @@ import { toast } from 'sonner';
 import type { TradeInTransaction, TradeInFilters, ConditionRating, TradeInStatus } from '../types/tradeIn';
 import { getTradeInTransactions } from '../lib/tradeInApi';
 import { format } from '../lib/format';
+import TradeInDetailsModal from '../components/tradeIn/TradeInDetailsModal';
 
 export const TradeInHistoryPage: React.FC = () => {
   const [transactions, setTransactions] = useState<TradeInTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<TradeInTransaction | null>(null);
   
   // Filters
   const [filters, setFilters] = useState<TradeInFilters>({});
@@ -78,10 +80,16 @@ export const TradeInHistoryPage: React.FC = () => {
       };
     }
 
+    // ✅ FIX: Parse final_trade_in_value as number to prevent string concatenation
+    const totalValue = transactions.reduce((sum, t) => {
+      const value = Number(t.final_trade_in_value) || 0;
+      return sum + value;
+    }, 0);
+
     return {
       totalTransactions: transactions.length,
-      totalValue: transactions.reduce((sum, t) => sum + t.final_trade_in_value, 0),
-      averageValue: transactions.reduce((sum, t) => sum + t.final_trade_in_value, 0) / transactions.length,
+      totalValue,
+      averageValue: transactions.length > 0 ? totalValue / transactions.length : 0,
       pendingCount: transactions.filter((t) => t.status === 'pending').length,
       completedCount: transactions.filter((t) => t.status === 'completed').length,
       needsRepairCount: transactions.filter((t) => t.needs_repair && !t.ready_for_resale).length,
@@ -391,10 +399,7 @@ export const TradeInHistoryPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <button
-                        onClick={() => {
-                          // TODO: Implement view details modal
-                          toast.info('View details coming soon');
-                        }}
+                        onClick={() => setSelectedTransaction(transaction)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="View Details"
                       >
@@ -421,6 +426,19 @@ export const TradeInHistoryPage: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Trade-In Details Modal */}
+      {selectedTransaction && (
+        <TradeInDetailsModal
+          transaction={selectedTransaction}
+          onClose={() => setSelectedTransaction(null)}
+          onStatusChange={() => {
+            // Refresh the list after status change
+            loadTransactions();
+            setSelectedTransaction(null);
+          }}
+        />
       )}
     </div>
   );

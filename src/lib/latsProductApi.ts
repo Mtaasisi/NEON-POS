@@ -2,6 +2,8 @@ import { supabase } from './supabaseClient';
 // ⚠️ DISABLED: Automatic default variant creation
 // import { validateAndCreateDefaultVariant } from '../features/lats/lib/variantUtils';
 import { ImageUploadService } from './imageUpload';
+import { deduplicateRequest } from './requestDeduplication';
+import { getCachedQuery, invalidateCachePattern } from './queryCache';
 
 // Use the main supabase client instead of creating a separate one
 // This ensures consistent configuration and avoids conflicts
@@ -133,9 +135,15 @@ export async function createProduct(
     if (productWithoutImages.attributes) {
       productInsertData.attributes = productWithoutImages.attributes;
     }
-    if (productWithoutImages.metadata) {
-      productInsertData.metadata = productWithoutImages.metadata;
-    }
+    
+    // ✅ CRITICAL FIX: Ensure metadata includes skip_default_variant flag
+    const hasVariants = productWithoutImages.variants && productWithoutImages.variants.length > 0;
+    productInsertData.metadata = {
+      ...(productWithoutImages.metadata || {}),
+      skip_default_variant: hasVariants, // ✅ Skip auto-creation if custom variants provided
+      useVariants: hasVariants,
+      variantCount: hasVariants ? productWithoutImages.variants!.length : 0
+    };
     
     // Only add supplier_id if it has valid values
     if (productWithoutImages.supplierId) {
@@ -159,8 +167,8 @@ export async function createProduct(
       const variants = productWithoutImages.variants.map(variant => ({
         product_id: product.id,
         sku: variant.sku,
-        name: variant.name,
-        attributes: variant.attributes || {},
+        name: variant.name,  // 🔧 FIX: Save to 'name' (user-defined column)
+        attributes: variant.attributes || {},  // 🔧 FIX: Save to 'attributes' (user-defined column)
         cost_price: variant.costPrice ?? 0,
         selling_price: (variant.sellingPrice ?? variant.price) ?? 0,
         quantity: (variant.quantity ?? variant.stockQuantity) ?? 0,
@@ -180,30 +188,26 @@ export async function createProduct(
         console.error('Variants data being inserted:', variants);
         throw variantsError;
       }
-    } 
-    // ⚠️ DISABLED: Automatic default variant creation
-    // Only variants explicitly created by the user will be added
-    // else {
-    //   // No variants provided - create a default variant automatically
-    //   
-    //   const defaultVariantResult = await validateAndCreateDefaultVariant(
-    //     product.id,
-    //     product.name,
-    //     {
-    //       costPrice: productWithoutImages.costPrice,
-    //       sellingPrice: productWithoutImages.sellingPrice,
-    //       quantity: productWithoutImages.quantity,
-    //       minQuantity: productWithoutImages.minQuantity,
-    //       sku: productWithoutImages.sku,
-    //       attributes: productWithoutImages.attributes
-    //     }
-    //   );
-    //
-    //   if (!defaultVariantResult.success) {
-    //     console.error('❌ Failed to create default variant:', defaultVariantResult.error);
-    //     throw new Error(`Failed to create default variant: ${defaultVariantResult.error}`);
-    //   }
-    // }
+      
+      console.log('✅ Created', variants.length, 'variants for product');
+    } else {
+      // ✨ If no variants provided, the database trigger will auto-create a "Default" variant
+      // Wait a moment to allow the trigger to execute
+      console.log('⏳ No variants provided - database trigger will auto-create default variant...');
+      await new Promise(resolve => setTimeout(resolve, 200)); // Wait 200ms for trigger
+      
+      // Verify the variant was created
+      const { data: createdVariants, error: variantCheckError } = await supabase
+        .from('lats_product_variants')
+        .select('id, name, sku')
+        .eq('product_id', product.id);
+      
+      if (!variantCheckError && createdVariants && createdVariants.length > 0) {
+        console.log('✅ Default variant auto-created by trigger:', createdVariants[0]);
+      } else {
+        console.warn('⚠️ No default variant created - this may cause issues');
+      }
+    }
 
     // Handle images if provided
     if (images && images.length > 0) {
@@ -256,8 +260,8 @@ export async function createProduct(
   }
 }
 
-// Get a product by ID with images
-export async function getProduct(productId: string): Promise<LatsProduct & { images: any[] }> {
+// Internal implementation for single product fetch
+async function _getProductImpl(productId: string): Promise<LatsProduct & { images: any[] }> {
   // Validate productId
   if (!productId || productId === 'undefined' || productId === 'null') {
     throw new Error(`Invalid product ID: ${productId}`);
@@ -272,10 +276,35 @@ export async function getProduct(productId: string): Promise<LatsProduct & { ima
   if (productError) throw productError;
   if (!product) throw new Error('Product not found');
 
-  // Fetch category and supplier separately
-  const [categoryResult, supplierResult] = await Promise.all([
-    product.category_id ? supabase.from('lats_categories').select('id, name').eq('id', product.category_id).single() : Promise.resolve({ data: null }),
-    product.supplier_id ? supabase.from('lats_suppliers').select('id, name').eq('id', product.supplier_id).single() : Promise.resolve({ data: null })
+  // Fetch all related data in parallel
+  const [categoryResult, supplierResult, variantsResult, storageRoomResult, shelfResult] = await Promise.all([
+    // Category
+    product.category_id 
+      ? supabase.from('lats_categories').select('id, name').eq('id', product.category_id).single() 
+      : Promise.resolve({ data: null }),
+    
+    // Supplier (with full details)
+    product.supplier_id 
+      ? supabase.from('lats_suppliers').select('id, name, contact_person, email, phone, address').eq('id', product.supplier_id).single() 
+      : Promise.resolve({ data: null }),
+    
+    // Variants - ✅ Exclude IMEI children, show only parents
+    supabase
+      .from('lats_product_variants')
+      .select('*')
+      .eq('product_id', productId)
+      .is('parent_variant_id', null)  // ✅ FIX: Exclude IMEI children
+      .order('created_at', { ascending: true }),
+    
+    // Storage Room
+    product.storage_room_id 
+      ? supabase.from('storage_rooms').select('id, name').eq('id', product.storage_room_id).single() 
+      : Promise.resolve({ data: null }),
+    
+    // Shelf
+    product.shelf_id 
+      ? supabase.from('shelves').select('id, name, code').eq('id', product.shelf_id).single() 
+      : Promise.resolve({ data: null })
   ]);
 
   // Get product images - handle gracefully if table doesn't exist
@@ -290,6 +319,56 @@ export async function getProduct(productId: string): Promise<LatsProduct & { ima
     images = [];
   }
 
+  // Map variants to the expected format with correct stock calculation
+  // ✅ FIX: Recalculate parent variant stock from children
+  const variants = await Promise.all((variantsResult.data || []).map(async (variant: any) => {
+    let actualStock = variant.quantity || 0;
+    
+    // If this is a parent variant, recalculate stock from active children
+    if (variant.is_parent || variant.variant_type === 'parent') {
+      try {
+        const { data: children, error: childError } = await supabase
+          .from('lats_product_variants')
+          .select('quantity, is_active')
+          .eq('parent_variant_id', variant.id)
+          .eq('variant_type', 'imei_child')
+          .eq('is_active', true);
+        
+        if (!childError && children) {
+          // Sum up quantities of all active children
+          actualStock = children.reduce((sum: number, child: any) => sum + (child.quantity || 0), 0);
+        }
+      } catch (e) {
+        console.warn(`Could not calculate stock from children for variant ${variant.id}:`, e);
+      }
+    }
+    
+    return {
+      id: variant.id,
+      productId: variant.product_id,
+      name: variant.variant_name || variant.name || 'Unnamed Variant',  // ✅ FIX: Prioritize variant_name (DB column)
+      sku: variant.sku,
+      attributes: variant.attributes || {},
+      variantAttributes: variant.variant_attributes || {},
+      variant_attributes: variant.variant_attributes || {},  // ✅ Include snake_case for UI compatibility
+      price: variant.selling_price,
+      costPrice: variant.cost_price,
+      cost_price: variant.cost_price,        // ✅ Include snake_case for UI compatibility
+      sellingPrice: variant.selling_price,
+      selling_price: variant.selling_price,  // ✅ Include snake_case for UI compatibility
+      stockQuantity: actualStock,  // ✅ Use calculated stock
+      quantity: actualStock,       // ✅ Use calculated stock
+      minQuantity: variant.min_quantity,
+      minStockLevel: variant.min_quantity,
+      isPrimary: variant.is_primary || false,
+      isActive: variant.is_active,
+      is_parent: variant.is_parent || false,       // ✅ Include parent flag
+      variant_type: variant.variant_type || 'standard',  // ✅ Include variant type
+      createdAt: variant.created_at,
+      updatedAt: variant.updated_at
+    };
+  }));
+
   return {
     id: product.id,
     name: product.name,
@@ -303,70 +382,136 @@ export async function getProduct(productId: string): Promise<LatsProduct & { ima
     createdAt: product.created_at,
     updatedAt: product.updated_at,
     images,
-    // Include fetched category and supplier data
-    category: categoryResult.data,
-    supplier: supplierResult.data
-  };
+    variants,
+    // Include fetched category data
+    category: categoryResult.data ? {
+      id: categoryResult.data.id,
+      name: categoryResult.data.name
+    } : null,
+    // Include full supplier data
+    supplier: supplierResult.data ? {
+      id: supplierResult.data.id,
+      name: supplierResult.data.name,
+      contactPerson: supplierResult.data.contact_person,
+      email: supplierResult.data.email,
+      phone: supplierResult.data.phone,
+      address: supplierResult.data.address
+    } : null,
+    // Include storage location data
+    storageRoomId: product.storage_room_id,
+    storageRoomName: storageRoomResult.data?.name,
+    shelfId: product.shelf_id,
+    shelfName: shelfResult.data?.name,
+    shelfCode: shelfResult.data?.code,
+    // Include all other product fields that might exist
+    barcode: product.barcode,
+    specification: product.specification,
+    condition: product.condition,
+    brand: product.brand,
+    model: product.model,
+    weight: product.weight,
+    length: product.length,
+    width: product.width,
+    height: product.height,
+    shippingClass: product.shipping_class,
+    requiresSpecialHandling: product.requires_special_handling,
+    shippingStatus: product.shipping_status,
+    trackingNumber: product.tracking_number,
+    expectedDelivery: product.expected_delivery,
+    shippingAgent: product.shipping_agent,
+    usdPrice: product.usd_price,
+    eurPrice: product.eur_price,
+    exchangeRate: product.exchange_rate,
+    baseCurrency: product.base_currency,
+    isDigital: product.is_digital,
+    requiresShipping: product.requires_shipping,
+    isFeatured: product.is_featured,
+    tags: product.tags,
+    metadata: product.metadata
+  } as any;
 }
 
-// Get all products - FIXED to respect store isolation settings
-export async function getProducts(): Promise<LatsProduct[]> {
+// Get a product by ID with images - PUBLIC API with caching and deduplication
+export async function getProduct(productId: string, options?: { forceRefresh?: boolean }): Promise<LatsProduct & { images: any[] }> {
+  const cacheKey = `products:${productId}`;
+  
+  // Use request deduplication to prevent duplicate simultaneous calls
+  return deduplicateRequest(
+    cacheKey,
+    async () => {
+      // Use query cache with 3-minute TTL and stale-while-revalidate
+      return getCachedQuery(
+        cacheKey,
+        () => _getProductImpl(productId),
+        {
+          ttl: 3 * 60 * 1000, // 3 minutes
+          staleWhileRevalidate: true, // Return stale data while fetching fresh
+        }
+      );
+    },
+    {
+      forceRefresh: options?.forceRefresh,
+      timeout: 60000, // 60 seconds - increased from default 30s to handle Neon cold starts
+    }
+  );
+}
+
+// Internal implementation with all optimizations
+async function _getProductsImpl(): Promise<LatsProduct[]> {
   try {
+    console.log('🔍 [getProducts] Starting optimized product fetch...');
+    const startTime = Date.now();
     
     // Get current branch from localStorage
     const currentBranchId = localStorage.getItem('current_branch_id');
     
-    // Get products without heavy JSONB columns (tags, images, attributes, metadata) to avoid timeout
-    
-    let query = supabase
-      .from('lats_products')
-      .select('id, name, description, sku, barcode, category_id, supplier_id, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id')
-      .order('created_at', { ascending: false });
-    
-    // 🔒 IMPROVED BRANCH FILTERING - Respects store isolation settings
-    // Define branchSettings outside the if block so it's accessible throughout the function
+    // 🚀 OPTIMIZATION: Fetch branch settings ONCE if needed
     let branchSettings: any = null;
-    
     if (currentBranchId) {
-      // Get store settings to determine isolation mode
       const { data: settings, error: branchError } = await supabase
         .from('store_locations')
         .select('id, name, data_isolation_mode, share_products')
         .eq('id', currentBranchId)
         .single();
       
-      branchSettings = settings; // Assign to the outer variable
+      branchSettings = settings;
       
       if (branchError) {
         console.warn('⚠️ Could not load branch settings:', branchError.message);
-      } else if (branchSettings) {
-        
-        // Apply filter based on isolation mode
-        if (branchSettings.data_isolation_mode === 'isolated') {
-          // ISOLATED MODE: Show products from this branch + shared products from other branches
-          // Show products from this branch OR products marked as shared
-          query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
-        } else if (branchSettings.data_isolation_mode === 'shared') {
-          // SHARED MODE: Show all products
-          // No filter needed
-        } else if (branchSettings.data_isolation_mode === 'hybrid') {
-          // HYBRID MODE: Always show this branch's products + shared products from other branches
-          // Show products from this branch OR products marked as shared
-          query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
-          
-          // Legacy code below for reference (can be removed later)
-          if (branchSettings.share_products) {
-            // No additional filter needed - is_shared handles this
-          } else {
-            // Filter already applied above
-          }
-        }
       }
-    } else {
     }
-    const startTime = Date.now();
+    
+    // 🚀 OPTIMIZED: Build a SINGLE query with OR condition to include null branch products
+    // This replaces the TWO separate queries with ONE combined query
+    let query = supabase
+      .from('lats_products')
+      .select('id, name, description, sku, barcode, category_id, supplier_id, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
+      .order('created_at', { ascending: false });
+    
+    // 🔒 BRANCH FILTERING - Build OR condition to include all relevant products in ONE query
+    if (currentBranchId && branchSettings) {
+      if (branchSettings.data_isolation_mode === 'isolated') {
+        // ISOLATED MODE: Show products from this branch + shared products
+        query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+      } else if (branchSettings.data_isolation_mode === 'shared') {
+        // SHARED MODE: Show all products (no filter)
+      } else if (branchSettings.data_isolation_mode === 'hybrid') {
+        // HYBRID MODE: Show this branch's products + shared products + unassigned products
+        query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+      } else {
+        // DEFAULT: Show this branch's products + unassigned products
+        query = query.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+      }
+    } else if (currentBranchId && !branchSettings) {
+      // No branch settings found, use default filter
+      query = query.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+    }
+    
+    // Execute the SINGLE optimized query
     const { data: allProducts, error } = await query;
     const queryTime = Date.now() - startTime;
+    
+    console.log(`⚡ [getProducts] Query completed in ${queryTime}ms`);
 
     if (error) {
       console.error('%c❌ QUERY FAILED!', 'background: #ff0000; color: white; font-size: 14px; font-weight: bold; padding: 5px;');
@@ -380,24 +525,8 @@ export async function getProducts(): Promise<LatsProduct[]> {
       throw new Error(`Failed to fetch products: ${error.message}`);
     }
     
-    // 🔧 CONDITIONAL: Fetch products with null branch_id (unassigned products)
-    // Only fetch unassigned products if NOT in isolated mode
-    let unassignedProducts: any[] = [];
-    if (currentBranchId && branchSettings && branchSettings.data_isolation_mode !== 'isolated') {
-      const { data: nullBranchProducts, error: nullError } = await supabase
-        .from('lats_products')
-        .select('id, name, description, sku, barcode, category_id, supplier_id, cost_price, stock_quantity, min_stock_level, max_stock_level, is_active, image_url, brand, model, warranty_period, created_at, updated_at, specification, condition, selling_price, total_quantity, total_value, storage_room_id, shelf_id, branch_id, is_shared, sharing_mode, visible_to_branches')
-        .is('branch_id', null)
-        .order('created_at', { ascending: false });
-      
-      if (!nullError && nullBranchProducts) {
-        unassignedProducts = nullBranchProducts;
-      }
-    } else if (branchSettings?.data_isolation_mode === 'isolated') {
-    }
-
-    // Merge unassigned products with the main products list
-    const mergedProducts = [...(allProducts || []), ...unassignedProducts];
+    // 🚀 OPTIMIZATION: No need for a second query or merging - we got everything in ONE query
+    const mergedProducts = allProducts || [];
     
     // Remove duplicates (in case a product appears in both lists)
     const uniqueProducts = Array.from(
@@ -428,15 +557,56 @@ export async function getProducts(): Promise<LatsProduct[]> {
     // Fetch categories and suppliers separately (Neon doesn't support PostgREST joins)
     const categoryIds = [...new Set(products.map(p => p.category_id).filter(Boolean))];
     const supplierIds = [...new Set(products.map(p => p.supplier_id).filter(Boolean))];
+    const productIds = products.map(p => p.id).filter(Boolean);
     
     console.log(`📊 [getProducts] Found ${categoryIds.length} unique categories and ${supplierIds.length} unique suppliers in products`);
     
-    // 🔧 ALWAYS fetch ALL suppliers to ensure they're available even if products don't have supplier_id yet
-    const [categoriesResult, suppliersResult] = await Promise.all([
-      categoryIds.length > 0 ? supabase.from('lats_categories').select('id, name').in('id', categoryIds) : Promise.resolve({ data: [] }),
-      // Always fetch all active suppliers for potential assignment
-      supabase.from('lats_suppliers').select('id, name').eq('is_active', true).order('name')
+    // 🚀 SUPER OPTIMIZED: Fetch categories, suppliers, variants, and images in PARALLEL
+    // This reduces 4 sequential queries to 1 parallel batch (4x faster!)
+    const fetchStartTime = Date.now();
+    
+    // Build all queries first
+    const categoriesQuery = categoryIds.length > 0 
+      ? supabase.from('lats_categories').select('id, name').in('id', categoryIds)
+      : Promise.resolve({ data: [] });
+      
+    const suppliersQuery = supabase.from('lats_suppliers').select('id, name').eq('is_active', true).order('name');
+    
+    // Build variants query
+    const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
+    let variantQuery = supabase
+      .from('lats_product_variants')
+      .select('id, product_id, name, variant_name, sku, attributes, variant_attributes, cost_price, selling_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared, is_parent, variant_type, parent_variant_id')
+      .in('product_id', productIds)
+      .is('parent_variant_id', null)
+      .order('name');
+    
+    // Apply branch filtering to variants
+    if (currentBranchIdForVariants && branchSettings) {
+      if (branchSettings.data_isolation_mode === 'isolated') {
+        variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants}`);
+      } else if (branchSettings.data_isolation_mode === 'hybrid') {
+        variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants},branch_id.is.null`);
+      }
+    } else if (currentBranchIdForVariants) {
+      variantQuery = variantQuery.or(`branch_id.eq.${currentBranchIdForVariants},branch_id.is.null`);
+    }
+    
+    // Build images query
+    const imagesQuery = productIds.length > 0
+      ? supabase.from('product_images').select('id, product_id, image_url, thumbnail_url, is_primary').in('product_id', productIds).order('is_primary', { ascending: false })
+      : Promise.resolve({ data: [] });
+    
+    // 🚀 Execute ALL queries in PARALLEL (huge performance boost!)
+    const [categoriesResult, suppliersResult, variantsResult, imagesResult] = await Promise.all([
+      categoriesQuery,
+      suppliersQuery,
+      variantQuery,
+      imagesQuery
     ]);
+    
+    const fetchDuration = Date.now() - fetchStartTime;
+    console.log(`⚡ [getProducts] All data fetched in parallel: ${fetchDuration}ms`);
     
     // Log any errors in fetching
     if (categoriesResult.error) {
@@ -445,12 +615,23 @@ export async function getProducts(): Promise<LatsProduct[]> {
     if (suppliersResult && 'error' in suppliersResult && suppliersResult.error) {
       console.error('❌ Error fetching suppliers:', suppliersResult.error);
     }
+    if (variantsResult.error) {
+      console.error('❌ Error fetching variants:', variantsResult.error);
+    }
+    if (imagesResult.error) {
+      console.error('❌ Error fetching images:', imagesResult.error);
+    }
     
     // Extract data from supabase responses
     const categoriesData = categoriesResult.data || [];
     const suppliersData = suppliersResult.data || [];
+    let allVariants = variantsResult.data || [];
+    let productImages = (imagesResult.data || []).map(img => ({
+      ...img,
+      thumbnail_url: img.thumbnail_url || img.image_url
+    }));
     
-    console.log(`✅ [getProducts] Fetched ${categoriesData.length} categories and ${suppliersData.length} suppliers`);
+    console.log(`✅ [getProducts] Fetched ${categoriesData.length} categories, ${suppliersData.length} suppliers, ${allVariants.length} variants, ${productImages.length} images`);
     
     // Create lookup maps
     const categoriesMap = new Map();
@@ -462,92 +643,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
     (suppliersData || []).forEach(supp => {
       suppliersMap.set(supp.id, supp);
     });
-
-    // Get product IDs for variant fetching
-    const productIds = products.map(product => product.id);
     
-    // 🚀 OPTIMIZED: Fetch ALL variants in a single query instead of batching
-    const variantsStartTime = Date.now();
-    
-    let allVariants: any[] = [];
-    
-    // ✅ FIXED: Skip variant query if no products
-    if (productIds.length === 0) {
-      console.log('ℹ️ No products to fetch variants for');
-    } else {
-      try {
-        // Fetch variants using supabase client
-        let variantQuery = supabase
-          .from('lats_product_variants')
-          .select('id, product_id, variant_name, sku, variant_attributes, cost_price, selling_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
-          .in('product_id', productIds)
-          .order('variant_name');
-      
-      // 🔒 BRANCH FILTER: Filter variants based on isolation mode
-      const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
-      if (currentBranchIdForVariants && branchSettings) {
-        if (branchSettings.data_isolation_mode === 'isolated' || branchSettings.data_isolation_mode === 'hybrid') {
-          // ISOLATED/HYBRID MODE: Variants from this branch OR shared variants
-          variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants}`);
-        } else {
-          // SHARED MODE: All variants
-          // No filter needed
-        }
-      } else {
-      }
-      
-      const variantsResult = await variantQuery;
-      
-      // Extract data from supabase response
-      allVariants = variantsResult.data || [];
-      
-      // 🔧 CONDITIONAL: Fetch variants with null branch_id (unassigned variants)
-      // Only in non-isolated modes
-      if (currentBranchIdForVariants && productIds.length > 0 && branchSettings?.data_isolation_mode !== 'isolated') {
-        const { data: nullBranchVariants } = await supabase
-          .from('lats_product_variants')
-          .select('id, product_id, variant_name, sku, variant_attributes, cost_price, selling_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared')
-          .in('product_id', productIds)
-          .is('branch_id', null)
-          .order('variant_name');
-        
-        if (nullBranchVariants && nullBranchVariants.length > 0) {
-          // Merge and deduplicate
-          const mergedVariants = [...allVariants, ...nullBranchVariants];
-          allVariants = Array.from(
-            new Map(mergedVariants.map(v => [v.id, v])).values()
-          );
-        }
-      } else if (branchSettings?.data_isolation_mode === 'isolated') {
-      }
-      
-        const duration = Date.now() - variantsStartTime;
-      } catch (exception) {
-        console.error('❌ Exception fetching variants:', exception);
-        
-        // Fallback to batched approach if single query fails
-        const BATCH_SIZE = 50;
-        
-        try {
-          for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-            const batch = productIds.slice(i, i + BATCH_SIZE);
-            const { data: batchVariants, error: batchError } = await supabase
-              .from('lats_product_variants')
-              .select('id, product_id, variant_name, sku, variant_attributes, cost_price, selling_price, quantity, min_quantity, created_at, updated_at')
-              .in('product_id', batch)
-              .order('variant_name');
-              
-            if (!batchError && batchVariants) {
-              allVariants.push(...batchVariants);
-            }
-          }
-        } catch (fallbackError) {
-          console.error('❌ Fallback also failed:', fallbackError);
-          allVariants = [];
-        }
-      }
-    }
-
     // Group variants by product ID
     const variantsByProductId = new Map<string, any[]>();
     allVariants.forEach(variant => {
@@ -557,33 +653,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
       variantsByProductId.get(variant.product_id)!.push(variant);
     });
 
-    // Fetch product images from product_images table using supabase client
-    
-    let productImages: any[] = [];
-    
-    // ✅ FIXED: Skip images query if no products
-    if (productIds.length === 0) {
-      console.log('ℹ️ No products to fetch images for');
-    } else {
-      try {
-        const imagesResult = await supabase
-          .from('product_images')
-          .select('id, product_id, image_url, is_primary')
-          .in('product_id', productIds)
-          .order('is_primary', { ascending: false });
-        
-        // Extract data from supabase response and add thumbnail_url as fallback to image_url
-        productImages = (imagesResult.data || []).map(img => ({
-          ...img,
-          thumbnail_url: img.thumbnail_url || img.image_url
-        }));
-      } catch (imagesError) {
-        console.error('⚠️  Error fetching product images:', imagesError);
-        productImages = [];
-      }
-    }
-
-    // Group images by product ID
+    // Group images by product ID (already fetched in parallel above)
     const imagesByProductId = new Map<string, any[]>();
     if (productImages && productImages.length > 0) {
       productImages.forEach(img => {
@@ -646,6 +716,7 @@ export async function getProducts(): Promise<LatsProduct[]> {
         barcode: product.barcode,
         specification: product.specification,
         images: images, // Add images array
+        image_url: images[0] || product.image_url || null, // Primary image for mobile display
         categoryId: product.category_id,
         supplierId: product.supplier_id,
         isActive: product.is_active,
@@ -670,8 +741,8 @@ export async function getProducts(): Promise<LatsProduct[]> {
           id: variant.id,
           productId: variant.product_id,
           sku: variant.sku,
-          name: variant.variant_name || variant.name,
-          attributes: variant.variant_attributes || variant.attributes || {},
+          name: variant.variant_name || variant.name || 'Unnamed',  // ✅ FIX: Prioritize variant_name (DB column) first, then legacy name
+          attributes: variant.variant_attributes || variant.attributes || {},  // ✅ FIX: Prioritize variant_attributes (DB column) first
           costPrice: variant.cost_price || 0,
           sellingPrice: variant.selling_price || 0,
           price: variant.selling_price || 0,
@@ -713,6 +784,33 @@ export async function getProducts(): Promise<LatsProduct[]> {
   }
 }
 
+// Get all products - PUBLIC API with caching and deduplication
+export async function getProducts(options?: { forceRefresh?: boolean }): Promise<LatsProduct[]> {
+  const currentBranchId = localStorage.getItem('current_branch_id');
+  const cacheKey = `products:${currentBranchId || 'default'}`;
+  
+  // Use request deduplication to prevent duplicate simultaneous calls
+  // Timeout increased to 60s to handle Neon cold starts (useInventoryStore has 75s outer timeout)
+  return deduplicateRequest(
+    cacheKey,
+    async () => {
+      // Use query cache with 3-minute TTL and stale-while-revalidate
+      return getCachedQuery(
+        cacheKey,
+        () => _getProductsImpl(),
+        {
+          ttl: 3 * 60 * 1000, // 3 minutes
+          staleWhileRevalidate: true, // Return stale data while fetching fresh
+        }
+      );
+    },
+    {
+      forceRefresh: options?.forceRefresh,
+      timeout: 60000, // 60 seconds - increased from default 30s to handle Neon cold starts
+    }
+  );
+}
+
 // Update a product
 export async function updateProduct(
   productId: string,
@@ -720,6 +818,8 @@ export async function updateProduct(
   userId: string
 ): Promise<LatsProduct> {
   try {
+    // Invalidate product cache on update
+    invalidateCachePattern('^products:');
     
     // First, verify the product exists
     const { data: existingProduct, error: existError } = await supabase

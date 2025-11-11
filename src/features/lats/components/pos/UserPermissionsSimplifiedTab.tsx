@@ -1,6 +1,6 @@
 // Simplified User Permissions Tab with Simple/Advanced Mode
 import React, { forwardRef, useImperativeHandle, useState } from 'react';
-import { Shield, Users, Lock, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { Shield, Users, Lock, Settings, Check, X as XIcon } from 'lucide-react';
 import UniversalSettingsTab from './UniversalSettingsTab';
 import { SettingsSection } from './UniversalFormComponents';
 import { ToggleSwitch } from './UniversalFormComponents';
@@ -140,97 +140,85 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
       title: 'Cashier',
       description: 'Basic sales and customer service access',
       permissions: [
-        '✓ Process sales',
-        '✓ View products and prices',
-        '✓ View inventory levels',
-        '✓ Create/edit customers',
-        '✗ Cannot issue refunds',
-        '✗ Cannot access reports',
-        '✗ Cannot change settings'
+        { text: 'Process sales', allowed: true },
+        { text: 'View products and prices', allowed: true },
+        { text: 'View inventory levels', allowed: true },
+        { text: 'Create/edit customers', allowed: true },
+        { text: 'Cannot issue refunds', allowed: false },
+        { text: 'Cannot access reports', allowed: false },
+        { text: 'Cannot change settings', allowed: false }
       ]
     },
     manager: {
       title: 'Manager',
       description: 'Full operational access with reports',
       permissions: [
-        '✓ Everything Cashier can do',
-        '✓ Process refunds',
-        '✓ Apply discounts',
-        '✓ Manage inventory',
-        '✓ Create/edit products',
-        '✓ View daily reports',
-        '✗ Cannot access system settings',
-        '✗ Cannot manage users'
+        { text: 'Everything Cashier can do', allowed: true },
+        { text: 'Process refunds', allowed: true },
+        { text: 'Apply discounts', allowed: true },
+        { text: 'Manage inventory', allowed: true },
+        { text: 'Create/edit products', allowed: true },
+        { text: 'View daily reports', allowed: true },
+        { text: 'Cannot access system settings', allowed: false },
+        { text: 'Cannot manage users', allowed: false }
       ]
     },
     admin: {
       title: 'Administrator',
       description: 'Complete system access',
       permissions: [
-        '✓ Everything Manager can do',
-        '✓ View financial reports',
-        '✓ Access system settings',
-        '✓ Manage users',
-        '✓ Configure POS',
-        '✓ Full access to all features'
+        { text: 'Everything Manager can do', allowed: true },
+        { text: 'View financial reports', allowed: true },
+        { text: 'Access system settings', allowed: true },
+        { text: 'Manage users', allowed: true },
+        { text: 'Configure POS', allowed: true },
+        { text: 'Full access to all features', allowed: true }
       ]
     },
     custom: {
       title: 'Custom',
       description: 'Create your own permission set',
       permissions: [
-        'Configure specific permissions',
-        'Mix and match access levels',
-        'Fine-grained control'
+        { text: 'Configure specific permissions', allowed: true },
+        { text: 'Mix and match access levels', allowed: true },
+        { text: 'Fine-grained control', allowed: true }
       ]
     }
   };
 
   return (
     <UniversalSettingsTab
-      title="User Permissions"
-      description="Control user access levels with simple role-based permissions or advanced custom settings"
-      onSave={handleSave}
-      onReset={handleReset}
-      onCancel={() => {}}
       isLoading={isLoading}
-      isSaving={isSaving}
-      isDirty={false}
     >
       {/* Mode Toggle */}
-      <div className="mb-6">
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Shield className="w-6 h-6 text-blue-600" />
-              <div>
-                <h3 className="font-semibold text-gray-900">Permission Mode</h3>
-                <p className="text-sm text-gray-600">
-                  {permissions.mode === 'simple' 
-                    ? 'Using Simple Mode - Easy role-based permissions'
-                    : 'Using Advanced Mode - Custom granular permissions'}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setPermissions(prev => ({ 
-                ...prev, 
-                mode: prev.mode === 'simple' ? 'advanced' : 'simple' 
-              }))}
-              className="px-4 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-medium transition-colors"
-            >
-              Switch to {permissions.mode === 'simple' ? 'Advanced' : 'Simple'} Mode
-            </button>
+      <SettingsSection
+        title="Permission Mode"
+        icon={<Shield className="w-5 h-5" />}
+        helpText="Choose between simple role-based permissions or advanced custom permissions."
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h4 className="font-medium text-gray-900">Use Simple Mode</h4>
+            <p className="text-sm text-gray-500">Quick role-based permissions vs. custom granular control</p>
           </div>
+          <button
+            onClick={() => setPermissions(prev => ({ 
+              ...prev, 
+              mode: prev.mode === 'simple' ? 'advanced' : 'simple' 
+            }))}
+            className="px-4 py-2 bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 font-medium transition-colors"
+          >
+            Switch to {permissions.mode === 'simple' ? 'Advanced' : 'Simple'} Mode
+          </button>
         </div>
-      </div>
+      </SettingsSection>
 
       {/* Simple Mode */}
       {permissions.mode === 'simple' && (
         <SettingsSection
-          title="Simple Mode - Role-Based Permissions"
-          description="Choose a pre-configured role for your users"
+          title="Role-Based Permissions"
           icon={<Users className="w-5 h-5" />}
+          helpText="Choose a pre-configured role with built-in permission sets. Best for most businesses."
         >
           <div className="space-y-4">
             {/* Role Cards */}
@@ -266,11 +254,16 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
                       {roleDescriptions[role].permissions.map((perm, idx) => (
                         <li
                           key={idx}
-                          className={`text-sm ${
-                            perm.startsWith('✓') ? 'text-green-700' : 'text-gray-500'
-                          }`}
+                          className="text-sm flex items-start gap-2"
                         >
-                          {perm}
+                          {perm.allowed ? (
+                            <Check className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          ) : (
+                            <XIcon className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                          )}
+                          <span className={perm.allowed ? 'text-green-700' : 'text-gray-500'}>
+                            {perm.text}
+                          </span>
                         </li>
                       ))}
                     </ul>
@@ -284,24 +277,6 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
               </div>
             ))}
 
-            {/* Info Box */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Settings className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-medium text-blue-900 mb-1">Simple Mode Benefits</h4>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    <li>• Quick setup - just pick a role</li>
-                    <li>• Easy to understand and manage</li>
-                    <li>• Best practices built-in</li>
-                    <li>• Recommended for most businesses</li>
-                  </ul>
-                  <p className="text-sm text-blue-600 mt-2">
-                    💡 Need more control? Switch to <strong>Advanced Mode</strong> for custom permissions.
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </SettingsSection>
       )}
@@ -309,23 +284,10 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
       {/* Advanced Mode */}
       {permissions.mode === 'advanced' && (
         <SettingsSection
-          title="Advanced Mode - Custom Permissions"
-          description="Fine-grained control over user permissions"
+          title="Custom Permissions"
           icon={<Lock className="w-5 h-5" />}
+          helpText="Fine-grained control over user permissions. Make sure you understand what each permission does to avoid security issues."
         >
-          <div className="space-y-6">
-            {/* Warning */}
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Shield className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-medium text-amber-900 mb-1">⚠️ Advanced Mode</h4>
-                  <p className="text-sm text-amber-700">
-                    You're configuring custom permissions. Make sure you understand what each permission does to avoid security issues.
-                  </p>
-                </div>
-              </div>
-            </div>
 
             {/* POS Access */}
             <div className="space-y-3">
@@ -333,26 +295,34 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
                 <Users className="w-5 h-5 text-blue-600" />
                 POS & Sales
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-7">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ToggleSwitch
+                  id="perm_pos_access"
                   label="Enable POS Access"
                   checked={permissions.customPermissions?.enable_pos_access ?? true}
                   onChange={(checked) => handlePermissionToggle('enable_pos_access', checked)}
+                  helpText="Allow user to access the POS system."
                 />
                 <ToggleSwitch
+                  id="perm_sales_access"
                   label="Enable Sales Access"
                   checked={permissions.customPermissions?.enable_sales_access ?? true}
                   onChange={(checked) => handlePermissionToggle('enable_sales_access', checked)}
+                  helpText="Allow user to make sales transactions."
                 />
                 <ToggleSwitch
+                  id="perm_refunds_access"
                   label="Process Refunds"
                   checked={permissions.customPermissions?.enable_refunds_access ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_refunds_access', checked)}
+                  helpText="Allow user to process customer refunds."
                 />
                 <ToggleSwitch
+                  id="perm_discount_access"
                   label="Apply Discounts"
                   checked={permissions.customPermissions?.enable_discount_access ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_discount_access', checked)}
+                  helpText="Allow user to apply discounts to sales."
                 />
               </div>
             </div>
@@ -363,21 +333,27 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
                 <Settings className="w-5 h-5 text-green-600" />
                 Inventory & Products
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-7">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ToggleSwitch
+                  id="perm_inventory_view"
                   label="View Inventory"
                   checked={permissions.customPermissions?.enable_inventory_view ?? true}
                   onChange={(checked) => handlePermissionToggle('enable_inventory_view', checked)}
+                  helpText="View inventory levels and product information."
                 />
                 <ToggleSwitch
+                  id="perm_inventory_edit"
                   label="Edit Inventory"
                   checked={permissions.customPermissions?.enable_inventory_edit ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_inventory_edit', checked)}
+                  helpText="Update stock quantities and inventory data."
                 />
                 <ToggleSwitch
+                  id="perm_product_creation"
                   label="Create Products"
                   checked={permissions.customPermissions?.enable_product_creation ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_product_creation', checked)}
+                  helpText="Add new products to the system."
                 />
               </div>
             </div>
@@ -388,16 +364,20 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
                 <Users className="w-5 h-5 text-purple-600" />
                 Customers
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-7">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ToggleSwitch
+                  id="perm_customer_view"
                   label="View Customers"
                   checked={permissions.customPermissions?.enable_customer_view ?? true}
                   onChange={(checked) => handlePermissionToggle('enable_customer_view', checked)}
+                  helpText="View customer information and history."
                 />
                 <ToggleSwitch
+                  id="perm_customer_creation"
                   label="Create/Edit Customers"
                   checked={permissions.customPermissions?.enable_customer_creation ?? true}
                   onChange={(checked) => handlePermissionToggle('enable_customer_creation', checked)}
+                  helpText="Add and update customer records."
                 />
               </div>
             </div>
@@ -408,30 +388,37 @@ const UserPermissionsSimplifiedTab = forwardRef<UserPermissionsSimplifiedTabRef>
                 <Lock className="w-5 h-5 text-red-600" />
                 Reports & Administration
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-7">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <ToggleSwitch
+                  id="perm_daily_reports"
                   label="View Daily Reports"
                   checked={permissions.customPermissions?.enable_daily_reports ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_daily_reports', checked)}
+                  helpText="Access daily sales and activity reports."
                 />
                 <ToggleSwitch
+                  id="perm_financial_reports"
                   label="View Financial Reports"
                   checked={permissions.customPermissions?.enable_financial_reports ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_financial_reports', checked)}
+                  helpText="View financial reports and analytics."
                 />
                 <ToggleSwitch
+                  id="perm_settings_access"
                   label="Access Settings"
                   checked={permissions.customPermissions?.enable_settings_access ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_settings_access', checked)}
+                  helpText="Access and modify system settings."
                 />
                 <ToggleSwitch
+                  id="perm_user_management"
                   label="Manage Users"
                   checked={permissions.customPermissions?.enable_user_management ?? false}
                   onChange={(checked) => handlePermissionToggle('enable_user_management', checked)}
+                  helpText="Add, edit, and remove user accounts."
                 />
               </div>
             </div>
-          </div>
         </SettingsSection>
       )}
     </UniversalSettingsTab>

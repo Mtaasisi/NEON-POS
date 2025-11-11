@@ -11,6 +11,7 @@ import { PageErrorBoundary } from '../../../features/shared/components/PageError
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import ErrorState from '../components/ui/ErrorState';
 import { supabase } from '../../../lib/supabaseClient';
+import AddProductModal from '../components/product/AddProductModal';
 import {
   ShoppingCart, Package, Users, BarChart3, TrendingUp, FileText, Crown, CreditCard,
   DollarSign, Activity, Target, Award, Calendar, Clock, ArrowRight, Plus, Settings,
@@ -21,6 +22,7 @@ const LATSDashboardPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'sales' | 'inventory' | 'customers' | 'analytics' | 'reports'>('all');
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
   
   // Error handling
   const { errorState, handleError, clearError, withErrorHandling } = useErrorHandler({
@@ -273,7 +275,7 @@ const LATSDashboardPage: React.FC = () => {
               Create Purchase Order
             </GlassButton>
             <GlassButton
-              onClick={() => handleNavigation('/lats/add-product')}
+              onClick={() => setShowAddProductModal(true)}
               icon={<Plus size={18} />}
               className="bg-gradient-to-r from-green-500 to-green-600 text-white"
             >
@@ -292,8 +294,15 @@ const LATSDashboardPage: React.FC = () => {
         {/* Breadcrumb - HIDDEN */}
         {/* <LATSBreadcrumb /> */}
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Quick Stats - Auto-fit Grid */}
+        <div 
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
+            gap: 'clamp(1rem, 2vw, 1.5rem)',
+            gridAutoRows: '1fr'
+          }}
+        >
           {dashboardData.quickStats.map((stat, index) => {
             const Icon = stat.icon;
             return (
@@ -373,10 +382,16 @@ const LATSDashboardPage: React.FC = () => {
           </div>
         </GlassCard>
 
-
-
-
       </div>
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onProductCreated={() => {
+          setShowAddProductModal(false);
+        }}
+      />
     </PageErrorBoundary>
   );
 };

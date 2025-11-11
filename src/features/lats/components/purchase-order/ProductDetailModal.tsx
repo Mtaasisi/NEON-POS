@@ -56,11 +56,12 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   const [isSavingPrice, setIsSavingPrice] = useState(false);
   const dataProvider = getLatsProvider();
   
-  // Purchase order history tracking
-  const { history: purchaseOrderHistory, stats: poStats, isLoading: isLoadingPOHistory } = usePurchaseOrderHistory(product?.id);
-  
-  // Tab state
+  // Tab state - MUST be declared before the hook that depends on it
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+  
+  // Purchase order history tracking - LAZY LOADED only when History tab is active
+  const [shouldLoadHistory, setShouldLoadHistory] = useState(false);
+  const { history: purchaseOrderHistory, stats: poStats, isLoading: isLoadingPOHistory } = usePurchaseOrderHistory(shouldLoadHistory ? product?.id : undefined);
 
   // Update selectedCurrency when currency prop changes
   useEffect(() => {
@@ -68,6 +69,22 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
       setSelectedCurrency(currency);
     }
   }, [currency]);
+
+  // Trigger lazy loading of purchase history when user switches to History tab
+  useEffect(() => {
+    if (activeTab === 'history' && !shouldLoadHistory && product?.id) {
+      console.log('📊 User switched to History tab - loading purchase order history...');
+      setShouldLoadHistory(true);
+    }
+  }, [activeTab, shouldLoadHistory, product?.id]);
+
+  // Reset state when modal closes to ensure fresh data on next open
+  useEffect(() => {
+    if (!isOpen) {
+      setShouldLoadHistory(false);
+      setActiveTab('details');
+    }
+  }, [isOpen]);
 
   // Safety check to ensure selectedCurrency is always defined
   const safeSelectedCurrency = selectedCurrency || safeCurrency;
@@ -199,8 +216,64 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     return realTimeStock.get(product.id) || 0;
   };
 
-  // Use real-time stock if available, otherwise fall back to cached stock
-  const currentTotalStock = getRealTimeStockForProduct() || getProductTotalStock(product);
+  // Calculate correct total stock from variants (don't trust product.totalQuantity)
+  const calculateCorrectTotalStock = (): number => {
+    if (!product.variants || product.variants.length === 0) {
+      return product.stockQuantity ?? product.totalQuantity ?? 0;
+    }
+    
+    // DEBUG: Log variant data
+    console.log('🔍 [PO Modal] Debug Stock Calculation:', {
+      productName: product.name,
+      totalVariants: product.variants.length,
+      variants: product.variants.map(v => ({
+        name: v.name,
+        quantity: v.quantity || v.stockQuantity,
+        parent_variant_id: v.parent_variant_id,
+        variant_type: v.variant_type,
+        variantType: v.variantType
+      }))
+    });
+    
+    // Sum up ONLY parent variants stock (exclude IMEI children)
+    // IMEI children have parent_variant_id set or variant_type = 'imei_child'
+    const parentVariants = product.variants.filter(variant => {
+      // Exclude IMEI children (they have parent_variant_id or are imei_child type)
+      const isImeiChild = variant.parent_variant_id || 
+                         variant.variant_type === 'imei_child' ||
+                         variant.variantType === 'imei_child' ||
+                         (variant.name && variant.name.toLowerCase().includes('imei:'));
+      return !isImeiChild;
+    });
+    
+    const totalStock = parentVariants.reduce((total, variant) => {
+      const stock = variant.stockQuantity ?? variant.quantity ?? 0;
+      return total + stock;
+    }, 0);
+    
+    console.log('🔍 [PO Modal] Stock Calculation Result:', {
+      parentVariantsCount: parentVariants.length,
+      totalStock,
+      parentVariants: parentVariants.map(v => ({
+        name: v.name,
+        stock: v.stockQuantity ?? v.quantity ?? 0
+      }))
+    });
+    
+    return totalStock;
+  };
+
+  // Use real-time stock if available, otherwise calculate from variants
+  const realTimeStockValue = getRealTimeStockForProduct();
+  const calculatedStock = calculateCorrectTotalStock();
+  
+  console.log('🔍 [PO Modal] Final Stock Decision:', {
+    realTimeStockValue,
+    calculatedStock,
+    willUse: realTimeStockValue || calculatedStock
+  });
+  
+  const currentTotalStock = realTimeStockValue || calculatedStock;
 
   const totalPrice = costPrice * quantity;
 
@@ -422,19 +495,19 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                 </div>
 
-                {/* Stock Availability */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-gray-900">Stock Availability</h3>
-                  <div className={`${stockStatus.bg} rounded-lg border ${stockStatus.border} p-4`}>
-                    {/* Status Header */}
-                    <div className="flex items-center justify-between mb-3">
+                {/* Stock Availability - Compact */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium text-gray-700">Stock Availability</h3>
+                  <div className={`${stockStatus.bg} rounded-lg border ${stockStatus.border} p-3`}>
+                    {/* Compact Header with Status and Live Badge */}
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full ${
+                        <div className={`w-1.5 h-1.5 rounded-full ${
                           stockStatus.status === 'In Stock' ? 'bg-green-500' :
                           stockStatus.status === 'Low Stock' ? 'bg-amber-500' :
                           'bg-red-500'
                         }`}></div>
-                        <span className={`text-xs font-semibold ${stockStatus.color} uppercase tracking-wide`}>
+                        <span className={`text-xs font-semibold ${stockStatus.color}`}>
                           {stockStatus.status}
                         </span>
                       </div>
@@ -446,41 +519,41 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       )}
                     </div>
 
-                    {/* Large Stock Number Display */}
-                    <div className="text-center py-3">
-                      {isLoadingStock ? (
-                        <div className="flex flex-col items-center gap-2">
-                          <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-                          <span className="text-xs text-gray-600">Loading stock...</span>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <div className={`text-4xl font-bold ${stockStatus.color}`}>
+                    {/* Compact Stock Display */}
+                    {isLoadingStock ? (
+                      <div className="flex items-center justify-center gap-2 py-2">
+                        <div className="w-5 h-5 border-3 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-xs text-gray-600">Loading...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-baseline justify-between">
+                        <div className="flex items-baseline gap-2">
+                          <span className={`text-2xl font-bold ${stockStatus.color}`}>
                             {currentTotalStock}
-                          </div>
-                          <div className="text-sm font-medium text-gray-600 mt-1">
-                            units available
-                          </div>
+                          </span>
+                          <span className="text-xs text-gray-600">units</span>
                         </div>
-                      )}
-                    </div>
-
-                    {/* Minimum Stock Warning */}
-                    {minimumStock > 0 && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <div className="flex items-center justify-between">
+                        {minimumStock > 0 && (
                           <div className="flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
-                            <span className="text-xs text-gray-600">
-                              Min threshold: <strong className="text-gray-900">{minimumStock} units</strong>
-                            </span>
+                            {currentTotalStock <= minimumStock && (
+                              <div className="flex items-center gap-1 bg-red-100 px-1.5 py-0.5 rounded-full">
+                                <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
+                                <span className="text-xs font-semibold text-red-700">Alert</span>
+                              </div>
+                            )}
                           </div>
-                          {currentTotalStock <= minimumStock && (
-                            <div className="flex items-center gap-1 bg-red-100 px-2 py-0.5 rounded-full">
-                              <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
-                              <span className="text-xs font-bold text-red-700 uppercase">Alert</span>
-                            </div>
-                          )}
+                        )}
+                      </div>
+                    )}
+
+                    {/* Minimum Stock Info - Compact */}
+                    {minimumStock > 0 && (
+                      <div className="mt-2 pt-2 border-t border-gray-200">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-1.5 h-1.5 bg-amber-500 rounded-full"></div>
+                          <span className="text-xs text-gray-600">
+                            Min: <span className="font-semibold text-gray-900">{minimumStock}</span>
+                          </span>
                         </div>
                       </div>
                     )}
@@ -519,7 +592,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             </div>
                             <div className="text-right">
                               <div className="font-bold text-gray-900">
-                                {formatMoney(product.costPrice || (product.price || 0) * 0.7, currency).replace(/\.00$/, '').replace(/\.0$/, '')}
+                                {formatMoney(variant.sellingPrice || variant.price || variant.costPrice || 0, currency).replace(/\.00$/, '').replace(/\.0$/, '')}
                               </div>
                               {selectedVariant?.id === variant.id && (
                                 <CheckCircle className="w-5 h-5 text-orange-600 mt-1" />
@@ -755,132 +828,79 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   })()}
                 </div>
 
-                {/* Order Summary - Redesigned */}
-                <div className="bg-white rounded-lg border-2 border-gray-300 overflow-hidden">
-                  {/* Header with gradient */}
-                  <div className="bg-orange-500 px-5 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
-                        <ShoppingCart className="w-5 h-5 text-orange-500" />
-                      </div>
-                      <h3 className="text-lg font-bold text-white">Order Summary</h3>
+                {/* Order Summary - Compact Design */}
+                <div className="bg-white rounded-lg border-2 border-orange-300 overflow-hidden">
+                  {/* Compact Header */}
+                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <ShoppingCart className="w-4 h-4 text-white" />
+                      <h3 className="text-sm font-bold text-white">Order Summary</h3>
                     </div>
                   </div>
                   
-                  {/* Content */}
-                  <div className="p-5 space-y-4">
-                    {/* Product Info Card */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between pb-2 border-b-2 border-gray-200">
-                        <span className="text-sm font-medium text-gray-500 uppercase tracking-wide">Product</span>
-                        <Package className="w-4 h-4 text-gray-400" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-gray-900 text-base">{product.name}</div>
-                        {selectedVariant && selectedVariant.name !== 'Default' && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-gray-500">Variant:</span>
-                            <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
-                              {selectedVariant.name}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Order Details */}
-                    <div className="space-y-3">
-                      {/* Quantity Row */}
-                      <div className="flex items-center justify-between py-3 px-4 bg-blue-50 rounded-lg border border-blue-200">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-                            <Package className="w-4 h-4 text-white" />
-                          </div>
-                          <div>
-                            <div className="text-xs font-medium text-blue-600 uppercase">Quantity</div>
-                            <div className="text-sm text-blue-700">Order units</div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-blue-900">{quantity}</div>
-                          <div className="text-xs text-blue-600">units</div>
-                        </div>
-                      </div>
-                      
-                      {/* Unit Cost Row */}
-                      {customCostPrice && parseFloat(customCostPrice) > 0 && (
-                        <div className="flex items-center justify-between py-3 px-4 bg-purple-50 rounded-lg border border-purple-200">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-purple-500 rounded flex items-center justify-center">
-                              <DollarSign className="w-4 h-4 text-white" />
-                            </div>
-                            <div>
-                              <div className="text-xs font-medium text-purple-600 uppercase">Unit Cost</div>
-                              <div className="text-sm text-purple-700">Price per unit</div>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-lg font-bold text-purple-900">
-                              {formatMoney(costPrice, safeSelectedCurrency).replace(/\.00$/, '').replace(/\.0$/, '')}
-                            </div>
-                            <div className="text-xs text-purple-600">{safeSelectedCurrency.code}</div>
-                          </div>
+                  {/* Compact Content */}
+                  <div className="p-3 space-y-2">
+                    {/* Product Name - Compact */}
+                    <div className="pb-2 border-b border-gray-200">
+                      <div className="text-sm font-semibold text-gray-900 truncate">{product.name}</div>
+                      {selectedVariant && selectedVariant.name !== 'Default' && (
+                        <div className="text-xs text-gray-500 mt-0.5 truncate">
+                          {selectedVariant.name}
                         </div>
                       )}
                     </div>
                     
-                    {/* Exchange Rate Info */}
-                    {safeSelectedCurrency.code !== currency.code && customCostPrice && parseFloat(customCostPrice) > 0 && (
-                      <div className="bg-blue-50 rounded-lg p-3 border border-blue-300">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <ArrowUpDown className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-semibold text-blue-700 uppercase">Exchange Rate</span>
-                          </div>
-                          <span className="text-xs font-mono text-blue-900">
-                            1 {safeSelectedCurrency.code} = {exchangeRate.toFixed(4)} {currency.code}
+                    {/* Order Details - Simple List */}
+                    <div className="space-y-1.5">
+                      {/* Quantity */}
+                      <div className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded">
+                        <span className="text-xs text-gray-600">Quantity</span>
+                        <span className="text-sm font-bold text-gray-900">{quantity} units</span>
+                      </div>
+                      
+                      {/* Unit Cost */}
+                      {customCostPrice && parseFloat(customCostPrice) > 0 && (
+                        <div className="flex items-center justify-between py-1.5 px-2 bg-gray-50 rounded">
+                          <span className="text-xs text-gray-600">Unit Cost</span>
+                          <span className="text-sm font-bold text-gray-900">
+                            {formatMoney(costPrice, safeSelectedCurrency).replace(/\.00$/, '').replace(/\.0$/, '')}
                           </span>
                         </div>
-                      </div>
-                    )}
+                      )}
+                      
+                      {/* Exchange Rate - Inline */}
+                      {safeSelectedCurrency.code !== currency.code && customCostPrice && parseFloat(customCostPrice) > 0 && (
+                        <div className="flex items-center justify-between py-1.5 px-2 bg-blue-50 rounded">
+                          <div className="flex items-center gap-1">
+                            <ArrowUpDown className="w-3 h-3 text-blue-600" />
+                            <span className="text-xs text-blue-700">Exchange Rate</span>
+                          </div>
+                          <span className="text-xs font-mono text-blue-900">
+                            1 {safeSelectedCurrency.code} = {Math.round(exchangeRate)} {currency.code}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     
-                    {/* Divider */}
-                    <div className="border-t-2 border-dashed border-gray-300 my-4"></div>
-                    
-                    {/* Total Cost */}
+                    {/* Total - Compact but Prominent */}
                     {customCostPrice && costPrice > 0 && (
-                      <div className="bg-orange-500 rounded-lg p-5 border-2 border-orange-600">
+                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg p-3 mt-2">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="text-xs font-bold text-white uppercase tracking-wide mb-1">Total Amount</div>
-                            <div className="text-xs text-orange-100">in {currency.code}</div>
+                            <div className="text-xs font-semibold text-white/90">Total Amount</div>
+                            <div className="text-xs text-white/70 mt-0.5">
+                              {quantity} × {formatMoney(costPrice, safeSelectedCurrency).replace(/\.00$/, '').replace(/\.0$/, '')}
+                              {safeSelectedCurrency.code !== currency.code && ` (${safeSelectedCurrency.code}→${currency.code})`}
+                            </div>
                           </div>
                           <div className="text-right">
-                            <div className="text-3xl font-bold text-white">
+                            <div className="text-2xl font-bold text-white">
                               {formatMoney(safeSelectedCurrency.code !== currency.code ? calculateExchangedPrice(totalPrice) : totalPrice, currency).replace(/\.00$/, '').replace(/\.0$/, '')}
                             </div>
                           </div>
                         </div>
                       </div>
                     )}
-                    
-                    {/* Calculation Breakdown */}
-                    <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                      <div className="flex justify-between items-center text-sm">
-                        <span className="text-gray-600">Calculation:</span>
-                        <span className="font-mono text-gray-900">{quantity} × {formatMoney(costPrice, safeSelectedCurrency).replace(/\.00$/, '').replace(/\.0$/, '')}</span>
-                      </div>
-                      {safeSelectedCurrency.code !== currency.code && (
-                        <div className="flex justify-between items-center text-sm pt-2 border-t border-gray-200">
-                          <span className="text-gray-600">Currency:</span>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900">{safeSelectedCurrency.code}</span>
-                            <ArrowUpDown className="w-3 h-3 text-gray-400" />
-                            <span className="font-medium text-gray-900">{currency.code}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>

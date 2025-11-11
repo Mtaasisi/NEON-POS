@@ -89,8 +89,11 @@ export const useBluetoothPrinter = (): UseBluetoothPrinterReturn => {
       
       return success;
     } catch (err) {
+      // Only set error for unexpected failures, not for unsupported browsers
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize Bluetooth printer service';
-      setError(errorMessage);
+      if (!errorMessage.includes('not supported')) {
+        setError(errorMessage);
+      }
       return false;
     }
   }, []);

@@ -8,7 +8,7 @@ import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import POTopBar from '../components/purchase-order/POTopBar';
 import {
   Search, QrCode, Plus, CheckCircle, XCircle, RefreshCw, 
-  User, Phone, Command, Truck, Coins, ShoppingBag, AlertTriangle
+  User, Phone, Command, Truck, Coins, ShoppingBag, AlertTriangle, X, Building
 } from 'lucide-react';
 
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -23,8 +23,8 @@ import SupplierSelectionModal from '../components/purchase-order/SupplierSelecti
 import PurchaseOrderDraftModal from '../components/purchase-order/PurchaseOrderDraftModal';
 import ShippingConfigurationModal from '../components/purchase-order/ShippingConfigurationModal';
 import CurrencySelector from '../components/purchase-order/CurrencySelector';
-import AddSupplierModal from '../components/purchase-order/AddSupplierModal';
-import AddProductModal from '../components/purchase-order/AddProductModal';
+import EnhancedAddSupplierModal from '../../settings/components/EnhancedAddSupplierModal';
+import AddProductModal from '../components/product/AddProductModal';
 import PurchaseCartItem from '../components/purchase-order/PurchaseCartItem';
 import ProductDetailModal from '../components/purchase-order/ProductDetailModal';
 import OrderManagementModal from '../components/purchase-order/OrderManagementModal';
@@ -162,15 +162,26 @@ interface Supplier {
   name: string;
   company_name?: string;
   contactPerson?: string;
+  contact_person?: string;
   phone?: string;
   email?: string;
+  whatsapp?: string;
+  wechat?: string;
   address?: string;
   city?: string;
   country?: string;
+  tax_id?: string;
+  payment_terms?: string;
   exchangeRates?: string;
+  exchange_rate?: number;
   leadTimeDays?: number;
-  currency?: string;
+  preferred_currency?: string;
+  currency?: string; // Legacy field
   isActive: boolean;
+  is_active?: boolean;
+  rating?: number;
+  description?: string;
+  notes?: string;
 }
 
 // Performance optimization hook
@@ -236,7 +247,7 @@ const POcreate: React.FC = () => {
   const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('all');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock' | 'recent' | 'supplier'>('recent');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
@@ -471,6 +482,13 @@ const POcreate: React.FC = () => {
           }
         }
         
+        // Load exchange rate if available
+        if (order.exchangeRate && order.exchangeRate !== 1.0) {
+          // Format exchange rate string to match expected format
+          const rateString = `1 ${order.currency} = ${Math.round(order.exchangeRate)} TZS`;
+          setExchangeRates(rateString);
+        }
+        
         if (order.status) {
           setPurchaseOrderStatus(order.status);
         }
@@ -507,6 +525,15 @@ const POcreate: React.FC = () => {
     
     loadData();
   }, [loadProducts, loadCategories, loadSuppliers]);
+
+  // Load latest used exchange rate on component mount
+  useEffect(() => {
+    const latestExchangeRate = localStorage.getItem('po_latest_exchange_rate');
+    if (latestExchangeRate && !isEditMode && !isDuplicateMode) {
+      setExchangeRates(latestExchangeRate);
+      console.log('✅ Loaded latest exchange rate:', latestExchangeRate);
+    }
+  }, [isEditMode, isDuplicateMode]);
 
   // Load purchase order for editing when editOrderId is available
   useEffect(() => {
@@ -578,6 +605,13 @@ const POcreate: React.FC = () => {
           if (currency) {
             setSelectedCurrency(currency);
           }
+        }
+        
+        // Load exchange rate if available
+        if (order.exchangeRate && order.exchangeRate !== 1.0) {
+          // Format exchange rate string to match expected format
+          const rateString = `1 ${order.currency} = ${Math.round(order.exchangeRate)} TZS`;
+          setExchangeRates(rateString);
         }
         
         // Always set status to draft for duplicated orders
@@ -896,29 +930,17 @@ const POcreate: React.FC = () => {
     }
   }, []);
 
-  // Test function to debug purchase order fetching
-  const testPurchaseOrderFetch = useCallback(async () => {
-    try {
-      const provider = getLatsProvider();
-      const response = await provider.getPurchaseOrders();
-      
-      if (response.ok && response.data) {
-      }
-    } catch (error) {
-      console.error('🧪 DEBUG: Error testing purchase order fetch:', error);
-    }
-  }, []);
-
   // Handle supplier selection
   const handleSupplierSelect = useCallback((supplier: Supplier) => {
     setSelectedSupplier(supplier);
     
     // Auto-select currency from supplier
-    if (supplier.currency) {
-      const supplierCurrency = SUPPORTED_CURRENCIES.find(c => c.code === supplier.currency);
+    const currencyCode = supplier.preferred_currency || supplier.currency;
+    if (currencyCode) {
+      const supplierCurrency = SUPPORTED_CURRENCIES.find(c => c.code === currencyCode);
       if (supplierCurrency) {
         setSelectedCurrency(supplierCurrency);
-        toast.success(`Currency automatically set to ${supplier.currency} (${supplierCurrency.name})`);
+        toast.success(`Currency automatically set to ${currencyCode} (${supplierCurrency.name})`);
       }
     } else {
       // Fallback to default currency if supplier doesn't specify one
@@ -1080,6 +1102,12 @@ const POcreate: React.FC = () => {
         // Store the created purchase order
         setCreatedPurchaseOrder(result.data);
         
+        // Save exchange rate to localStorage for future use
+        if (exchangeRates && exchangeRates.trim()) {
+          localStorage.setItem('po_latest_exchange_rate', exchangeRates);
+          console.log('💾 Saved latest exchange rate:', exchangeRates);
+        }
+        
         // Show success modal with action buttons
         successModal.show(
           `Purchase Order ${orderNumber} has been ${isEditMode && !isDuplicateMode ? 'updated' : 'created'} successfully!`,
@@ -1148,7 +1176,6 @@ const POcreate: React.FC = () => {
         onViewPurchaseOrders={() => setShowOrderManagementModal(true)}
         isCreatingPO={isCreatingPO}
         hasSelectedSupplier={!!selectedSupplier}
-        onTestPOFetch={testPurchaseOrderFetch}
       />
 
       <div className="p-4 sm:p-6 pb-20 max-w-full mx-auto space-y-6">
@@ -1255,18 +1282,6 @@ const POcreate: React.FC = () => {
                     </div>
                   </div>
                 )}
-                
-                {/* Products Status */}
-                {!isLoading && !error && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <span className="text-green-800 font-medium">
-                        {products.length > 0 ? `${products.length} products loaded` : 'No products found'}
-                      </span>
-                    </div>
-                  </div>
-                )}
 
                 {/* Advanced Filters */}
                 {showAdvancedFilters && (
@@ -1359,7 +1374,15 @@ const POcreate: React.FC = () => {
                     </div>
                     
                     {filteredProducts.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6">
+                        <div 
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))',
+                            gap: 'clamp(1rem, 2vw, 1.5rem)',
+                            gridAutoRows: '1fr'
+                          }}
+                        >
                         {filteredProducts.map((product) => (
                           <VariantProductCard
                             key={product.id}
@@ -1370,8 +1393,10 @@ const POcreate: React.FC = () => {
                             actionText="View Details"
                             allowOutOfStockSelection={true}
                             showCategory={true}
+                              className="w-full h-full"
                           />
                         ))}
+                        </div>
                       </div>
                     ) : (
                       <div className="text-center py-12">
@@ -1393,7 +1418,15 @@ const POcreate: React.FC = () => {
                       <span className="text-sm text-gray-500">{products.length} products</span>
                     </div>
                     {products.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-3 sm:pb-4 md:pb-6">
+                        <div 
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(min(250px, 100%), 1fr))',
+                            gap: 'clamp(1rem, 2vw, 1.5rem)',
+                            gridAutoRows: '1fr'
+                          }}
+                        >
                         {products.map((product) => (
                           <VariantProductCard
                             key={product.id}
@@ -1404,8 +1437,10 @@ const POcreate: React.FC = () => {
                             actionText="View Details"
                             allowOutOfStockSelection={true}
                             showCategory={true}
+                              className="w-full h-full"
                           />
                         ))}
+                        </div>
                       </div>
                     ) : (
                       <div className="text-center py-12">
@@ -1616,7 +1651,7 @@ const POcreate: React.FC = () => {
                         {exchangeRates && selectedCurrency.code !== 'TZS' && (
                           <div className="flex-shrink-0">
                             <div className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-md font-medium">
-                              ≈ {parseExchangeRate(exchangeRates)?.toFixed(2) || 'N/A'} TZS
+                              ≈ {Math.round(parseExchangeRate(exchangeRates) || 0)} TZS
                             </div>
                           </div>
                         )}
@@ -1802,10 +1837,13 @@ const POcreate: React.FC = () => {
 
       {/* Add Supplier Modal */}
       {showAddSupplierModal && (
-        <AddSupplierModal
+        <EnhancedAddSupplierModal
           isOpen={showAddSupplierModal}
           onClose={() => setShowAddSupplierModal(false)}
-          onSupplierCreated={handleSupplierCreated}
+          onSupplierCreated={() => {
+            // Reload suppliers after creation
+            setShowAddSupplierModal(false);
+          }}
         />
       )}
 

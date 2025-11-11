@@ -167,11 +167,11 @@ export const usePOSAnalytics = () => {
 
       const [productsResult, variantsResult] = await Promise.all([
         productIds.length > 0 ? supabase.from('lats_products').select('id, name, cost_price').in('id', productIds) : { data: [] },
-        variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, cost_price, selling_price').in('id', variantIds) : { data: [] }
+        variantIds.length > 0 ? supabase.from('lats_product_variants').select('id, name, variant_name, cost_price, selling_price').in('id', variantIds) : { data: [] }  // 🔧 FIX: Select both name columns
       ]);
 
       const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
-      const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
+      const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, { ...v, name: v.name || v.variant_name || 'Unnamed' }]));  // 🔧 FIX: Prioritize 'name' first
 
       // Process sales data to calculate product performance
       const productPerformanceMap = new Map<string, {

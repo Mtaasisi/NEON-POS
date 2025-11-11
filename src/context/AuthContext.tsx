@@ -6,6 +6,16 @@ import { toast } from 'react-hot-toast';
 import { POSSettingsAPI } from '../lib/posSettingsApi';
 import { logInfo, logError, logWarn, trackInit } from '../lib/debugUtils';
 import { clearAuthState, isSessionValid, handle403Error } from '../lib/authUtils';
+import { 
+  hasPermission, 
+  hasAnyPermission, 
+  hasAllPermissions, 
+  canAccessRoute, 
+  getUserPermissions,
+  hasRole,
+  checkAccess,
+  Permission
+} from '../lib/permissionUtils';
 
 // Import the inventory store for automatic product loading
 import { useInventoryStore } from '../features/lats/stores/useInventoryStore';
@@ -20,6 +30,15 @@ interface AuthContextType {
   loading: boolean;
   refreshSession: () => Promise<boolean>;
   handleAuthError: (error: any) => Promise<boolean>;
+  // Permission checking functions
+  hasPermission: (permission: string) => boolean;
+  hasAnyPermission: (permissions: string[]) => boolean;
+  hasAllPermissions: (permissions: string[]) => boolean;
+  canAccessRoute: (path: string) => boolean;
+  getUserPermissions: () => string[];
+  hasRole: (roles: string | string[]) => boolean;
+  checkAccess: (options: { roles?: string[]; permissions?: string[]; requireAll?: boolean }) => boolean;
+  Permission: typeof Permission;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -48,7 +67,15 @@ export const useAuth = () => {
       clearError: () => {},
       loading: true,
       refreshSession: async () => false,
-      handleAuthError: async () => false
+      handleAuthError: async () => false,
+      hasPermission: () => false,
+      hasAnyPermission: () => false,
+      hasAllPermissions: () => false,
+      canAccessRoute: () => false,
+      getUserPermissions: () => [],
+      hasRole: () => false,
+      checkAccess: () => false,
+      Permission
     } as AuthContextType;
   }
   return context;
@@ -111,59 +138,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadInitialDataInBackground = async () => {
     // Prevent multiple data loads
     if (dataLoadedRef.current) {
-
+      console.log('📦 Data already loaded, skipping...');
       return;
     }
     
     try {
-
+      console.log('🚀 Starting comprehensive data preload...');
       dataLoadedRef.current = true;
       
       // Small delay to ensure UI is fully loaded first
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 300));
       
-      // Load other data sources first (avoid store calls during initialization)
-      const otherDataPromises = [
-        loadCustomersData(),
-        loadDevicesData(),
-        loadSettingsData()
-      ];
-
-      const otherResults = await Promise.allSettled(otherDataPromises);
+      // Use the new preload service for comprehensive data loading
+      const { dataPreloadService } = await import('../services/dataPreloadService');
+      const result = await dataPreloadService.preloadAllData();
       
-      // Load inventory data after other data (to avoid initialization issues)
-      try {
-        const inventoryStore = useInventoryStore.getState();
-        const inventoryPromises = [
-          inventoryStore.loadProducts({ page: 1, limit: 50 }),
-          inventoryStore.loadCategories(),
-          inventoryStore.loadSuppliers()
-        ];
-
-        const inventoryResults = await Promise.allSettled(inventoryPromises);
-        
-        // Combine results
-        const results = [...otherResults, ...inventoryResults];
-        
-        // Count successful loads
-        const successfulLoads = results.filter(result => result.status === 'fulfilled').length;
-        const totalLoads = results.length;
-
-        // Background data loading completed silently
-        if (successfulLoads > 0) {
-
-        }
-      } catch (inventoryError) {
-        console.error('❌ Error loading inventory data:', inventoryError);
-        // Continue with other results even if inventory fails
-        const successfulLoads = otherResults.filter(result => result.status === 'fulfilled').length;
-        if (successfulLoads > 0) {
-          console.log(`✅ Background data loading completed (partial): ${successfulLoads}/${otherResults.length} successful`);
-        }
+      if (result.success) {
+        console.log('✅ All data preloaded successfully');
+        console.log(`   Duration: ${result.duration}ms`);
+        console.log(`   Loaded: ${result.loaded.length} data types`);
+      } else {
+        console.warn('⚠️ Data preload completed with some failures');
+        console.log(`   Loaded: ${result.loaded.join(', ')}`);
+        console.log(`   Failed: ${result.failed.join(', ')}`);
       }
+      
+      // Get preload summary
+      const summary = dataPreloadService.getSummary();
+      console.log('📊 Preload Summary:', {
+        customers: summary.dataCounts.customers,
+        products: summary.dataCounts.products,
+        categories: summary.dataCounts.categories,
+        suppliers: summary.dataCounts.suppliers,
+      });
     } catch (error) {
       console.error('❌ Error in background data loading:', error);
       // Don't throw error - this is background loading, shouldn't affect login
+      // Reset flag so it can be retried
+      dataLoadedRef.current = false;
     }
   };
 
@@ -574,11 +586,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-
+      console.log('🚪 Logging out...');
       setLoading(true);
       
       // Clear POS settings user cache
       POSSettingsAPI.clearUserCache();
+      
+      // Clear preloaded data
+      try {
+        const { dataPreloadService } = await import('../services/dataPreloadService');
+        dataPreloadService.clearAll();
+        console.log('🧹 Cleared preloaded data');
+      } catch (error) {
+        console.error('❌ Error clearing preloaded data:', error);
+      }
       
       await supabase.auth.signOut();
       setCurrentUser(null);
@@ -594,6 +615,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const clearError = () => setError(null);
 
+  // Permission checking functions that use the current user
+  const userHasPermission = (permission: string) => hasPermission(currentUser, permission);
+  const userHasAnyPermission = (permissions: string[]) => hasAnyPermission(currentUser, permissions);
+  const userHasAllPermissions = (permissions: string[]) => hasAllPermissions(currentUser, permissions);
+  const userCanAccessRoute = (path: string) => canAccessRoute(currentUser, path);
+  const userGetPermissions = () => getUserPermissions(currentUser);
+  const userHasRole = (roles: string | string[]) => hasRole(currentUser, roles);
+  const userCheckAccess = (options: { roles?: string[]; permissions?: string[]; requireAll?: boolean }) => 
+    checkAccess(currentUser, options);
+
   return (
     <AuthContext.Provider value={{ 
       currentUser,
@@ -604,7 +635,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearError,
       loading,
       refreshSession,
-      handleAuthError
+      handleAuthError,
+      // Permission checking functions
+      hasPermission: userHasPermission,
+      hasAnyPermission: userHasAnyPermission,
+      hasAllPermissions: userHasAllPermissions,
+      canAccessRoute: userCanAccessRoute,
+      getUserPermissions: userGetPermissions,
+      hasRole: userHasRole,
+      checkAccess: userCheckAccess,
+      Permission
     }}>
       {children}
     </AuthContext.Provider>

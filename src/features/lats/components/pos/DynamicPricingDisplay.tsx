@@ -1,89 +1,122 @@
-// Dynamic Pricing Display Component for LATS POS
+/**
+ * Dynamic Pricing Display Component
+ * 
+ * Shows applied discounts and pricing information in the POS interface
+ */
+
 import React from 'react';
-import { Zap, Settings, ChevronDown } from 'lucide-react';
-import { AppliedDiscount } from '../../lib/dynamicPricing';
+import { AppliedDiscount } from '../../lib/dynamicPricingService';
+import { Clock, ShoppingCart, Star, Tag, Percent } from 'lucide-react';
 
 interface DynamicPricingDisplayProps {
   appliedDiscounts: AppliedDiscount[];
-  totalDiscount: number;
-  discountPercentage: number;
   basePrice: number;
   finalPrice: number;
-  loyaltyPoints?: number;
-  manualDiscount?: number;
-  discountType?: 'percentage' | 'fixed';
-  selectedCustomer?: any;
-  onClearManualDiscount?: () => void;
-  onApplyManualDiscount?: (amount: number, type: 'percentage' | 'fixed') => void;
-  onOpenSettings?: () => void;
+  showBreakdown?: boolean;
+  className?: string;
 }
 
 const DynamicPricingDisplay: React.FC<DynamicPricingDisplayProps> = ({
   appliedDiscounts,
-  totalDiscount,
-  discountPercentage,
   basePrice,
   finalPrice,
-  loyaltyPoints,
-  manualDiscount = 0,
-  discountType = 'percentage',
-  selectedCustomer,
-  onClearManualDiscount,
-  onApplyManualDiscount,
-  onOpenSettings
+  showBreakdown = true,
+  className = ''
 }) => {
-  if (appliedDiscounts.length === 0 && totalDiscount === 0 && manualDiscount === 0) {
+  const totalDiscount = basePrice - finalPrice;
+  const discountPercentage = basePrice > 0 ? (totalDiscount / basePrice) * 100 : 0;
+
+  // Don't render if no discounts applied
+  if (appliedDiscounts.length === 0) {
     return null;
   }
 
-  const totalManualDiscount = manualDiscount > 0 
-    ? (discountType === 'percentage' ? (basePrice * manualDiscount / 100) : manualDiscount)
-    : 0;
+  const getDiscountIcon = (ruleName: string) => {
+    if (ruleName.toLowerCase().includes('happy hour') || ruleName.toLowerCase().includes('time')) {
+      return <Clock className="w-4 h-4 text-orange-500" />;
+    }
+    if (ruleName.toLowerCase().includes('bulk') || ruleName.toLowerCase().includes('quantity')) {
+      return <ShoppingCart className="w-4 h-4 text-blue-500" />;
+    }
+    if (ruleName.toLowerCase().includes('vip') || ruleName.toLowerCase().includes('loyalty')) {
+      return <Star className="w-4 h-4 text-purple-500" />;
+    }
+    return <Tag className="w-4 h-4 text-green-500" />;
+  };
 
-  const totalSmartDiscount = totalDiscount;
-  const totalCombinedDiscount = totalSmartDiscount + totalManualDiscount;
-  const finalDiscountPercentage = basePrice > 0 ? (totalCombinedDiscount / basePrice) * 100 : 0;
+  const getDiscountColor = (ruleName: string) => {
+    if (ruleName.toLowerCase().includes('happy hour') || ruleName.toLowerCase().includes('time')) {
+      return 'bg-orange-50 border-orange-200 text-orange-800';
+    }
+    if (ruleName.toLowerCase().includes('bulk') || ruleName.toLowerCase().includes('quantity')) {
+      return 'bg-blue-50 border-blue-200 text-blue-800';
+    }
+    if (ruleName.toLowerCase().includes('vip') || ruleName.toLowerCase().includes('loyalty')) {
+      return 'bg-purple-50 border-purple-200 text-purple-800';
+    }
+    return 'bg-green-50 border-green-200 text-green-800';
+  };
 
   return (
-    <div className="p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-xl border-2 border-blue-200 cursor-pointer hover:shadow-lg transition-all duration-200">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <Zap className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <div className="font-bold text-blue-900 text-lg">Smart Pricing & Discounts</div>
-            <div className="text-sm text-blue-700">
-              {appliedDiscounts.length} auto-discount{appliedDiscounts.length !== 1 ? 's' : ''} • {finalDiscountPercentage.toFixed(1)}% total off
-            </div>
-          </div>
+    <div className={`space-y-2 ${className}`}>
+      {/* Main discount summary */}
+      <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+        <div className="flex items-center gap-2">
+          <Percent className="w-5 h-5 text-green-600" />
+          <span className="font-medium text-green-800">
+            Dynamic Pricing Applied
+          </span>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="text-xl font-bold text-blue-900">
-              TZS {finalPrice.toLocaleString()}
-            </div>
-            <div className="text-sm text-blue-600 line-through">
-              TZS {basePrice.toLocaleString()}
-            </div>
+        <div className="text-right">
+          <div className="text-lg font-bold text-green-900">
+            {discountPercentage.toFixed(1)}% off
           </div>
-          <div className="flex items-center gap-2">
-            {onOpenSettings && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenSettings();
-                }}
-                className="p-2 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                title="Open POS Settings"
-              >
-                <Settings className="w-4 h-4" />
-              </button>
-            )}
-            <ChevronDown className="w-5 h-5 text-blue-600" />
+          <div className="text-sm text-green-700">
+            Save {totalDiscount.toLocaleString()} TZS
           </div>
         </div>
       </div>
+
+      {/* Price breakdown */}
+      <div className="space-y-1 text-sm">
+        <div className="flex justify-between">
+          <span className="text-gray-600">Original Price:</span>
+          <span className="line-through text-gray-500">{basePrice.toLocaleString()} TZS</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-600">Discount:</span>
+          <span className="text-red-600">-{totalDiscount.toLocaleString()} TZS</span>
+        </div>
+        <div className="flex justify-between font-bold text-lg border-t pt-1">
+          <span>Final Price:</span>
+          <span className="text-green-600">{finalPrice.toLocaleString()} TZS</span>
+        </div>
+      </div>
+
+      {/* Individual discount breakdown */}
+      {showBreakdown && appliedDiscounts.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-medium text-gray-700">Applied Discounts:</h4>
+          <div className="space-y-1">
+            {appliedDiscounts.map((discount, index) => (
+              <div
+                key={`${discount.ruleId}-${index}`}
+                className={`flex items-center justify-between p-2 rounded-md border ${getDiscountColor(discount.ruleName)}`}
+              >
+                <div className="flex items-center gap-2">
+                  {getDiscountIcon(discount.ruleName)}
+                  <span className="text-sm font-medium">
+                    {discount.ruleName}
+                  </span>
+                </div>
+                <div className="text-sm font-bold">
+                  -{discount.discountAmount.toLocaleString()} TZS
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

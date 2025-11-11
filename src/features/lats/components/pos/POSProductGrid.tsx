@@ -1,8 +1,7 @@
 import React, { memo, useEffect, useState } from 'react';
 import VariantProductCard from './VariantProductCard';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import GlassButton from '../../../shared/components/ui/GlassButton';
 import { RealTimeStockService } from '../../lib/realTimeStock';
+import { useGeneralSettingsContext } from '../../../../context/GeneralSettingsContext';
 
 interface POSProductGridProps {
   products: any[];
@@ -21,6 +20,9 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
   onPageChange,
   isLoading = false
 }) => {
+  // Get products per row setting from context
+  const { productsPerRow } = useGeneralSettingsContext();
+  
   // Real-time stock data for all products (BATCH FETCH to avoid N+1 queries)
   const [realTimeStockData, setRealTimeStockData] = useState<Map<string, number>>(new Map());
 
@@ -63,14 +65,23 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
   if (isLoading) {
     return (
       <div className="flex-1 overflow-y-auto">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 p-4">
-          {Array.from({ length: 12 }).map((_, index) => (
-            <div key={index} className="animate-pulse">
-              <div className="bg-gray-200 rounded-lg h-48 mb-2"></div>
-              <div className="bg-gray-200 rounded h-4 mb-2"></div>
-              <div className="bg-gray-200 rounded h-4 w-2/3"></div>
-            </div>
-          ))}
+        <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
+          <div 
+            style={{
+              display: 'grid',
+              gridTemplateColumns: `repeat(${productsPerRow}, 1fr)`,
+              gap: 'clamp(1rem, 2vw, 1.5rem)',
+              gridAutoRows: '1fr'
+            }}
+          >
+            {Array.from({ length: 12 }).map((_, index) => (
+              <div key={index} className="animate-pulse w-full h-full">
+                <div className="bg-gray-200 rounded-lg h-48 md:h-56 mb-3"></div>
+                <div className="bg-gray-200 rounded h-4 mb-2"></div>
+                <div className="bg-gray-200 rounded h-4 w-2/3"></div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -90,70 +101,36 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {/* Products Grid */}
-      <div className="pos-product-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 p-4">
-        {products.map((product) => (
-          <VariantProductCard
-            key={product.id}
-            product={product}
-            onAddToCart={handleAddToCart}
-            compact={true}
-            realTimeStockData={realTimeStockData}
-          />
-        ))}
+      {/* Products Grid - Controlled by products per row setting */}
+      <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
+        <div 
+          className="pos-product-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `repeat(${productsPerRow}, 1fr)`,
+            gap: 'clamp(1rem, 2vw, 1.5rem)',
+            gridAutoRows: '1fr'
+          }}
+        >
+          {products.map((product) => (
+            <VariantProductCard
+              key={product.id}
+              product={product}
+              onAddToCart={handleAddToCart}
+              compact={true}
+              realTimeStockData={realTimeStockData}
+              className="w-full h-full"
+            />
+          ))}
+        </div>
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
-          <div className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <GlassButton
-              onClick={() => onPageChange(currentPage - 1)}
-              disabled={currentPage <= 1}
-              variant="outline"
-              size="sm"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous
-            </GlassButton>
-            
-            <div className="flex items-center gap-1">
-              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                const page = i + 1;
-                const isActive = page === currentPage;
-                
-                return (
-                  <button
-                    key={page}
-                    onClick={() => onPageChange(page)}
-                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
-            </div>
-            
-            <GlassButton
-              onClick={() => onPageChange(currentPage + 1)}
-              disabled={currentPage >= totalPages}
-              variant="outline"
-              size="sm"
-            >
-              Next
-              <ChevronRight className="w-4 h-4" />
-            </GlassButton>
-          </div>
+      {/* Product Count Display */}
+      <div className="flex items-center justify-center px-4 py-3 border-t border-gray-200">
+        <div className="text-sm text-gray-600">
+          Showing {products.length} products
         </div>
-      )}
+      </div>
     </div>
   );
 });

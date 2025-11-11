@@ -103,8 +103,22 @@ const ProductCard: React.FC<ProductCardProps> = ({
     loadImages();
   }, [product?.id, product.images]);
 
-  // Get primary variant (first active variant or first variant)
-  const primaryVariant = product.variants.find(v => v.isActive) || product.variants[0];
+  // Smart variant selection: prefer variant with stock, then highest price
+  const primaryVariant = (() => {
+    if (!product.variants || product.variants.length === 0) return null;
+    
+    // Try to find variant with stock
+    const variantWithStock = product.variants.find(v => v.stockQuantity > 0);
+    if (variantWithStock) return variantWithStock;
+    
+    // If no stock, use variant with highest price
+    const variantWithPrice = [...product.variants]
+      .sort((a, b) => (b.price || 0) - (a.price || 0))[0];
+    if (variantWithPrice && variantWithPrice.price > 0) return variantWithPrice;
+    
+    // Fallback to first variant
+    return product.variants[0];
+  })();
   
   // Calculate product stats
   const totalStock = product.variants.reduce((sum, v) => sum + v.stockQuantity, 0);
@@ -192,7 +206,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
           {/* Product Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-sm font-medium text-lats-text truncate">
+              <h3 className="text-sm font-medium text-lats-text truncate" title={product.name}>
                 {product.name}
               </h3>
               {!product.isActive && (
@@ -252,7 +266,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-lg font-semibold text-lats-text truncate">
+              <h3 className="text-lg font-semibold text-lats-text truncate" title={product.name}>
                 {product.name}
               </h3>
               {product.isFeatured && (
@@ -422,7 +436,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
       {/* Product Info */}
       <div className="space-y-2">
-        <h3 className="text-lg font-semibold text-lats-text line-clamp-2">
+        <h3 className="text-lg font-semibold text-lats-text line-clamp-2" title={product.name}>
           {product.name}
         </h3>
         

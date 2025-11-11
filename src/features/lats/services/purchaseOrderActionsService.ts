@@ -37,22 +37,43 @@ export class PurchaseOrderActionsService {
   // ===========================================
   
   /**
-   * Delete a purchase order (sent orders only - not received)
+   * Delete a purchase order (draft, sent, cancelled orders - not received)
    */
   static async deleteOrder(orderId: string): Promise<ActionResult> {
     try {
+      // First check the order status
+      const { data: order, error: fetchError } = await supabase
+        .from('lats_purchase_orders')
+        .select('status')
+        .eq('id', orderId)
+        .single();
+
+      if (fetchError) {
+        console.error('Error fetching order:', fetchError);
+        return { success: false, message: 'Order not found' };
+      }
+
+      // Only allow deletion of orders that haven't been received
+      const deletableStatuses = ['draft', 'pending_approval', 'sent', 'cancelled'];
+      if (!deletableStatuses.includes(order.status)) {
+        return { 
+          success: false, 
+          message: `Cannot delete order with status '${order.status}'. Only draft, pending approval, sent, or cancelled orders can be deleted.` 
+        };
+      }
+
+      // Delete the order
       const { error } = await supabase
         .from('lats_purchase_orders')
         .delete()
-        .eq('id', orderId)
-        .eq('status', 'sent');
+        .eq('id', orderId);
 
       if (error) throw error;
       
       return { success: true, message: 'Order deleted successfully' };
     } catch (error) {
       console.error('Error deleting order:', error);
-      return { success: false, message: 'Failed to delete order - only sent orders can be deleted' };
+      return { success: false, message: 'Failed to delete order' };
     }
   }
 
@@ -423,11 +444,14 @@ export class PurchaseOrderActionsService {
         return;
       }
 
+      // Convert details to JSON string for PostgreSQL TEXT column
+      const detailsString = typeof details === 'string' ? details : JSON.stringify(details);
+
       // Try using the helper function first (more secure)
       const { data: auditId, error: functionError } = await supabase.rpc('log_purchase_order_audit', {
         p_purchase_order_id: orderId,
         p_action: action,
-        p_details: details,
+        p_details: detailsString,
         p_user_id: user.id
       });
 
@@ -440,7 +464,7 @@ export class PurchaseOrderActionsService {
           .insert({
             purchase_order_id: orderId,
             action: action,
-            details: details,
+            details: detailsString,
             user_id: user.id,
             created_by: user.id,
             timestamp: new Date().toISOString()

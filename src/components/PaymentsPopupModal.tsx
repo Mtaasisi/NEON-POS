@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, CreditCard, DollarSign, AlertCircle, CheckCircle2, Plus, Edit3 } from 'lucide-react';
+import { X, Loader2, CreditCard, DollarSign, AlertCircle, CheckCircle2, Plus, Edit3, RefreshCw, QrCode } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePaymentMethodsContext } from '../context/PaymentMethodsContext';
 import { usePaymentAccounts } from '../hooks/usePaymentAccounts';
@@ -8,6 +8,8 @@ import PaymentMethodIcon from './PaymentMethodIcon';
 import { devicePriceService } from '../lib/devicePriceService';
 import { toast } from 'react-hot-toast';
 import { Currency, DEFAULT_CURRENCY, formatCurrencyWithFlag, SUPPORTED_CURRENCIES } from '../lib/currencyUtils';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
+import { supabase } from '../lib/supabaseClient';
 
 interface PaymentsPopupModalProps {
   isOpen: boolean;
@@ -53,11 +55,61 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const { paymentMethods, loading: methodsLoading } = usePaymentMethodsContext();
-  const { paymentAccounts } = usePaymentAccounts(); // Remove loading state to avoid conflicts
+  const { paymentAccounts, refreshPaymentAccounts } = usePaymentAccounts(); // Add refresh function
   
   // Load payment methods directly if context is not available
   const [directPaymentMethods, setDirectPaymentMethods] = useState<any[]>([]);
   const [directLoading, setDirectLoading] = useState(false);
+  const [isRefreshingBalances, setIsRefreshingBalances] = useState(false);
+  
+  // Supplier payment information for Chinese suppliers
+  const [supplierPaymentInfo, setSupplierPaymentInfo] = useState<{
+    wechat_qr_code?: string;
+    alipay_qr_code?: string;
+    bank_account_details?: string;
+    wechat?: string;
+    country?: string;
+  } | null>(null);
+  const [showPaymentQR, setShowPaymentQR] = useState(false);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+
+  // Load supplier payment information for Chinese suppliers
+  useEffect(() => {
+    const loadSupplierPaymentInfo = async () => {
+      if (!isOpen || !customerId || paymentType !== 'cash_out') {
+        setSupplierPaymentInfo(null);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('lats_suppliers')
+          .select('wechat_qr_code, alipay_qr_code, bank_account_details, wechat, country')
+          .eq('id', customerId)
+          .single();
+
+        if (error) {
+          console.error('Error fetching supplier payment info:', error);
+          return;
+        }
+
+        // Only set payment info if supplier is from China and has payment data
+        if (data && data.country === 'China' && 
+            (data.wechat_qr_code || data.alipay_qr_code || data.bank_account_details)) {
+          setSupplierPaymentInfo(data);
+        } else {
+          setSupplierPaymentInfo(null);
+        }
+      } catch (error) {
+        console.error('Error loading supplier payment info:', error);
+        setSupplierPaymentInfo(null);
+      }
+    };
+
+    loadSupplierPaymentInfo();
+  }, [isOpen, customerId, paymentType]);
 
   useEffect(() => {
     // If context is empty (outside provider), load payment methods directly
@@ -93,7 +145,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
   const [priceEditReason, setPriceEditReason] = useState('');
   const [isEditingAmount, setIsEditingAmount] = useState(false);
 
-  // Reset form when modal opens
+  // Reset form and REFRESH BALANCES when modal opens
   useEffect(() => {
     if (isOpen) {
       setSelectedMethod('');
@@ -106,15 +158,41 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
       setShowPriceEdit(false);
       setNewPrice('');
       setPriceEditReason('');
+      
+      // 🔄 AUTOMATIC BALANCE REFRESH when modal opens
+      console.log('💳 Payment modal opened - Refreshing account balances...');
+      const refreshBalances = async () => {
+        setIsRefreshingBalances(true);
+        try {
+          if (refreshPaymentAccounts) {
+            await refreshPaymentAccounts();
+            console.log('✅ Account balances refreshed successfully');
+          } else {
+            // Fallback: reload payment accounts directly
+            console.log('⚠️ Using fallback balance refresh');
+            import('../lib/financeAccountService').then(({ financeAccountService }) => {
+              financeAccountService.getPaymentMethods().then(methods => {
+                console.log('✅ Balances loaded via fallback:', methods.map(m => ({
+                  name: m.name,
+                  balance: m.balance,
+                  currency: m.currency
+                })));
+              });
+            });
+          }
+        } catch (error) {
+          console.error('❌ Failed to refresh balances:', error);
+        } finally {
+          setIsRefreshingBalances(false);
+        }
+      };
+      
+      refreshBalances();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  // Calculate totals
-  const totalPaid = paymentEntries.reduce((sum, entry) => sum + entry.amount, 0);
-  const customerPaymentAmount = customAmount ? Number(customAmount) : totalPaid;
-  const remainingAmount = amount - totalPaid;
-
-  // Calculate TZS conversion
+  // Calculate TZS conversion helper
   const calculateTZSAmount = (amount: number, currency?: string, exchangeRate?: number) => {
     if (!currency || currency === 'TZS' || !exchangeRate || exchangeRate === 1.0) {
       return null; // No conversion needed
@@ -122,8 +200,16 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
     return Math.round(amount * exchangeRate);
   };
 
+  // Calculate TZS amount first (before using it)
   const amountInTZS = calculateTZSAmount(customAmount ? Number(customAmount) : amount, currency, exchangeRate);
   const showConversion = currency && currency !== 'TZS' && exchangeRate && exchangeRate > 1;
+
+  // Calculate totals (now that amountInTZS is defined)
+  const totalPaid = paymentEntries.reduce((sum, entry) => sum + entry.amount, 0);
+  const customerPaymentAmount = customAmount ? Number(customAmount) : totalPaid;
+  // For remaining amount calculation, use TZS amount if available
+  const baseAmount = amountInTZS || amount;
+  const remainingAmount = baseAmount - totalPaid;
 
   // Get the currency for display
   const displayCurrency = currency || 'TZS';
@@ -239,10 +325,31 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         toast.error('Payment amount exceeds required amount');
         return;
       }
+
+      // Check balance for each payment entry (cash_out only)
+      if (paymentType === 'cash_out') {
+        for (const entry of paymentEntries) {
+          const account = paymentAccounts.find(acc => acc.id === entry.accountId);
+          if (account && account.balance < entry.amount) {
+            toast.error(`Insufficient balance in ${account.name}. Available: ${account.balance.toLocaleString()}, Required: ${entry.amount.toLocaleString()}`);
+            return;
+          }
+        }
+      }
     } else {
       if (!selectedMethod) {
         toast.error('Please select a payment method');
         return;
+      }
+
+      // Check balance for single payment (cash_out only)
+      if (paymentType === 'cash_out') {
+        const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
+        const checkAmount = amountInTZS || amount;  // Use TZS amount if available
+        if (account && account.balance < checkAmount) {
+          toast.error(`Insufficient balance in ${account.name}. Available: ${account.balance.toLocaleString()} ${account.currency || 'TZS'}, Required: ${checkAmount.toLocaleString()}`);
+          return;
+        }
       }
     }
 
@@ -335,7 +442,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         }
 
         // Validate amount before sending
-        const paymentAmount = typeof amount === 'number' ? amount : parseFloat(String(amount));
+        // Use TZS converted amount if available (for foreign currency), otherwise use original amount
+        const paymentAmount = amountInTZS || (typeof amount === 'number' ? amount : parseFloat(String(amount)));
         
         if (isNaN(paymentAmount) || paymentAmount <= 0) {
           toast.error(`Invalid payment amount: ${amount}. Please refresh and try again.`);
@@ -348,12 +456,17 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           methodId: method.id,
           account: account.name,
           accountId: account.id,
-          amount: paymentAmount
+          amount: paymentAmount,
+          originalAmount: amount,
+          originalCurrency: currency,
+          convertedToTZS: amountInTZS ? true : false
         });
 
         const paymentData = [{
-          amount: paymentAmount,
-          currency: currency || selectedCurrency.code,  // Use PO currency if provided
+          amount: paymentAmount,  // Always in TZS
+          currency: 'TZS',  // Always process payments in TZS
+          originalCurrency: currency,  // Track original currency for reference
+          originalAmount: amount,  // Track original amount for reference
           paymentMethod: method.name,
           paymentMethodId: method.id,
           paymentAccountId: account.id,
@@ -393,16 +506,12 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className={`flex items-center justify-between p-6 border-b border-gray-100 ${
-          paymentType === 'cash_out' 
-            ? 'bg-gradient-to-r from-red-50 to-orange-50' 
-            : 'bg-gradient-to-r from-blue-50 to-indigo-50'
-        }`}>
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-white">
           <div className="flex items-center gap-3">
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
               paymentType === 'cash_out'
-                ? 'bg-gradient-to-br from-red-500 to-orange-600'
-                : 'bg-gradient-to-br from-blue-500 to-indigo-600'
+                ? 'bg-red-500'
+                : 'bg-blue-500'
             }`}>
               <CreditCard className="w-6 h-6 text-white" />
             </div>
@@ -429,16 +538,12 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         {/* Content - Scrollable */}
         <div className="flex-1 p-6 overflow-y-auto">
           {/* Payment Summary */}
-          <div className={`mb-6 p-6 rounded-xl border ${
-            paymentType === 'cash_out'
-              ? 'bg-gradient-to-br from-red-50 to-orange-50 border-red-200'
-              : 'bg-gradient-to-br from-green-50 to-emerald-50 border-green-200'
-          }`}>
+          <div className="mb-6 p-6 rounded-xl border bg-white border-gray-200">
             <div className="text-center">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
                 paymentType === 'cash_out'
-                  ? 'bg-gradient-to-br from-red-500 to-orange-600'
-                  : 'bg-gradient-to-br from-green-500 to-emerald-600'
+                  ? 'bg-red-500'
+                  : 'bg-green-500'
               }`}>
                 <DollarSign className="w-8 h-8 text-white" />
               </div>
@@ -485,7 +590,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                       <div className="flex-1 px-4 py-4 h-full">
                         <input
                           type="text"
-                          value={customAmount ? Number(customAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : ''}
+                          value={customAmount ? Number(customAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
                           onChange={(e) => {
                             const value = e.target.value.replace(/,/g, '');
                             if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
@@ -493,7 +598,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                             }
                           }}
                           className="w-full border-0 focus:outline-none focus:ring-0 text-3xl font-bold text-gray-900 placeholder-gray-400 bg-transparent h-full"
-                          placeholder="0.00"
+                          placeholder="0"
                           autoFocus
                         />
                       </div>
@@ -521,7 +626,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
               ) : (
                 <div>
                   <p className="text-3xl font-bold text-green-600 mb-2">
-                    {currencySymbol} {(customAmount ? Number(customAmount) : amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {currencySymbol} {(customAmount ? Number(customAmount) : amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </p>
                   <p className="text-sm text-gray-600 mb-2">
                     {displayCurrency} • Amount to Pay
@@ -536,10 +641,10 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                       </div>
                       <div className="text-center space-y-1">
                         <p className="text-xs text-blue-600">
-                          Exchange Rate: 1 {currency} = {exchangeRate?.toLocaleString()} TZS
+                          Exchange Rate: 1 {currency} = {exchangeRate?.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} TZS
                         </p>
                         <p className="text-lg font-bold text-blue-900">
-                          ≈ TZS {amountInTZS.toLocaleString()}
+                          ≈ TZS {amountInTZS.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                         </p>
                         <p className="text-xs text-blue-600 italic">
                           Payment will be processed in TZS
@@ -557,6 +662,85 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                       <p className="text-xs text-orange-600 mt-1">
                         The payment amount will be deducted from your selected payment account
                       </p>
+                    </div>
+                  )}
+
+                  {/* Supplier Payment QR Codes for Chinese Suppliers */}
+                  {supplierPaymentInfo && paymentType === 'cash_out' && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowPaymentQR(!showPaymentQR)}
+                        className="w-full p-3 bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-200 rounded-lg hover:from-red-100 hover:to-red-200 transition-all"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <QrCode className="w-4 h-4 text-red-600" />
+                            <span className="text-sm font-semibold text-red-900">
+                              🇨🇳 Supplier Payment QR Codes
+                            </span>
+                          </div>
+                          <span className="text-xs text-red-600">
+                            {showPaymentQR ? 'Hide' : 'Show'}
+                          </span>
+                        </div>
+                      </button>
+
+                      {showPaymentQR && (
+                        <div className="mt-2 p-4 bg-white border-2 border-red-200 rounded-lg space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* WeChat Pay QR */}
+                            {supplierPaymentInfo.wechat_qr_code && (
+                              <div className="text-center">
+                                <div className="mb-2 flex items-center justify-center gap-2">
+                                  <div className="w-4 h-4 bg-[#09B83E] rounded flex items-center justify-center">
+                                    <svg viewBox="0 0 24 24" className="w-3 h-3" fill="white">
+                                      <path d="M8.5 6c-2.8 0-5 1.9-5 4.3 0 1.4.7 2.6 1.8 3.4l-.5 1.5 1.7-.9c.6.2 1.3.3 2 .3 2.8 0 5-1.9 5-4.3S11.3 6 8.5 6zm-1 5.8c-.4 0-.8-.3-.8-.8s.3-.8.8-.8.8.3.8.8-.4.8-.8.8zm2.5 0c-.4 0-.8-.3-.8-.8s.3-.8.8-.8.8.3.8.8-.4.8-.8.8z"/>
+                                      <path d="M15.5 11c-.3 0-.5 0-.8.1 0 .1 0 .3 0 .4 0 2.9-2.6 5.2-5.7 5.2-.4 0-.7 0-1.1-.1 1 1.3 2.8 2.2 4.9 2.2.5 0 1-.1 1.5-.2l1.3.7-.4-1.2c.9-.6 1.5-1.6 1.5-2.7 0-1.8-1.5-3.4-3.2-4.4z"/>
+                                    </svg>
+                                  </div>
+                                  <span className="text-xs font-semibold text-gray-700">WeChat Pay</span>
+                                </div>
+                                <img 
+                                  src={supplierPaymentInfo.wechat_qr_code} 
+                                  alt="WeChat QR" 
+                                  className="w-32 h-32 mx-auto border-2 border-green-300 rounded-lg"
+                                />
+                                {supplierPaymentInfo.wechat && (
+                                  <p className="text-xs text-gray-600 mt-1">{supplierPaymentInfo.wechat}</p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Alipay QR */}
+                            {supplierPaymentInfo.alipay_qr_code && (
+                              <div className="text-center">
+                                <div className="mb-2 flex items-center justify-center gap-2">
+                                  <div className="w-4 h-4 bg-[#1677FF] rounded flex items-center justify-center">
+                                    <span className="text-white text-[8px] font-bold">支</span>
+                                  </div>
+                                  <span className="text-xs font-semibold text-gray-700">Alipay</span>
+                                </div>
+                                <img 
+                                  src={supplierPaymentInfo.alipay_qr_code} 
+                                  alt="Alipay QR" 
+                                  className="w-32 h-32 mx-auto border-2 border-blue-300 rounded-lg"
+                                />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Bank Account */}
+                          {supplierPaymentInfo.bank_account_details && (
+                            <div className="pt-3 border-t border-gray-200">
+                              <p className="text-xs font-semibold text-gray-700 mb-1">Bank Account:</p>
+                              <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
+                                {supplierPaymentInfo.bank_account_details}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -616,7 +800,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                     )}
                     
                     {/* Payment Summary */}
-                    <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+                    <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
                       <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                         <DollarSign className="w-4 h-4 text-green-600" />
                         Payment Summary
@@ -654,20 +838,20 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             <div className="flex items-center justify-center gap-4">
               <button
                 onClick={() => setIsMultipleMode(false)}
-                className={`px-6 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${
+                className={`px-6 py-3 rounded-xl font-medium text-sm transition-all duration-200 border-2 ${
                   !isMultipleMode 
-                    ? (paymentType === 'cash_out' ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/30')
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? (paymentType === 'cash_out' ? 'bg-white border-red-500 ring-4 ring-red-200 shadow-xl' : 'bg-white border-blue-500 ring-4 ring-blue-200 shadow-xl')
+                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
                 }`}
               >
                 💳 Single {paymentType === 'cash_out' ? 'Payment' : 'Payment'}
               </button>
               <button
                 onClick={() => setIsMultipleMode(true)}
-                className={`px-6 py-3 rounded-xl font-medium text-sm transition-all duration-200 ${
+                className={`px-6 py-3 rounded-xl font-medium text-sm transition-all duration-200 border-2 ${
                   isMultipleMode 
-                    ? (paymentType === 'cash_out' ? 'bg-red-600 text-white shadow-lg shadow-red-500/30' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/30')
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    ? (paymentType === 'cash_out' ? 'bg-white border-red-500 ring-4 ring-red-200 shadow-xl' : 'bg-white border-blue-500 ring-4 ring-blue-200 shadow-xl')
+                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
                 }`}
               >
                 💰 Split {paymentType === 'cash_out' ? 'Payment' : 'Payment'}
@@ -675,6 +859,14 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             </div>
           </div>
 
+
+          {/* Balance Refresh Indicator */}
+          {isRefreshingBalances && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-blue-700">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span className="text-sm font-medium">Refreshing account balances...</span>
+            </div>
+          )}
 
           {/* Payment Methods */}
           {isLoading ? (
@@ -696,57 +888,119 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                     )}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {displayPaymentMethods && displayPaymentMethods.length > 0 ? displayPaymentMethods.map((method) => (
-                      <button
-                        key={method.id}
-                        onClick={() => setSelectedMethod(method.id)}
-                        className={`p-4 rounded-xl border-2 transition-all duration-200 ${
-                          selectedMethod === method.id
-                            ? 'border-blue-500 bg-blue-50 shadow-lg shadow-blue-500/20'
-                            : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <PaymentMethodIcon 
-                            type={method.type} 
-                            name={method.name} 
-                            className="w-16 h-16" 
-                          />
-                          <div className="flex-1">
-                            <p className="font-semibold text-gray-900">{method.name}</p>
-                            {paymentType === 'cash_out' && (
-                              <div className="mt-1">
-                                {(() => {
-                                  const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
-                                  if (account) {
-                                    return (
-                                      <div className="text-xs text-gray-600">
-                                        <span className="font-medium">Balance:</span> {account.balance.toLocaleString()} {account.currency || 'TZS'}
-                                        {account.balance < amount && (
-                                          <span className="text-red-600 ml-1">⚠️ Insufficient</span>
-                                        )}
-                                      </div>
-                                    );
-                                  }
-                                  return null;
-                                })()}
+                    {displayPaymentMethods && displayPaymentMethods.length > 0 ? displayPaymentMethods.map((method) => {
+                      const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
+                      // Use TZS amount if available (for foreign currency), otherwise use the amount passed
+                      const paymentAmount = amountInTZS || amount;
+                      const hasInsufficientBalance = paymentType === 'cash_out' && account && account.balance < paymentAmount;
+                      const hasSufficientBalance = paymentType === 'cash_out' && account && account.balance >= paymentAmount;
+                      
+                      return (
+                        <button
+                          key={method.id}
+                          onClick={() => {
+                            if (!hasInsufficientBalance) {
+                              setSelectedMethod(method.id);
+                            } else {
+                              toast.error(`Insufficient balance in ${account.name}. Please select another account or add funds.`);
+                            }
+                          }}
+                          disabled={hasInsufficientBalance}
+                          className={`p-4 rounded-xl border-2 transition-all duration-200 ${
+                            hasInsufficientBalance
+                              ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed'
+                              : selectedMethod === method.id
+                                ? 'border-blue-500 bg-white ring-4 ring-blue-200 shadow-xl'
+                                : hasSufficientBalance
+                                  ? 'border-green-300 bg-green-50 hover:border-green-400 hover:shadow-md'
+                                  : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <PaymentMethodIcon 
+                              type={method.type} 
+                              name={method.name} 
+                              className="w-16 h-16" 
+                            />
+                            <div className="flex-1 text-left">
+                              <p className="font-semibold text-gray-900">{method.name}</p>
+                              {account && (
+                                <div className="mt-1">
+                                  <div className={`text-xs ${hasInsufficientBalance ? 'text-red-700' : 'text-gray-600'}`}>
+                                    <span className="font-medium">Balance:</span> {account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                                  </div>
+                                  {paymentType === 'cash_out' && hasInsufficientBalance && (
+                                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600 font-medium">
+                                      <AlertCircle className="w-3 h-3" />
+                                      Insufficient (Need: {paymentAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })})
+                                    </div>
+                                  )}
+                                  {paymentType === 'cash_out' && hasSufficientBalance && (
+                                    <div className="mt-1 flex items-center gap-1 text-xs text-green-600 font-medium">
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      Sufficient Funds
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            {selectedMethod === method.id && !hasInsufficientBalance && (
+                              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                                <CheckCircle2 className="w-3 h-3 text-white" />
                               </div>
                             )}
                           </div>
-                          {selectedMethod === method.id && (
-                            <div className="w-5 h-5 bg-blue-600 rounded-full flex items-center justify-center">
-                              <CheckCircle2 className="w-3 h-3 text-white" />
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    )) : (
+                        </button>
+                      );
+                    }) : (
                       <div className="col-span-2 text-center py-8">
                         <div className="text-gray-500 mb-2">⚠️ No payment methods available</div>
                         <div className="text-sm text-gray-400">Please contact administrator to set up payment methods</div>
                       </div>
                     )}
                   </div>
+                  
+                  {/* Selected Account Balance Display */}
+                  {selectedMethod && (() => {
+                    const method = displayPaymentMethods.find(m => m.id === selectedMethod);
+                    const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
+                    if (!method || !account) return null;
+                    
+                    // Use TZS amount if available, otherwise use the amount passed
+                    const paymentAmount = amountInTZS || amount;
+                    const newBalance = account.balance - paymentAmount;
+                    
+                    return (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl shadow-md">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-gray-700">Selected Account:</span>
+                            <span className="text-base font-bold text-blue-900">{method.name}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-gray-700">Current Balance:</span>
+                            <span className="text-lg font-bold text-green-600">
+                              {account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-gray-700">Amount to {paymentType === 'cash_out' ? 'Pay' : 'Receive'}:</span>
+                            <span className="text-lg font-bold text-orange-600">
+                              {paymentAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                            </span>
+                          </div>
+                          <div className="pt-2 border-t border-blue-200">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-gray-700">Balance After Payment:</span>
+                              <span className={`text-xl font-bold ${newBalance >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                                {newBalance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 /* Multiple Payment Mode */
@@ -757,7 +1011,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                   </div>
                   
                   {/* Add Payment Section */}
-                  <div className="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                  <div className="p-5 bg-white rounded-xl border border-gray-200">
                     <h4 className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
                       <Plus className="w-4 h-4" />
                       Add Another Payment Method
@@ -785,11 +1039,15 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                           className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                            <option value="">Choose method</option>
-                           {paymentMethods.map((method) => (
-                             <option key={method.id} value={method.id}>
-                               {method.name} - Accept {method.currency} payments
-                             </option>
-                           ))}
+                           {paymentMethods.map((method) => {
+                             const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
+                             return (
+                               <option key={method.id} value={method.id}>
+                                 {method.name} - Accept {method.currency} payments
+                                 {account ? ` (Balance: ${account.balance.toLocaleString()} ${account.currency || 'TZS'})` : ''}
+                               </option>
+                             );
+                           })}
                         </select>
                       </div>
                       <div className="flex items-end">
@@ -1002,11 +1260,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         </div>
 
         {/* Fixed Footer */}
-        <div className={`flex items-center justify-between p-6 border-t border-gray-100 flex-shrink-0 ${
-          paymentType === 'cash_out'
-            ? 'bg-gradient-to-r from-gray-50 to-red-50'
-            : 'bg-gradient-to-r from-gray-50 to-blue-50'
-        }`}>
+        <div className="flex items-center justify-between p-6 border-t border-gray-100 flex-shrink-0 bg-white">
           <div className="text-sm text-gray-600">
             {remainingAmount > 0 ? (
               <span className="text-orange-600 flex items-center gap-1">
@@ -1024,7 +1278,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                 {(() => {
                   const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
                   if (account) {
-                    const newBalance = account.balance - (isMultipleMode ? totalPaid : amount);
+                    const paymentAmount = isMultipleMode ? totalPaid : (amountInTZS || amount);
+                    const newBalance = account.balance - paymentAmount;
                     return (
                       <span>
                         Account balance: {account.balance.toLocaleString()} → {newBalance.toLocaleString()} {account.currency || 'TZS'}
@@ -1046,12 +1301,35 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             </button>
             <button
               onClick={handlePayment}
-              disabled={isProcessing || (isMultipleMode ? paymentEntries.length === 0 : !selectedMethod)}
-              className={`px-8 py-3 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 text-sm font-semibold flex items-center gap-2 ${
+              disabled={
+                isProcessing || 
+                (isMultipleMode ? paymentEntries.length === 0 : !selectedMethod) ||
+                // Disable if insufficient balance for cash_out
+                (paymentType === 'cash_out' && !isMultipleMode && selectedMethod && (() => {
+                  const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
+                  const checkAmount = amountInTZS || amount;  // Use TZS amount if available
+                  return account && account.balance < checkAmount;
+                })()) ||
+                (paymentType === 'cash_out' && isMultipleMode && paymentEntries.some(entry => {
+                  const account = paymentAccounts.find(acc => acc.id === entry.accountId);
+                  return account && account.balance < entry.amount;
+                }))
+              }
+              className={`px-8 py-3 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 text-sm font-semibold flex items-center gap-2 ${
                 paymentType === 'cash_out'
-                  ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700 shadow-lg shadow-red-500/25'
-                  : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg shadow-green-500/25'
+                  ? 'bg-red-600 hover:bg-red-700 shadow-lg disabled:hover:bg-gray-400'
+                  : 'bg-green-600 hover:bg-green-700 shadow-lg disabled:hover:bg-gray-400'
               }`}
+              title={
+                paymentType === 'cash_out' && !isMultipleMode && selectedMethod ? (() => {
+                  const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
+                  const checkAmount = amountInTZS || amount;  // Use TZS amount if available
+                  if (account && account.balance < checkAmount) {
+                    return `Insufficient balance: ${account.balance.toLocaleString()} available, ${checkAmount.toLocaleString()} required`;
+                  }
+                  return '';
+                })() : ''
+              }
             >
               {isProcessing ? (
                 <>

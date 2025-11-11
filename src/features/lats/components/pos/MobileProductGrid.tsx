@@ -62,22 +62,23 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
     return (
       <div className="bg-white rounded-sm shadow-sm border border-gray-100 overflow-hidden h-full flex flex-col">
         {/* Product Image */}
-        <div className="relative h-12 sm:h-16 bg-gray-50 flex-shrink-0">
+        <div className="relative h-16 sm:h-20 md:h-24 bg-gray-50 flex-shrink-0">
           <ProductImage
             src={product.thumbnail_url}
             alt={product.name}
             className="w-full h-full object-cover"
             fallback={
               <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                <Package size={12} className="text-gray-400 sm:hidden" />
-                <Package size={14} className="text-gray-400 hidden sm:block" />
+                <Package size={14} className="text-gray-400 sm:hidden" />
+                <Package size={16} className="text-gray-400 hidden sm:block md:hidden" />
+                <Package size={18} className="text-gray-400 hidden md:block" />
               </div>
             }
           />
           
           {/* Stock Badge */}
           {product.stock_quantity !== undefined && (
-            <div className={`absolute top-0 left-0 px-1 py-0.5 rounded-full text-xs font-medium shadow-sm ${
+            <div className={`absolute top-0.5 left-0.5 px-1 sm:px-1.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium shadow-sm ${
               product.stock_quantity > 10 
                 ? 'bg-green-100 text-green-700 border border-green-200' 
                 : product.stock_quantity > 0 
@@ -95,14 +96,14 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
         </div>
 
         {/* Product Info */}
-        <div className="p-1 sm:p-1.5 flex-1 flex flex-col">
+        <div className="p-1.5 sm:p-2 flex-1 flex flex-col">
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 text-xs mb-0.5 line-clamp-2 leading-tight">
+            <h3 className="font-semibold text-gray-900 text-[11px] sm:text-xs mb-0.5 line-clamp-2 leading-tight">
               {product.name}
             </h3>
             
             {product.sku && (
-              <p className="text-xs text-gray-500 mb-0.5 font-mono">SKU: {product.sku}</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 mb-0.5 font-mono">SKU: {product.sku}</p>
             )}
 
             {/* Variants */}
@@ -114,7 +115,7 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
                     const variant = product.variants?.find(v => v.id === e.target.value);
                     setSelectedVariant(variant);
                   }}
-                  className="w-full text-xs border border-gray-200 rounded-sm px-1 py-0.5 touch-input bg-white"
+                  className="w-full text-[10px] sm:text-xs border border-gray-200 rounded-sm px-1 py-0.5 touch-input bg-white"
                 >
                   {product.variants.map(variant => (
                     <option key={variant.id} value={variant.id}>
@@ -127,7 +128,7 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
 
             {/* Price */}
             <div className="flex items-center justify-between mb-1">
-              <span className="font-bold text-green-600 text-xs">
+              <span className="font-bold text-green-600 text-[11px] sm:text-xs">
                 {formatPrice(selectedVariant?.price || product.price)}
               </span>
               
@@ -135,18 +136,20 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
               <div className="flex items-center gap-0.5 bg-gray-50 rounded-sm p-0.5">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="p-0.5 rounded-sm active:bg-gray-200 touch-target"
+                  className="p-0.5 sm:p-1 rounded-sm active:bg-gray-200 touch-target"
                 >
-                  <Minus size={8} />
+                  <Minus size={10} className="sm:hidden" />
+                  <Minus size={12} className="hidden sm:block" />
                 </button>
-                <span className="px-1 py-0.5 bg-white rounded text-xs font-medium min-w-[1rem] text-center border">
+                <span className="px-1 py-0.5 bg-white rounded text-[10px] sm:text-xs font-medium min-w-[1rem] sm:min-w-[1.25rem] text-center border">
                   {quantity}
                 </span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="p-0.5 rounded-sm active:bg-gray-200 touch-target"
+                  className="p-0.5 sm:p-1 rounded-sm active:bg-gray-200 touch-target"
                 >
-                  <Plus size={8} />
+                  <Plus size={10} className="sm:hidden" />
+                  <Plus size={12} className="hidden sm:block" />
                 </button>
               </div>
             </div>
@@ -156,7 +159,7 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
           <button
             onClick={handleAddToCart}
             disabled={product.stock_quantity === 0}
-            className="w-full py-1 bg-blue-500 text-white font-medium rounded-sm active:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-xs touch-button shadow-sm"
+            className="w-full py-1 sm:py-1.5 bg-blue-500 text-white font-medium rounded-sm active:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-[11px] sm:text-xs touch-button shadow-sm"
           >
             {product.stock_quantity === 0 ? 'Out of Stock' : 'Add to Cart'}
           </button>
@@ -246,7 +249,7 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
       </div>
 
       {/* Products Grid/List */}
-      <div className="flex-1 overflow-y-auto p-1.5 mobile-scroll">
+      <div className="flex-1 overflow-y-auto mobile-scroll">
         {isLoading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -258,14 +261,31 @@ const MobileProductGrid: React.FC<MobileProductGridProps> = ({
             <p className="text-sm text-gray-400">Try adjusting your search or filters</p>
           </div>
         ) : (
-          <div className={
-            viewMode === 'grid' 
-              ? 'grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-1' 
-              : 'space-y-1'
-          }>
-            {filteredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+          <div className="w-full max-w-full mx-auto px-1.5 sm:px-2 md:px-3">
+            {viewMode === 'grid' ? (
+              <div 
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
+                  gap: 'clamp(0.5rem, 1.5vw, 1rem)',
+                  gridAutoRows: '1fr'
+                }}
+              >
+                {filteredProducts.map((product) => (
+                  <div key={product.id} className="w-full">
+                    <ProductCard product={product} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {filteredProducts.map((product) => (
+                  <div key={product.id} className="w-full">
+                    <ProductCard product={product} />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

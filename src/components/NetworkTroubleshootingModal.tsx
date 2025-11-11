@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Wifi, WifiOff, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { checkNetworkHealth } from '../utils/networkErrorHandler';
 import { checkConnectionHealth } from '../lib/supabaseClient';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface NetworkTroubleshootingModalProps {
   isOpen: boolean;
@@ -28,6 +29,9 @@ export function NetworkTroubleshootingModal({
   ]);
   const [isRunning, setIsRunning] = useState(false);
   const [overallStatus, setOverallStatus] = useState<'pending' | 'success' | 'error'>('pending');
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   const runTests = async () => {
     setIsRunning(true);

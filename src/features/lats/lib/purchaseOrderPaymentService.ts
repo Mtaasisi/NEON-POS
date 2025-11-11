@@ -59,7 +59,7 @@ class PurchaseOrderPaymentService {
       // Check if purchase order is already fully paid
       const { data: poData, error: poError } = await supabase
         .from('lats_purchase_orders')
-        .select('payment_status, total_amount, total_paid')
+        .select('payment_status, total_amount, total_paid, total_amount_base_currency, currency')
         .eq('id', data.purchaseOrderId)
         .single();
 
@@ -76,15 +76,15 @@ class PurchaseOrderPaymentService {
       }
 
       // Check if this payment would exceed the total amount
-      // Ensure values are numbers for proper comparison
+      // All payments are processed in TZS, so use total_amount_base_currency
       const currentPaid = Number(poData.total_paid) || 0;
-      const totalAmount = Number(poData.total_amount) || 0;
-      const remainingAmount = totalAmount - currentPaid;
+      const totalAmountTZS = Number(poData.total_amount_base_currency || poData.total_amount) || 0;
+      const remainingAmount = totalAmountTZS - currentPaid;
 
-      if (data.amount > remainingAmount) {
+      if (data.amount > remainingAmount + 1) {  // Allow 1 TZS tolerance for rounding
         return {
           success: false,
-          message: `Payment amount (${data.amount}) exceeds remaining balance (${remainingAmount})`
+          message: `Payment amount (${data.amount.toLocaleString()} TZS) exceeds remaining balance (${remainingAmount.toLocaleString()} TZS)`
         };
       }
 
@@ -182,12 +182,14 @@ class PurchaseOrderPaymentService {
           // Update PO totals manually
           const { data: currentPO } = await supabase
             .from('lats_purchase_orders')
-            .select('total_paid, total_amount')
+            .select('total_paid, total_amount, total_amount_base_currency, currency')
             .eq('id', data.purchaseOrderId)
             .single();
           
           const newTotalPaid = (currentPO?.total_paid || 0) + data.amount;
-          const newPaymentStatus = newTotalPaid >= (currentPO?.total_amount || 0) ? 'paid' : 'partial';
+          // Compare with base currency amount since payments are in TZS
+          const totalAmountTZS = currentPO?.total_amount_base_currency || currentPO?.total_amount || 0;
+          const newPaymentStatus = newTotalPaid >= totalAmountTZS ? 'paid' : 'partial';
           
           await supabase
             .from('lats_purchase_orders')
@@ -218,6 +220,46 @@ class PurchaseOrderPaymentService {
             
             // Create account transaction for fallback method
             try {
+              // Get PO details including currency and exchange rate
+              const { data: poData } = await supabase
+                .from('lats_purchase_orders')
+                .select('po_number, supplier_id, currency, exchange_rate, base_currency, total_amount, total_amount_base_currency')
+                .eq('id', data.purchaseOrderId)
+                .single();
+              
+              // Get supplier name
+              let supplierName = 'Unknown Supplier';
+              if (poData?.supplier_id) {
+                const { data: supplierData } = await supabase
+                  .from('lats_suppliers')
+                  .select('name')
+                  .eq('id', poData.supplier_id)
+                  .single();
+                if (supplierData) {
+                  supplierName = supplierData.name;
+                }
+              }
+              
+              const poReference = poData?.po_number || `PO-${data.purchaseOrderId.substring(0, 8)}`;
+              
+              // Calculate expense amount in base currency (TZS)
+              let expenseAmountBaseCurrency = data.amount;
+              const poCurrency = poData?.currency || 'TZS';
+              const poExchangeRate = poData?.exchange_rate || 1.0;
+              const poBaseCurrency = poData?.base_currency || 'TZS';
+              
+              // If PO is in foreign currency, calculate the expense in base currency
+              if (poCurrency !== poBaseCurrency && poExchangeRate !== 1.0) {
+                // data.amount should already be in TZS, so use it directly
+                expenseAmountBaseCurrency = data.amount;
+                
+                console.log(`💱 Currency conversion for expense (Fallback):
+                  - PO Currency: ${poCurrency}
+                  - Payment Amount (TZS): ${data.amount}
+                  - Exchange Rate: ${poExchangeRate}
+                  - Base Currency Expense: ${expenseAmountBaseCurrency} ${poBaseCurrency}`);
+              }
+              
               await supabase
                 .from('account_transactions')
                 .insert({
@@ -226,14 +268,28 @@ class PurchaseOrderPaymentService {
                   amount: data.amount,
                   balance_before: accountData.balance,
                   balance_after: newBalance,
-                  description: `PO Payment: ${data.purchaseOrderId.substring(0, 8)} (Fallback Method)`,
+                  description: `PO Payment: ${poReference} - ${supplierName} (Fallback)`,
                   reference_number: data.reference || `PO-PAY-${paymentId.substring(0, 8)}`,
                   related_entity_type: 'purchase_order_payment',
                   related_entity_id: paymentId,
+                  metadata: {
+                    purchase_order_id: data.purchaseOrderId,
+                    po_reference: poReference,
+                    supplier: supplierName,
+                    payment_method: paymentMethod,
+                    // Currency tracking for proper expense reporting
+                    po_currency: poCurrency,
+                    po_total_amount: poData?.total_amount,
+                    po_total_amount_base_currency: poData?.total_amount_base_currency,
+                    po_exchange_rate: poExchangeRate,
+                    payment_amount_tzs: data.amount,
+                    base_currency: poBaseCurrency,
+                    expense_amount_base_currency: expenseAmountBaseCurrency
+                  },
                   created_by: userId,
                   created_at: new Date().toISOString()
                 });
-              console.log('✅ Account transaction created via fallback');
+              console.log(`✅ Account transaction created via fallback - Spending tracked in base currency: ${expenseAmountBaseCurrency} ${poBaseCurrency}`);
             } catch (txError) {
               console.warn('⚠️ Failed to create account transaction:', txError);
             }
@@ -545,10 +601,10 @@ class PurchaseOrderPaymentService {
       try {
         console.log(`📊 Creating account transaction for PO payment...`);
         
-        // Get PO details for description
+        // Get PO details including currency and exchange rate
         const { data: poData } = await supabase
           .from('lats_purchase_orders')
-          .select('po_number, supplier_id')
+          .select('po_number, supplier_id, currency, exchange_rate, base_currency, total_amount, total_amount_base_currency')
           .eq('id', data.purchaseOrderId)
           .single();
         
@@ -567,13 +623,36 @@ class PurchaseOrderPaymentService {
         
         const poReference = poData?.po_number || `PO-${data.purchaseOrderId.substring(0, 8)}`;
         
-        // Create account transaction record
+        // Calculate expense amount in base currency (TZS)
+        // Note: data.amount is already in TZS after conversion in PaymentsPopupModal
+        const expenseAmountBaseCurrency = data.amount;
+        const poCurrency = poData?.currency || 'TZS';
+        const poExchangeRate = poData?.exchange_rate || 1.0;
+        const poBaseCurrency = poData?.base_currency || 'TZS';
+        
+        // Log currency information for tracking
+        if (poCurrency !== poBaseCurrency && poExchangeRate !== 1.0) {
+          const totalAmountTZS = poData?.total_amount_base_currency || 0;
+          const paymentPercentage = totalAmountTZS > 0 ? (data.amount / totalAmountTZS) * 100 : 0;
+          
+          console.log(`💱 Multi-currency PO payment:
+            - PO Currency: ${poCurrency}
+            - PO Total (Base): ${totalAmountTZS} ${poBaseCurrency}
+            - Exchange Rate: ${poExchangeRate}
+            - Payment Amount (TZS): ${data.amount}
+            - Expense Tracked: ${expenseAmountBaseCurrency} ${poBaseCurrency}
+            - Payment Percentage: ${paymentPercentage.toFixed(2)}%`);
+        } else {
+          console.log(`💰 Same currency transaction - Payment: ${expenseAmountBaseCurrency} ${poBaseCurrency}`);
+        }
+        
+        // Create account transaction record with proper currency information
         const { error: transactionError } = await supabase
           .from('account_transactions')
           .insert({
             account_id: data.paymentAccountId,
             transaction_type: 'expense', // This is spending/expense
-            amount: requiredAmount,
+            amount: requiredAmount, // Amount deducted from account
             balance_before: accountBalance,
             balance_after: newBalance,
             description: `PO Payment: ${poReference} - ${supplierName}`,
@@ -585,7 +664,17 @@ class PurchaseOrderPaymentService {
               po_reference: poReference,
               supplier: supplierName,
               payment_method: data.paymentMethod,
-              account_name: paymentAccount.name
+              account_name: paymentAccount.name,
+              // Currency tracking for proper expense reporting
+              po_currency: poCurrency,
+              po_total_amount: poData?.total_amount,
+              po_total_amount_base_currency: poData?.total_amount_base_currency,
+              po_exchange_rate: poExchangeRate,
+              payment_amount_tzs: data.amount,
+              base_currency: poBaseCurrency,
+              expense_amount_base_currency: expenseAmountBaseCurrency,
+              account_currency: paymentAccount.currency,
+              account_amount: requiredAmount
             },
             created_by: validUser?.id || '00000000-0000-0000-0000-000000000001',
             created_at: new Date().toISOString()
@@ -594,7 +683,7 @@ class PurchaseOrderPaymentService {
         if (transactionError) {
           console.warn('⚠️ Failed to create account transaction:', transactionError);
         } else {
-          console.log(`✅ Account transaction created - Spending tracked!`);
+          console.log(`✅ Account transaction created - Spending tracked in base currency: ${expenseAmountBaseCurrency} ${poBaseCurrency}`);
         }
       } catch (transErr) {
         console.warn('⚠️ Error creating account transaction:', transErr);

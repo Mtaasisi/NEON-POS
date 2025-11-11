@@ -10,9 +10,10 @@ import express from 'express';
 import cors from 'cors';
 import { neon } from '@neondatabase/serverless';
 import { readFileSync, existsSync } from 'fs';
+import neonMigrationRouter from './routes/neon-migration.mjs';
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
@@ -27,24 +28,30 @@ if (!DATABASE_URL && existsSync('database-config.json')) {
 }
 
 if (!DATABASE_URL) {
-  // Fallback to development branch (for local dev)
+  // Fallback URLs based on environment
   // Use production database when NODE_ENV is production
   if (process.env.NODE_ENV === 'production') {
-    DATABASE_URL = 'postgresql://neondb_owner:****************@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+    DATABASE_URL = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
   } else {
-    DATABASE_URL = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
+    DATABASE_URL = 'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
   }
 }
 
 const sql = neon(DATABASE_URL);
 
+const dbEnvironment = process.env.NODE_ENV === 'production' ? 'PRODUCTION' : 'DEVELOPMENT';
+const dbHost = DATABASE_URL.match(/@([^/]+)/)?.[1] || 'unknown';
+
 console.log('🚀 Starting Backend API Server...');
-console.log('📡 Database URL configured');
+console.log(`📡 Database: ${dbEnvironment} (${dbHost})`);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Backend API is running' });
 });
+
+// Mount Neon migration routes
+app.use('/api/neon', neonMigrationRouter);
 
 // Generic query endpoint
 app.post('/api/query', async (req, res) => {

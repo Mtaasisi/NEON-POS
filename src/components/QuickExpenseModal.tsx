@@ -13,6 +13,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
 import { financeAccountService, FinanceAccount } from '../lib/financeAccountService';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface QuickExpenseModalProps {
   isOpen: boolean;
@@ -27,6 +28,9 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
   const [expenseCategories, setExpenseCategories] = useState<any[]>([]);
   const [dailySalesAmount, setDailySalesAmount] = useState(0);
   const [isLoadingDailySales, setIsLoadingDailySales] = useState(false);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Form state with smart defaults
   const [formData, setFormData] = useState({

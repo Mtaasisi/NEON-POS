@@ -37,10 +37,13 @@ export const DEFAULT_POINTS_CONFIG: PointsConfig = {
   enablePointsForNewDevices: true,
   maxPointsPerDay: 50,
   customerLoyaltyMultipliers: {
-    'bronze': 1.0,
-    'silver': 1.1,
-    'gold': 1.2,
-    'platinum': 1.5,
+    'interested': 1.0,
+    'engaged': 1.05,
+    'payment_customer': 1.1,
+    'active': 1.15,
+    'regular': 1.2,
+    'premium': 1.3,
+    'vip': 1.5,
   },
 };
 

@@ -1,12 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { loadUserSettings, saveUserSettings, UserSettings } from '../../../lib/userSettingsApi';
+import { 
+  getRoleWidgetPermissions, 
+  getRoleQuickActionPermissions,
+  RoleWidgetPermissions,
+  RoleQuickActionPermissions 
+} from '../../../config/roleBasedWidgets';
 import toast from 'react-hot-toast';
+import { WidgetOrderSettings } from '../../shared/components/WidgetOrderSettings';
+import { useSmartGridLayout } from '../../../hooks/useSmartGridLayout';
 import { 
   LayoutDashboard, 
   Zap, 
-  Eye, 
-  EyeOff,
   Save,
   RotateCcw,
   Smartphone,
@@ -23,7 +29,6 @@ import {
   Bell,
   UserCog,
   Briefcase,
-  DollarSignIcon,
   LineChart,
   Box,
   AlertCircle,
@@ -47,57 +52,15 @@ import {
   Printer,
   Clock,
   Target,
-  TrendingDown,
-  Shield,
-  FileSpreadsheet,
-  Layers,
-  Store,
   Tag,
-  Truck,
-  AlertTriangle,
-  CheckCircle,
-  RefreshCw,
-  Zap as ZapIcon,
-  Globe,
-  Smartphone as PhoneIcon,
-  Monitor,
-  ClipboardList,
-  BarChart,
-  PieChart as PieChartIcon,
-  LineChart as LineChartIcon,
-  Activity as ActivityIcon,
-  TrendingUp as TrendingUpIcon,
-  Users as UsersIcon,
-  Package as PackageIcon,
-  Calendar as CalendarIcon,
-  Bell as BellIcon,
-  Settings as SettingsIcon,
-  Search as SearchIcon,
-  Star as StarIcon,
-  HardDrive as HardDriveIcon,
-  MessageSquare as MessageSquareIcon,
-  Wrench as WrenchIcon,
-  Database as DatabaseIcon,
-  Download as DownloadIcon,
-  Upload as UploadIcon,
-  UserCheck as UserCheckIcon,
-  Building as BuildingIcon,
-  MapPin as MapPinIcon,
-  Bot as BotIcon,
-  Printer as PrinterIcon,
-  Clock as ClockIcon,
-  Target as TargetIcon,
-  TrendingDown as TrendingDownIcon,
-  Shield as ShieldIcon,
-  FileSpreadsheet as FileSpreadsheetIcon,
-  Layers as LayersIcon,
-  Store as StoreIcon,
-  Tag as TagIcon,
-  Truck as TruckIcon,
-  AlertTriangle as AlertTriangleIcon,
-  CheckCircle as CheckCircleIcon,
-  RefreshCw as RefreshCwIcon
+  Info,
+  Shield,
+  Maximize2,
+  Minimize2,
+  Square
 } from 'lucide-react';
+
+type WidgetSize = 'small' | 'medium' | 'large';
 
 interface DashboardSettings {
   quickActions: {
@@ -180,12 +143,21 @@ interface DashboardSettings {
     salesByCategoryChart: boolean;
     profitMarginChart: boolean;
   };
+  widgetSizes?: {
+    [key: string]: WidgetSize;
+  };
 }
 
 const DashboardCustomizationSettings: React.FC = () => {
   const { currentUser } = useAuth();
+  const { autoArrangeWidgets } = useSmartGridLayout();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [rolePermissions, setRolePermissions] = useState<{
+    widgets: RoleWidgetPermissions;
+    quickActions: RoleQuickActionPermissions;
+  } | null>(null);
+
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({
     quickActions: {
       // Core Business Features
@@ -257,14 +229,37 @@ const DashboardCustomizationSettings: React.FC = () => {
       inventoryWidget: true,
       activityFeedWidget: true,
       purchaseOrderWidget: true,
-      chatWidget: true
+      chatWidget: true,
+      salesWidget: true,
+      topProductsWidget: true,
+      expensesWidget: true,
+      staffPerformanceWidget: true,
+      salesChart: true,
+      paymentMethodsChart: true,
+      salesByCategoryChart: true,
+      profitMarginChart: true
     }
   });
 
-  // Load settings on mount
+  // Load role permissions and settings on mount
   useEffect(() => {
-    loadSettings();
-  }, [currentUser?.id]);
+    if (currentUser) {
+      loadRolePermissions();
+      loadSettings();
+    }
+  }, [currentUser?.id, currentUser?.role]);
+
+  const loadRolePermissions = () => {
+    if (!currentUser) return;
+    
+    const widgetPerms = getRoleWidgetPermissions(currentUser.role);
+    const quickActionPerms = getRoleQuickActionPermissions(currentUser.role);
+    
+    setRolePermissions({
+      widgets: widgetPerms,
+      quickActions: quickActionPerms
+    });
+  };
 
   const loadSettings = async () => {
     if (!currentUser?.id) return;
@@ -305,7 +300,13 @@ const DashboardCustomizationSettings: React.FC = () => {
       const success = await saveUserSettings(currentUser.id, updatedSettings, 'Dashboard');
       
       if (success) {
-        toast.success('Dashboard settings saved successfully');
+        toast.success('Dashboard settings saved! Refresh your dashboard to see changes.', {
+          duration: 4000,
+          icon: '✅'
+        });
+        
+        // Trigger a storage event to notify other components
+        window.dispatchEvent(new CustomEvent('dashboardSettingsChanged'));
       } else {
         toast.error('Failed to save dashboard settings');
       }
@@ -318,92 +319,24 @@ const DashboardCustomizationSettings: React.FC = () => {
   };
 
   const handleReset = () => {
+    if (!rolePermissions) return;
+
+    // Reset to role-based defaults
     const defaultSettings: DashboardSettings = {
-      quickActions: {
-        // Core Business Features
-        devices: true,
-        addDevice: true,
-        customers: true,
-        inventory: true,
-        appointments: true,
-        purchaseOrders: true,
-        payments: true,
-        adGenerator: true,
-        pos: true,
-        reports: true,
-        employees: true,
-        whatsapp: true,
-        settings: true,
-        search: true,
-        loyalty: true,
-        backup: true,
-        
-        // SMS & Communication Features
-        sms: true,
-        bulkSms: true,
-        smsLogs: true,
-        smsSettings: true,
-        
-        // Import/Export & Data Management
-        excelImport: true,
-        excelTemplates: true,
-        productExport: true,
-        customerImport: true,
-        
-        // Advanced System Features
-        userManagement: true,
-        databaseSetup: true,
-        integrationSettings: true,
-        integrationsTest: true,
-        aiTraining: true,
-        bluetoothPrinter: true,
-        
-        // Business Management
-        categoryManagement: true,
-        supplierManagement: true,
-        storeLocations: true,
-        
-        // Advanced Analytics & Reports
-        reminders: true,
-        mobile: true,
-        myAttendance: true
-      },
-      widgets: {
-        revenueTrendChart: true,
-        deviceStatusChart: true,
-        appointmentsTrendChart: true,
-        stockLevelChart: true,
-        performanceMetricsChart: true,
-        customerActivityChart: true,
-        salesFunnelChart: true,
-        purchaseOrderChart: true,
-        appointmentWidget: true,
-        employeeWidget: true,
-        notificationWidget: true,
-        financialWidget: true,
-        analyticsWidget: true,
-        serviceWidget: true,
-        customerInsightsWidget: true,
-        systemHealthWidget: true,
-        inventoryWidget: true,
-        activityFeedWidget: true,
-        purchaseOrderWidget: true,
-        chatWidget: true,
-        salesWidget: true,
-        topProductsWidget: true,
-        expensesWidget: true,
-        staffPerformanceWidget: true,
-        salesChart: true,
-        paymentMethodsChart: true,
-        salesByCategoryChart: true,
-        profitMarginChart: true
-      }
+      quickActions: rolePermissions.quickActions as any,
+      widgets: rolePermissions.widgets as any
     };
+    
     setDashboardSettings(defaultSettings);
-    toast.success('Dashboard settings reset to default');
+    toast.success('Dashboard settings reset to your role defaults');
   };
 
   const toggleQuickAction = (action: keyof DashboardSettings['quickActions']) => {
+    // Only allow toggle if user has permission for this action
+    if (!rolePermissions?.quickActions[action as keyof RoleQuickActionPermissions]) {
+      return;
+    }
+
     setDashboardSettings(prev => ({
       ...prev,
       quickActions: {
@@ -414,6 +347,11 @@ const DashboardCustomizationSettings: React.FC = () => {
   };
 
   const toggleWidget = (widget: keyof DashboardSettings['widgets']) => {
+    // Only allow toggle if user has permission for this widget
+    if (!rolePermissions?.widgets[widget as keyof RoleWidgetPermissions]) {
+      return;
+    }
+
     setDashboardSettings(prev => ({
       ...prev,
       widgets: {
@@ -424,23 +362,47 @@ const DashboardCustomizationSettings: React.FC = () => {
   };
 
   const toggleAllQuickActions = (value: boolean) => {
+    if (!rolePermissions) return;
+
     setDashboardSettings(prev => ({
       ...prev,
-      quickActions: Object.keys(prev.quickActions).reduce((acc, key) => ({
-        ...acc,
-        [key]: value
-      }), {} as DashboardSettings['quickActions'])
+      quickActions: Object.keys(prev.quickActions).reduce((acc, key) => {
+        const actionKey = key as keyof RoleQuickActionPermissions;
+        // Only set value if user has permission
+        acc[key as keyof DashboardSettings['quickActions']] = 
+          rolePermissions.quickActions[actionKey] ? value : false;
+        return acc;
+      }, {} as DashboardSettings['quickActions'])
     }));
   };
 
   const toggleAllWidgets = (value: boolean) => {
+    if (!rolePermissions) return;
+
     setDashboardSettings(prev => ({
       ...prev,
-      widgets: Object.keys(prev.widgets).reduce((acc, key) => ({
-        ...acc,
-        [key]: value
-      }), {} as DashboardSettings['widgets'])
+      widgets: Object.keys(prev.widgets).reduce((acc, key) => {
+        const widgetKey = key as keyof RoleWidgetPermissions;
+        // Only set value if user has permission
+        acc[key as keyof DashboardSettings['widgets']] = 
+          rolePermissions.widgets[widgetKey] ? value : false;
+        return acc;
+      }, {} as DashboardSettings['widgets'])
     }));
+  };
+
+  const setWidgetSize = (widgetKey: string, size: WidgetSize) => {
+    setDashboardSettings(prev => ({
+      ...prev,
+      widgetSizes: {
+        ...(prev.widgetSizes || {}),
+        [widgetKey]: size
+      }
+    }));
+  };
+
+  const getWidgetSize = (widgetKey: string): WidgetSize => {
+    return dashboardSettings.widgetSizes?.[widgetKey] || 'medium';
   };
 
   const quickActionItems = [
@@ -528,7 +490,7 @@ const DashboardCustomizationSettings: React.FC = () => {
     { key: 'staffPerformanceWidget' as const, label: 'Staff Performance Widget', icon: Users, category: 'Widgets' }
   ];
 
-  if (loading) {
+  if (loading || !rolePermissions) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -537,13 +499,74 @@ const DashboardCustomizationSettings: React.FC = () => {
     );
   }
 
-  const chartWidgets = widgetItems.filter(w => w.category === 'Charts');
-  const otherWidgets = widgetItems.filter(w => w.category === 'Widgets');
+  // Filter items based on role permissions
+  const allowedQuickActions = quickActionItems.filter(item => 
+    rolePermissions.quickActions[item.key as keyof RoleQuickActionPermissions]
+  );
+  
+  const allowedWidgets = widgetItems.filter(item => 
+    rolePermissions.widgets[item.key as keyof RoleWidgetPermissions]
+  );
+
+  const chartWidgets = allowedWidgets.filter(w => w.category === 'Charts');
+  const otherWidgets = allowedWidgets.filter(w => w.category === 'Widgets');
+
+  // Get saved widget order from localStorage for unified preview
+  const getSavedWidgetOrder = (): string[] => {
+    try {
+      const savedOrder = localStorage.getItem('dashboard_widget_order');
+      if (savedOrder) {
+        return JSON.parse(savedOrder);
+      }
+    } catch (error) {
+      console.error('Error loading widget order:', error);
+    }
+    // Default order if no saved order exists
+    return [
+      'revenueTrendChart', 'salesChart', 'deviceStatusChart', 'appointmentsTrendChart',
+      'purchaseOrderChart', 'paymentMethodsChart', 'analyticsWidget', 'salesByCategoryChart', 'profitMarginChart',
+      'stockLevelChart', 'performanceMetricsChart', 'customerActivityChart',
+      'appointmentWidget', 'employeeWidget', 'notificationWidget',
+      'financialWidget', 'salesFunnelChart',
+      'customerInsightsWidget', 'serviceWidget', 'reminderWidget',
+      'systemHealthWidget', 'inventoryWidget', 'activityFeedWidget',
+      'purchaseOrderWidget', 'chatWidget', 'salesWidget', 'topProductsWidget', 
+      'expensesWidget', 'staffPerformanceWidget'
+    ];
+  };
+
+  // Combine all widgets and sort by saved order for unified preview
+  const allWidgets = [...chartWidgets, ...otherWidgets];
+  const savedOrder = getSavedWidgetOrder();
+  const orderedWidgets = [...allWidgets].sort((a, b) => {
+    const indexA = savedOrder.indexOf(a.key);
+    const indexB = savedOrder.indexOf(b.key);
+    // If not in saved order, put at end
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
+  });
 
   // Calculate enabled counts
-  const enabledQuickActionsCount = Object.values(dashboardSettings.quickActions).filter(Boolean).length;
+  const enabledQuickActionsCount = allowedQuickActions.filter(item => 
+    dashboardSettings.quickActions[item.key]
+  ).length;
   const enabledChartsCount = chartWidgets.filter(w => dashboardSettings.widgets[w.key]).length;
   const enabledWidgetsCount = otherWidgets.filter(w => dashboardSettings.widgets[w.key]).length;
+  const totalEnabledWidgets = enabledChartsCount + enabledWidgetsCount;
+
+  const getRoleDisplayName = (role: string) => {
+    const roleNames: Record<string, string> = {
+      'admin': 'Administrator',
+      'customer-care': 'Customer Care',
+      'technician': 'Technician',
+      'manager': 'Manager',
+      'sales': 'Sales',
+      'user': 'User'
+    };
+    return roleNames[role] || role;
+  };
 
   return (
     <div className="space-y-6">
@@ -556,7 +579,7 @@ const DashboardCustomizationSettings: React.FC = () => {
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">Dashboard Settings</h2>
-              <p className="text-sm text-gray-600">Click items to add or remove from your dashboard</p>
+              <p className="text-sm text-gray-600">Customize your dashboard - Click items to add or remove</p>
             </div>
           </div>
           
@@ -564,9 +587,20 @@ const DashboardCustomizationSettings: React.FC = () => {
           <div className="flex gap-2">
             <div className="px-3 py-1.5 bg-blue-50 rounded-lg">
               <p className="text-xs text-blue-600 font-medium">
-                {enabledQuickActionsCount + enabledChartsCount + enabledWidgetsCount} items selected
+                {enabledQuickActionsCount + enabledChartsCount + enabledWidgetsCount} items enabled
               </p>
             </div>
+          </div>
+        </div>
+
+        {/* Role Info Banner */}
+        <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Shield className="w-4 h-4 text-blue-600" />
+            <p className="text-sm text-blue-800">
+              <span className="font-semibold">Your Role: {getRoleDisplayName(currentUser?.role || '')}</span> - 
+              You can customize {allowedQuickActions.length} quick actions and {allowedWidgets.length} widgets
+            </p>
           </div>
         </div>
 
@@ -584,117 +618,393 @@ const DashboardCustomizationSettings: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
           >
             <RotateCcw size={18} />
-            Reset to Default
+            Reset to Defaults
           </button>
         </div>
       </div>
 
       {/* Quick Actions Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-              <Zap className="w-5 h-5 text-blue-600" />
+      {allowedQuickActions.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <Zap className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold text-blue-600">{enabledQuickActionsCount} of {allowedQuickActions.length}</span> enabled
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold text-blue-600">{enabledQuickActionsCount} of 39</span> selected
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => toggleAllQuickActions(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
-            >
-              <CheckCircle2 size={16} />
-              Add All
-            </button>
-            <button
-              onClick={() => toggleAllQuickActions(false)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
-            >
-              <XCircle size={16} />
-              Remove All
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {quickActionItems.map(item => {
-            const Icon = item.icon;
-            const isEnabled = dashboardSettings.quickActions[item.key];
-
-            return (
+            <div className="flex gap-2">
               <button
-                key={item.key}
-                onClick={() => toggleQuickAction(item.key)}
-                className={`group p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden ${
-                  isEnabled
-                    ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-blue-50 shadow-sm hover:shadow-md'
-                    : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'
-                }`}
+                onClick={() => toggleAllQuickActions(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
               >
-                {/* Status Badge */}
-                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  isEnabled 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
-                }`}>
-                  {isEnabled ? 'Added' : 'Click to Add'}
-                </div>
-
-                <div className="flex items-start gap-3 mb-2 mt-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    isEnabled 
-                      ? 'bg-indigo-600 shadow-lg shadow-indigo-200' 
-                      : 'bg-gray-300 group-hover:bg-indigo-400'
-                  }`}>
-                    <Icon className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-                
-                <h4 className={`font-semibold text-sm mb-1 ${
-                  isEnabled ? 'text-indigo-900' : 'text-gray-700'
-                }`}>
-                  {item.label}
-                </h4>
-                <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
-
-                {/* Click Instruction */}
-                <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                  isEnabled 
-                    ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                    : 'text-indigo-600 opacity-0 group-hover:opacity-100'
-                }`}>
-                  <MousePointerClick size={12} />
-                  {isEnabled ? 'Click to remove' : 'Click to add'}
-                </div>
+                <CheckCircle2 size={16} />
+                Enable All
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Charts Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Dashboard Charts</h3>
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold text-purple-600">{enabledChartsCount} of 7</span> selected
-              </p>
+              <button
+                onClick={() => toggleAllQuickActions(false)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
+              >
+                <XCircle size={16} />
+                Disable All
+              </button>
             </div>
           </div>
-          <div className="flex gap-2">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {allowedQuickActions.map(item => {
+              const Icon = item.icon;
+              const isEnabled = dashboardSettings.quickActions[item.key];
+
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => toggleQuickAction(item.key)}
+                  className={`group p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden ${
+                    isEnabled
+                      ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-blue-50 shadow-sm hover:shadow-md'
+                      : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'
+                  }`}
+                >
+                  {/* Status Badge */}
+                  <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    isEnabled 
+                      ? 'bg-green-500 text-white' 
+                      : 'bg-gray-300 text-gray-600'
+                  }`}>
+                    {isEnabled ? 'Enabled' : 'Disabled'}
+                  </div>
+
+                  <div className="flex items-start gap-3 mb-2 mt-2">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                      isEnabled 
+                        ? 'bg-indigo-600 shadow-lg shadow-indigo-200' 
+                        : 'bg-gray-300 group-hover:bg-indigo-400'
+                    }`}>
+                      <Icon className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                  
+                  <h4 className={`font-semibold text-sm mb-1 ${
+                    isEnabled ? 'text-indigo-900' : 'text-gray-700'
+                  }`}>
+                    {item.label}
+                  </h4>
+                  <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
+
+                  {/* Click Instruction */}
+                  <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
+                    isEnabled 
+                      ? 'text-red-600 opacity-0 group-hover:opacity-100' 
+                      : 'text-indigo-600 opacity-0 group-hover:opacity-100'
+                  }`}>
+                    <MousePointerClick size={12} />
+                    {isEnabled ? 'Click to disable' : 'Click to enable'}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Dashboard Preview - Only Enabled Widgets */}
+      {orderedWidgets.filter(w => dashboardSettings.widgets[w.key]).length > 0 && (
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-sm border-2 border-green-300 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
+                <LayoutDashboard className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  Dashboard Preview
+                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-green-600 text-white shadow-sm">
+                    {totalEnabledWidgets} Active
+                  </span>
+                </h3>
+                <p className="text-sm text-gray-700 font-medium mt-1">
+                  This shows EXACTLY how your dashboard looks with real gaps - Resize widgets to fill empty spaces
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Show widgets with REAL gaps by simulating row-by-row placement */}
+          {(() => {
+            const enabledWidgets = orderedWidgets.filter(w => dashboardSettings.widgets[w.key]);
+            
+            // Calculate column spans for each widget
+            const getColumnSpan = (key: string) => {
+              const size = getWidgetSize(key);
+              if (size === 'small') return 1;
+              if (size === 'large') return 3;
+              return 2; // medium
+            };
+            
+            // Group widgets into rows of 3 columns, tracking empty spaces
+            const rows: Array<Array<{type: 'widget' | 'empty', item?: typeof enabledWidgets[0], span: number}>> = [];
+            let currentRow: Array<{type: 'widget' | 'empty', item?: typeof enabledWidgets[0], span: number}> = [];
+            let currentRowCols = 0;
+            
+            enabledWidgets.forEach(item => {
+              const span = getColumnSpan(item.key);
+              
+              // If adding this widget exceeds 3 columns, start a new row
+              if (currentRowCols + span > 3) {
+                // Fill remaining columns with empty spaces
+                const remainingCols = 3 - currentRowCols;
+                if (remainingCols > 0) {
+                  currentRow.push({ type: 'empty', span: remainingCols });
+                }
+                rows.push(currentRow);
+                currentRow = [];
+                currentRowCols = 0;
+              }
+              
+              // Add widget to current row
+              currentRow.push({ type: 'widget', item, span });
+              currentRowCols += span;
+              
+              // If row is complete (3 columns), start new row
+              if (currentRowCols >= 3) {
+                rows.push(currentRow);
+                currentRow = [];
+                currentRowCols = 0;
+              }
+            });
+            
+            // Add the last incomplete row with empty spaces
+            if (currentRow.length > 0) {
+              const remainingCols = 3 - currentRowCols;
+              if (remainingCols > 0) {
+                currentRow.push({ type: 'empty', span: remainingCols });
+              }
+              rows.push(currentRow);
+            }
+            
+            // Render rows
+            return rows.map((row, rowIndex) => (
+              <div key={`row-${rowIndex}`} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                {row.map((cell, cellIndex) => {
+                  if (cell.type === 'empty') {
+                    // Render empty space placeholder
+                    const getEmptySpanClass = () => {
+                      if (cell.span === 1) return 'md:col-span-1';
+                      if (cell.span === 2) return 'md:col-span-2 lg:col-span-2';
+                      return 'md:col-span-2 lg:col-span-3';
+                    };
+                    
+                    return (
+                      <div 
+                        key={`empty-${rowIndex}-${cellIndex}`}
+                        className={`rounded-xl border-2 border-dashed border-red-300 bg-red-50/30 p-4 flex items-center justify-center min-h-[200px] ${getEmptySpanClass()}`}
+                      >
+                        <div className="text-center">
+                          <div className="text-4xl mb-2">📏</div>
+                          <p className="text-sm font-semibold text-red-600">Empty Space</p>
+                          <p className="text-xs text-red-500 mt-1">
+                            {cell.span === 1 ? '1 column gap' : cell.span === 2 ? '2 column gap' : '3 column gap'}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-2">
+                            Resize widgets above to fill this gap
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  
+                  // Render widget
+                  const item = cell.item!;
+                  const Icon = item.icon;
+                  const isEnabled = dashboardSettings.widgets[item.key];
+                  const currentSize = getWidgetSize(item.key);
+                  const isChart = item.category === 'Charts';
+
+                  // Get responsive class based on widget size (same as dashboard)
+                  const getResponsiveClass = () => {
+                    if (currentSize === 'small') return 'md:col-span-1';
+                    if (currentSize === 'large') return 'md:col-span-2 lg:col-span-3';
+                    // medium (default)
+                    return 'md:col-span-2 lg:col-span-2';
+                  };
+
+                  // Color scheme based on category
+                  const colorScheme = isChart ? {
+                    border: 'border-purple-500',
+                    bg: 'bg-gradient-to-br from-purple-50 to-pink-50',
+                    iconBg: 'bg-purple-600 shadow-lg shadow-purple-200',
+                    iconHover: 'group-hover:bg-purple-400',
+                    text: 'text-purple-900',
+                    hoverText: 'text-purple-600',
+                    sizeBg: 'bg-purple-600',
+                    sizeButtons: 'bg-purple-100 text-purple-600 hover:bg-purple-200',
+                    sizeActive: 'bg-purple-600 text-white',
+                    borderBottom: 'border-purple-200',
+                    sizeLabel: 'text-purple-700'
+                  } : {
+                    border: 'border-blue-500',
+                    bg: 'bg-gradient-to-br from-blue-50 to-cyan-50',
+                    iconBg: 'bg-blue-600 shadow-lg shadow-blue-200',
+                    iconHover: 'group-hover:bg-blue-400',
+                    text: 'text-blue-900',
+                    hoverText: 'text-blue-600',
+                    sizeBg: 'bg-blue-600',
+                    sizeButtons: 'bg-blue-100 text-blue-600 hover:bg-blue-200',
+                    sizeActive: 'bg-blue-600 text-white',
+                    borderBottom: 'border-blue-200',
+                    sizeLabel: 'text-blue-700'
+                  };
+
+                  return (
+                    <div
+                      key={item.key}
+                      className={`rounded-xl border-2 transition-all relative overflow-hidden ${
+                        isEnabled
+                          ? `${colorScheme.border} ${colorScheme.bg} shadow-sm`
+                          : 'border-gray-200 bg-white'
+                      } ${getResponsiveClass()}`}
+                    >
+                    {/* Main Card - Click to toggle */}
+                    <button
+                      onClick={() => toggleWidget(item.key)}
+                      className="w-full p-4 text-left group"
+                    >
+                      {/* Status Badge */}
+                      <div className="absolute top-2 right-2 flex gap-1 flex-wrap justify-end max-w-[70%]">
+                        <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          isEnabled 
+                            ? 'bg-green-500 text-white' 
+                            : 'bg-gray-300 text-gray-600'
+                        }`}>
+                          {isEnabled ? 'Enabled' : 'Disabled'}
+                        </div>
+                        {isEnabled && (
+                          <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${colorScheme.sizeBg} text-white`}>
+                            {currentSize === 'small' ? 'Small' : currentSize === 'large' ? 'Large' : 'Medium'}
+                          </div>
+                        )}
+                        <div className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-600 text-white">
+                          {isChart ? '📊 Chart' : '📦 Widget'}
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 mb-2 mt-2">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                          isEnabled 
+                            ? colorScheme.iconBg
+                            : `bg-gray-300 ${colorScheme.iconHover}`
+                        }`}>
+                          <Icon className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      
+                      <h4 className={`font-semibold text-sm mb-1 ${
+                        isEnabled ? colorScheme.text : 'text-gray-700'
+                      }`}>
+                        {item.label}
+                      </h4>
+
+                      {/* Click Instruction */}
+                      <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
+                        isEnabled 
+                          ? 'text-red-600 opacity-0 group-hover:opacity-100' 
+                          : `${colorScheme.hoverText} opacity-0 group-hover:opacity-100`
+                      }`}>
+                        <MousePointerClick size={12} />
+                        {isEnabled ? 'Click to remove' : 'Click to enable'}
+                      </div>
+                    </button>
+
+                    {/* Size Selector - Only show if enabled */}
+                    {isEnabled && (
+                      <div className={`px-4 pb-4 pt-2 border-t ${colorScheme.borderBottom}`}>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-medium ${colorScheme.sizeLabel}`}>Widget Size:</span>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setWidgetSize(item.key, 'small');
+                              }}
+                              className={`p-1.5 rounded ${
+                                currentSize === 'small'
+                                  ? colorScheme.sizeActive
+                                  : colorScheme.sizeButtons
+                              } transition-colors`}
+                              title="Small (1 column)"
+                            >
+                              <Minimize2 size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setWidgetSize(item.key, 'medium');
+                              }}
+                              className={`p-1.5 rounded ${
+                                currentSize === 'medium'
+                                  ? colorScheme.sizeActive
+                                  : colorScheme.sizeButtons
+                              } transition-colors`}
+                              title="Medium (2 columns)"
+                            >
+                              <Square size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setWidgetSize(item.key, 'large');
+                              }}
+                              className={`p-1.5 rounded ${
+                                currentSize === 'large'
+                                  ? colorScheme.sizeActive
+                                  : colorScheme.sizeButtons
+                              } transition-colors`}
+                              title="Large (3 columns)"
+                            >
+                              <Maximize2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    </div>
+                  );
+                })}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+
+      {/* Available Widgets - Disabled Widgets */}
+      {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).length > 0 && (
+        <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl shadow-sm border-2 border-gray-300 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-gray-500 to-slate-500 flex items-center justify-center shadow-lg">
+                <Package className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  Available Widgets
+                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-600 text-white shadow-sm">
+                    {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).length} Available
+                  </span>
+                </h3>
+                <p className="text-sm text-gray-700 font-medium mt-1">
+                  Click any widget below to add it to your dashboard
+                </p>
+              </div>
+            </div>
             <button
               onClick={() => {
-                chartWidgets.forEach(widget => {
+                allWidgets.forEach(widget => {
                   setDashboardSettings(prev => ({
                     ...prev,
                     widgets: {
@@ -704,217 +1014,320 @@ const DashboardCustomizationSettings: React.FC = () => {
                   }));
                 });
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
             >
-              <CheckCircle2 size={16} />
-              Add All
-            </button>
-            <button
-              onClick={() => {
-                chartWidgets.forEach(widget => {
-                  setDashboardSettings(prev => ({
-                    ...prev,
-                    widgets: {
-                      ...prev.widgets,
-                      [widget.key]: false
-                    }
-                  }));
-                });
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
-            >
-              <XCircle size={16} />
-              Remove All
+              <Plus size={18} />
+              Add All to Dashboard
             </button>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).map(item => {
+              const Icon = item.icon;
+              const isEnabled = dashboardSettings.widgets[item.key];
+              const isChart = item.category === 'Charts';
+
+              // Color scheme based on category
+              const colorScheme = isChart ? {
+                border: 'border-purple-300',
+                bg: 'bg-white',
+                iconBg: 'bg-purple-500',
+                text: 'text-gray-700',
+                badge: 'bg-purple-100 text-purple-700'
+              } : {
+                border: 'border-blue-300',
+                bg: 'bg-white',
+                iconBg: 'bg-blue-500',
+                text: 'text-gray-700',
+                badge: 'bg-blue-100 text-blue-700'
+              };
+
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => toggleWidget(item.key)}
+                  className={`rounded-xl border-2 transition-all relative overflow-hidden hover:shadow-md hover:scale-105 p-4 text-left group ${colorScheme.border} ${colorScheme.bg}`}
+                >
+                  {/* Type Badge */}
+                  <div className="absolute top-2 right-2">
+                    <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${colorScheme.badge}`}>
+                      {isChart ? '📊 Chart' : '📦 Widget'}
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3 mb-2 mt-2">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${colorScheme.iconBg} shadow-md`}>
+                      <Icon className="w-5 h-5 text-white" />
+                    </div>
+                  </div>
+                  
+                  <h4 className={`font-semibold text-sm mb-1 ${colorScheme.text}`}>
+                    {item.label}
+                  </h4>
+
+                  {/* Click Instruction */}
+                  <div className="mt-3 flex items-center gap-1 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Plus size={12} />
+                    Click to add
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
+      )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {chartWidgets.map(item => {
-            const Icon = item.icon;
-            const isEnabled = dashboardSettings.widgets[item.key];
-
-            return (
-              <button
-                key={item.key}
-                onClick={() => toggleWidget(item.key)}
-                className={`group p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden ${
-                  isEnabled
-                    ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-pink-50 shadow-sm hover:shadow-md'
-                    : 'border-gray-200 bg-white hover:border-purple-300 hover:bg-purple-50/30'
-                }`}
-              >
-                {/* Status Badge */}
-                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  isEnabled 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
-                }`}>
-                  {isEnabled ? 'Added' : 'Click to Add'}
-                </div>
-
-                <div className="flex items-start gap-3 mb-2 mt-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    isEnabled 
-                      ? 'bg-purple-600 shadow-lg shadow-purple-200' 
-                      : 'bg-gray-300 group-hover:bg-purple-400'
-                  }`}>
-                    <Icon className="w-5 h-5 text-white" />
+      {/* Widget Order Section (Temporarily Hidden - Use Unified Preview Above) */}
+      {false && otherWidgets.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Dashboard Widgets</h3>
+                <p className="text-sm text-gray-600">
+                  <span className="font-semibold text-green-600">{enabledWidgetsCount} of {otherWidgets.length}</span> enabled
+                </p>
+              </div>
+            </div>
+            
+            {/* Auto Arrange Toggle */}
+            <div className="mb-4 pb-4 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                    <LayoutDashboard className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-900">Auto Arrange</h4>
+                    <p className="text-xs text-gray-600">Automatically fill empty spaces with expanded widgets</p>
                   </div>
                 </div>
-                
-                <h4 className={`font-semibold text-sm mb-1 ${
-                  isEnabled ? 'text-purple-900' : 'text-gray-700'
-                }`}>
-                  {item.label}
-                </h4>
-
-                {/* Click Instruction */}
-                <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                  isEnabled 
-                    ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                    : 'text-purple-600 opacity-0 group-hover:opacity-100'
-                }`}>
-                  <MousePointerClick size={12} />
-                  {isEnabled ? 'Click to remove' : 'Click to add'}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Widgets Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-              <Activity className="w-5 h-5 text-green-600" />
+                <button
+                  onClick={() => {
+                    setDashboardSettings(prev => ({
+                      ...prev,
+                      autoArrange: !prev.autoArrange
+                    }));
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    dashboardSettings.autoArrange ? 'bg-blue-600' : 'bg-gray-200'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      dashboardSettings.autoArrange ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Dashboard Widgets</h3>
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold text-green-600">{enabledWidgetsCount} of 10</span> selected
-              </p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => {
-                otherWidgets.forEach(widget => {
-                  setDashboardSettings(prev => ({
-                    ...prev,
-                    widgets: {
-                      ...prev.widgets,
-                      [widget.key]: true
-                    }
-                  }));
-                });
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
-            >
-              <CheckCircle2 size={16} />
-              Add All
-            </button>
-            <button
-              onClick={() => {
-                otherWidgets.forEach(widget => {
-                  setDashboardSettings(prev => ({
-                    ...prev,
-                    widgets: {
-                      ...prev.widgets,
-                      [widget.key]: false
-                    }
-                  }));
-                });
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
-            >
-              <XCircle size={16} />
-              Remove All
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {otherWidgets.map(item => {
-            const Icon = item.icon;
-            const isEnabled = dashboardSettings.widgets[item.key];
-
-            return (
+            
+            <div className="flex gap-2">
               <button
-                key={item.key}
-                onClick={() => toggleWidget(item.key)}
-                className={`group p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden ${
-                  isEnabled
-                    ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50 shadow-sm hover:shadow-md'
-                    : 'border-gray-200 bg-white hover:border-green-300 hover:bg-green-50/30'
-                }`}
+                onClick={() => {
+                  otherWidgets.forEach(widget => {
+                    setDashboardSettings(prev => ({
+                      ...prev,
+                      widgets: {
+                        ...prev.widgets,
+                        [widget.key]: true
+                      }
+                    }));
+                  });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
               >
-                {/* Status Badge */}
-                <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-                  isEnabled 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-300 text-gray-600'
-                }`}>
-                  {isEnabled ? 'Added' : 'Click to Add'}
-                </div>
-
-                <div className="flex items-start gap-3 mb-2 mt-2">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                    isEnabled 
-                      ? 'bg-green-600 shadow-lg shadow-green-200' 
-                      : 'bg-gray-300 group-hover:bg-green-400'
-                  }`}>
-                    <Icon className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-                
-                <h4 className={`font-semibold text-sm mb-1 ${
-                  isEnabled ? 'text-green-900' : 'text-gray-700'
-                }`}>
-                  {item.label}
-                </h4>
-
-                {/* Click Instruction */}
-                <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                  isEnabled 
-                    ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                    : 'text-green-600 opacity-0 group-hover:opacity-100'
-                }`}>
-                  <MousePointerClick size={12} />
-                  {isEnabled ? 'Click to remove' : 'Click to add'}
-                </div>
+                <CheckCircle2 size={16} />
+                Enable All
               </button>
-            );
-          })}
+              <button
+                onClick={() => {
+                  otherWidgets.forEach(widget => {
+                    setDashboardSettings(prev => ({
+                      ...prev,
+                      widgets: {
+                        ...prev.widgets,
+                        [widget.key]: false
+                      }
+                    }));
+                  });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
+              >
+                <XCircle size={16} />
+                Disable All
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {otherWidgets.map(item => {
+              const Icon = item.icon;
+              const isEnabled = dashboardSettings.widgets[item.key];
+              const currentSize = getWidgetSize(item.key);
+
+              // Get responsive class based on widget size (same as dashboard)
+              const getResponsiveClass = () => {
+                if (currentSize === 'small') return 'md:col-span-1';
+                if (currentSize === 'large') return 'md:col-span-2 lg:col-span-3';
+                // medium (default)
+                return 'md:col-span-2 lg:col-span-2';
+              };
+
+              return (
+                <div
+                  key={item.key}
+                  className={`rounded-xl border-2 transition-all relative overflow-hidden ${
+                    isEnabled
+                      ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50 shadow-sm'
+                      : 'border-gray-200 bg-white'
+                  } ${getResponsiveClass()}`}
+                >
+                  {/* Main Card - Click to toggle */}
+                  <button
+                    onClick={() => toggleWidget(item.key)}
+                    className="w-full p-4 text-left group"
+                  >
+                    {/* Status Badge */}
+                    <div className="absolute top-2 right-2 flex gap-1">
+                      <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        isEnabled 
+                          ? 'bg-green-500 text-white' 
+                          : 'bg-gray-300 text-gray-600'
+                      }`}>
+                        {isEnabled ? 'Enabled' : 'Disabled'}
+                      </div>
+                      {isEnabled && (
+                        <div className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-600 text-white">
+                          {currentSize === 'small' ? 'Small' : currentSize === 'large' ? 'Large' : 'Medium'}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-start gap-3 mb-2 mt-2">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                        isEnabled 
+                          ? 'bg-green-600 shadow-lg shadow-green-200' 
+                          : 'bg-gray-300 group-hover:bg-green-400'
+                      }`}>
+                        <Icon className="w-5 h-5 text-white" />
+                      </div>
+                    </div>
+                    
+                    <h4 className={`font-semibold text-sm mb-1 ${
+                      isEnabled ? 'text-green-900' : 'text-gray-700'
+                    }`}>
+                      {item.label}
+                    </h4>
+
+                    {/* Click Instruction */}
+                    <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
+                      isEnabled 
+                        ? 'text-red-600 opacity-0 group-hover:opacity-100' 
+                        : 'text-green-600 opacity-0 group-hover:opacity-100'
+                    }`}>
+                      <MousePointerClick size={12} />
+                      {isEnabled ? 'Click to disable' : 'Click to enable'}
+                    </div>
+                  </button>
+
+                  {/* Size Selector - Only show if enabled */}
+                  {isEnabled && (
+                    <div className="px-4 pb-4 pt-2 border-t border-green-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-green-700">Widget Size:</span>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWidgetSize(item.key, 'small');
+                            }}
+                            className={`p-1.5 rounded ${
+                              currentSize === 'small'
+                                ? 'bg-green-600 text-white'
+                                : 'bg-green-100 text-green-600 hover:bg-green-200'
+                            } transition-colors`}
+                            title="Small (1 column)"
+                          >
+                            <Minimize2 size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWidgetSize(item.key, 'medium');
+                            }}
+                            className={`p-1.5 rounded ${
+                              currentSize === 'medium'
+                                ? 'bg-green-600 text-white'
+                                : 'bg-green-100 text-green-600 hover:bg-green-200'
+                            } transition-colors`}
+                            title="Medium (2 columns)"
+                          >
+                            <Square size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setWidgetSize(item.key, 'large');
+                            }}
+                            className={`p-1.5 rounded ${
+                              currentSize === 'large'
+                                ? 'bg-green-600 text-white'
+                                : 'bg-green-100 text-green-600 hover:bg-green-200'
+                            } transition-colors`}
+                            title="Large (3 columns)"
+                          >
+                            <Maximize2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Widget Order Section */}
+      <WidgetOrderSettings className="mt-8" />
 
       {/* Info Box */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 mt-8">
         <div className="flex gap-3">
           <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-            <AlertCircle className="w-5 h-5 text-blue-600" />
+            <Info className="w-5 h-5 text-blue-600" />
           </div>
           <div>
             <h4 className="font-semibold text-blue-900 mb-2 text-base">💡 How to Use</h4>
             <ul className="text-sm text-blue-800 space-y-2">
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">→</span>
-                <span><strong>Click any card</strong> to add it to your dashboard (green badge = added)</span>
+                <span className="text-blue-600 font-bold">✅</span>
+                <span><strong>Dashboard Preview</strong> shows REAL gaps and empty spaces - exactly like your actual dashboard!</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">→</span>
-                <span><strong>Click again</strong> to remove it from your dashboard</span>
+                <span className="text-blue-600 font-bold">📏</span>
+                <span><strong>See the gaps?</strong> Change widget sizes to Large to fill empty spaces, or keep Small/Medium if you like the gaps</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">→</span>
-                <span>Use <strong>"Add All"</strong> or <strong>"Remove All"</strong> buttons for quick selection</span>
+                <span className="text-blue-600 font-bold">➕</span>
+                <span><strong>Available Widgets</strong> (gray section) - click any widget to add it and see how it affects the layout</span>
               </li>
               <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">→</span>
-                <span>Don't forget to click <strong>"Save Changes"</strong> when done!</span>
+                <span className="text-blue-600 font-bold">🎨</span>
+                <span><strong>Resize instantly:</strong> Click Small (1 col) / Medium (2 cols) / Large (3 cols - full width) buttons</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold">📊</span>
+                <span>Purple = <strong>Charts</strong>, Blue = <strong>Widgets</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-blue-600 font-bold">💾</span>
+                <span>Click <strong>"Save Changes"</strong> when you're happy with the layout!</span>
               </li>
             </ul>
           </div>
@@ -925,4 +1338,3 @@ const DashboardCustomizationSettings: React.FC = () => {
 };
 
 export default DashboardCustomizationSettings;
-

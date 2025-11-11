@@ -10,6 +10,7 @@ import { ToggleSwitch, TextInput, Select } from './UniversalFormComponents';
 import toast from 'react-hot-toast';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import { format } from '../../lib/format';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 export interface NotificationsSettingsTabRef {
   saveSettings: () => Promise<boolean>;
@@ -47,6 +48,7 @@ interface NotificationSettings {
 }
 
 const NotificationsSettingsTab = forwardRef<NotificationsSettingsTabRef>((props, ref) => {
+  const { t } = useTranslation(); // Add translation hook
   const [settings, setSettings] = useState<NotificationSettings>({
     // WhatsApp defaults
     whatsappEnabled: true,
@@ -116,16 +118,16 @@ const NotificationsSettingsTab = forwardRef<NotificationsSettingsTabRef>((props,
       whatsappShowPreview: true,
       whatsappIncludeLogo: true,
       whatsappIncludeItems: true,
-      whatsappMessage: 'Thank you for your purchase! Here\'s your invoice:',
+      whatsappMessage: 'Asante kwa kununua! Hii hapa invoice yako:',
       smsEnabled: true,
       smsAutoSend: false,
-      smsTemplate: 'Thank you! Total: {total}. Balance: {balance}. Ref: {invoice_no}',
+      smsTemplate: 'Asante! Jumla: {total}. Deni: {balance}. Ref: {invoice_no}',
       smsIncludeTotal: true,
       smsIncludeBalance: true,
       emailEnabled: true,
       emailAutoSend: false,
       emailSubject: 'Your Invoice from {business_name}',
-      emailTemplate: 'Thank you for your purchase. Please find your invoice attached.',
+      emailTemplate: 'Asante kwa kununua. Invoice iko attached.',
       emailAttachPDF: true,
       notifyOnPayment: true,
       notifyOnRefund: true,
@@ -206,538 +208,321 @@ const NotificationsSettingsTab = forwardRef<NotificationsSettingsTabRef>((props,
 
   return (
     <UniversalSettingsTab
-      title="Notifications & Invoices"
-      description="Configure how invoices and notifications are sent to customers"
-      onSave={handleSave}
-      onReset={handleReset}
-      onCancel={() => {}}
       isLoading={isLoading}
-      isSaving={isSaving}
-      isDirty={false}
     >
       {/* WhatsApp Settings */}
       <SettingsSection
         title="WhatsApp Invoice"
-        description="Send invoices via WhatsApp with rich preview"
         icon={<MessageCircle className="w-5 h-5" />}
+        helpText="Tuma invoice kwenye WhatsApp ya customer na items, totals, na payment info."
       >
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Main WhatsApp Toggle */}
-          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div className="flex items-start gap-3">
-                <MessageCircle className="w-6 h-6 text-green-600 mt-1" />
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-1">WhatsApp Integration</h4>
-                  <p className="text-sm text-gray-600">
-                    Send detailed invoices with items, totals, and payment info directly to customers' WhatsApp
-                  </p>
-                </div>
+          <ToggleSwitch
+            id="whatsapp_enabled"
+            label="Enable WhatsApp Integration"
+            checked={settings.whatsappEnabled}
+            onChange={(checked) => handleSettingChange('whatsappEnabled', checked)}
+            helpText="Send detailed invoices with items, totals, and payment info directly to customers' WhatsApp."
+          />
+
+          {settings.whatsappEnabled && (
+            <div className="space-y-4 pl-6 border-l-4 border-green-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ToggleSwitch
+                  id="whatsapp_auto_send"
+                  label="Auto-send after payment"
+                  checked={settings.whatsappAutoSend}
+                  onChange={(checked) => handleSettingChange('whatsappAutoSend', checked)}
+                  helpText="Automatically send invoice to customer's WhatsApp after payment completion."
+                />
+
+                <ToggleSwitch
+                  id="whatsapp_show_preview"
+                  label="Show preview before sending"
+                  checked={settings.whatsappShowPreview}
+                  onChange={(checked) => handleSettingChange('whatsappShowPreview', checked)}
+                  helpText="Allow staff to review the message before sending it."
+                />
+
+                <ToggleSwitch
+                  id="whatsapp_include_logo"
+                  label="Include business logo"
+                  checked={settings.whatsappIncludeLogo}
+                  onChange={(checked) => handleSettingChange('whatsappIncludeLogo', checked)}
+                  helpText="Add your business logo to the WhatsApp message."
+                />
+                
+                <ToggleSwitch
+                  id="whatsapp_include_items"
+                  label="Include item details"
+                  checked={settings.whatsappIncludeItems}
+                  onChange={(checked) => handleSettingChange('whatsappIncludeItems', checked)}
+                  helpText="Show individual items and quantities in the message."
+                />
               </div>
-              <ToggleSwitch
-                label=""
-                checked={settings.whatsappEnabled}
-                onChange={(checked) => handleSettingChange('whatsappEnabled', checked)}
-              />
+
+              <div className="space-y-4">
+                <TextInput
+                  id="whatsapp_opening"
+                  label="Opening Message"
+                  value={settings.whatsappMessage}
+                  onChange={(value) => handleSettingChange('whatsappMessage', value)}
+                  placeholder="Thank you for your purchase! Here's your invoice:"
+                  multiline
+                  rows={2}
+                  helpText={
+                    <div>
+                      <p className="mb-2"><strong>Available Variables:</strong></p>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <span>{'{invoice_no}'}</span>
+                        <span>{'{customer_name}'}</span>
+                        <span>{'{total}'}</span>
+                        <span>{'{paid}'}</span>
+                        <span>{'{balance}'}</span>
+                        <span>{'{date}'}</span>
+                        <span>{'{business_name}'}</span>
+                        <span>{'{business_phone}'}</span>
+                      </div>
+                    </div>
+                  }
+                />
+
+                <TextInput
+                  id="whatsapp_closing"
+                  label="Closing Message (Optional)"
+                  value={settings.whatsappClosingMessage || ''}
+                  onChange={(value) => handleSettingChange('whatsappClosingMessage', value)}
+                  placeholder="Thank you for your business!"
+                  multiline
+                  rows={2}
+                  helpText="Optional message shown at the end of the invoice."
+                />
+              </div>
+
+              <button
+                onClick={() => setShowWhatsAppPreview(!showWhatsAppPreview)}
+                className="flex items-center gap-2 px-4 py-2 border-2 border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                <Eye className="w-4 h-4" />
+                {showWhatsAppPreview ? 'Hide Preview' : 'Show Preview'}
+              </button>
+
+              {showWhatsAppPreview && (
+                <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono">
+                    {generateWhatsAppPreview()}
+                  </pre>
+                </div>
+              )}
             </div>
-
-            {settings.whatsappEnabled && (
-              <div className="space-y-4 mt-4 pt-4 border-t border-green-300">
-                {/* Auto Send */}
-                <div>
-                  <ToggleSwitch
-                    label="Auto-send after payment completion"
-                    checked={settings.whatsappAutoSend}
-                    onChange={(checked) => handleSettingChange('whatsappAutoSend', checked)}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">
-                    {settings.whatsappAutoSend 
-                      ? "✅ Invoices will be sent automatically" 
-                      : "Manual: Staff will need to click 'Send' button"
-                    }
-                  </p>
-                </div>
-
-                {/* Show Preview */}
-                <div>
-                  <ToggleSwitch
-                    label="Show preview before sending"
-                    checked={settings.whatsappShowPreview}
-                    onChange={(checked) => handleSettingChange('whatsappShowPreview', checked)}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">
-                    Allow staff to review message before sending
-                  </p>
-                </div>
-
-                {/* Include Options */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <ToggleSwitch
-                    label="Include business logo"
-                    checked={settings.whatsappIncludeLogo}
-                    onChange={(checked) => handleSettingChange('whatsappIncludeLogo', checked)}
-                  />
-                  
-                  <ToggleSwitch
-                    label="Include item details"
-                    checked={settings.whatsappIncludeItems}
-                    onChange={(checked) => handleSettingChange('whatsappIncludeItems', checked)}
-                  />
-                </div>
-
-                {/* Template Customization */}
-                <div className="border-t border-green-200 pt-4">
-                  <h5 className="font-medium text-gray-900 mb-3">📝 Template Customization</h5>
-                  
-                  {/* Opening Message */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Opening Message
-                    </label>
-                    <textarea
-                      value={settings.whatsappMessage}
-                      onChange={(e) => handleSettingChange('whatsappMessage', e.target.value)}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="Thank you for your purchase! Here's your invoice:"
-                    />
-                  </div>
-
-                  {/* Available Variables */}
-                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                    <p className="text-xs font-medium text-gray-700 mb-2">Available Variables:</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                      <span>• {'{invoice_no}'} - Invoice number</span>
-                      <span>• {'{customer_name}'} - Customer name</span>
-                      <span>• {'{total}'} - Total amount</span>
-                      <span>• {'{paid}'} - Amount paid</span>
-                      <span>• {'{balance}'} - Balance due</span>
-                      <span>• {'{date}'} - Transaction date</span>
-                      <span>• {'{business_name}'} - Your business</span>
-                      <span>• {'{business_phone}'} - Your phone</span>
-                    </div>
-                  </div>
-
-                  {/* Closing Message */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Closing Message (Optional)
-                    </label>
-                    <textarea
-                      value={settings.whatsappClosingMessage || ''}
-                      onChange={(e) => handleSettingChange('whatsappClosingMessage', e.target.value)}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      placeholder="Thank you for your business! Visit us again soon."
-                    />
-                  </div>
-                </div>
-
-                {/* Preview Button */}
-                <button
-                  onClick={() => setShowWhatsAppPreview(!showWhatsAppPreview)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                >
-                  <Eye className="w-4 h-4" />
-                  {showWhatsAppPreview ? 'Hide Preview' : 'Show Preview'}
-                </button>
-
-                {/* WhatsApp Preview */}
-                {showWhatsAppPreview && (
-                  <div className="bg-white border-2 border-green-300 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <MessageCircle className="w-5 h-5 text-green-600" />
-                      <h5 className="font-semibold text-gray-900">WhatsApp Preview</h5>
-                    </div>
-                    <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                      <pre className="whitespace-pre-wrap text-sm text-gray-800 font-mono">
-                        {generateWhatsAppPreview()}
-                      </pre>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      💡 This is how your invoice will appear on WhatsApp
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </SettingsSection>
 
       {/* SMS Settings */}
       <SettingsSection
         title="SMS Invoice"
-        description="Send short invoice notifications via SMS"
         icon={<Smartphone className="w-5 h-5" />}
+        helpText="Tuma invoice summary kwa SMS kwa customer."
       >
-        <div className="space-y-6">
-          {/* Main SMS Toggle */}
-          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div className="flex items-start gap-3">
-                <Smartphone className="w-6 h-6 text-blue-600 mt-1" />
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-1">SMS Integration</h4>
-                  <p className="text-sm text-gray-600">
-                    Send concise invoice summaries via SMS for quick customer reference
-                  </p>
-                </div>
+        <div className="space-y-4">
+          <ToggleSwitch
+            id="sms_enabled"
+            label="Enable SMS Integration"
+            checked={settings.smsEnabled}
+            onChange={(checked) => handleSettingChange('smsEnabled', checked)}
+            helpText="Send short invoice notifications to customers via SMS."
+          />
+
+          {settings.smsEnabled && (
+            <div className="space-y-4 pl-6 border-l-4 border-blue-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ToggleSwitch
+                  id="sms_auto_send"
+                  label="Auto-send after payment"
+                  checked={settings.smsAutoSend}
+                  onChange={(checked) => handleSettingChange('smsAutoSend', checked)}
+                  helpText="Automatically send SMS after payment completion."
+                />
+
+                <ToggleSwitch
+                  id="sms_include_total"
+                  label="Include total amount"
+                  checked={settings.smsIncludeTotal}
+                  onChange={(checked) => handleSettingChange('smsIncludeTotal', checked)}
+                  helpText="Show total amount in the SMS message."
+                />
+                
+                <ToggleSwitch
+                  id="sms_include_balance"
+                  label="Include balance due"
+                  checked={settings.smsIncludeBalance}
+                  onChange={(checked) => handleSettingChange('smsIncludeBalance', checked)}
+                  helpText="Show remaining balance in the SMS message."
+                />
               </div>
-              <ToggleSwitch
-                label=""
-                checked={settings.smsEnabled}
-                onChange={(checked) => handleSettingChange('smsEnabled', checked)}
-              />
-            </div>
 
-            {settings.smsEnabled && (
-              <div className="space-y-4 mt-4 pt-4 border-t border-blue-300">
-                {/* Auto Send */}
-                <div>
-                  <ToggleSwitch
-                    label="Auto-send after payment completion"
-                    checked={settings.smsAutoSend}
-                    onChange={(checked) => handleSettingChange('smsAutoSend', checked)}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">
-                    {settings.smsAutoSend 
-                      ? "✅ SMS will be sent automatically" 
-                      : "Manual: Staff will need to click 'Send' button"
-                    }
-                  </p>
-                </div>
-
-                {/* Include Options */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <ToggleSwitch
-                    label="Include total amount"
-                    checked={settings.smsIncludeTotal}
-                    onChange={(checked) => handleSettingChange('smsIncludeTotal', checked)}
-                  />
-                  
-                  <ToggleSwitch
-                    label="Include balance due"
-                    checked={settings.smsIncludeBalance}
-                    onChange={(checked) => handleSettingChange('smsIncludeBalance', checked)}
-                  />
-                </div>
-
-                {/* SMS Template Customization */}
-                <div className="border-t border-blue-200 pt-4">
-                  <h5 className="font-medium text-gray-900 mb-3">📝 Template Customization</h5>
-                  
-                  {/* Main SMS Template */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      SMS Template
-                    </label>
-                    <textarea
-                      value={settings.smsTemplate}
-                      onChange={(e) => handleSettingChange('smsTemplate', e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Thank you! Total: {total}. Balance: {balance}. Ref: {invoice_no}"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      💡 Keep under 160 characters to save costs!
-                    </p>
-                  </div>
-
-                  {/* Available Variables */}
-                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                    <p className="text-xs font-medium text-gray-700 mb-2">Available Variables:</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                      <span>• {'{total}'} - Total amount</span>
-                      <span>• {'{balance}'} - Balance due</span>
-                      <span>• {'{paid}'} - Amount paid</span>
-                      <span>• {'{invoice_no}'} - Invoice number</span>
-                      <span>• {'{business_name}'} - Your business</span>
-                      <span>• {'{customer_name}'} - Customer name</span>
-                      <span>• {'{date}'} - Transaction date</span>
-                      <span>• {'{business_phone}'} - Your phone</span>
+                <TextInput
+                  id="sms_template"
+                  label="SMS Template"
+                  value={settings.smsTemplate}
+                  onChange={(value) => handleSettingChange('smsTemplate', value)}
+                  placeholder="Thank you! Total: {total}. Balance: {balance}. Ref: {invoice_no}"
+                  multiline
+                  rows={3}
+                  helpText={
+                    <div>
+                      <p className="mb-2"><strong>Variables:</strong></p>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <span>{'{total}'}</span>
+                        <span>{'{balance}'}</span>
+                        <span>{'{paid}'}</span>
+                        <span>{'{invoice_no}'}</span>
+                        <span>{'{business_name}'}</span>
+                        <span>{'{customer_name}'}</span>
+                      </div>
+                      <p className="mt-2 text-xs">Keep under 160 chars to avoid splitting.</p>
                     </div>
-                  </div>
+                  }
+                />
 
-                  {/* Quick Templates */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Quick Templates (Click to use)
-                    </label>
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSettingChange('smsTemplate', 'Thank you! Total: {total}. Paid: {paid}. Balance: {balance}. Ref: {invoice_no}')}
-                        className="w-full text-left px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 text-xs"
-                      >
-                        💰 Full Details: "Thank you! Total: {'{total}'}. Paid: {'{paid}'}. Balance: {'{balance}'}. Ref: {'{invoice_no}'}"
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSettingChange('smsTemplate', 'Payment received! {total} paid. Balance: {balance}. Thank you!')}
-                        className="w-full text-left px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 text-xs"
-                      >
-                        ✅ Simple: "Payment received! {'{total}'} paid. Balance: {'{balance}'}. Thank you!"
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleSettingChange('smsTemplate', '{business_name}: Invoice {invoice_no}. Total: {total}. Visit us again!')}
-                        className="w-full text-left px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-blue-50 text-xs"
-                      >
-                        🏪 Business Focus: "{'{business_name}'}: Invoice {'{invoice_no}'}. Total: {'{total}'}. Visit us again!"
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Preview Button */}
                 <button
                   onClick={() => setShowSMSPreview(!showSMSPreview)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 border-2 border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <Eye className="w-4 h-4" />
                   {showSMSPreview ? 'Hide Preview' : 'Show Preview'}
                 </button>
 
-                {/* SMS Preview */}
                 {showSMSPreview && (
-                  <div className="bg-white border-2 border-blue-300 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Smartphone className="w-5 h-5 text-blue-600" />
-                      <h5 className="font-semibold text-gray-900">SMS Preview</h5>
-                    </div>
-                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                      <p className="text-sm text-gray-800">
-                        {generateSMSPreview()}
-                      </p>
-                      <div className="mt-2 pt-2 border-t border-blue-200 text-xs text-gray-500">
-                        Character count: {generateSMSPreview().length} / 160
-                      </div>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      💡 SMS messages over 160 characters may be split into multiple messages
+                  <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-800 mb-2">
+                      {generateSMSPreview()}
                     </p>
+                    <div className="text-xs text-gray-500">
+                      Character count: {generateSMSPreview().length} / 160
+                    </div>
                   </div>
                 )}
               </div>
-            )}
-          </div>
+          )}
         </div>
       </SettingsSection>
 
       {/* Email Settings */}
       <SettingsSection
         title="Email Invoice"
-        description="Send professional invoices via email"
         icon={<Mail className="w-5 h-5" />}
+        helpText="Tuma invoice PDF kwa email ya customer."
       >
-        <div className="space-y-6">
-          {/* Main Email Toggle */}
-          <div className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4">
-            <div className="flex items-start justify-between gap-4 mb-4">
-              <div className="flex items-start gap-3">
-                <Mail className="w-6 h-6 text-purple-600 mt-1" />
-                <div>
-                  <h4 className="font-semibold text-gray-900 mb-1">Email Integration</h4>
-                  <p className="text-sm text-gray-600">
-                    Send professional PDF invoices via email with custom templates
-                  </p>
-                </div>
+        <div className="space-y-4">
+          <ToggleSwitch
+            id="email_enabled"
+            label="Enable Email Integration"
+            checked={settings.emailEnabled}
+            onChange={(checked) => handleSettingChange('emailEnabled', checked)}
+            helpText="Send professional invoices to customers via email."
+          />
+
+          {settings.emailEnabled && (
+            <div className="space-y-4 pl-6 border-l-4 border-purple-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <ToggleSwitch
+                  id="email_auto_send"
+                  label="Auto-send after payment"
+                  checked={settings.emailAutoSend}
+                  onChange={(checked) => handleSettingChange('emailAutoSend', checked)}
+                  helpText="Automatically send email after payment completion."
+                />
+
+                <ToggleSwitch
+                  id="email_attach_pdf"
+                  label="Attach PDF invoice"
+                  checked={settings.emailAttachPDF}
+                  onChange={(checked) => handleSettingChange('emailAttachPDF', checked)}
+                  helpText="Include formatted PDF as email attachment."
+                />
               </div>
-              <ToggleSwitch
-                label=""
-                checked={settings.emailEnabled}
-                onChange={(checked) => handleSettingChange('emailEnabled', checked)}
-              />
+
+              <div className="space-y-4">
+                <TextInput
+                  id="email_subject"
+                  label="Email Subject"
+                  value={settings.emailSubject}
+                  onChange={(value) => handleSettingChange('emailSubject', value)}
+                  placeholder="Your Invoice from {business_name}"
+                  helpText="Subject line for the email. Use variables like {business_name}, {invoice_no}."
+                />
+
+                <TextInput
+                  id="email_body"
+                  label="Email Body"
+                  value={settings.emailTemplate}
+                  onChange={(value) => handleSettingChange('emailTemplate', value)}
+                  placeholder="Dear {customer_name}, Thank you for your purchase!"
+                  multiline
+                  rows={6}
+                  helpText={
+                    <div>
+                      <p className="mb-2"><strong>Variables:</strong></p>
+                      <div className="grid grid-cols-2 gap-1 text-xs">
+                        <span>{'{business_name}'}</span>
+                        <span>{'{customer_name}'}</span>
+                        <span>{'{invoice_no}'}</span>
+                        <span>{'{total}'}</span>
+                        <span>{'{paid}'}</span>
+                        <span>{'{balance}'}</span>
+                      </div>
+                    </div>
+                  }
+                />
+              </div>
             </div>
-
-            {settings.emailEnabled && (
-              <div className="space-y-4 mt-4 pt-4 border-t border-purple-300">
-                {/* Auto Send */}
-                <div>
-                  <ToggleSwitch
-                    label="Auto-send after payment completion"
-                    checked={settings.emailAutoSend}
-                    onChange={(checked) => handleSettingChange('emailAutoSend', checked)}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">
-                    {settings.emailAutoSend 
-                      ? "✅ Emails will be sent automatically" 
-                      : "Manual: Staff will need to click 'Send' button"
-                    }
-                  </p>
-                </div>
-
-                {/* Attach PDF */}
-                <div>
-                  <ToggleSwitch
-                    label="Attach PDF invoice"
-                    checked={settings.emailAttachPDF}
-                    onChange={(checked) => handleSettingChange('emailAttachPDF', checked)}
-                  />
-                  <p className="text-xs text-gray-600 mt-1">
-                    Include a professionally formatted PDF invoice
-                  </p>
-                </div>
-
-                {/* Email Template Customization */}
-                <div className="border-t border-purple-200 pt-4">
-                  <h5 className="font-medium text-gray-900 mb-3">📝 Template Customization</h5>
-                  
-                  {/* Email Subject */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email Subject
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.emailSubject}
-                      onChange={(e) => handleSettingChange('emailSubject', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      placeholder="Your Invoice from {business_name}"
-                    />
-                  </div>
-
-                  {/* Email Body Template */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email Body
-                    </label>
-                    <textarea
-                      value={settings.emailTemplate}
-                      onChange={(e) => handleSettingChange('emailTemplate', e.target.value)}
-                      rows={6}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      placeholder="Dear {customer_name},&#10;&#10;Thank you for your purchase!&#10;&#10;Please find your invoice #{invoice_no} attached.&#10;&#10;Total: {total}&#10;&#10;Best regards,&#10;{business_name}"
-                    />
-                  </div>
-
-                  {/* Available Variables */}
-                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                    <p className="text-xs font-medium text-gray-700 mb-2">Available Variables:</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                      <span>• {'{business_name}'} - Your business</span>
-                      <span>• {'{customer_name}'} - Customer name</span>
-                      <span>• {'{invoice_no}'} - Invoice number</span>
-                      <span>• {'{total}'} - Total amount</span>
-                      <span>• {'{paid}'} - Amount paid</span>
-                      <span>• {'{balance}'} - Balance due</span>
-                      <span>• {'{date}'} - Transaction date</span>
-                      <span>• {'{business_phone}'} - Your phone</span>
-                    </div>
-                  </div>
-
-                  {/* Quick Email Templates */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Quick Templates (Click to use)
-                    </label>
-                    <div className="space-y-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleSettingChange('emailSubject', 'Invoice #{invoice_no} from {business_name}');
-                          handleSettingChange('emailTemplate', 'Dear {customer_name},\n\nThank you for your purchase!\n\nInvoice Details:\n- Invoice #: {invoice_no}\n- Total: {total}\n- Paid: {paid}\n- Balance: {balance}\n\nPlease find your detailed invoice attached as a PDF.\n\nBest regards,\n{business_name}\n{business_phone}');
-                        }}
-                        className="w-full text-left px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-purple-50 text-xs"
-                      >
-                        📧 Professional: Full invoice details with PDF attachment
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleSettingChange('emailSubject', 'Thank you for your purchase! - {business_name}');
-                          handleSettingChange('emailTemplate', 'Hi {customer_name},\n\nThanks for shopping with us! Your invoice #{invoice_no} is attached.\n\nTotal: {total}\n\nSee you soon!\n{business_name}');
-                        }}
-                        className="w-full text-left px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-purple-50 text-xs"
-                      >
-                        😊 Friendly: Casual tone with essential details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleSettingChange('emailSubject', 'Receipt - {invoice_no}');
-                          handleSettingChange('emailTemplate', 'Dear Customer,\n\nPlease find your receipt attached.\n\nInvoice: {invoice_no}\nAmount: {total}\nDate: {date}\n\nThank you.');
-                        }}
-                        className="w-full text-left px-3 py-2 bg-white border border-gray-300 rounded-lg hover:bg-purple-50 text-xs"
-                      >
-                        📄 Minimal: Simple receipt confirmation
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </SettingsSection>
 
       {/* General Notifications */}
       <SettingsSection
         title="General Notifications"
-        description="System-wide notification preferences"
         icon={<Bell className="w-5 h-5" />}
+        helpText="Control which system events trigger notifications to staff and customers."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ToggleSwitch
+            id="notify_on_payment"
             label="Notify on successful payment"
             checked={settings.notifyOnPayment}
             onChange={(checked) => handleSettingChange('notifyOnPayment', checked)}
+            helpText="Show notification when a payment is completed successfully."
           />
           
           <ToggleSwitch
+            id="notify_on_refund"
             label="Notify on refund"
             checked={settings.notifyOnRefund}
             onChange={(checked) => handleSettingChange('notifyOnRefund', checked)}
+            helpText="Alert when a refund is processed."
           />
           
           <ToggleSwitch
+            id="notify_low_stock"
             label="Low stock alerts"
             checked={settings.notifyLowStock}
             onChange={(checked) => handleSettingChange('notifyLowStock', checked)}
+            helpText="Get alerted when products are running low on inventory."
           />
           
           <ToggleSwitch
+            id="notify_new_customer"
             label="New customer registration"
             checked={settings.notifyNewCustomer}
             onChange={(checked) => handleSettingChange('notifyNewCustomer', checked)}
+            helpText="Receive notification when a new customer is added."
           />
         </div>
       </SettingsSection>
-
-      {/* Info Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-white rounded-lg shadow-sm">
-            <Zap className="w-6 h-6 text-blue-600" />
-          </div>
-          <div className="flex-1">
-            <h4 className="font-semibold text-gray-900 mb-2">Notification Tips</h4>
-            <ul className="text-sm text-gray-700 space-y-2">
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <span><strong>Auto-send:</strong> Invoices sent immediately after payment</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <span><strong>Manual send:</strong> Staff reviews and sends when ready</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <span><strong>Multiple channels:</strong> You can enable all channels simultaneously</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <span><strong>Preview:</strong> Always test your templates before going live</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <span><strong>Cost:</strong> SMS charges apply per message, WhatsApp/Email may have lower costs</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </UniversalSettingsTab>
   );
 });

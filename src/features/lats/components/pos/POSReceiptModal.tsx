@@ -3,6 +3,7 @@ import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import { Printer, Smartphone, MessageSquare, X, Bluetooth, CheckCircle, XCircle, Settings } from 'lucide-react';
 import { useBluetoothPrinter } from '../../../../hooks/useBluetoothPrinter';
 import { useBusinessInfo } from '../../../../hooks/useBusinessInfo';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 interface Receipt {
   id: string;
@@ -48,6 +49,9 @@ const POSReceiptModal: React.FC<POSReceiptModalProps> = ({
   } = useBluetoothPrinter();
   
   const { businessInfo } = useBusinessInfo();
+  
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
   const [showBluetoothOptions, setShowBluetoothOptions] = useState(false);
 
   if (!isOpen || !receipt) return null;

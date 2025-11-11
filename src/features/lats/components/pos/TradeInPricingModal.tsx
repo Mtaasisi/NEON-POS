@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, X, AlertCircle, TrendingUp, Calculator, Package, Plus, Trash2, CheckCircle } from 'lucide-react';
+import { DollarSign, X, AlertCircle, TrendingUp, Calculator, Package, Plus, Trash2, CheckCircle, Smartphone } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../../lib/supabaseClient';
 import type { TradeInTransaction } from '../../types/tradeIn';
@@ -54,10 +54,15 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
     markup_percentage: 30,
     profit_per_unit: 0
   });
+  const [animateStats, setAnimateStats] = useState(false);
 
   // Helper function to format numbers with comma separators
   const formatPrice = (price: number | string): string => {
     const num = typeof price === 'string' ? parseFloat(price) : price;
+    // Remove .00 for whole numbers
+    if (num % 1 === 0) {
+      return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
     return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
@@ -91,6 +96,10 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
       markup_percentage: parseFloat(markup.toFixed(2)),
       profit_per_unit: parseFloat(profit.toFixed(2))
     });
+
+    // Trigger animation
+    setAnimateStats(true);
+    setTimeout(() => setAnimateStats(false), 600);
   };
 
   const updateMarkupPercentage = (markupPercentage: number) => {
@@ -104,6 +113,10 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
       markup_percentage: markupPercentage,
       profit_per_unit: parseFloat(profit.toFixed(2))
     });
+
+    // Trigger animation
+    setAnimateStats(true);
+    setTimeout(() => setAnimateStats(false), 600);
   };
 
   const addAdditionalCost = () => {
@@ -161,6 +174,12 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
       markup_percentage: parseFloat(markup.toFixed(2)),
       profit_per_unit: parseFloat(profit.toFixed(2))
     });
+
+    // Trigger animation when amount changes
+    if (field === 'amount') {
+      setAnimateStats(true);
+      setTimeout(() => setAnimateStats(false), 600);
+    }
   };
 
   const handleConfirm = async () => {
@@ -222,200 +241,210 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
 
   const isProfitable = pricingData.profit_per_unit > 0;
   const needsRepair = transaction.needs_repair || false;
+  const isPricingComplete = pricingData.selling_price > 0;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[99999]">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-5 h-5 text-orange-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900">Set Resale Price - Trade-In Device</h3>
-                <p className="text-xs text-gray-500">Configure pricing before adding to inventory</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]" role="dialog" aria-modal="true" aria-labelledby="trade-in-pricing-modal-title">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+        >
+          <X className="w-5 h-5" />
+        </button>
 
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white text-center border-b border-gray-200 flex-shrink-0">
+          <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <DollarSign className="w-8 h-8 text-white" />
+          </div>
+          <h3 id="trade-in-pricing-modal-title" className="text-2xl font-bold text-gray-900 mb-2">Set Resale Price - Trade-In Device</h3>
+          <p className="text-sm text-gray-600">Configure pricing before adding to inventory</p>
+          
+          {/* Status Badge */}
+          <div className="flex items-center justify-center gap-2 mt-4">
+            {isPricingComplete ? (
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                <CheckCircle className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-bold text-green-700">Pricing Complete</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-lg animate-pulse">
+                <AlertCircle className="w-4 h-4 text-orange-600" />
+                <span className="text-sm font-bold text-orange-700">Set Selling Price</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Scrollable Content Section */}
+        <div className="flex-1 overflow-y-auto px-6 pt-6">
           {/* Device Info */}
-          <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg p-4 mb-6 border-2 border-orange-200">
-            <div className="flex items-start gap-3">
-              <div className="w-12 h-12 bg-orange-200 rounded-lg flex items-center justify-center">
-                <Package className="w-6 h-6 text-orange-700" />
+          <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl p-5 mb-6 border-2 border-orange-200 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="w-14 h-14 bg-gradient-to-br from-orange-400 to-orange-500 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md">
+                <Smartphone className="w-7 h-7 text-white" />
               </div>
               <div className="flex-1">
-                <h4 className="font-bold text-gray-900 text-lg">{transaction.device_name}</h4>
-                <p className="text-sm text-gray-600">{transaction.device_model}</p>
-                <div className="flex flex-wrap gap-3 mt-2">
+                <h4 className="font-bold text-gray-900 text-xl mb-1">{transaction.device_name}</h4>
+                <p className="text-sm text-gray-700 font-medium mb-3">{transaction.device_model}</p>
+                <div className="flex flex-wrap gap-2">
                   {transaction.device_imei && (
-                    <span className="text-xs bg-white px-2 py-1 rounded border border-gray-300">
-                      IMEI: {transaction.device_imei}
+                    <span className="text-xs bg-white px-3 py-1.5 rounded-lg border-2 border-gray-300 font-semibold text-gray-700">
+                      📱 IMEI: {transaction.device_imei}
                     </span>
                   )}
-                  <span className="text-xs bg-white px-2 py-1 rounded border border-gray-300">
-                    Condition: {transaction.condition_rating?.toUpperCase()}
+                  <span className={`text-xs px-3 py-1.5 rounded-lg border-2 font-bold ${
+                    transaction.condition_rating === 'excellent' ? 'bg-green-100 border-green-300 text-green-700' :
+                    transaction.condition_rating === 'good' ? 'bg-blue-100 border-blue-300 text-blue-700' :
+                    transaction.condition_rating === 'fair' ? 'bg-yellow-100 border-yellow-300 text-yellow-700' :
+                    'bg-gray-100 border-gray-300 text-gray-700'
+                  }`}>
+                    ⭐ Condition: {transaction.condition_rating?.toUpperCase()}
                   </span>
                   {needsRepair && (
-                    <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded border border-red-300">
+                    <span className="text-xs bg-red-500 text-white px-3 py-1.5 rounded-lg border-2 border-red-600 font-bold shadow-sm">
                       ⚠️ Needs Repair
                     </span>
                   )}
                 </div>
                 {transaction.condition_description && (
-                  <p className="text-xs text-gray-600 mt-2">{transaction.condition_description}</p>
+                  <p className="text-sm text-gray-600 mt-3 italic">{transaction.condition_description}</p>
                 )}
               </div>
             </div>
           </div>
 
           {/* Pricing Summary Stats */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6 mb-6 border-2 border-green-200">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-gray-600 mb-1">Trade-In Value Paid</p>
-                <p className="text-xl font-bold text-gray-700">{formatPrice(pricingData.cost_price)}</p>
-                <p className="text-xs text-gray-500">TZS</p>
-              </div>
-              <div>
-                <p className="text-xs text-orange-600 mb-1">+ Additional Costs</p>
-                <p className="text-xl font-bold text-orange-600">
-                  {formatPrice(pricingData.additional_costs.reduce((sum, cost) => sum + cost.amount, 0))}
-                </p>
-                <p className="text-xs text-gray-500">TZS</p>
-              </div>
-              <div className="border-l-2 border-green-300 pl-4">
-                <p className="text-xs text-gray-600 mb-1">Total Cost</p>
-                <p className="text-xl font-bold text-gray-900">{formatPrice(pricingData.total_cost)}</p>
-                <p className="text-xs text-gray-500">TZS</p>
-              </div>
-              <div className="bg-white rounded-lg p-2 shadow-sm">
-                <p className="text-xs text-gray-600 mb-1">Expected Profit</p>
-                <p className={`text-xl font-bold ${isProfitable ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatPrice(pricingData.profit_per_unit)}
-                </p>
-                <p className="text-xs text-purple-600 font-semibold">{pricingData.markup_percentage.toFixed(1)}% markup</p>
-              </div>
+          <div className="grid grid-cols-4 gap-3 mb-6">
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+              <p className="text-xs text-gray-500 mb-2">Trade-In Paid</p>
+              <p className={`text-xl font-bold text-gray-900 transition-all duration-300 ${animateStats ? 'scale-110 text-blue-600' : ''}`}>
+                {formatPrice(pricingData.cost_price)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">TZS</p>
+            </div>
+            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+              <p className="text-xs text-gray-500 mb-2">Total Cost</p>
+              <p className={`text-xl font-bold text-gray-900 transition-all duration-300 ${animateStats ? 'scale-110 text-blue-600' : ''}`}>
+                {formatPrice(pricingData.total_cost)}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">TZS</p>
             </div>
           </div>
 
           {/* Main Pricing Form */}
-          <div className="border-2 border-gray-200 rounded-lg p-6 mb-6">
-            <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <Calculator className="w-5 h-5 text-green-600" />
+          <div className="border-2 border-blue-200 rounded-2xl p-6 mb-6 bg-blue-50/30 shadow-sm">
+            <h4 className="font-bold text-gray-900 mb-5 flex items-center gap-2 text-lg">
+              <Calculator className="w-6 h-6 text-blue-600" />
               Pricing Configuration
             </h4>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              {/* Trade-In Value (Read-only) */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Trade-In Value Paid
-                </label>
-                <input
-                  type="text"
-                  value={formatPrice(pricingData.cost_price)}
-                  readOnly
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none text-gray-900 bg-gray-50 cursor-not-allowed"
-                />
-              </div>
-
-              {/* Total Cost (Read-only) */}
-              <div>
-                <label className="block text-sm font-medium text-orange-700 mb-2">
-                  Total Cost (with extras)
-                </label>
-                <input
-                  type="text"
-                  value={formatPrice(pricingData.total_cost)}
-                  readOnly
-                  className="w-full px-4 py-3 border-2 border-orange-300 rounded-lg focus:outline-none text-gray-900 bg-orange-50 cursor-not-allowed font-bold"
-                />
-              </div>
-
+            <div className="grid grid-cols-2 gap-4 mb-5">
               {/* Selling Price */}
-              <div>
-                <label className="block text-sm font-medium text-green-700 mb-2">
-                  Selling Price * (Required)
+              <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
+                <label className="block text-xs font-medium text-blue-700 mb-2">
+                  Selling Price *
                 </label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={pricingData.selling_price}
-                  onChange={(e) => updateSellingPrice(parseFloat(e.target.value) || 0)}
-                  className="w-full px-4 py-3 border-2 border-green-300 rounded-lg focus:outline-none focus:border-green-500 transition-colors text-gray-900 font-semibold"
+                  type="text"
+                  value={formatPrice(pricingData.selling_price)}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/,/g, '');
+                    const numValue = parseFloat(value) || 0;
+                    updateSellingPrice(numValue);
+                  }}
+                  className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-xl font-bold bg-white"
                   placeholder="Enter selling price"
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Markup Percentage */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Markup Percentage
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="1000"
-                    value={pricingData.markup_percentage}
-                    onChange={(e) => updateMarkupPercentage(parseFloat(e.target.value) || 0)}
-                    className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors text-gray-900"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => updateMarkupPercentage(30)}
-                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
-                  >
-                    30%
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateMarkupPercentage(50)}
-                    className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
-                  >
-                    50%
-                  </button>
-                </div>
-              </div>
-
-              {/* Profit */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Expected Profit
+              {/* Markup % */}
+              <div className="bg-purple-50 p-4 rounded-xl border border-purple-200">
+                <label className="block text-xs font-medium text-purple-700 mb-2">
+                  Markup %
                 </label>
                 <input
                   type="text"
-                  value={formatPrice(pricingData.profit_per_unit)}
-                  readOnly
-                  className={`w-full px-4 py-3 border-2 rounded-lg text-gray-900 font-bold cursor-not-allowed ${
-                    isProfitable 
-                      ? 'border-green-300 bg-green-50 text-green-700' 
-                      : 'border-red-300 bg-red-50 text-red-700'
-                  }`}
+                  value={pricingData.markup_percentage % 1 === 0 ? pricingData.markup_percentage : pricingData.markup_percentage.toFixed(2)}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/,/g, '');
+                    const numValue = parseFloat(value) || 0;
+                    updateMarkupPercentage(numValue);
+                  }}
+                  className="w-full px-4 py-3 border-2 border-purple-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
                 />
               </div>
             </div>
 
+            {/* Quick Profit Add Buttons */}
+            <div className="flex flex-wrap items-center gap-2 p-3 bg-blue-50 rounded-xl border border-blue-200">
+              <span className="text-sm font-semibold text-gray-700">Quick Add Profit:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const totalCost = pricingData.total_cost;
+                  const sellingPrice = totalCost + 10000;
+                  updateSellingPrice(sellingPrice);
+                }}
+                className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 hover:bg-blue-500 hover:text-white hover:border-blue-500 rounded-lg transition-all font-semibold shadow-sm"
+              >
+                +10K
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const totalCost = pricingData.total_cost;
+                  const sellingPrice = totalCost + 50000;
+                  updateSellingPrice(sellingPrice);
+                }}
+                className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 hover:bg-blue-500 hover:text-white hover:border-blue-500 rounded-lg transition-all font-semibold shadow-sm"
+              >
+                +50K
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const totalCost = pricingData.total_cost;
+                  const sellingPrice = totalCost + 100000;
+                  updateSellingPrice(sellingPrice);
+                }}
+                className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 hover:bg-blue-500 hover:text-white hover:border-blue-500 rounded-lg transition-all font-semibold shadow-sm"
+              >
+                +100K
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const totalCost = pricingData.total_cost;
+                  const sellingPrice = totalCost + 200000;
+                  updateSellingPrice(sellingPrice);
+                }}
+                className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 hover:bg-blue-500 hover:text-white hover:border-blue-500 rounded-lg transition-all font-semibold shadow-sm"
+              >
+                +200K
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const totalCost = pricingData.total_cost;
+                  const sellingPrice = totalCost + 500000;
+                  updateSellingPrice(sellingPrice);
+                }}
+                className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 hover:bg-blue-500 hover:text-white hover:border-blue-500 rounded-lg transition-all font-semibold shadow-sm"
+              >
+                +500K
+              </button>
+            </div>
+
             {/* Warning for unprofitable pricing */}
-            {!isProfitable && (
-              <div className="mt-4 flex items-start gap-2 p-3 bg-red-50 border-2 border-red-200 rounded-lg">
-                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            {!isProfitable && pricingData.selling_price > 0 && (
+              <div className="mt-4 flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-xl shadow-sm">
+                <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-red-700">Warning: Loss on This Item</p>
-                  <p className="text-xs text-red-600">
+                  <p className="text-sm font-bold text-red-700">⚠️ Warning: Loss on This Item</p>
+                  <p className="text-sm text-red-600 mt-1">
                     Selling price is below total cost. You will lose {formatPrice(Math.abs(pricingData.profit_per_unit))} TZS on this device.
                   </p>
                 </div>
@@ -424,17 +453,13 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
           </div>
 
           {/* Additional Costs Section */}
-          <div className="border-2 border-orange-200 rounded-lg p-6 mb-6 bg-orange-50/30">
+          <div className="border-2 border-orange-200 rounded-2xl p-5 mb-4 bg-orange-50 shadow-sm">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Calculator className="w-5 h-5 text-orange-600" />
-                <h5 className="font-semibold text-gray-900">Additional Costs</h5>
-                <span className="text-xs text-gray-500">Repairs, cleaning, refurbishment, etc.</span>
-              </div>
+              <h4 className="text-base font-bold text-gray-900">Additional Costs</h4>
               <button
                 type="button"
                 onClick={addAdditionalCost}
-                className="flex items-center gap-1 px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-lg transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-xl transition-colors font-semibold shadow-lg"
               >
                 <Plus className="w-4 h-4" />
                 Add Cost
@@ -442,89 +467,96 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
             </div>
 
             {pricingData.additional_costs.length > 0 ? (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {pricingData.additional_costs.map((cost) => (
-                  <div key={cost.id} className="flex items-center gap-2 bg-white rounded p-3 border border-orange-200">
+                  <div key={cost.id} className="flex items-center gap-3 p-4 bg-white rounded-xl border-2 border-orange-200 shadow-sm">
                     <select
                       value={cost.category}
                       onChange={(e) => updateAdditionalCost(cost.id, 'category', e.target.value)}
-                      className="flex-1 px-3 py-2 border-2 border-gray-300 rounded focus:outline-none focus:border-orange-500"
+                      className="flex-1 px-3 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 font-medium"
                     >
                       {COST_CATEGORIES.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={cost.amount}
-                      onChange={(e) => updateAdditionalCost(cost.id, 'amount', parseFloat(e.target.value) || 0)}
+                      type="text"
+                      value={formatPrice(cost.amount)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/,/g, '');
+                        const amount = parseFloat(value) || 0;
+                        updateAdditionalCost(cost.id, 'amount', amount);
+                      }}
                       placeholder="Amount"
-                      className="w-32 px-3 py-2 border-2 border-gray-300 rounded focus:outline-none focus:border-orange-500 font-semibold"
+                      className="w-44 px-4 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 font-bold text-lg"
                     />
                     <input
                       type="text"
                       value={cost.description}
                       onChange={(e) => updateAdditionalCost(cost.id, 'description', e.target.value)}
                       placeholder="Description (optional)"
-                      className="flex-1 px-3 py-2 border-2 border-gray-300 rounded focus:outline-none focus:border-orange-500"
+                      className="flex-1 px-3 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                     />
                     <button
                       type="button"
                       onClick={() => removeAdditionalCost(cost.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                      className="p-2.5 text-red-600 hover:bg-red-100 rounded-xl transition-colors"
                       title="Remove cost"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-5 h-5" />
                     </button>
                   </div>
                 ))}
                 <div className="mt-3 pt-3 border-t-2 border-orange-300 flex justify-between items-center">
-                  <span className="text-sm text-gray-700 font-medium">Total Additional Costs:</span>
-                  <span className="text-lg text-orange-700 font-bold">
+                  <span className="text-sm text-gray-700 font-bold">Total Additional Costs:</span>
+                  <span className="text-xl text-orange-700 font-bold">
                     {formatPrice(pricingData.additional_costs.reduce((sum, c) => sum + c.amount, 0))} TZS
                   </span>
                 </div>
               </div>
             ) : (
-              <div className="text-center py-4 text-sm text-gray-500 bg-white rounded border-2 border-dashed border-gray-300">
-                No additional costs added. Click "Add Cost" if there are any repair, cleaning, or refurbishment expenses.
+              <div className="text-sm text-gray-600 bg-white rounded-xl p-5 border-2 border-dashed border-orange-300 text-center">
+                No additional costs. Click "Add Cost" for repair, cleaning, or refurbishment expenses.
               </div>
             )}
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isLoading}
-              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={isLoading || pricingData.selling_price <= 0}
-              className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <span className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Processing...
-                </span>
-              ) : (
-                <>
-                  <CheckCircle className="w-5 h-5" />
-                  Confirm & Add to Inventory
-                </>
-              )}
-            </button>
-          </div>
-          <p className="text-xs text-center text-gray-500 mt-2">
-            Device will be added to inventory with all pricing information
+        {/* Fixed Action Buttons Footer */}
+        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+          {!isPricingComplete && (
+            <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+              <span className="text-sm font-semibold text-orange-700">
+                Please set a selling price before confirming.
+              </span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isLoading || pricingData.selling_price <= 0}
+            className="w-full px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+          >
+            {isLoading ? (
+              <span className="flex items-center justify-center gap-2">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Processing...
+              </span>
+            ) : pricingData.selling_price <= 0 ? (
+              <span className="flex items-center justify-center gap-2">
+                <AlertCircle className="w-5 h-5" />
+                Set Selling Price to Continue
+              </span>
+            ) : (
+              <span className="flex items-center justify-center gap-2">
+                <CheckCircle className="w-5 h-5" />
+                Confirm & Add to Inventory
+              </span>
+            )}
+          </button>
+          <p className="text-xs text-center text-gray-500 mt-3">
+            Device will be added to inventory with pricing information
           </p>
         </div>
       </div>

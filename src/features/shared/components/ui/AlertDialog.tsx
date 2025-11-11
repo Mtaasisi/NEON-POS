@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, AlertTriangle, CheckCircle, Info, AlertCircle } from 'lucide-react';
 import GlassButton from './GlassButton';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 export interface AlertDialogProps {
   isOpen: boolean;
@@ -19,6 +20,9 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
   type = 'info',
   buttonText = 'OK'
 }) => {
+  // Prevent body scroll when dialog is open
+  useBodyScrollLock(isOpen);
+  
   if (!isOpen) return null;
 
   const getIcon = () => {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, AlertTriangle, CheckCircle, Info, AlertCircle } from 'lucide-react';
 import GlassButton from './GlassButton';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 export interface ConfirmationDialogProps {
   isOpen: boolean;
@@ -25,6 +26,9 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   cancelText = 'Cancel',
   loading = false
 }) => {
+  // Prevent body scroll when dialog is open
+  useBodyScrollLock(isOpen);
+  
   if (!isOpen) return null;
 
   const getIcon = () => {

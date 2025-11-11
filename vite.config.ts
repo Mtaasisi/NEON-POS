@@ -13,17 +13,10 @@ export default defineConfig(({ command, mode }) => {
     host: 'localhost',
     strictPort: true, // Don't try other ports if 5173 is busy
     hmr: {
-      port: 5173, // Use same port for HMR WebSocket
       host: 'localhost',
       protocol: 'ws',
       timeout: 30000, // 30 second timeout for HMR
-      clientPort: 5173, // Match the HMR port
       overlay: false, // Disable error overlay to prevent WebSocket issues
-      // Add WebSocket configuration for better reliability
-      ws: {
-        host: 'localhost',
-        port: 5173,
-      },
     },
     watch: {
       usePolling: true,
@@ -73,6 +66,10 @@ export default defineConfig(({ command, mode }) => {
   };
 
   return {
+    // Use relative path for Capacitor, absolute for web deployments
+    // If deployed to a subdirectory, set VITE_BASE_PATH environment variable
+    // Set to '/lats/' for production deployment to subdirectory
+    base: process.env.CAPACITOR_BUILD === 'true' ? './' : (command === 'serve' ? '/' : (env.VITE_BASE_PATH || '/lats/')),
     plugins: [
       react({
         jsxRuntime: 'automatic'
@@ -158,17 +155,6 @@ export default defineConfig(({ command, mode }) => {
     },
     // Development-specific configuration
     ...(command === 'serve' && {
-      server: {
-        ...server,
-        sourcemapIgnoreList: false,
-        // Add WebSocket fallback configuration
-        hmr: {
-          ...server.hmr,
-          overlay: false,
-          // Use same port for HMR WebSocket
-          clientPort: 5173,
-        },
-      },
       css: {
         devSourcemap: false,
       },

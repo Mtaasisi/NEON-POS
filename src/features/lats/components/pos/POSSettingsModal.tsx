@@ -1,10 +1,9 @@
 import React, { useState, useRef, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { toast } from 'react-hot-toast';
-import GlassCard from '../../../../features/shared/components/ui/GlassCard';
-import GlassButton from '../../../../features/shared/components/ui/GlassButton';
 import { X, Save, Settings, Search } from 'lucide-react';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { useAuth } from '../../../../context/AuthContext';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 // Import settings tabs - NEW SIMPLIFIED STRUCTURE (6 tabs now)
 import GeneralSettingsTab from './GeneralSettingsTab';
@@ -36,6 +35,7 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
     const { currentUser } = useAuth();
     const userRole = currentUser?.role || 'customer-care';
     const isAdmin = userRole === 'admin';
+    const { t } = useTranslation(); // Use the translation hook
     
     const [activeSettingsTab, setActiveSettingsTab] = useState(activeTab || (isAdmin ? 'general' : 'receipt'));
     const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -59,12 +59,12 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
     // Settings tabs data - 6 TABS (memoized to prevent recreating on every render)
     // Role-based filtering: customer-care only sees receipts and notifications
     const allSettingsTabs = useMemo(() => [
-      { id: 'general', name: '🏪 General', keywords: ['interface', 'theme', 'language', 'currency', 'display', 'barcode', 'scanner', 'security', 'passcode'], roles: ['admin'] },
-      { id: 'pricing', name: '💰 Pricing & Discounts', keywords: ['pricing', 'discount', 'happy hour', 'bulk', 'loyalty', 'promotions'], roles: ['admin'] },
-      { id: 'receipt', name: '🧾 Receipts', keywords: ['receipt', 'print', 'template', 'logo', 'format'], roles: ['admin', 'customer-care'] },
-      { id: 'notifications', name: '📢 Notifications', keywords: ['notifications', 'alerts', 'whatsapp', 'sms', 'email', 'invoice', 'send', 'auto', 'manual'], roles: ['admin', 'customer-care'] },
-      { id: 'features', name: '📦 Features', keywords: ['features', 'delivery', 'loyalty', 'customer', 'payment tracking', 'enable', 'disable'], roles: ['admin'] },
-      { id: 'permissions', name: '👥 Users & Permissions', keywords: ['permissions', 'access', 'user', 'role', 'security', 'cashier', 'manager', 'admin'], roles: ['admin'] }
+      { id: 'general', name: t('settings.general'), keywords: ['interface', 'theme', 'language', 'currency', 'display', 'barcode', 'scanner', 'security', 'passcode'], roles: ['admin'] },
+      { id: 'pricing', name: t('settings.pricing'), keywords: ['pricing', 'discount', 'happy hour', 'bulk', 'loyalty', 'promotions'], roles: ['admin'] },
+      { id: 'receipt', name: t('settings.receipt'), keywords: ['receipt', 'print', 'template', 'logo', 'format'], roles: ['admin', 'customer-care'] },
+      { id: 'notifications', name: t('settings.notifications'), keywords: ['notifications', 'alerts', 'whatsapp', 'sms', 'email', 'invoice', 'send', 'auto', 'manual'], roles: ['admin', 'customer-care'] },
+      { id: 'features', name: t('settings.features'), keywords: ['features', 'delivery', 'loyalty', 'customer', 'payment tracking', 'enable', 'disable'], roles: ['admin'] },
+      { id: 'permissions', name: t('settings.permissions'), keywords: ['permissions', 'access', 'user', 'role', 'security', 'cashier', 'manager', 'admin'], roles: ['admin'] }
     ], []);
     
     // Filter tabs based on user role
@@ -95,62 +95,62 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
         // Simplified save function - tabs handle their own saving
         switch (activeSettingsTab) {
           case 'general':
-            console.log('  - Checking generalSettingsRef:', !!generalSettingsRef.current);
+            console.log('[Settings] Checking generalSettingsRef:', !!generalSettingsRef.current);
             if (generalSettingsRef.current?.saveSettings) {
-              console.log('  ✅ Calling generalSettingsRef.saveSettings()');
+              console.log('[Settings] Calling generalSettingsRef.saveSettings()');
               return await generalSettingsRef.current.saveSettings();
             }
             break;
           case 'pricing':
-            console.log('  - Checking pricingSettingsRef:', !!pricingSettingsRef.current);
+            console.log('[Settings] Checking pricingSettingsRef:', !!pricingSettingsRef.current);
             if (pricingSettingsRef.current?.saveSettings) {
-              console.log('  ✅ Calling pricingSettingsRef.saveSettings()');
+              console.log('[Settings] Calling pricingSettingsRef.saveSettings()');
               return await pricingSettingsRef.current.saveSettings();
             }
             break;
           case 'receipt':
-            console.log('  - Checking receiptSettingsRef:', !!receiptSettingsRef.current);
+            console.log('[Settings] Checking receiptSettingsRef:', !!receiptSettingsRef.current);
             if (receiptSettingsRef.current?.saveSettings) {
-              console.log('  ✅ Calling receiptSettingsRef.saveSettings()');
+              console.log('[Settings] Calling receiptSettingsRef.saveSettings()');
               return await receiptSettingsRef.current.saveSettings();
             }
             break;
           case 'features':
-            console.log('  - Checking featuresSettingsRef:', !!featuresSettingsRef.current);
+            console.log('[Settings] Checking featuresSettingsRef:', !!featuresSettingsRef.current);
             if (featuresSettingsRef.current?.saveSettings) {
-              console.log('  ✅ Calling featuresSettingsRef.saveSettings()');
+              console.log('[Settings] Calling featuresSettingsRef.saveSettings()');
               return await featuresSettingsRef.current.saveSettings();
             }
             break;
           case 'permissions':
-            console.log('  - Checking permissionsSettingsRef:', !!permissionsSettingsRef.current);
+            console.log('[Settings] Checking permissionsSettingsRef:', !!permissionsSettingsRef.current);
             if (permissionsSettingsRef.current?.saveSettings) {
-              console.log('  ✅ Calling permissionsSettingsRef.saveSettings()');
+              console.log('[Settings] Calling permissionsSettingsRef.saveSettings()');
               return await permissionsSettingsRef.current.saveSettings();
             }
             break;
           case 'notifications':
-            console.log('  - Checking notificationsSettingsRef:', !!notificationsSettingsRef.current);
+            console.log('[Settings] Checking notificationsSettingsRef:', !!notificationsSettingsRef.current);
             if (notificationsSettingsRef.current?.saveSettings) {
-              console.log('  ✅ Calling notificationsSettingsRef.saveSettings()');
+              console.log('[Settings] Calling notificationsSettingsRef.saveSettings()');
               return await notificationsSettingsRef.current.saveSettings();
             }
             break;
           default:
-            console.error('  ❌ Unknown settings tab:', activeSettingsTab);
+            console.error('[Settings] Unknown settings tab:', activeSettingsTab);
             toast.error(`Unknown settings tab: ${activeSettingsTab}`);
             return false;
         }
 
         // If we get here, no save function was found
-        console.error('  ❌ No save function available for tab:', activeSettingsTab);
+        console.error('[Settings] No save function available for tab:', activeSettingsTab);
         throw new Error(`No save function available for ${activeSettingsTab} settings`);
       } catch (error) {
-        console.error('  ❌ Save failed:', error);
+        console.error('[Settings] Save failed:', error);
         toast.error(`Failed to save ${activeSettingsTab} settings. Please try again.`);
         return false;
       } finally {
-        console.log('  - Setting isSavingSettings to false');
+        console.log('[Settings] Setting isSavingSettings to false');
         setIsSavingSettings(false);
       }
     };
@@ -167,10 +167,15 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
 
     return (
       <>
-        {/* Backdrop - respects sidebar and topbar */}
+        {/* Backdrop */}
         <div 
-          className="fixed bg-black bg-opacity-50"
-          onClick={onClose}
+          className="fixed bg-black/50"
+          onClick={(e) => {
+            // Only close if clicking the backdrop itself, not the modal content
+            if (e.target === e.currentTarget) {
+              onClose();
+            }
+          }}
           style={{
             left: 'var(--sidebar-width, 0px)',
             top: 'var(--topbar-height, 64px)',
@@ -192,68 +197,100 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
             pointerEvents: 'none'
           }}
         >
-        <GlassCard className="w-full max-w-6xl p-8 max-h-[90vh] overflow-y-auto">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <Settings className="w-6 h-6 text-blue-600" />
-              <h2 className="text-2xl font-bold text-gray-900">POS Settings</h2>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Search Input */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="Search settings..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    console.log('🔍 Search query changed:', e.target.value);
-                    setSearchQuery(e.target.value);
-                  }}
-                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-64"
-                />
+          <div 
+            className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col"
+            style={{ pointerEvents: 'auto' }}
+          >
+            {/* Fixed Header */}
+            <div className="p-6 border-b border-gray-200 flex-shrink-0">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <Settings className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">{t('settings.posSettings')}</h3>
+                    <p className="text-xs text-gray-500">{t('settings.configure')}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {/* Search Input */}
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder={t('settings.searchSettings')}
+                      value={searchQuery}
+                      onChange={(e) => {
+                        console.log('[Settings] Search query changed:', e.target.value);
+                        setSearchQuery(e.target.value);
+                      }}
+                      className="pl-10 pr-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 w-64"
+                    />
+                  </div>
+                  <button
+                    onClick={() => {
+                      console.log('[Settings] Close button clicked');
+                      onClose();
+                    }}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={() => {
-                  console.log('❌ Close button clicked');
-                  onClose();
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-6 h-6 text-gray-500" />
-              </button>
-            </div>
-          </div>
 
-          {/* Settings Tabs */}
-          <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200">
-            {filteredTabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveSettingsTab(tab.id);
-                  onTabChange?.(tab.id);
-                }}
-                className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                  activeSettingsTab === tab.id
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {tab.name}
-              </button>
-            ))}
+              {/* Settings Tabs */}
+              <div className="mt-6">
+            <div className="flex rounded-lg bg-gray-100 p-1 gap-1 overflow-x-auto">
+              {filteredTabs.map(tab => {
+                // Assign unique colors to each tab - only when active
+                const getTabColors = (tabId: string, isActive: boolean) => {
+                  if (!isActive) {
+                    return 'text-gray-600 hover:text-gray-900 hover:bg-gray-50';
+                  }
+                  
+                  const colors = {
+                    general: 'bg-blue-600 text-white shadow-lg',
+                    pricing: 'bg-green-600 text-white shadow-lg',
+                    receipt: 'bg-purple-600 text-white shadow-lg',
+                    notifications: 'bg-orange-600 text-white shadow-lg',
+                    features: 'bg-indigo-600 text-white shadow-lg',
+                    permissions: 'bg-pink-600 text-white shadow-lg',
+                  };
+                  return colors[tabId as keyof typeof colors] || 'bg-white text-gray-900 shadow-sm';
+                };
+
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveSettingsTab(tab.id);
+                      onTabChange?.(tab.id);
+                    }}
+                    className={`flex-1 px-4 py-2.5 text-base font-medium rounded-md transition-all whitespace-nowrap ${
+                      getTabColors(tab.id, activeSettingsTab === tab.id)
+                    }`}
+                  >
+                    {tab.name}
+                  </button>
+                );
+              })}
+            </div>
             
             {filteredTabs.length === 0 && searchQuery && (
-              <div className="text-gray-500 text-sm py-2">
-                No settings found matching "{searchQuery}"
+              <div className="text-gray-500 text-sm py-2 text-center mt-2">
+                {t('settings.noSettingsFound')} "{searchQuery}"
               </div>
             )}
-          </div>
+              </div>
+            </div>
 
-          {/* Settings Content */}
-          <div className="min-h-[400px]">
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto p-6">
             {/* ============================================ */}
             {/* UPDATED STRUCTURE - 6 TABS */}
             {/* ============================================ */}
@@ -287,44 +324,45 @@ const POSSettingsModal = forwardRef<POSSettingsModalRef, POSSettingsModalProps>(
             {activeSettingsTab === 'permissions' && (
               <UserPermissionsSimplifiedTab ref={permissionsSettingsRef} />
             )}
-          </div>
+            </div>
 
-          {/* Footer */}
-          <div className="flex gap-4 mt-6 pt-6 border-t border-gray-200">
-            <GlassButton
+            {/* Fixed Footer */}
+            <div className="flex gap-3 p-6 border-t border-gray-200 bg-white flex-shrink-0">
+            <button
+              type="button"
               onClick={() => {
-                console.log('🔙 Cancel button clicked');
+                console.log('[Settings] Cancel button clicked');
                 onClose();
               }}
-              variant="secondary"
-              className="flex-1 py-3 text-lg font-semibold"
+              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
             >
-              Cancel
-            </GlassButton>
-            <GlassButton
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
               onClick={() => {
-                console.log('💾 Save Settings button clicked');
+                console.log('[Settings] Save Settings button clicked');
                 saveCurrentTabSettings();
               }}
               disabled={isSavingSettings}
-              className="flex-1 py-3 text-lg font-semibold bg-gradient-to-r from-blue-500 to-indigo-600 text-white"
+              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isSavingSettings ? (
-                <div className="flex items-center gap-2">
+                <>
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Saving...
-                </div>
+                  {t('settings.saving')}
+                </>
               ) : (
-                <div className="flex items-center gap-2">
+                <>
                   <Save className="w-5 h-5" />
-                  Save Settings
-                </div>
+                  {t('settings.saveSettings')}
+                </>
               )}
-            </GlassButton>
+            </button>
+            </div>
           </div>
-        </GlassCard>
         </div>
-    </>
+      </>
     );
   }
 );

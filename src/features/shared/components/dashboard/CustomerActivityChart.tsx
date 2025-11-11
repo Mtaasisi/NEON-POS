@@ -134,7 +134,7 @@ export const CustomerActivityChart: React.FC<CustomerActivityChartProps> = ({ cl
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col w-full ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>

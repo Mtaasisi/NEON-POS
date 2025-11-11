@@ -164,7 +164,7 @@ const ProductResultCard: React.FC<ProductResultCardProps> = ({
 
           {/* Product Info */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-lats-text truncate">
+            <h3 className="text-sm font-medium text-lats-text truncate" title={product.name}>
               {product.name}
             </h3>
             <div className="flex items-center gap-2 text-xs text-lats-text-secondary">
@@ -241,7 +241,7 @@ const ProductResultCard: React.FC<ProductResultCardProps> = ({
           {/* Product Info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-sm font-medium text-lats-text truncate">
+              <h3 className="text-sm font-medium text-lats-text truncate" title={product.name}>
                 {product.name}
               </h3>
               {getStockStatusBadge()}
@@ -365,7 +365,7 @@ const ProductResultCard: React.FC<ProductResultCardProps> = ({
       {/* Product Info */}
       <div className="space-y-3">
         <div>
-          <h3 className="text-lg font-semibold text-lats-text line-clamp-2 mb-1">
+          <h3 className="text-lg font-semibold text-lats-text line-clamp-2 mb-1" title={product.name}>
             {product.name}
           </h3>
           

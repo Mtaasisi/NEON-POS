@@ -90,6 +90,21 @@ router.post('/', authenticateToken, validate(createSaleSchema), async (req: Auth
 
         // Update stock
         if (item.variantId) {
+          // Check if this is a parent variant (shouldn't happen, but handle it)
+          const variantCheck = await sql`
+            SELECT is_parent, variant_type FROM lats_product_variants WHERE id = ${item.variantId} LIMIT 1
+          `;
+          
+          const isParentVariant = variantCheck[0]?.is_parent || variantCheck[0]?.variant_type === 'parent';
+          
+          if (isParentVariant) {
+            // For parent variants, we should update children (FIFO or specific selection)
+            // For now, just log a warning - this should be handled at POS level
+            console.warn(`Warning: Attempting to sell parent variant ${item.variantId}. Children should be selected instead.`);
+          }
+          
+          // Update variant stock (works for both parent and child)
+          // Database triggers will auto-update parent stock when children change
           await sql`
             UPDATE lats_product_variants
             SET quantity = quantity - ${item.quantity}

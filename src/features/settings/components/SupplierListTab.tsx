@@ -5,9 +5,11 @@ import {
   Users, Building, Phone, Mail, MapPin, Plus, Edit, Trash2, 
   Search, Filter, Eye, X, Save, RotateCcw, MessageCircle, 
   Star, UserPlus, Store, Upload, Image as ImageIcon, 
-  Globe, CreditCard, Wallet
+  Globe, CreditCard, Wallet, Package
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { extractProductCategories, getCategoryColor } from '../../../utils/supplierUtils';
+import { getCountryFlag } from '../../../utils/countryFlags';
 
 interface SupplierListTabProps {
   isActive: boolean;
@@ -108,12 +110,16 @@ const SupplierListTab: React.FC<SupplierListTabProps> = ({
   };
 
   const handleDeleteSupplier = async (supplierId: string) => {
-    if (window.confirm('Are you sure you want to delete this supplier?')) {
+    if (window.confirm('⚠️ PERMANENT DELETE: Are you sure you want to permanently delete this supplier from the database? This action CANNOT be undone!')) {
       try {
-        // Mock API call
-        toast.success('Supplier deleted successfully');
+        const { deleteSupplier: deleteSupplierApi } = await import('../../../lib/supplierApi');
+        await deleteSupplierApi(supplierId);
+        toast.success('Supplier permanently deleted from database');
+        // Refresh suppliers list if available
+        window.location.reload();
       } catch (error) {
         toast.error('Failed to delete supplier');
+        console.error('Error deleting supplier:', error);
       }
     }
   };
@@ -186,7 +192,12 @@ const SupplierListTab: React.FC<SupplierListTabProps> = ({
                         </div>
                         <div>
                           <span className="text-gray-600">Country:</span>
-                          <p className="font-medium">{supplier.country || 'N/A'}</p>
+                          <p className="font-medium flex items-center gap-1.5">
+                            {supplier.country && (
+                              <span className="text-lg leading-none">{getCountryFlag(supplier.country)}</span>
+                            )}
+                            <span>{supplier.country || 'N/A'}</span>
+                          </p>
                         </div>
                       </div>
                       
@@ -196,6 +207,34 @@ const SupplierListTab: React.FC<SupplierListTabProps> = ({
                           <p className="text-sm">{supplier.description}</p>
                         </div>
                       )}
+                      
+                      {/* Product Categories */}
+                      {(() => {
+                        const categories = extractProductCategories(supplier.notes);
+                        return categories.length > 0 && (
+                          <div className="mt-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Package className="w-3.5 h-3.5 text-gray-500" />
+                              <span className="text-xs font-medium text-gray-600">Deals with:</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {categories.slice(0, 4).map((category, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`px-2 py-1 text-xs font-medium rounded-md border ${getCategoryColor(category)}`}
+                                >
+                                  {category}
+                                </span>
+                              ))}
+                              {categories.length > 4 && (
+                                <span className="px-2 py-1 text-xs text-gray-500 bg-gray-100 rounded-md border border-gray-200">
+                                  +{categories.length - 4} more
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                   

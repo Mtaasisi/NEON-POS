@@ -107,14 +107,17 @@ const SearchDropdown: React.FC<SearchDropdownProps> = ({
       { label: 'Overdue Devices', query: 'overdue:true', icon: <Clock size={16} />, color: 'red' }
     ];
 
-    if (currentUser.role === 'admin' || currentUser.role === 'customer-care') {
+    const userPermissions = currentUser.permissions || [];
+    const hasAll = userPermissions.includes('all');
+
+    if (hasAll || userPermissions.includes('view_inventory') || userPermissions.includes('access_pos') || currentUser.role === 'admin' || currentUser.role === 'customer-care') {
       suggestions.push(
         { label: 'All Products', query: 'type:product', icon: <Package size={16} />, color: 'purple' },
         { label: 'Recent Sales', query: 'type:sale', icon: <TrendingUp size={16} />, color: 'amber' }
       );
     }
 
-    if (currentUser.role === 'admin') {
+    if (hasAll || userPermissions.includes('view_financial_reports') || currentUser.role === 'admin') {
       suggestions.push(
         { label: 'Payment Reports', query: 'type:payment', icon: <CreditCard size={16} />, color: 'emerald' },
         { label: 'Loyalty Members', query: 'type:loyalty', icon: <Crown size={16} />, color: 'yellow' },

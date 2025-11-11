@@ -15,16 +15,15 @@ import {
   getBestVariant 
 } from '../../lib/productUtils';
 import { RealTimeStockService } from '../../lib/realTimeStock';
-import VariantSelectionModal from './VariantSelectionModal';
 import { SafeImage } from '../../../../components/SafeImage';
 import { ProductImage } from '../../../../lib/robustImageService';
 import { ImagePopupModal } from '../../../../components/ImagePopupModal';
-import ProductInfoModal from './ProductInfoModal';
 import { useGeneralSettingsUI } from '../../../../hooks/useGeneralSettingsUI';
 import { getSpecificationIcon, getSpecificationTooltip, getShelfDisplay, getShelfIcon, formatSpecificationValue } from '../../lib/specificationUtils';
 import { toast } from 'react-hot-toast';
 import { RESPONSIVE_OPTIMIZATIONS } from '../../../shared/constants/theme';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import VariantSelectionModal from './VariantSelectionModal';
 
 interface DynamicMobileProductCardProps {
   product: ProductSearchResult;
@@ -91,10 +90,9 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
 
   const navigate = useNavigate();
   const [selectedVariant, setSelectedVariant] = useState<ProductSearchVariant | null>(null);
-  const [showVariantModal, setShowVariantModal] = useState(false);
   const [isImagePopupOpen, setIsImagePopupOpen] = useState(false);
-  const [isProductInfoOpen, setIsProductInfoOpen] = useState(false);
   const [showAllSpecifications, setShowAllSpecifications] = useState(false);
+  const [isVariantModalOpen, setIsVariantModalOpen] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [isLoaded, setIsLoaded] = useState(priority);
   const [isImageLoaded, setIsImageLoaded] = useState(false);
@@ -279,7 +277,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
   };
 
   // Handle card click
-  const handleCardClick = () => {
+  const handleCardClick = async () => {
     // In inventory management mode, clicking opens details modal
     if (showActions && onView) {
       onView(product);
@@ -305,22 +303,58 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
       }
     }
     
-    if (isMultiVariantProduct(product)) {
-      // If product has multiple variants, open the variant selection modal
-      setShowVariantModal(true);
-    } else {
-      // If single variant, directly add to cart
-      if (onAddToCart) {
-        onAddToCart(product, primaryVariant, 1);
+    // Check if product has variants (including parent-child structure)
+    const hasMultipleVariants = product.variants && product.variants.length > 1;
+    const hasSingleVariant = product.variants && product.variants.length === 1;
+    
+    // ✅ ENHANCED: Check for parent variants with better detection
+    if (hasMultipleVariants) {
+      setIsVariantModalOpen(true);
+      return;
+    }
+    
+    if (hasSingleVariant) {
+      const variant = product.variants[0];
+      const isParentByFlag = variant.is_parent || variant.variant_type === 'parent';
+      
+      // Also check if variant has IMEI children in database
+      let hasChildren = false;
+      if (!isParentByFlag) {
+        try {
+          const { supabase } = await import('../../../../lib/supabaseClient');
+          const { count } = await supabase
+            .from('lats_product_variants')
+            .select('id', { count: 'exact', head: true })
+            .eq('parent_variant_id', variant.id)
+            .eq('variant_type', 'imei_child')
+            .eq('is_active', true)
+            .gt('quantity', 0);
+          
+          hasChildren = (count || 0) > 0;
+          console.log(`🔍 Mobile: Checking variant ${variant.id} for children: ${hasChildren ? 'HAS CHILDREN' : 'NO CHILDREN'}`);
+        } catch (error) {
+          console.error('Error checking for children:', error);
+        }
       }
+      
+      if (isParentByFlag || hasChildren) {
+        console.log('✅ Mobile: Opening variant modal - parent variant detected');
+        setIsVariantModalOpen(true);
+        return;
+      }
+    }
+    
+    // Single non-parent variant: Add directly to cart
+    if (onAddToCart) {
+      onAddToCart(product, primaryVariant, 1);
     }
   };
 
-  // Handle variant selection
-  const handleVariantSelect = (variant: ProductSearchVariant) => {
-    setSelectedVariant(variant);
-    onAddToCart(product, variant, 1); // Add selected variant to cart
-    setShowVariantModal(false); // Close modal after selection
+  // Handle variant selection from modal
+  const handleVariantSelect = (selectedProduct: any, selectedVariant: any, quantity: number) => {
+    if (onAddToCart) {
+      onAddToCart(selectedProduct, selectedVariant, quantity);
+    }
   };
 
   // Check if product has multiple variants using utility function
@@ -414,7 +448,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
               className="flex-shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
               onClick={(e) => {
                 e.stopPropagation();
-                setIsProductInfoOpen(true);
+                // Info modal removed
               }}
             >
               <SimpleImageDisplay
@@ -490,7 +524,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
         
         {/* Checkbox for Selection - Only show when parent enables selection mode */}
         {showCheckbox && (
-          <div className="absolute top-3 left-3 z-30 action-button">
+          <div className="absolute top-3 left-3 z-30 action-button" onClick={(e) => e.stopPropagation()}>
             <input
               type="checkbox"
               checked={isSelected}
@@ -521,7 +555,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
           </div>
         )}
         {/* Product Card Header */}
-        <div className="p-6 cursor-pointer">
+        <div className="p-6 cursor-pointer flex flex-col h-full">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1 min-w-0">
               {/* Product Icon */}
@@ -553,7 +587,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
 
               {/* Product Info */}
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-800 truncate text-xl leading-tight">
+                <div className="font-medium text-gray-800 truncate text-xl leading-tight" title={product.name}>
                   {product.name}
                 </div>
                 <div className="text-2xl text-gray-700 mt-1 font-bold">
@@ -651,9 +685,12 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
             </div>
           )}
 
+          {/* Spacer to push action buttons to bottom */}
+          <div className="flex-1"></div>
+
           {/* Action Buttons for Inventory Management */}
           {showActions ? (
-            <div className="mt-4 pt-4 border-t border-gray-200 space-y-2 action-button">
+            <div className="mt-auto pt-4 border-t border-gray-200 space-y-2 action-button">
               {/* Quick Action Buttons */}
               <div className="grid grid-cols-3 gap-2">
                 {onView && (
@@ -703,7 +740,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
               </div>
             </div>
           ) : !isDisabled ? (
-            <div className="mt-3 pt-3 border-t border-gray-100">
+            <div className="mt-auto pt-3 border-t border-gray-100">
               <div className={`text-center text-sm font-medium ${theme.textColor} opacity-70 hover:opacity-100 transition-opacity`}>
                 Click to {actionText}
               </div>
@@ -712,23 +749,12 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
         </div>
       </div>
 
-      {/* Variant Selection Modal - Rendered at root level */}
-      {showVariantModal && createPortal(
-        <VariantSelectionModal
-          isOpen={showVariantModal}
-          onClose={() => setShowVariantModal(false)}
-          product={product}
-          onSelectVariant={handleVariantSelect}
-        />,
-        document.body
-      )}
-
-      {/* Product Info Modal */}
-      <ProductInfoModal
-        isOpen={isProductInfoOpen}
-        onClose={() => setIsProductInfoOpen(false)}
+      {/* Variant Selection Modal */}
+      <VariantSelectionModal
+        isOpen={isVariantModalOpen}
+        onClose={() => setIsVariantModalOpen(false)}
         product={product}
-        onAddToCart={onAddToCart}
+        onSelectVariant={handleVariantSelect}
       />
     </>
   );

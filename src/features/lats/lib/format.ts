@@ -14,47 +14,145 @@ const DEFAULT_OPTIONS: FormatOptions = {
   maximumFractionDigits: 2
 };
 
+// Track warned amounts to prevent duplicate console spam
+const warnedAmounts = new Set<string>();
+
 /**
  * Format a number as currency
  * Shows real values with corruption warning if unrealistic
+ * Handles both number and string inputs with proper type coercion
  */
 export function money(
-  amount: number, 
+  amount: number | string | null | undefined, 
   options: FormatOptions = {}
 ): string {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   
-  const realAmount = amount || 0;
+  // Step 1: Convert to number with robust handling
+  let realAmount: number;
   
-  // Safety check: Detect unrealistic amounts (log but show real value)
+  if (amount === null || amount === undefined) {
+    realAmount = 0;
+  } else if (typeof amount === 'string') {
+    // Check for concatenated decimal patterns (e.g., "123.45678.90")
+    const concatenatedPattern = /[0-9]{2,}\.[0-9]{2}[0-9]{2,}\.[0-9]{2}/;
+    if (concatenatedPattern.test(amount)) {
+      const amountKey = `concat-${amount}`;
+      if (!warnedAmounts.has(amountKey)) {
+        warnedAmounts.add(amountKey);
+        console.warn(`⚠️ Invalid amount detected: ${amount}. Showing as 0.`);
+        setTimeout(() => warnedAmounts.delete(amountKey), 60000);
+      }
+      return `${opts.currency} 0`;
+    }
+    
+    // Parse string to number
+    realAmount = parseFloat(amount);
+    
+    // Check if parsing failed
+    if (isNaN(realAmount)) {
+      const amountKey = `invalid-${amount}`;
+      if (!warnedAmounts.has(amountKey)) {
+        warnedAmounts.add(amountKey);
+        console.warn(`⚠️ Invalid amount detected: ${amount}. Showing as 0.`);
+        setTimeout(() => warnedAmounts.delete(amountKey), 60000);
+      }
+      return `${opts.currency} 0`;
+    }
+  } else if (typeof amount === 'number') {
+    realAmount = amount;
+  } else {
+    // Unexpected type
+    const amountKey = `type-${typeof amount}`;
+    if (!warnedAmounts.has(amountKey)) {
+      warnedAmounts.add(amountKey);
+      console.warn(`⚠️ Unexpected amount type: ${typeof amount}. Showing as 0.`);
+      setTimeout(() => warnedAmounts.delete(amountKey), 60000);
+    }
+    return `${opts.currency} 0`;
+  }
+  
+  // Step 2: Validate the number value
   const MAX_REALISTIC_AMOUNT = 1_000_000_000_000; // 1 trillion
   const isCorrupt = Math.abs(realAmount) > MAX_REALISTIC_AMOUNT;
   
+  // Only warn once per unique corrupt amount to prevent console spam
   if (isCorrupt) {
-    console.warn(`⚠️ CORRUPT DATA - Unrealistic amount: ${realAmount}`);
+    const amountKey = `${realAmount}`;
+    if (!warnedAmounts.has(amountKey)) {
+      warnedAmounts.add(amountKey);
+      console.warn(`⚠️ CORRUPT DATA - Unrealistic amount detected: ${realAmount}`);
+      // Clear the cache after a minute to allow re-warnings for new data
+      setTimeout(() => warnedAmounts.delete(amountKey), 60000);
+    }
   }
   
   // Safety check: Handle NaN and Infinity
   if (!isFinite(realAmount)) {
-    console.warn(`⚠️ Invalid amount detected: ${amount}. Showing as 0.`);
-    return `${opts.currency} 0 ⚠️ INVALID`;
+    const amountKey = `invalid-${amount}`;
+    if (!warnedAmounts.has(amountKey)) {
+      warnedAmounts.add(amountKey);
+      console.warn(`⚠️ Invalid amount detected: ${amount}. Showing as 0.`);
+      setTimeout(() => warnedAmounts.delete(amountKey), 60000);
+    }
+    return `${opts.currency} 0`;
   }
   
+  // For corrupt amounts, show a safe fallback value
+  if (isCorrupt) {
+    return `${opts.currency} 0 ⚠️`;
+  }
+  
+  // Step 3: Format the validated number
   try {
-    const formatted = new Intl.NumberFormat(opts.locale, {
+    return new Intl.NumberFormat(opts.locale, {
       style: 'currency',
       currency: opts.currency,
       minimumFractionDigits: opts.minimumFractionDigits,
       maximumFractionDigits: opts.maximumFractionDigits
     }).format(realAmount);
-    
-    // Add corruption indicator if amount is unrealistic
-    return isCorrupt ? `${formatted} ⚠️ CORRUPT` : formatted;
   } catch (error) {
     // Fallback formatting
-    const formatted = `${opts.currency} ${realAmount.toFixed(opts.maximumFractionDigits || 2)}`;
-    return isCorrupt ? `${formatted} ⚠️ CORRUPT` : formatted;
+    return `${opts.currency} ${realAmount.toFixed(opts.maximumFractionDigits || 2)}`;
   }
+}
+
+/**
+ * Safely parse an amount to a number
+ * Returns 0 for invalid values
+ */
+export function parseAmount(amount: number | string | null | undefined): number {
+  if (amount === null || amount === undefined) {
+    return 0;
+  }
+  
+  if (typeof amount === 'number') {
+    // Validate it's a safe number
+    if (!isFinite(amount) || Math.abs(amount) > 1_000_000_000_000) {
+      console.warn(`⚠️ Invalid numeric amount: ${amount}, returning 0`);
+      return 0;
+    }
+    return amount;
+  }
+  
+  if (typeof amount === 'string') {
+    // Check for concatenated patterns first
+    const concatenatedPattern = /[0-9]{2,}\.[0-9]{2}[0-9]{2,}\.[0-9]{2}/;
+    if (concatenatedPattern.test(amount)) {
+      console.warn(`⚠️ Concatenated string amount detected: ${amount}, returning 0`);
+      return 0;
+    }
+    
+    const parsed = parseFloat(amount);
+    if (isNaN(parsed) || !isFinite(parsed) || Math.abs(parsed) > 1_000_000_000_000) {
+      console.warn(`⚠️ Invalid string amount: ${amount}, returning 0`);
+      return 0;
+    }
+    return parsed;
+  }
+  
+  console.warn(`⚠️ Unexpected amount type: ${typeof amount}, returning 0`);
+  return 0;
 }
 
 /**
@@ -298,5 +396,6 @@ export const format = {
   formatOrderNumber,
   truncate,
   capitalize,
-  formatAttributes
+  formatAttributes,
+  parseAmount
 };

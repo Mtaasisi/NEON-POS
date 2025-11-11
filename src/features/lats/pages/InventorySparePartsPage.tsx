@@ -873,9 +873,16 @@ const InventorySparePartsPage: React.FC = () => {
             )}
           </GlassCard>
         ) : (
-          // Spare Parts Grid/List
+          // Spare Parts Grid/List - Auto-fit Grid
           viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div 
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
+              gap: 'clamp(1rem, 2vw, 1.5rem)',
+              gridAutoRows: '1fr'
+            }}
+          >
             {filteredSpareParts.map((part) => {
               const stockStatus = getStockStatus(part);
               const isSelected = selectedSpareParts.includes(part.id);

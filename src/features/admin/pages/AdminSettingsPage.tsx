@@ -28,10 +28,13 @@ import APIWebhooksSettings from '../components/APIWebhooksSettings';
 import LoyaltyProgramSettings from '../components/LoyaltyProgramSettings';
 import DocumentTemplatesSettings from '../components/DocumentTemplatesSettings';
 import InventorySettings from '../components/InventorySettings';
+import ShippingSettings from '../../settings/components/ShippingSettings';
 import BranchIsolationDebugPanel from '../components/BranchIsolationDebugPanel';
 import { BranchDataCleanupPanel } from '../components/BranchDataCleanupPanel';
 import { BranchProductManagement } from '../components/BranchProductManagement';
 import DashboardCustomizationSettings from '../components/DashboardCustomizationSettings';
+import { DatabaseDataCleanupPanel } from '../components/DatabaseDataCleanupPanel';
+import DatabaseBranchMigration from '../components/DatabaseBranchMigration';
 import { 
   Settings,
   Database,
@@ -97,9 +100,11 @@ import {
   Camera,
   Lightbulb,
   Code,
+  GitBranch,
   FileText,
   Package,
-  LayoutDashboard
+  LayoutDashboard,
+  Truck
 } from 'lucide-react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
@@ -565,6 +570,7 @@ const AdminSettingsPage: React.FC = () => {
                   { id: 'stores', label: 'Store Management', icon: MapPin },
                   { id: 'branch-debug', label: 'Branch Isolation Debug', icon: Bug },
                   { id: 'inventory', label: 'Inventory', icon: Package },
+                  { id: 'shipping', label: 'Shipping Management', icon: Truck },
                   { id: 'payments', label: 'Payments', icon: CreditCard },
                   { id: 'attendance', label: 'Attendance', icon: Users },
                   { id: 'loyalty', label: 'Loyalty Program', icon: Star },
@@ -574,6 +580,7 @@ const AdminSettingsPage: React.FC = () => {
                   { id: 'appearance', label: 'Appearance', icon: Palette },
                   { id: 'notifications', label: 'Notifications', icon: Bell },
                   { id: 'database', label: 'Database', icon: Database },
+                  { id: 'branch-migration', label: 'Branch Migration', icon: GitBranch },
                   { id: 'automation', label: 'Automation', icon: RotateCcw }
                 ].map((section) => (
                   <button
@@ -621,6 +628,10 @@ const AdminSettingsPage: React.FC = () => {
               <InventorySettings />
             )}
 
+            {activeSection === 'shipping' && (
+              <ShippingSettings isActive={true} />
+            )}
+
             {activeSection === 'appearance' && (
               <AppearanceSettings isActive={true} />
             )}
@@ -660,6 +671,10 @@ const AdminSettingsPage: React.FC = () => {
                 getStatusIcon={getStatusIcon}
                 getStatusColor={getStatusColor}
               />
+            )}
+
+            {activeSection === 'branch-migration' && (
+              <DatabaseBranchMigration />
             )}
 
             {activeSection === 'automation' && (
@@ -2175,6 +2190,7 @@ const DatabaseSettings: React.FC = () => {
   }
 
   return (
+    <>
     <GlassCard className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -2412,6 +2428,12 @@ const DatabaseSettings: React.FC = () => {
         </div>
       
     </GlassCard>
+
+    {/* Database Data Cleanup Panel */}
+    <div className="mt-6">
+      <DatabaseDataCleanupPanel />
+    </div>
+  </>
   );
 }; 
 

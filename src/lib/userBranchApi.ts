@@ -16,7 +16,7 @@ export interface UserBranchAssignment {
   can_manage_staff: boolean;
   assigned_at: string;
   assigned_by?: string;
-  store_locations?: {
+  branch?: {
     id: string;
     name: string;
     code: string;
@@ -43,7 +43,7 @@ export async function getUserBranchAssignments(userId: string): Promise<UserBran
       .from('user_branch_assignments')
       .select(`
         *,
-        store_locations (
+        branch:store_locations!branch_id (
           id,
           name,
           code,

@@ -1041,7 +1041,7 @@ const WhatsAppChatPage: React.FC = () => {
               messageType: 'text'
             });
             
-            toast.info(`Interactive buttons not supported. Sent as numbered options instead.`, {
+            toast(`Interactive buttons not supported. Sent as numbered options instead.`, {
               duration: 5000,
               action: {
                 label: 'Use Text Format',

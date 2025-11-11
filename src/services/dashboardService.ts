@@ -1009,14 +1009,28 @@ class DashboardService {
         sampleSale: sales[0]
       });
 
-      // Calculate revenue metrics from SALES (primary source)
+      // Helper function to convert any currency to TZS
+      const convertToTZS = (amount: number, currency: string = 'TZS', exchangeRate: number = 1): number => {
+        if (currency === 'TZS' || !currency) return amount;
+        // Use provided exchange rate or fallback to common rates
+        const rate = exchangeRate && exchangeRate > 1 ? exchangeRate : 
+          (currency === 'USD' ? 2500 : currency === 'EUR' ? 2700 : currency === 'GBP' ? 3200 : 1);
+        return amount * rate;
+      };
+
+      // Calculate revenue metrics from SALES (primary source) - all in TZS
       const todaySales = sales
         .filter((s: any) => new Date(s.created_at) >= today)
         .reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0);
       
+      // Service payments may have different currencies - convert to TZS
       const todayServiceRevenue = servicePayments
         .filter((p: any) => new Date(p.payment_date) >= today && p.status === 'completed')
-        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        .reduce((sum: number, p: any) => {
+          const amount = Number(p.amount) || 0;
+          const amountInTZS = convertToTZS(amount, p.currency, p.exchange_rate);
+          return sum + amountInTZS;
+        }, 0);
       
       const todayRevenue = todaySales + todayServiceRevenue;
 
@@ -1026,7 +1040,11 @@ class DashboardService {
       
       const weeklyServiceRevenue = servicePayments
         .filter((p: any) => new Date(p.payment_date) >= weekStart && p.status === 'completed')
-        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        .reduce((sum: number, p: any) => {
+          const amount = Number(p.amount) || 0;
+          const amountInTZS = convertToTZS(amount, p.currency, p.exchange_rate);
+          return sum + amountInTZS;
+        }, 0);
       
       const weeklyRevenue = weeklySales + weeklyServiceRevenue;
 
@@ -1036,7 +1054,11 @@ class DashboardService {
       
       const monthlyServiceRevenue = servicePayments
         .filter((p: any) => new Date(p.payment_date) >= monthStart && p.status === 'completed')
-        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        .reduce((sum: number, p: any) => {
+          const amount = Number(p.amount) || 0;
+          const amountInTZS = convertToTZS(amount, p.currency, p.exchange_rate);
+          return sum + amountInTZS;
+        }, 0);
       
       const monthlyRevenue = monthlySales + monthlyServiceRevenue;
 
@@ -1053,7 +1075,11 @@ class DashboardService {
           new Date(p.payment_date) <= lastMonthEnd && 
           p.status === 'completed'
         )
-        .reduce((sum: number, p: any) => sum + (Number(p.amount) || 0), 0);
+        .reduce((sum: number, p: any) => {
+          const amount = Number(p.amount) || 0;
+          const amountInTZS = convertToTZS(amount, p.currency, p.exchange_rate);
+          return sum + amountInTZS;
+        }, 0);
       
       const lastMonthRevenue = lastMonthSales + lastMonthServiceRevenue;
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Loader2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, X } from 'lucide-react';
 
 interface BackgroundSearchIndicatorProps {
   isSearching: boolean;
@@ -18,21 +18,33 @@ const BackgroundSearchIndicator: React.FC<BackgroundSearchIndicatorProps> = ({
   onCancel,
   className = ''
 }) => {
-  const [showDetails, setShowDetails] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
 
-  if (!isSearching) return null;
+  // Reset visibility when search starts
+  useEffect(() => {
+    if (isSearching) {
+      setIsVisible(true);
+    }
+  }, [isSearching]);
 
-  const getStatusIcon = () => {
+  // Auto-hide on completion after 2 seconds
+  useEffect(() => {
+    if (searchStatus === 'completed') {
+      const timer = setTimeout(() => setIsVisible(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchStatus]);
+
+  if (!isSearching || !isVisible) return null;
+
+  const getProgressColor = () => {
     switch (searchStatus) {
-      case 'processing':
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
       case 'completed':
-        return <CheckCircle className="w-4 h-4 text-green-500" />;
+        return 'bg-green-500';
       case 'failed':
-        return <XCircle className="w-4 h-4 text-red-500" />;
-      case 'pending':
+        return 'bg-red-500';
       default:
-        return <Clock className="w-4 h-4 text-yellow-500" />;
+        return 'bg-blue-500';
     }
   };
 
@@ -41,90 +53,93 @@ const BackgroundSearchIndicator: React.FC<BackgroundSearchIndicatorProps> = ({
       case 'processing':
         return 'Searching...';
       case 'completed':
-        return resultCount !== undefined ? `Found ${resultCount} results` : 'Search completed';
+        return resultCount !== undefined ? `Found ${resultCount.toLocaleString()} customers` : 'Complete';
       case 'failed':
         return 'Search failed';
-      case 'pending':
       default:
-        return 'Queued for search';
+        return 'Searching...';
     }
   };
 
-  const getStatusColor = () => {
+  const getBgColor = () => {
     switch (searchStatus) {
-      case 'processing':
-        return 'text-blue-600';
       case 'completed':
-        return 'text-green-600';
+        return 'bg-green-50 border-green-200';
       case 'failed':
-        return 'text-red-600';
-      case 'pending':
+        return 'bg-red-50 border-red-200';
       default:
-        return 'text-yellow-600';
+        return 'bg-blue-50 border-blue-200';
+    }
+  };
+
+  const getTextColor = () => {
+    switch (searchStatus) {
+      case 'completed':
+        return 'text-green-700';
+      case 'failed':
+        return 'text-red-700';
+      default:
+        return 'text-blue-700';
     }
   };
 
   return (
-    <div className={`bg-white/10 backdrop-blur-md border border-white/20 rounded-lg p-3 ${className}`}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <Search className="w-4 h-4 text-gray-400" />
-            {getStatusIcon()}
-          </div>
-          
-          <div className="flex flex-col">
-            <span className={`text-sm font-medium ${getStatusColor()}`}>
-              {getStatusText()}
-            </span>
-            
-            {searchStatus === 'processing' && (
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-16 h-1 bg-gray-200 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                    style={{ width: `${searchProgress}%` }}
-                  />
-                </div>
-                <span className="text-xs text-gray-500">{searchProgress}%</span>
-              </div>
+    <div className={`relative overflow-hidden rounded-lg border ${getBgColor()} ${className}`}>
+      {/* Progress Bar */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gray-200/50">
+        <div 
+          className={`h-full ${getProgressColor()} transition-all duration-300 ease-out`}
+          style={{ width: `${searchProgress}%` }}
+        />
+      </div>
+
+      {/* Content */}
+      <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {/* Icon */}
+          <div className="flex-shrink-0">
+            {searchStatus === 'completed' ? (
+              <CheckCircle className="w-4 h-4 text-green-600" />
+            ) : searchStatus === 'failed' ? (
+              <XCircle className="w-4 h-4 text-red-600" />
+            ) : (
+              <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
             )}
           </div>
+
+          {/* Text */}
+          <p className={`text-sm font-medium ${getTextColor()} truncate`}>
+            {getStatusText()}
+          </p>
+
+          {/* Progress % */}
+          {searchStatus === 'processing' && searchProgress > 0 && (
+            <span className="text-xs text-gray-600 tabular-nums">
+              {searchProgress}%
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {searchStatus === 'pending' && onCancel && (
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+          {searchStatus === 'processing' && onCancel && (
             <button
               onClick={onCancel}
-              className="text-xs text-gray-500 hover:text-red-500 transition-colors"
+              className="text-xs text-gray-600 hover:text-red-600 transition-colors px-2 py-0.5"
+              title="Cancel"
             >
               Cancel
             </button>
           )}
-          
           <button
-            onClick={() => setShowDetails(!showDetails)}
-            className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+            onClick={() => setIsVisible(false)}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-0.5"
+            title="Dismiss"
           >
-            {showDetails ? 'Hide' : 'Details'}
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
-
-      {showDetails && (
-        <div className="mt-3 pt-3 border-t border-white/10">
-          <div className="text-xs text-gray-500 space-y-1">
-            <div>Status: <span className="font-medium">{searchStatus}</span></div>
-            {searchProgress > 0 && (
-              <div>Progress: <span className="font-medium">{searchProgress}%</span></div>
-            )}
-            {resultCount !== undefined && (
-              <div>Results: <span className="font-medium">{resultCount}</span></div>
-            )}
-            <div>Time: <span className="font-medium">{new Date().toLocaleTimeString()}</span></div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

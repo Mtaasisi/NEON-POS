@@ -52,7 +52,7 @@ export const useKeyboardShortcuts = (
       if (isInput && !enableInInputs) {
         // Allow only specific shortcuts in inputs (like Cmd+S, Escape)
         const allowedInInputs = ['Escape', 's', 'z', 'y'];
-        if (!allowedInInputs.includes(e.key.toLowerCase()) || 
+        if (!e.key || !allowedInInputs.includes(e.key.toLowerCase()) || 
             !(e.metaKey || e.ctrlKey || e.key === 'Escape')) {
           return;
         }
@@ -61,7 +61,12 @@ export const useKeyboardShortcuts = (
       // Check each shortcut
       if (!shortcutsRef.current || !Array.isArray(shortcutsRef.current)) return;
       
+      // Early return if key is undefined
+      if (!e.key) return;
+      
       for (const shortcut of shortcutsRef.current) {
+        if (!shortcut.key) continue; // Skip shortcuts with undefined key
+        
         const keyMatch = e.key.toLowerCase() === shortcut.key.toLowerCase();
         const ctrlMatch = !shortcut.ctrl || e.ctrlKey;
         const altMatch = !shortcut.alt || e.altKey;

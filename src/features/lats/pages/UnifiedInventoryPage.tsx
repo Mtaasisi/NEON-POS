@@ -20,6 +20,7 @@ import ProductExcelImportModal from '../components/ProductExcelImportModal';
 import SupplierForm from '../components/inventory/SupplierForm';
 import EditProductModal from '../components/inventory/EditProductModal';
 import { useProductModals } from '../hooks/useProductModals';
+import AddProductModal from '../components/product/AddProductModal';
 
 // Import tab components
 import EnhancedInventoryTab from '../components/inventory/EnhancedInventoryTab';
@@ -133,6 +134,7 @@ const UnifiedInventoryPage: React.FC = () => {
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<string | null>(null);
   const [showMoreActions, setShowMoreActions] = useState(false);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
 
 
   // Close dropdown when clicking outside
@@ -641,16 +643,103 @@ const UnifiedInventoryPage: React.FC = () => {
           const updatePromises = selectedProducts.map(async (productId) => {
             const product = products.find(p => p.id === productId);
             if (product) {
-                      // Note: tags field removed from database schema
-        await updateProduct(productId, { isActive: true });
+              // Toggle featured status
+              const newFeaturedStatus = !product.isFeatured;
+              await updateProduct(productId, { 
+                isFeatured: newFeaturedStatus,
+                isActive: true // Also ensure product is active when featuring
+              });
             }
           });
           
           await Promise.all(updatePromises);
-          toast.success(`Successfully updated ${selectedProducts.length} products`);
+          const firstProduct = products.find(p => p.id === selectedProducts[0]);
+          const action = firstProduct?.isFeatured ? 'unfeatured' : 'featured';
+          toast.success(`Successfully ${action} ${selectedProducts.length} product${selectedProducts.length !== 1 ? 's' : ''}`);
           setSelectedProducts([]);
         } catch (error) {
-          toast.error('Failed to feature products');
+          console.error('Feature error:', error);
+          toast.error('Failed to update product featured status');
+        }
+        break;
+      
+      case 'print-labels':
+        try {
+          // Print labels for all selected products
+          toast.success(`Preparing labels for ${selectedProducts.length} product${selectedProducts.length !== 1 ? 's' : ''}...`);
+          // Note: The actual print modal is triggered from EnhancedInventoryTab
+          // This case is here for completeness and future bulk printing features
+        } catch (error) {
+          console.error('Print labels error:', error);
+          toast.error('Failed to print labels');
+        }
+        break;
+      
+      case 'activate':
+        try {
+          const activatePromises = selectedProducts.map(async (productId) => {
+            await updateProduct(productId, { isActive: true });
+          });
+          
+          await Promise.all(activatePromises);
+          toast.success(`Successfully activated ${selectedProducts.length} product${selectedProducts.length !== 1 ? 's' : ''}`);
+          setSelectedProducts([]);
+        } catch (error) {
+          console.error('Activate error:', error);
+          toast.error('Failed to activate products');
+        }
+        break;
+      
+      case 'deactivate':
+        try {
+          const deactivatePromises = selectedProducts.map(async (productId) => {
+            await updateProduct(productId, { isActive: false });
+          });
+          
+          await Promise.all(deactivatePromises);
+          toast.success(`Successfully deactivated ${selectedProducts.length} product${selectedProducts.length !== 1 ? 's' : ''}`);
+          setSelectedProducts([]);
+        } catch (error) {
+          console.error('Deactivate error:', error);
+          toast.error('Failed to deactivate products');
+        }
+        break;
+      
+      case 'duplicate':
+        try {
+          // Copy product information to clipboard for manual duplication
+          const selectedProductsData = selectedProducts.map(productId => {
+            const product = products.find(p => p.id === productId);
+            if (!product) return null;
+            
+            return {
+              name: product.name,
+              categoryId: product.categoryId,
+              variants: product.variants?.map((v: any) => ({
+                sku: v.sku,
+                sellingPrice: v.sellingPrice,
+                costPrice: v.costPrice,
+                quantity: v.quantity,
+                attributes: v.attributes
+              }))
+            };
+          }).filter(Boolean);
+          
+          // Copy to clipboard
+          const productInfo = JSON.stringify(selectedProductsData, null, 2);
+          navigator.clipboard.writeText(productInfo);
+          
+          toast.success(
+            `Copied ${selectedProducts.length} product${selectedProducts.length !== 1 ? 's' : ''} data to clipboard!\n` +
+            'You can use this to create new products.',
+            { duration: 4000 }
+          );
+          
+          // Note: In a future update, this could directly duplicate products
+          // For now, users can manually create new products using the copied data
+        } catch (error) {
+          console.error('Duplicate error:', error);
+          toast.error('Failed to copy product data to clipboard');
         }
         break;
         
@@ -763,34 +852,14 @@ const UnifiedInventoryPage: React.FC = () => {
           <div className="flex items-center gap-4">
             <BackButton to="/dashboard" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Unified Inventory Management</h1>
+              <h1 className="text-3xl font-bold text-gray-900">Inventory</h1>
               <p className="text-gray-600 mt-1">Manage products and inventory in one place</p>
-              {/* Database Status Indicator */}
-              <div className="flex items-center gap-2 mt-2">
-                <div className={`w-2 h-2 rounded-full ${
-                  dbStatus === 'connected' ? 'bg-green-500' : 
-                  dbStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-                }`}></div>
-                <span className={`text-xs font-medium ${
-                  dbStatus === 'connected' ? 'text-green-600' : 
-                  dbStatus === 'connecting' ? 'text-yellow-600' : 'text-red-600'
-                }`}>
-                  {dbStatus === 'connected' ? 'Database Connected' : 
-                   dbStatus === 'connecting' ? 'Connecting...' : 'Connection Error'}
-                </span>
-                {isDataLoading && (
-                  <div className="flex items-center gap-1">
-                    <RefreshCw className="w-3 h-3 animate-spin text-blue-500" />
-                    <span className="text-xs text-blue-600">Loading...</span>
-                  </div>
-                )}
-              </div>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-3">
             <GlassButton
-              onClick={() => navigate('/lats/add-product')}
+              onClick={() => setShowAddProductModal(true)}
               icon={<Plus size={18} />}
               className="bg-gradient-to-r from-blue-500 to-purple-600 text-white"
               title="Add a new product (⌘N)"
@@ -1055,6 +1124,7 @@ const UnifiedInventoryPage: React.FC = () => {
             selectedProducts={selectedProducts}
             setSelectedProducts={setSelectedProducts}
             categories={categories}
+            suppliers={suppliers}
             brands={[]}
             formatMoney={formatMoney}
             getStatusColor={getStatusColor}
@@ -1223,6 +1293,17 @@ const UnifiedInventoryPage: React.FC = () => {
         isOpen={showExcelImportModal}
         onClose={() => setShowExcelImportModal(false)}
         onImportComplete={handleExcelImportComplete}
+      />
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onProductCreated={async () => {
+          setShowAddProductModal(false);
+          await loadProducts();
+          toast.success('Product created successfully!');
+        }}
       />
     </PageErrorBoundary>
   );

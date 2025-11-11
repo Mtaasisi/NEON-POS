@@ -126,6 +126,53 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [receiveMode, setReceiveMode] = useState<'full' | 'partial'>('partial');
   const [hasPendingPricingItems, setHasPendingPricingItems] = useState(false);
   const [tempSerialNumberData, setTempSerialNumberData] = useState<any[]>([]);  // Store serial numbers temporarily
+  const [tempPricingData, setTempPricingData] = useState<Map<string, any>>(new Map());  // Store pricing data temporarily
+  const [hasRestoredProgress, setHasRestoredProgress] = useState(false); // Track if we've already restored progress
+  
+  // Helper functions for localStorage persistence
+  const getStorageKey = (suffix: string) => `po_receive_${id}_${suffix}`;
+  
+  const saveReceiveProgress = (data: {
+    receiveMode?: 'full' | 'partial';
+    serialNumberData?: any[];
+    pricingData?: Map<string, any>;
+  }) => {
+    if (!id) return;
+    
+    if (data.receiveMode) {
+      localStorage.setItem(getStorageKey('mode'), data.receiveMode);
+    }
+    if (data.serialNumberData) {
+      localStorage.setItem(getStorageKey('serials'), JSON.stringify(data.serialNumberData));
+    }
+    if (data.pricingData) {
+      const pricingArray = Array.from(data.pricingData.entries());
+      localStorage.setItem(getStorageKey('pricing'), JSON.stringify(pricingArray));
+    }
+  };
+  
+  const loadReceiveProgress = () => {
+    if (!id) return null;
+    
+    const mode = localStorage.getItem(getStorageKey('mode')) as 'full' | 'partial' | null;
+    const serialsStr = localStorage.getItem(getStorageKey('serials'));
+    const pricingStr = localStorage.getItem(getStorageKey('pricing'));
+    
+    return {
+      receiveMode: mode,
+      serialNumberData: serialsStr ? JSON.parse(serialsStr) : null,
+      pricingData: pricingStr ? new Map(JSON.parse(pricingStr)) : null
+    };
+  };
+  
+  const clearReceiveProgress = () => {
+    if (!id) return;
+    
+    localStorage.removeItem(getStorageKey('mode'));
+    localStorage.removeItem(getStorageKey('serials'));
+    localStorage.removeItem(getStorageKey('pricing'));
+  };
+  
   const [showQualityCheckModal, setShowQualityCheckModal] = useState(false);
   const [showQualityCheckDetailsModal, setShowQualityCheckDetailsModal] = useState(false);
   const [selectedQualityCheckId, setSelectedQualityCheckId] = useState<string>('');
@@ -145,6 +192,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     onConfirm: () => void;
   } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [confirmDialogState, setConfirmDialogState] = useState<'confirming' | 'processing' | 'success'>('confirming');
   
   // Lazy load data only when needed
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
@@ -180,10 +228,33 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     dateTo: ''
   });
 
-  // Permission check helper function
+  // Permission check helper function - now checks user.permissions array first!
   const hasPermission = (action: 'approve' | 'delete' | 'cancel' | 'edit' | 'create') => {
     if (!currentUser) return false;
     
+    // Check user permissions array first
+    const userPermissions = currentUser.permissions || [];
+    
+    // If user has 'all' permission, they can do anything
+    if (userPermissions.includes('all')) {
+      return true;
+    }
+    
+    // Check specific permissions
+    const permissionMap = {
+      'approve': 'approve_purchase_orders',
+      'delete': 'delete_purchase_orders',
+      'cancel': 'delete_purchase_orders',
+      'edit': 'edit_purchase_orders',
+      'create': 'create_purchase_orders'
+    };
+    
+    const requiredPermission = permissionMap[action];
+    if (userPermissions.includes(requiredPermission)) {
+      return true;
+    }
+    
+    // Fallback to role-based check
     // Admin and manager have all permissions
     if (currentUser.role === 'admin' || currentUser.role === 'manager') {
       return true;
@@ -431,6 +502,46 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       loadPurchaseOrder();
     }
   }, [id, loadPurchaseOrder]);
+
+  // Load saved progress when page loads - only once
+  useEffect(() => {
+    if (id && purchaseOrder && !hasRestoredProgress) {
+      const savedProgress = loadReceiveProgress();
+      if (savedProgress && (savedProgress.receiveMode || savedProgress.serialNumberData || savedProgress.pricingData)) {
+        // Restore saved data
+        if (savedProgress.receiveMode) {
+          setReceiveMode(savedProgress.receiveMode);
+        }
+        if (savedProgress.serialNumberData) {
+          setTempSerialNumberData(savedProgress.serialNumberData);
+        }
+        if (savedProgress.pricingData) {
+          setTempPricingData(savedProgress.pricingData);
+        }
+        
+        // Mark as restored to prevent repeated execution
+        setHasRestoredProgress(true);
+        
+        // Auto-resume from the last step
+        if (savedProgress.pricingData && savedProgress.pricingData.size > 0) {
+          // User was on pricing step
+          toast.success('Resuming from pricing step...');
+          setTimeout(() => setShowPricingModal(true), 500);
+        } else if (savedProgress.serialNumberData && savedProgress.serialNumberData.length > 0) {
+          // User was on serial numbers step
+          toast.success('Resuming from serial numbers step...');
+          setTimeout(() => setShowSerialNumberReceiveModal(true), 500);
+        } else if (savedProgress.receiveMode) {
+          // User only selected receive mode
+          toast.success('Resuming receive process...');
+          setTimeout(() => setShowConsolidatedReceiveModal(true), 500);
+        }
+      } else {
+        // No saved progress, mark as checked
+        setHasRestoredProgress(true);
+      }
+    }
+  }, [id, purchaseOrder, hasRestoredProgress]);
 
   // Handle URL action parameters (e.g., ?action=receive)
   useEffect(() => {
@@ -1443,7 +1554,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
             purchaseOrderId: purchaseOrder?.id || '',
             paymentAccountId: payment.paymentAccountId,
             amount: payment.amount,
-            currency: purchaseOrder?.currency || 'TZS',
+            currency: payment.currency || 'TZS',  // Use currency from payment (always TZS after conversion)
             paymentMethod: payment.paymentMethod,
             paymentMethodId: payment.paymentMethodId,
             reference: payment.reference,
@@ -1597,6 +1708,10 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     console.log('💰 Pricing data confirmed:', pricingData);
     console.log('📦 Serial numbers to include:', tempSerialNumberData);
     
+    // Save pricing progress to localStorage
+    setTempPricingData(pricingData);
+    saveReceiveProgress({ pricingData });
+    
     setShowPricingModal(false);
     
     // Calculate total items being received
@@ -1604,13 +1719,15 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     const uniqueProducts = tempSerialNumberData.filter(item => item.receivedQuantity > 0).length;
     
     // Show confirmation dialog with "Add to Inventory" button
+    setConfirmDialogState('confirming');
+    setShowConfirmDialog(true); // ← BUG FIX: This was missing!
     setConfirmAction({
-      title: '📦 Ready to Add to Inventory',
-      message: `You're about to add ${totalItemsReceiving} items (${uniqueProducts} products) to inventory with pricing${tempSerialNumberData.some(i => i.serialNumbers?.length > 0) ? ' and serial numbers' : ''}. Continue?`,
+      title: 'Ready to Add to Inventory',
+      message: `You're about to add ${totalItemsReceiving} items (${uniqueProducts} products) to inventory${tempSerialNumberData.some(i => i.serialNumbers?.length > 0) ? ' with serial numbers' : ''}.`,
       onConfirm: async () => {
         try {
           setIsReceiving(true);
-          setShowConfirmDialog(false);
+          setConfirmDialogState('processing');
           
           // First, update the variant prices in the database
           let priceUpdateCount = 0;
@@ -1760,37 +1877,73 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
             // Show appropriate message based on completion
             if (dbIsComplete || allItemsFullyReceived) {
               toast.success(`🎉 All items received! Purchase order complete!`, { duration: 6000 });
+              
+              // Clear temp data
+              setTempSerialNumberData([]);
+              setTempPricingData(new Map());
+              clearReceiveProgress();
+              
+              // Show success state briefly
+              setConfirmDialogState('success');
+              
+              // Navigate back to purchase orders list after 2 seconds
+              setTimeout(() => {
+                setShowConfirmDialog(false);
+                setConfirmAction(null);
+                setConfirmDialogState('confirming');
+                
+                // Navigate back to purchase orders list
+                toast.success('Returning to purchase orders list...', { duration: 2000 });
+                setTimeout(() => {
+                  navigate('/lats/purchase-orders');
+                }, 500);
+              }, 2000);
+              
             } else {
               const remaining = totalOrdered - (totalAlreadyReceived + totalReceiving);
               toast.success(`✅ Items added to inventory! ${remaining} items remaining to receive.`, { duration: 5000 });
-            }
-            
-            if (result.summary) {
-              console.log('Receive summary:', result.summary);
               
-              // Show detailed summary in toast
-              const summary = result.summary;
-              toast.success(
-                `Received: ${summary.total_received || 0}/${summary.total_ordered || 0} items (${summary.percent_received || 0}% complete)`,
-                { duration: 5000 }
-              );
+              if (result.summary) {
+                console.log('Receive summary:', result.summary);
+                
+                // Show detailed summary in toast
+                const summary = result.summary;
+                toast.success(
+                  `Received: ${summary.total_received || 0}/${summary.total_ordered || 0} items (${summary.percent_received || 0}% complete)`,
+                  { duration: 5000 }
+                );
+              }
+              
+              // Clear temp serial number data
+              setTempSerialNumberData([]);
+              setTempPricingData(new Map());
+              
+              // Clear saved progress from localStorage
+              clearReceiveProgress();
+              
+              // Reload purchase order data to get updated quantities
+              await loadPurchaseOrder();
+              
+              // Refresh received items tab if it's currently active
+              if (activeTab === 'received') {
+                console.log('🔄 Refreshing received items tab after receive operation');
+                await handleRefreshReceivedItems();
+              }
+              
+              // Switch to received tab to show the results with force refresh
+              await handleTabChange('received', true);
+              console.log('📋 Switched to received tab to show received items');
+              
+              // Show success state
+              setConfirmDialogState('success');
+              
+              // Auto-close after showing success for 2 seconds
+              setTimeout(() => {
+                setShowConfirmDialog(false);
+                setConfirmAction(null);
+                setConfirmDialogState('confirming');
+              }, 2000);
             }
-            
-            // Clear temp serial number data
-            setTempSerialNumberData([]);
-            
-            // Reload purchase order data to get updated quantities
-            await loadPurchaseOrder();
-            
-            // Refresh received items tab if it's currently active
-            if (activeTab === 'received') {
-              console.log('🔄 Refreshing received items tab after receive operation');
-              await handleRefreshReceivedItems();
-            }
-            
-            // Switch to received tab to show the results with force refresh
-            await handleTabChange('received', true);
-            console.log('📋 Switched to received tab to show received items');
             
           } else {
             console.error('❌ Receive failed:', result);
@@ -1803,10 +1956,15 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
                 { duration: 6000 }
               );
             }
+            
+            setConfirmDialogState('confirming');
+            setShowConfirmDialog(false);
           }
         } catch (error) {
           console.error('Receive error:', error);
           toast.error(`Failed to receive purchase order: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          setConfirmDialogState('confirming');
+          setShowConfirmDialog(false);
         } finally {
           setIsReceiving(false);
         }
@@ -1814,6 +1972,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     });
     
     // Show the confirmation dialog
+    setConfirmDialogState('confirming');
     setShowConfirmDialog(true);
   };
 
@@ -1951,66 +2110,57 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     try {
       setIsSaving(true);
       
-      console.log('🔄 Updating received quantities via PurchaseOrderService...');
+      console.log('🔄 Processing partial receive with new stock update function...');
       
-      // Use the enhanced PurchaseOrderService to update received quantities
-      const result = await PurchaseOrderService.updateReceivedQuantities(
-        purchaseOrder.id,
-        validatedItems.map(item => ({
-          id: item.id,
-          receivedQuantity: item.receivedQuantity
+      // ⭐ NEW: Use the database function that properly creates inventory items and updates stock
+      const { data, error } = await supabase.rpc('partial_purchase_order_receive', {
+        purchase_order_id_param: purchaseOrder.id,
+        received_items: validatedItems.map(item => ({
+          item_id: item.id,
+          quantity: item.receivedQuantity
         })),
-        currentUser?.id || ''
-      );
+        user_id_param: currentUser?.id || '',
+        receive_notes: 'Partial receive from UI'
+      });
       
-      console.log('🔍 Partial receive result:', result);
+      console.log('🔍 Partial receive result:', { data, error });
       
-      if (result.success) {
-        console.log('✅ Received quantities updated successfully');
+      if (error) {
+        console.error('❌ Partial receive error:', error);
+        toast.error(`Partial receive failed: ${error.message}`);
+        return;
+      }
+      
+      // Check if function returned success
+      if (data && data.success) {
+        console.log('✅ Partial receive completed successfully');
         
-        // Check if all items are now fully received
-        console.log('🔄 Checking if all items are fully received...');
-        const allItemsFullyReceived = await PurchaseOrderService.areAllItemsFullyReceived(purchaseOrder.id);
+        const statusMessage = data.data?.is_complete
+          ? 'All items fully received - Order marked as received' 
+          : 'Partial receive completed';
         
-        console.log('🔍 All items fully received:', allItemsFullyReceived);
+        toast.success(`${statusMessage}: ${data.message}`);
         
-        // Determine the appropriate status
-        const newStatus = allItemsFullyReceived ? 'received' : 'partial_received';
-        console.log(`🔄 Updating order status to: ${newStatus}`);
+        console.log('🔄 Reloading purchase order to get updated data...');
+        await loadPurchaseOrder(); // Reload to get updated data
         
-        // Update order status
-        const statusResult = await PurchaseOrderService.updateOrderStatus(
-          purchaseOrder.id,
-          newStatus,
-          currentUser?.id || ''
-        );
-        
-        console.log('🔍 Status update result:', statusResult);
-        
-        if (statusResult.success) {
-          const statusMessage = allItemsFullyReceived 
-            ? 'All items fully received - Order marked as received' 
-            : 'Partial receive completed';
-          
-          console.log('✅ Partial receive completed successfully:', statusMessage);
-          toast.success(`${statusMessage}: ${result.message}`);
-          
-          console.log('🔄 Reloading purchase order to get updated data...');
-          await loadPurchaseOrder(); // Reload to get updated data
-          
-          // Refresh received items tab if it's currently active
-          if (activeTab === 'received') {
-            console.log('🔄 Refreshing received items tab after partial receive operation');
-            await handleRefreshReceivedItems();
-          }
-          
-          setShowPartialReceiveModal(false);
-        } else {
-          console.error('❌ Failed to update order status:', statusResult.message);
-          toast.error(`Items updated but failed to update order status: ${statusResult.message}`);
+        // Refresh received items tab if it's currently active
+        if (activeTab === 'received') {
+          console.log('🔄 Refreshing received items tab after partial receive operation');
+          await handleRefreshReceivedItems();
         }
+        
+        // 🔥 Emit event to refresh inventory
+        latsEventBus.emit('lats:purchase-order.received', {
+          purchaseOrderId: purchaseOrder.id,
+          userId: currentUser?.id,
+          notes: 'Partial receive'
+        });
+        
+        setShowPartialReceiveModal(false);
       } else {
-        toast.error(`Partial receive failed: ${result.message}`);
+        console.error('❌ Function returned failure:', data);
+        toast.error(`Partial receive failed: ${data?.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('❌ Exception in partial receive:', {
@@ -2054,6 +2204,9 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
     // Step 2 → Step 3: Store serial number data temporarily and go to Pricing Modal
     console.log('📦 Serial numbers captured:', receivedItems);
     setTempSerialNumberData(receivedItems);
+    
+    // Save progress to localStorage
+    saveReceiveProgress({ serialNumberData: receivedItems });
     
     setShowSerialNumberReceiveModal(false);
     toast.success('Serial numbers saved! Now set pricing...');
@@ -2831,13 +2984,7 @@ TERMS AND CONDITIONS:
 
   // Helper function to format exchange rate display
   const formatExchangeRate = (rate: number) => {
-    if (rate >= 1000) {
-      return rate.toLocaleString('en-US', { maximumFractionDigits: 0 });
-    } else if (rate >= 1) {
-      return rate.toFixed(2);
-    } else {
-      return rate.toFixed(6);
-    }
+    return rate.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   };
 
   const formatDate = (dateString: string | null | undefined) => {
@@ -3120,7 +3267,7 @@ TERMS AND CONDITIONS:
                         <div className="col-span-2 space-y-1">
                           <span className="text-xs text-gray-500 uppercase tracking-wide">Exchange Rate</span>
                           <p className="text-sm font-medium text-gray-900">
-                            1 {purchaseOrder.currency} = {parseFloat(purchaseOrder.exchangeRate.toString()).toString()} TZS
+                            1 {purchaseOrder.currency} = {Math.round(parseFloat(purchaseOrder.exchangeRate.toString()))} TZS
                             {purchaseOrder.exchangeRateSource && purchaseOrder.exchangeRateSource !== 'default' && (
                               <span className="text-xs text-gray-500 ml-2">({purchaseOrder.exchangeRateSource})</span>
                             )}
@@ -3692,6 +3839,7 @@ TERMS AND CONDITIONS:
                           <th className="text-left p-3 font-medium text-gray-700 hidden sm:table-cell">Variant</th>
                           <th className="text-left p-3 font-medium text-gray-700">Quantity</th>
                           <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">Cost Price</th>
+                          <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">Set Price</th>
                           <th className="text-left p-3 font-medium text-gray-700">Total</th>
                           {purchaseOrder.exchangeRate && purchaseOrder.exchangeRate !== 1.0 && (
                             <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">TZS Total</th>
@@ -3749,6 +3897,48 @@ TERMS AND CONDITIONS:
                                 ) : (
                                   formatCurrency(item.costPrice, purchaseOrder.currency)
                                 )}
+                              </td>
+                              <td className="p-3 text-sm hidden md:table-cell">
+                                {(() => {
+                                  // Calculate average selling price from received items
+                                  const itemReceivedItems = receivedItems.filter(ri => 
+                                    ri.product_id === item.productId && 
+                                    ri.variant_id === item.variantId
+                                  );
+                                  
+                                  if (itemReceivedItems.length === 0) {
+                                    return <span className="text-gray-400">Not set</span>;
+                                  }
+                                  
+                                  // Get unique selling prices
+                                  const sellingPrices = itemReceivedItems
+                                    .map(ri => Number(ri.selling_price) || 0)
+                                    .filter(price => price > 0);
+                                  
+                                  if (sellingPrices.length === 0) {
+                                    return <span className="text-gray-400">Not set</span>;
+                                  }
+                                  
+                                  const minPrice = Math.min(...sellingPrices);
+                                  const maxPrice = Math.max(...sellingPrices);
+                                  
+                                  if (minPrice === maxPrice) {
+                                    return (
+                                      <span className="font-medium text-green-600">
+                                        TZS {minPrice.toLocaleString()}
+                                      </span>
+                                    );
+                                  } else {
+                                    return (
+                                      <div className="text-xs">
+                                        <div className="text-green-600 font-medium">
+                                          TZS {minPrice.toLocaleString()} - {maxPrice.toLocaleString()}
+                                        </div>
+                                        <div className="text-gray-500">(Range)</div>
+                                      </div>
+                                    );
+                                  }
+                                })()}
                               </td>
                               <td className="p-3">
                                 <span className="font-medium text-sm text-gray-900">{formatCurrency((item.quantity || 0) * (item.costPrice || 0), purchaseOrder.currency)}</span>
@@ -3873,11 +4063,11 @@ TERMS AND CONDITIONS:
                             <tr className="bg-gray-50 border-b border-gray-200">
                               <th className="text-left p-3 font-medium text-gray-700">Product</th>
                               <th className="text-left p-3 font-medium text-gray-700 hidden sm:table-cell">Variant</th>
-                              <th className="text-left p-3 font-medium text-gray-700">Serial Number</th>
-                              <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">IMEI</th>
+                              <th className="text-left p-3 font-medium text-gray-700">Serial Number / IMEI</th>
                               <th className="text-left p-3 font-medium text-gray-700">Status</th>
                               <th className="text-left p-3 font-medium text-gray-700 hidden lg:table-cell">Location</th>
                               <th className="text-left p-3 font-medium text-gray-700">Cost</th>
+                              <th className="text-left p-3 font-medium text-gray-700">Selling Price</th>
                               <th className="text-left p-3 font-medium text-gray-700">Received Date</th>
                             </tr>
                           </thead>
@@ -3893,17 +4083,20 @@ TERMS AND CONDITIONS:
                                 </td>
                                 <td className="p-3 text-sm hidden sm:table-cell">{item.variant?.name || `Variant ${item.variant_id}`}</td>
                                 <td className="p-3">
-                                  <div className="font-mono text-sm text-gray-900">{item.serial_number || '-'}</div>
-                                  {item.barcode && (
-                                    <div className="text-xs text-gray-500">Barcode: {item.barcode}</div>
-                                  )}
-                                </td>
-                                <td className="p-3 text-sm hidden md:table-cell">
-                                  {item.imei ? (
-                                    <span className="font-mono text-xs text-gray-600">{item.imei}</span>
-                                  ) : (
-                                    <span className="text-gray-400">-</span>
-                                  )}
+                                  <div>
+                                    {item.serial_number && (
+                                      <div className="font-mono text-sm text-gray-900">{item.serial_number}</div>
+                                    )}
+                                    {item.imei && (
+                                      <div className="font-mono text-xs text-gray-600">IMEI: {item.imei}</div>
+                                    )}
+                                    {!item.serial_number && !item.imei && (
+                                      <span className="text-gray-400">-</span>
+                                    )}
+                                    {item.barcode && (
+                                      <div className="text-xs text-gray-500">Barcode: {item.barcode}</div>
+                                    )}
+                                  </div>
                                 </td>
                                 <td className="p-3">
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -3934,6 +4127,11 @@ TERMS AND CONDITIONS:
                                 <td className="p-3 text-sm">
                                   <span className="font-medium text-gray-900">
                                     TZS {(item.cost_price || 0).toLocaleString()}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-sm">
+                                  <span className="font-medium text-gray-900">
+                                    TZS {(item.selling_price || 0).toLocaleString()}
                                   </span>
                                 </td>
                                 <td className="p-3">
@@ -4924,17 +5122,20 @@ TERMS AND CONDITIONS:
               // Calculate remaining amount in the purchase order's original currency
               const totalAmount = purchaseOrder.totalAmount || 0;
               const totalPaid = purchaseOrder.totalPaid || 0;
+              const totalAmountBaseCurrency = purchaseOrder.totalAmountBaseCurrency || 0;
+              const exchangeRate = purchaseOrder.exchangeRate || 1;
               
-              // If the purchase order is in foreign currency and we have an exchange rate,
-              // we need to convert the paid amount back to the original currency
-              if (purchaseOrder.currency && purchaseOrder.currency !== 'TZS' && purchaseOrder.exchangeRate && purchaseOrder.exchangeRate > 1) {
-                // Convert TZS paid amount back to original currency
-                const paidInOriginalCurrency = totalPaid / purchaseOrder.exchangeRate;
-                return totalAmount - paidInOriginalCurrency;
+              // If the purchase order is in foreign currency and we have an exchange rate
+              if (purchaseOrder.currency && purchaseOrder.currency !== 'TZS' && exchangeRate > 1) {
+                // totalPaid is in TZS, convert it back to original currency for display
+                const paidInOriginalCurrency = totalPaid / exchangeRate;
+                const remainingInOriginalCurrency = totalAmount - paidInOriginalCurrency;
+                // Return remaining in original currency (will be converted back to TZS by PaymentsPopupModal)
+                return Math.max(0, remainingInOriginalCurrency);
               }
               
-              // For TZS purchase orders or when no conversion is needed
-              return totalAmount - totalPaid;
+              // For TZS purchase orders, amounts are already in TZS
+              return Math.max(0, totalAmount - totalPaid);
             })()}
             customerId={purchaseOrder.supplierId}
             customerName={purchaseOrder.supplier?.name}
@@ -5560,6 +5761,7 @@ TERMS AND CONDITIONS:
             onConfirm={handleSerialNumberReceive}
             isLoading={isSaving}
             mode={receiveMode}
+            initialReceivedItems={tempSerialNumberData.length > 0 ? tempSerialNumberData : undefined}
           />
         )}
 
@@ -5571,6 +5773,7 @@ TERMS AND CONDITIONS:
             purchaseOrder={purchaseOrder as any}
             onConfirm={handleConfirmPricingAndReceive}
             isLoading={isReceiving}
+            initialPricingData={tempPricingData.size > 0 ? tempPricingData : undefined}
           />
         )}
 
@@ -5722,42 +5925,94 @@ TERMS AND CONDITIONS:
 
         {/* Confirmation Dialog */}
         {showConfirmDialog && confirmAction && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
-              <div className="flex items-center gap-2 mb-4">
-                <Package className="w-6 h-6 text-green-600" />
-                <h3 className="text-lg font-semibold text-gray-900">{confirmAction.title}</h3>
-              </div>
-              
-              <p className="text-gray-600 mb-6">{confirmAction.message}</p>
-              
-              <div className="flex gap-3">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden relative">
+              {/* Close Button - Only show in confirming state */}
+              {confirmDialogState === 'confirming' && (
                 <button
                   onClick={() => {
                     setShowConfirmDialog(false);
                     setConfirmAction(null);
+                    setConfirmDialogState('confirming');
                   }}
-                  className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors font-medium"
+                  className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
                 >
-                  Cancel
+                  <X className="w-5 h-5" />
                 </button>
-                <button
-                  onClick={() => {
-                    confirmAction.onConfirm();
-                  }}
-                  disabled={isReceiving}
-                  className="flex-1 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium shadow-lg shadow-green-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isReceiving ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Adding...
-                    </span>
+              )}
+
+              {/* Icon Header - Changes based on state */}
+              <div className={`p-8 text-center transition-all duration-500 ${
+                confirmDialogState === 'success' 
+                  ? 'bg-gradient-to-br from-green-100 to-emerald-100' 
+                  : 'bg-gradient-to-br from-green-50 to-emerald-50'
+              }`}>
+                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg transition-all duration-500 ${
+                  confirmDialogState === 'success'
+                    ? 'bg-green-500 scale-110'
+                    : confirmDialogState === 'processing'
+                    ? 'bg-blue-500'
+                    : 'bg-green-600'
+                }`}>
+                  {confirmDialogState === 'success' ? (
+                    <CheckCircle className="w-10 h-10 text-white" />
+                  ) : confirmDialogState === 'processing' ? (
+                    <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
                   ) : (
-                    '✅ Add to Inventory'
+                    <Package className="w-8 h-8 text-white" />
                   )}
-                </button>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">
+                  {confirmDialogState === 'success' 
+                    ? 'Successfully Added!' 
+                    : confirmDialogState === 'processing'
+                    ? 'Adding to Inventory...'
+                    : 'Add to Inventory?'
+                  }
+                </h3>
               </div>
+              
+              {/* Content */}
+              <div className="p-6">
+                <p className="text-center text-gray-600 leading-relaxed">
+                  {confirmDialogState === 'success'
+                    ? 'Items have been successfully added to inventory.'
+                    : confirmDialogState === 'processing'
+                    ? 'Please wait while we add items to inventory...'
+                    : confirmAction.message
+                  }
+                </p>
+              </div>
+              
+              {/* Actions - Only show button in confirming state */}
+              {confirmDialogState === 'confirming' && (
+                <div className="p-6 pt-0">
+                  <button
+                    onClick={() => {
+                      confirmAction.onConfirm();
+                    }}
+                    className="w-full px-6 py-3.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl text-lg"
+                  >
+                    Confirm & Add
+                  </button>
+                </div>
+              )}
+              
+              {/* Success state close button */}
+              {confirmDialogState === 'success' && (
+                <div className="p-6 pt-0">
+                  <button
+                    onClick={() => {
+                      setShowConfirmDialog(false);
+                      setConfirmAction(null);
+                      setConfirmDialogState('confirming');
+                    }}
+                    className="w-full px-6 py-3 text-gray-600 hover:text-gray-900 font-medium transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -5887,17 +6142,30 @@ TERMS AND CONDITIONS:
             isOpen={showConsolidatedReceiveModal}
             onClose={() => setShowConsolidatedReceiveModal(false)}
             purchaseOrder={purchaseOrder}
-            onReceiveFull={() => {
-              setShowConsolidatedReceiveModal(false);
+            onReceiveFull={async () => {
               setReceiveMode('full');
-              // Step 1 → Step 2: Go to Serial Number Modal
-              setShowSerialNumberReceiveModal(true);
-            }}
-            onReceivePartial={() => {
+              // Save progress
+              saveReceiveProgress({ receiveMode: 'full' });
+              
+              console.log('📦 Full receive selected - opening SerialNumberReceiveModal');
               setShowConsolidatedReceiveModal(false);
+              
+              // Always show the Serial Number Modal to allow users to enter IMEI/serial numbers
+              // The modal will allow skipping for items that don't need tracking
+              setTimeout(() => setShowSerialNumberReceiveModal(true), 150);
+            }}
+            onReceivePartial={async () => {
               setReceiveMode('partial');
-              // Step 1 → Step 2: Go to Serial Number Modal
-              setShowSerialNumberReceiveModal(true);
+              // Save progress
+              saveReceiveProgress({ receiveMode: 'partial' });
+              
+              console.log('📦 Partial receive selected - opening SerialNumberReceiveModal');
+              setShowConsolidatedReceiveModal(false);
+              
+              // Always show the Serial Number Modal to allow users to enter IMEI/serial numbers
+              // and select quantities for partial receive
+              toast('Select quantities to receive for each item', { icon: 'ℹ️' });
+              setTimeout(() => setShowSerialNumberReceiveModal(true), 150);
             }}
           />
         )}

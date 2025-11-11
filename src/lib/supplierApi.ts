@@ -9,52 +9,80 @@ export interface SupplierCategory {
 export interface Supplier {
   id: string;
   name: string;
+  company_name?: string;
+  description?: string;
   contact_person?: string;
   email?: string;
   phone?: string;
+  whatsapp?: string;
+  wechat?: string;
   address?: string;
   city?: string;
   country?: string;
   tax_id?: string;
   payment_terms?: string;
+  preferred_currency?: string;
+  exchange_rate?: number;
   notes?: string;
   rating?: number;
+  wechat_qr_code?: string;
+  alipay_qr_code?: string;
+  bank_account_details?: string;
   is_active: boolean;
+  is_trade_in_customer?: boolean; // Flag to distinguish trade-in customers from real suppliers
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateSupplierData {
   name: string;
+  company_name?: string;
+  description?: string;
   contact_person?: string;
   email?: string;
   phone?: string;
+  whatsapp?: string;
+  wechat?: string;
   address?: string;
   city?: string;
   country?: string;
   tax_id?: string;
   payment_terms?: string;
+  preferred_currency?: string;
+  exchange_rate?: number;
   notes?: string;
   rating?: number;
+  wechat_qr_code?: string;
+  alipay_qr_code?: string;
+  bank_account_details?: string;
   is_active?: boolean; // Will default to true if not provided
 }
 
 export interface UpdateSupplierData {
   name?: string;
+  company_name?: string;
+  description?: string;
   contact_person?: string;
   email?: string;
   phone?: string;
+  whatsapp?: string;
+  wechat?: string;
   address?: string;
   city?: string;
   country?: string;
   tax_id?: string;
   payment_terms?: string;
+  preferred_currency?: string;
+  exchange_rate?: number;
   notes?: string;
   rating?: number;
+  wechat_qr_code?: string;
+  alipay_qr_code?: string;
+  bank_account_details?: string;
   is_active?: boolean;
 }
 
-// Get all active suppliers
+// Get all active suppliers (excluding trade-in customers)
 export const getActiveSuppliers = async (): Promise<Supplier[]> => {
   try {
     const { data, error } = await supabase
@@ -67,8 +95,10 @@ export const getActiveSuppliers = async (): Promise<Supplier[]> => {
       throw new Error(`Failed to fetch suppliers: ${error.message}`);
     }
 
-    // Filter active suppliers in memory (faster than DB filter with potential RLS issues)
-    const activeSuppliers = (data || []).filter(s => s.is_active !== false);
+    // Filter active suppliers and exclude trade-in customers
+    const activeSuppliers = (data || []).filter(s => 
+      s.is_active !== false && s.is_trade_in_customer !== true
+    );
     
     const count = activeSuppliers.length;
     
@@ -83,7 +113,7 @@ export const getActiveSuppliers = async (): Promise<Supplier[]> => {
   }
 };
 
-// Get all suppliers (including inactive)
+// Get all suppliers (including inactive, but excluding trade-in customers)
 export const getAllSuppliers = async (): Promise<Supplier[]> => {
   try {
     const { data, error } = await supabase
@@ -96,7 +126,8 @@ export const getAllSuppliers = async (): Promise<Supplier[]> => {
       throw new Error('Failed to fetch suppliers');
     }
 
-    return data || [];
+    // Exclude trade-in customers from supplier list
+    return (data || []).filter(s => s.is_trade_in_customer !== true);
   } catch (error) {
     console.error('Error in getAllSuppliers:', error);
     throw error;
@@ -109,10 +140,8 @@ export const createSupplier = async (supplierData: CreateSupplierData): Promise<
     // Clean up the data to avoid type conflicts
     const dataToInsert: any = { ...supplierData };
     
-    // Ensure is_active has a default value
-    if (dataToInsert.is_active === undefined) {
-      dataToInsert.is_active = true;
-    }
+    // Always set suppliers as active
+    dataToInsert.is_active = true;
     
     // Remove any undefined values
     Object.keys(dataToInsert).forEach(key => {
@@ -171,12 +200,45 @@ export const updateSupplier = async (id: string, supplierData: UpdateSupplierDat
   }
 };
 
-// Delete a supplier (soft delete by setting is_active to false)
+// Delete a supplier (HARD DELETE - permanently removes from database)
 export const deleteSupplier = async (id: string): Promise<void> => {
   try {
+    // First, check if the supplier has any purchase orders
+    const { data: purchaseOrders, error: checkError } = await supabase
+      .from('lats_purchase_orders')
+      .select('id')
+      .eq('supplier_id', id)
+      .limit(1);
+
+    if (checkError) {
+      console.error('❌ Error checking purchase orders:', checkError);
+      throw new Error(`Failed to check supplier references: ${checkError.message}`);
+    }
+
+    if (purchaseOrders && purchaseOrders.length > 0) {
+      throw new Error('Cannot delete supplier: This supplier has associated purchase orders. Please delete or reassign the purchase orders first.');
+    }
+
+    // Check if the supplier has any products
+    const { data: products, error: productsCheckError } = await supabase
+      .from('lats_products')
+      .select('id')
+      .eq('supplier_id', id)
+      .limit(1);
+
+    if (productsCheckError) {
+      console.error('❌ Error checking products:', productsCheckError);
+      throw new Error(`Failed to check supplier references: ${productsCheckError.message}`);
+    }
+
+    if (products && products.length > 0) {
+      throw new Error('Cannot delete supplier: This supplier has associated products. Please delete or reassign the products first.');
+    }
+
+    // If no references exist, proceed with deletion
     const { error } = await supabase
       .from('lats_suppliers')
-      .update({ is_active: false })
+      .delete()
       .eq('id', id);
 
     if (error) {
@@ -207,7 +269,7 @@ export const hardDeleteSupplier = async (id: string): Promise<void> => {
   }
 };
 
-// Search suppliers by name
+// Search suppliers by name (excluding trade-in customers)
 export const searchSuppliers = async (query: string): Promise<Supplier[]> => {
   try {
     const { data, error } = await supabase
@@ -221,15 +283,17 @@ export const searchSuppliers = async (query: string): Promise<Supplier[]> => {
       throw new Error('Failed to search suppliers');
     }
 
-    // Filter active suppliers in memory
-    return (data || []).filter(s => s.is_active !== false);
+    // Filter active suppliers and exclude trade-in customers
+    return (data || []).filter(s => 
+      s.is_active !== false && s.is_trade_in_customer !== true
+    );
   } catch (error) {
     console.error('Error in searchSuppliers:', error);
     throw error;
   }
 };
 
-// Get suppliers by country
+// Get suppliers by country (excluding trade-in customers)
 export const getSuppliersByCountry = async (country: string): Promise<Supplier[]> => {
   try {
     const { data, error } = await supabase
@@ -243,15 +307,17 @@ export const getSuppliersByCountry = async (country: string): Promise<Supplier[]
       throw new Error('Failed to fetch suppliers by country');
     }
 
-    // Filter active suppliers in memory
-    return (data || []).filter(s => s.is_active !== false);
+    // Filter active suppliers and exclude trade-in customers
+    return (data || []).filter(s => 
+      s.is_active !== false && s.is_trade_in_customer !== true
+    );
   } catch (error) {
     console.error('Error in getSuppliersByCountry:', error);
     throw error;
   }
 };
 
-// Get suppliers by payment terms
+// Get suppliers by payment terms (excluding trade-in customers)
 export const getSuppliersByPaymentTerms = async (terms: string): Promise<Supplier[]> => {
   try {
     const { data, error } = await supabase
@@ -265,8 +331,10 @@ export const getSuppliersByPaymentTerms = async (terms: string): Promise<Supplie
       throw new Error('Failed to fetch suppliers by payment terms');
     }
 
-    // Filter active suppliers in memory
-    return (data || []).filter(s => s.is_active !== false);
+    // Filter active suppliers and exclude trade-in customers
+    return (data || []).filter(s => 
+      s.is_active !== false && s.is_trade_in_customer !== true
+    );
   } catch (error) {
     console.error('Error in getSuppliersByPaymentTerms:', error);
     throw error;

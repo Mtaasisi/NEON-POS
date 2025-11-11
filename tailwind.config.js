@@ -33,6 +33,36 @@ export default {
         'responsive-2xl': 'clamp(1.5rem, 2vw, 1.875rem)',
         'responsive-3xl': 'clamp(1.875rem, 2.5vw, 2.25rem)',
       },
+      keyframes: {
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        'scale-in': {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        'slide-up': {
+          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'progress-bar': {
+          '0%': { transform: 'translateX(-100%)' },
+          '50%': { transform: 'translateX(0%)' },
+          '100%': { transform: 'translateX(100%)' },
+        },
+        'shimmer': {
+          '0%': { backgroundPosition: '-1000px 0' },
+          '100%': { backgroundPosition: '1000px 0' },
+        },
+      },
+      animation: {
+        'fade-in': 'fade-in 0.2s ease-out',
+        'scale-in': 'scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-up': 'slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both',
+        'progress-bar': 'progress-bar 1.5s ease-in-out infinite',
+        'shimmer': 'shimmer 2s linear infinite',
+      },
     },
   },
   plugins: [],

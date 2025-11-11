@@ -524,7 +524,7 @@ const CalendarViewTab: React.FC<CalendarViewTabProps> = ({ isActive }) => {
               </GlassButton>
               <GlassButton
                 onClick={() => {
-                  toast.info('Please use "New Appointment" button in Management tab to create appointments with customer details');
+                  toast('Please use "New Appointment" button in Management tab to create appointments with customer details', { icon: 'ℹ️' });
                   setShowCreateModal(false);
                   setSelectedDate(null);
                 }}

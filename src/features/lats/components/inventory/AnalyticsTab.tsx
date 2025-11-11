@@ -4,7 +4,7 @@ import {
   CheckCircle, Star,
   Database, Save, BarChart3,
   Building, ShoppingCart, Activity,
-  PieChart
+  PieChart, AlertCircle, ExternalLink
 } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
 
@@ -76,23 +76,18 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
             contact_person,
             phone,
             email,
-            total_orders,
-            on_time_delivery_rate
+            is_active
           `);
 
         if (suppliersError) {
-          console.warn('Error fetching supplier data:', suppliersError);
+          console.error('Error fetching supplier data:', suppliersError);
         }
 
         if (!suppliersError && suppliers && Array.isArray(suppliers)) {
           setSupplierData({
             totalSuppliers: suppliers.length,
-            topSuppliers: suppliers
-              .sort((a: any, b: any) => (b.total_orders || 0) - (a.total_orders || 0))
-              .slice(0, 5),
-            averageDeliveryRate: suppliers.length > 0 
-              ? suppliers.reduce((sum: number, s: any) => sum + (s.on_time_delivery_rate || 0), 0) / suppliers.length 
-              : 0
+            activeSuppliers: suppliers.filter((s: any) => s.is_active).length,
+            topSuppliers: suppliers.slice(0, 5)
           });
         }
 
@@ -467,59 +462,169 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Row - Key Metrics Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Total Products */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Total Products</p>
-              <p className="text-2xl font-bold text-gray-900">{analytics.totalProducts}</p>
-              <p className="text-xs text-gray-500">{analytics.activeProducts} active</p>
+        <div className="bg-white rounded-2xl p-7 flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <Package className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Total Products</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{analytics.activeProducts} active</p>
+              </div>
             </div>
-            <div className="p-3 bg-blue-100 rounded-full">
-              <Package className="w-6 h-6 text-blue-600" />
+          </div>
+          
+          <div className="mb-6">
+            <div className="text-3xl font-bold text-gray-900">{analytics.totalProducts}</div>
+          </div>
+
+          {/* Quick Stats Grid */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 rounded-lg bg-emerald-50 hover:bg-emerald-100 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle size={14} className="text-emerald-500" />
+                <span className="text-xs text-gray-500">Active</span>
+              </div>
+              <span className="text-2xl font-semibold text-gray-900">
+                {analytics.activeProducts}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle size={14} className="text-gray-500" />
+                <span className="text-xs text-gray-500">Inactive</span>
+              </div>
+              <span className="text-2xl font-semibold text-gray-900">
+                {analytics.inactiveProducts}
+              </span>
             </div>
           </div>
         </div>
 
         {/* Stock Status */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Stock Health</p>
-              <p className="text-2xl font-bold text-green-600">{analytics.wellStockedProducts}</p>
-              <p className="text-xs text-gray-500">{analytics.lowStockProducts} low stock</p>
+        <div className="bg-white rounded-2xl p-7 flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Stock Health</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{analytics.lowStockProducts} low stock</p>
+              </div>
             </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <CheckCircle className="w-6 h-6 text-green-600" />
+          </div>
+          
+          <div className="mb-6">
+            <div className="text-3xl font-bold text-emerald-600">{analytics.wellStockedProducts}</div>
+            <p className="text-xs text-gray-500 mt-1">Well stocked items</p>
+          </div>
+
+          {/* Stock Distribution */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between p-2 bg-emerald-50 rounded-lg">
+              <span className="text-xs text-gray-600">Well Stocked</span>
+              <span className="text-sm font-semibold text-emerald-600">{analytics.wellStockedProducts}</span>
+            </div>
+            <div className="flex items-center justify-between p-2 bg-amber-50 rounded-lg">
+              <span className="text-xs text-gray-600">Low Stock</span>
+              <span className="text-sm font-semibold text-amber-600">{analytics.lowStockProducts}</span>
+            </div>
+            <div className="flex items-center justify-between p-2 bg-rose-50 rounded-lg">
+              <span className="text-xs text-gray-600">Out of Stock</span>
+              <span className="text-sm font-semibold text-rose-600">{analytics.outOfStockProducts}</span>
             </div>
           </div>
         </div>
 
         {/* Retail Value */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Retail Value</p>
-              <p className="text-2xl font-bold text-purple-600">{formatMoney(analytics.retailValue)}</p>
-              <p className="text-xs text-gray-500">{analytics.profitMargin.toFixed(1)}% margin</p>
+        <div className="bg-white rounded-2xl p-7 flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Inventory Value</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Total retail value</p>
+              </div>
             </div>
-            <div className="p-3 bg-purple-100 rounded-full">
-              <DollarSign className="w-6 h-6 text-purple-600" />
+          </div>
+          
+          <div className="mb-6">
+            <div className="text-3xl font-bold text-purple-600">{formatMoney(analytics.retailValue)}</div>
+            <p className="text-xs text-gray-500 mt-1">Avg Margin: {analytics.profitMargin.toFixed(1)}%</p>
+          </div>
+
+          {/* Value Breakdown */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-600">Cost Value</span>
+              <span className="text-sm font-semibold text-gray-900">{formatMoney(analytics.totalValue)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-600">Retail Value</span>
+              <span className="text-sm font-semibold text-purple-600">{formatMoney(analytics.retailValue)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-600">Potential Profit</span>
+              <span className="text-sm font-semibold text-emerald-600">{formatMoney(analytics.potentialProfit)}</span>
             </div>
           </div>
         </div>
 
         {/* Profit Potential */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Profit Potential</p>
-              <p className="text-2xl font-bold text-green-600">{formatMoney(analytics.potentialProfit)}</p>
-              <p className="text-xs text-gray-500">Total profit</p>
+        <div className="bg-white rounded-2xl p-7 flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Profit Margin</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Average margin</p>
+              </div>
             </div>
-            <div className="p-3 bg-green-100 rounded-full">
-              <TrendingUp className="w-6 h-6 text-green-600" />
+          </div>
+          
+          <div className="mb-6">
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold text-emerald-600">{formatMoney(analytics.potentialProfit)}</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Profit margin: {analytics.profitMargin.toFixed(1)}%
+            </p>
+          </div>
+
+          {/* Margin Indicator */}
+          <div className="space-y-3">
+            <div className="flex justify-between text-xs text-gray-500 mb-1">
+              <span>Profit Margin</span>
+              <span>{analytics.profitMargin.toFixed(1)}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  analytics.profitMargin >= 50 ? 'bg-emerald-500' : 
+                  analytics.profitMargin >= 30 ? 'bg-amber-500' : 'bg-rose-500'
+                }`}
+                style={{ width: `${Math.min(analytics.profitMargin, 100)}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className={`${analytics.profitMargin >= 50 ? 'text-emerald-600 font-semibold' : 'text-gray-500'}`}>
+                Excellent (50%+)
+              </span>
+              <span className={`${analytics.profitMargin >= 30 && analytics.profitMargin < 50 ? 'text-amber-600 font-semibold' : 'text-gray-500'}`}>
+                Good (30-50%)
+              </span>
+              <span className={`${analytics.profitMargin < 30 ? 'text-rose-600 font-semibold' : 'text-gray-500'}`}>
+                Low (&lt;30%)
+              </span>
             </div>
           </div>
         </div>
@@ -527,86 +632,133 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
 
       {/* Second Row - Charts and Visual Analytics */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Stock Distribution Pie Chart */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-            <PieChart className="w-5 h-5 text-blue-600" />
-            <h3 className="text-sm font-semibold text-gray-800">Stock Distribution</h3>
-          </div>
-          
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                <span className="text-sm text-gray-700">Well Stocked</span>
+        {/* Stock Distribution */}
+        <div className="bg-white rounded-2xl p-7 flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <PieChart className="w-5 h-5 text-gray-700" />
               </div>
-              <span className="text-sm font-semibold text-gray-900">{analytics.wellStockedProducts}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                <span className="text-sm text-gray-700">Low Stock</span>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Stock Distribution</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{analytics.totalProducts} products tracked</p>
               </div>
-              <span className="text-sm font-semibold text-gray-900">{analytics.lowStockProducts}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                <span className="text-sm text-gray-700">Out of Stock</span>
-              </div>
-              <span className="text-sm font-semibold text-gray-900">{analytics.outOfStockProducts}</span>
             </div>
           </div>
-          
-          {/* Simple Progress Bar Chart */}
-          <div className="mt-4 space-y-2">
-            <div className="flex justify-between text-xs text-gray-500">
-              <span>Stock Health</span>
-              <span>{analytics.totalProducts > 0 ? Math.round((analytics.wellStockedProducts / analytics.totalProducts) * 100) : 0}%</span>
+
+          <div className="mb-6">
+            <div className="text-3xl font-bold text-gray-900">{analytics.totalProducts}</div>
+            <p className="text-xs text-gray-500 mt-1">Total Products</p>
+          </div>
+
+          {/* Percentage Indicators */}
+          <div className="space-y-3 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                <span className="text-xs text-gray-600">Well Stocked</span>
+              </div>
+              <span className="text-sm font-semibold text-gray-900">
+                {analytics.totalProducts > 0 ? Math.round((analytics.wellStockedProducts / analytics.totalProducts) * 100) : 0}%
+              </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                <span className="text-xs text-gray-600">Low Stock</span>
+              </div>
+              <span className="text-sm font-semibold text-gray-900">
+                {analytics.totalProducts > 0 ? Math.round((analytics.lowStockProducts / analytics.totalProducts) * 100) : 0}%
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-rose-500 rounded-full"></div>
+                <span className="text-xs text-gray-600">Out of Stock</span>
+              </div>
+              <span className="text-sm font-semibold text-gray-900">
+                {analytics.totalProducts > 0 ? Math.round((analytics.outOfStockProducts / analytics.totalProducts) * 100) : 0}%
+              </span>
+            </div>
+          </div>
+
+          {/* Visual Distribution Bar */}
+          <div className="space-y-2">
+            <div className="flex h-2 rounded-full overflow-hidden">
               <div 
-                className="bg-green-500 h-2 rounded-full transition-all duration-300" 
+                className="bg-emerald-500 transition-all duration-300"
                 style={{ width: `${analytics.totalProducts > 0 ? (analytics.wellStockedProducts / analytics.totalProducts) * 100 : 0}%` }}
               ></div>
+              <div 
+                className="bg-amber-500 transition-all duration-300"
+                style={{ width: `${analytics.totalProducts > 0 ? (analytics.lowStockProducts / analytics.totalProducts) * 100 : 0}%` }}
+              ></div>
+              <div 
+                className="bg-rose-500 transition-all duration-300"
+                style={{ width: `${analytics.totalProducts > 0 ? (analytics.outOfStockProducts / analytics.totalProducts) * 100 : 0}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>{analytics.wellStockedProducts}</span>
+              <span>{analytics.lowStockProducts}</span>
+              <span>{analytics.outOfStockProducts}</span>
             </div>
           </div>
         </div>
 
         {/* Category Performance */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-            <BarChart3 className="w-5 h-5 text-purple-600" />
-            <h3 className="text-sm font-semibold text-gray-800">Top Categories</h3>
+        <div className="bg-white rounded-2xl p-7 flex flex-col">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <BarChart3 className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Top Categories</h3>
+                <p className="text-xs text-gray-400 mt-0.5">By value</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <div className="text-3xl font-bold text-gray-900">{analytics.categoryStats.length}</div>
+            <p className="text-xs text-gray-500 mt-1">Total Categories</p>
           </div>
           
-          <div className="space-y-3">
-            {analytics.categoryStats.slice(0, 3).map((category) => (
-              <div key={category.name} className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-gray-900">{category.name}</span>
-                  <span className="text-sm font-semibold text-gray-900">{formatMoney(category.value)}</span>
+          <div className="space-y-2 flex-grow max-h-48 overflow-y-auto">
+            {analytics.categoryStats.slice(0, 5).map((category, index) => (
+              <div key={category.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 bg-gray-900 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-xs font-bold text-white">{index + 1}</span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900 truncate">{category.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 ml-8">
+                    <span className="text-xs text-gray-500">{category.count} products</span>
+                    <span className="text-xs text-gray-400">•</span>
+                    <span className="text-xs text-gray-500">{category.percentage.toFixed(1)}%</span>
+                  </div>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-1.5">
-                  <div 
-                    className="bg-purple-500 h-1.5 rounded-full transition-all duration-300" 
-                    style={{ width: `${category.percentage}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-between text-xs text-gray-500">
-                  <span>{category.count} products</span>
-                  <span>{category.percentage.toFixed(1)}%</span>
-                </div>
+                <span className="text-sm font-semibold text-purple-600 ml-2">
+                  {formatMoney(category.value)}
+                </span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Financial Overview */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-            <DollarSign className="w-5 h-5 text-green-600" />
-            <h3 className="text-sm font-semibold text-gray-800">Financial Overview</h3>
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-gray-700" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Financial Overview</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Inventory value</p>
+            </div>
           </div>
           
           <div className="space-y-4">
@@ -649,10 +801,15 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
       {salesData && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Sales Performance Chart */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-              <TrendingUp className="w-5 h-5 text-green-600" />
-              <h3 className="text-sm font-semibold text-gray-800">Sales Performance (30 Days)</h3>
+          <div className="bg-white rounded-2xl p-7">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Sales Performance</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Last 30 days</p>
+              </div>
             </div>
             
             <div className="grid grid-cols-2 gap-4 mb-4">
@@ -693,24 +850,29 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
 
           {/* Supplier Performance */}
           {supplierData && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-                <Building className="w-5 h-5 text-orange-600" />
-                <h3 className="text-sm font-semibold text-gray-800">Supplier Performance</h3>
+            <div className="bg-white rounded-2xl p-7">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Building className="w-5 h-5 text-gray-700" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900">Supplier Performance</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{supplierData.totalSuppliers} suppliers</p>
+                </div>
               </div>
               
               <div className="grid grid-cols-3 gap-3 mb-4">
                 <div className="text-center">
                   <div className="text-lg font-bold text-orange-600">{supplierData.totalSuppliers}</div>
-                  <div className="text-xs text-gray-500">Suppliers</div>
+                  <div className="text-xs text-gray-500">Total Suppliers</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-yellow-600">{supplierData.averageDeliveryRate.toFixed(1)}%</div>
-                  <div className="text-xs text-gray-500">Avg Delivery</div>
+                  <div className="text-lg font-bold text-green-600">{supplierData.activeSuppliers}</div>
+                  <div className="text-xs text-gray-500">Active</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-lg font-bold text-green-600">{supplierData.topSuppliers.length}</div>
-                  <div className="text-xs text-gray-500">Top Suppliers</div>
+                  <div className="text-lg font-bold text-blue-600">{supplierData.topSuppliers.length}</div>
+                  <div className="text-xs text-gray-500">Listed</div>
                 </div>
               </div>
               
@@ -727,8 +889,8 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
                         <span className="text-xs text-gray-700 truncate">{supplier.name}</span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <ShoppingCart className="w-3 h-3 text-blue-500" />
-                        <span className="text-xs font-semibold text-gray-900">{supplier.total_orders || 0}</span>
+                        <div className={`w-2 h-2 rounded-full ${supplier.is_active ? 'bg-green-500' : 'bg-gray-400'}`}></div>
+                        <span className="text-xs text-gray-600">{supplier.is_active ? 'Active' : 'Inactive'}</span>
                       </div>
                     </div>
                   ))}
@@ -743,10 +905,15 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Activity */}
         {recentActivity.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-              <Activity className="w-5 h-5 text-blue-600" />
-              <h3 className="text-sm font-semibold text-gray-800">Recent Activity</h3>
+          <div className="bg-white rounded-2xl p-7">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Recent Activity</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Latest transactions</p>
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -778,10 +945,15 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         )}
 
         {/* Business Intelligence */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-            <BarChart3 className="w-5 h-5 text-purple-600" />
-            <h3 className="text-sm font-semibold text-gray-800">Business Intelligence</h3>
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+              <BarChart3 className="w-5 h-5 text-gray-700" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Business Intelligence</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Key metrics</p>
+            </div>
           </div>
           
           <div className="space-y-3">
@@ -807,10 +979,15 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         </div>
 
         {/* Database Backup */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-            <Database className="w-5 h-5 text-indigo-600" />
-            <h3 className="text-sm font-semibold text-gray-800">Database Backup</h3>
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+              <Database className="w-5 h-5 text-gray-700" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">Database Backup</h3>
+              <p className="text-xs text-gray-400 mt-0.5">Export all data</p>
+            </div>
           </div>
           
           <div className="space-y-3">
@@ -859,69 +1036,82 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
       </div>
 
       {/* Fifth Row - Additional Analytics Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Featured Products */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Featured Products</p>
-              <p className="text-2xl font-bold text-amber-600">{analytics.featuredProducts}</p>
-              <p className="text-xs text-gray-500">{analytics.totalProducts > 0 ? ((analytics.featuredProducts / analytics.totalProducts) * 100).toFixed(1) : 0}% of total</p>
-            </div>
-            <div className="p-3 bg-amber-100 rounded-full">
-              <Star className="w-6 h-6 text-amber-600" />
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <Star className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Featured</h3>
+                <p className="text-xs text-gray-400 mt-0.5">{analytics.totalProducts > 0 ? ((analytics.featuredProducts / analytics.totalProducts) * 100).toFixed(1) : 0}% of total</p>
+              </div>
             </div>
           </div>
+          <div className="text-3xl font-bold text-amber-600">{analytics.featuredProducts}</div>
         </div>
 
         {/* Reorder Alerts */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Reorder Alerts</p>
-              <p className="text-2xl font-bold text-orange-600">{analytics.reorderAlerts}</p>
-              <p className="text-xs text-gray-500">Need restocking</p>
-            </div>
-            <div className="p-3 bg-orange-100 rounded-full">
-              <Package className="w-6 h-6 text-orange-600" />
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <Package className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Reorder Alerts</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Need restocking</p>
+              </div>
             </div>
           </div>
+          <div className="text-3xl font-bold text-orange-600">{analytics.reorderAlerts}</div>
         </div>
 
         {/* Out of Stock */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Out of Stock</p>
-              <p className="text-2xl font-bold text-red-600">{analytics.outOfStockProducts}</p>
-              <p className="text-xs text-gray-500">Products unavailable</p>
-            </div>
-            <div className="p-3 bg-red-100 rounded-full">
-              <CheckCircle className="w-6 h-6 text-red-600" />
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Out of Stock</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Products unavailable</p>
+              </div>
             </div>
           </div>
+          <div className="text-3xl font-bold text-rose-600">{analytics.outOfStockProducts}</div>
         </div>
 
         {/* Total Categories */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Categories</p>
-              <p className="text-2xl font-bold text-purple-600">{analytics.categoryStats.length}</p>
-              <p className="text-xs text-gray-500">Product categories</p>
-            </div>
-            <div className="p-3 bg-purple-100 rounded-full">
-              <BarChart3 className="w-6 h-6 text-purple-600" />
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+                <BarChart3 className="w-5 h-5 text-gray-700" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-gray-900">Categories</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Product categories</p>
+              </div>
             </div>
           </div>
+          <div className="text-3xl font-bold text-purple-600">{analytics.categoryStats.length}</div>
         </div>
       </div>
 
       {/* Sixth Row - Detailed Category Breakdown */}
-      <div className="bg-white border border-gray-200 rounded-xl p-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-gray-100 mb-4">
-          <Package className="w-5 h-5 text-purple-600" />
-          <h3 className="text-sm font-semibold text-gray-800">Complete Category Breakdown</h3>
+      <div className="bg-white rounded-2xl p-7">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
+            <Package className="w-5 h-5 text-gray-700" />
+          </div>
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Complete Category Breakdown</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{analytics.categoryStats.length} categories</p>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -958,12 +1148,15 @@ const AnalyticsTab: React.FC<AnalyticsTabProps> = ({
         </div>
       </div>
 
-      {/* Loading State - Following GeneralProductDetailModal Design */}
+      {/* Loading State - Following Dashboard Design */}
       {isLoadingAnalytics && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-center py-6">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-sm text-gray-600">Loading advanced analytics...</span>
+        <div className="bg-white rounded-2xl p-7">
+          <div className="flex items-center justify-center py-12">
+            <div className="flex gap-1">
+              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse"></div>
+              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-75"></div>
+              <div className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-pulse delay-150"></div>
+            </div>
           </div>
         </div>
       )}

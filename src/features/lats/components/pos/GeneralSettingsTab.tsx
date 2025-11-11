@@ -6,6 +6,8 @@ import { SettingsSection } from './UniversalFormComponents';
 import { ToggleSwitch, NumberInput, TextInput, Select } from './UniversalFormComponents';
 import { useGeneralSettings } from '../../../../hooks/usePOSSettings';
 import toast from 'react-hot-toast';
+import HelpTooltip from './HelpTooltip';
+import { useTranslation } from '../../lib/i18n/useTranslation';
 
 export interface GeneralSettingsTabRef {
   saveSettings: () => Promise<boolean>;
@@ -23,6 +25,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
     updateSettings,
     resetSettings
   } = useGeneralSettings();
+  const { t } = useTranslation(); // Use the translation hook
   
   const [logoPreview, setLogoPreview] = useState<string | null>(settings.business_logo || null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -168,117 +171,102 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
 
   return (
     <UniversalSettingsTab
-      title="General Settings"
-      description="Configure basic interface and behavior settings for your POS system"
-      onSave={handleSave}
-      onReset={handleReset}
-      onCancel={() => {}} // Add empty function for now
       isLoading={isLoading}
-      isSaving={isSaving}
-      isDirty={false} // Add default value for now
     >
       {/* Business Information */}
       <SettingsSection
-        title="Business Information"
-        description="Configure your business details and branding"
+        title={t('general.businessInfo')}
         icon={<Building2 className="w-5 h-5" />}
+        helpText={t('general.businessInfoHelp')}
       >
-        <div className="space-y-6">
-          {/* Business Name and Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <TextInput
-              label="Business Name"
-              value={settings.business_name || ''}
-              onChange={(value) => handleSettingChange('business_name', value)}
-              placeholder="My Store"
-            />
-            
-            <TextInput
-              label="Business Phone"
-              value={settings.business_phone || ''}
-              onChange={(value) => handleSettingChange('business_phone', value)}
-              placeholder="+255 123 456 789"
-            />
-            
-            <TextInput
-              label="Business Email"
-              value={settings.business_email || ''}
-              onChange={(value) => handleSettingChange('business_email', value)}
-              placeholder="info@mystore.com"
-            />
-            
-            <TextInput
-              label="Business Website"
-              value={settings.business_website || ''}
-              onChange={(value) => handleSettingChange('business_website', value)}
-              placeholder="www.mystore.com"
-            />
-          </div>
-          
-          <div className="col-span-full">
-            <TextInput
-              label="Business Address"
-              value={settings.business_address || ''}
-              onChange={(value) => handleSettingChange('business_address', value)}
-              placeholder="123 Main Street, City, Country"
-            />
-          </div>
-
-          {/* Business Logo Upload */}
-          <div className="col-span-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Logo
-            </label>
-            <div className="flex items-start gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Logo Section - Left Side */}
+          <div className="lg:col-span-3">
+            <div className="h-full flex flex-col">
               {/* Logo Preview */}
-              {logoPreview ? (
-                <div className="relative">
-                  <div className="w-32 h-32 border-2 border-gray-200 rounded-lg overflow-hidden bg-white flex items-center justify-center">
-                    <img 
-                      src={logoPreview} 
-                      alt="Business Logo" 
-                      className="max-w-full max-h-full object-contain"
-                    />
+              <div className="flex-1 flex items-center justify-center mb-3">
+                {logoPreview ? (
+                  <div className="relative">
+                    <div className="w-48 h-48 border-2 border-gray-200 rounded-lg overflow-hidden bg-white flex items-center justify-center">
+                      <img 
+                        src={logoPreview} 
+                        alt="Business Logo" 
+                        className="max-w-full max-h-full object-contain"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                      title="Remove logo"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRemoveLogo}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
-                    title="Remove logo"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
-                  <Upload className="w-8 h-8 text-gray-400" />
-                </div>
-              )}
+                ) : (
+                  <div className="w-48 h-48 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-white">
+                    <Upload className="w-10 h-10 text-gray-400" />
+                  </div>
+                )}
+              </div>
 
               {/* Upload Button */}
-              <div className="flex-1">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleLogoUpload}
-                  className="hidden"
-                  id="logo-upload"
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleLogoUpload}
+                className="hidden"
+                id="logo-upload"
+              />
+              <label
+                htmlFor="logo-upload"
+                className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 border-2 border-gray-200 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors ${uploadingLogo ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <Upload className="w-4 h-4" />
+                {uploadingLogo ? t('general.uploading') : logoPreview ? t('general.changeLogo') : t('general.uploadLogo')}
+              </label>
+            </div>
+          </div>
+
+          {/* Business Fields - Right Side */}
+          <div className="lg:col-span-9">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <TextInput
+                label={t('general.businessName')}
+                value={settings.business_name || ''}
+                onChange={(value) => handleSettingChange('business_name', value)}
+                placeholder="My Store"
+              />
+              
+              <TextInput
+                label={t('general.businessPhone')}
+                value={settings.business_phone || ''}
+                onChange={(value) => handleSettingChange('business_phone', value)}
+                placeholder="+255 123 456 789"
+              />
+              
+              <TextInput
+                label={t('general.businessEmail')}
+                value={settings.business_email || ''}
+                onChange={(value) => handleSettingChange('business_email', value)}
+                placeholder="info@mystore.com"
+              />
+              
+              <TextInput
+                label={t('general.businessWebsite')}
+                value={settings.business_website || ''}
+                onChange={(value) => handleSettingChange('business_website', value)}
+                placeholder="www.mystore.com"
+              />
+              
+              <div className="sm:col-span-2">
+                <TextInput
+                  label={t('general.businessAddress')}
+                  value={settings.business_address || ''}
+                  onChange={(value) => handleSettingChange('business_address', value)}
+                  placeholder="123 Main Street, City, Country"
                 />
-                <label
-                  htmlFor="logo-upload"
-                  className={`inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors ${uploadingLogo ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  <Upload className="w-4 h-4" />
-                  {uploadingLogo ? 'Uploading...' : logoPreview ? 'Change Logo' : 'Upload Logo'}
-                </label>
-                <p className="mt-2 text-sm text-gray-500">
-                  Upload your business logo. Recommended size: 200x200px. Max size: 2MB. 
-                  Supported formats: JPG, PNG, GIF, WebP.
-                </p>
-                <p className="mt-1 text-xs text-blue-600">
-                  💡 This logo will appear on receipts, invoices, and other documents.
-                </p>
               </div>
             </div>
           </div>
@@ -287,74 +275,67 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
 
       {/* Interface Settings */}
       <SettingsSection
-        title="Interface Settings"
-        description="Customize the look and feel of your POS interface"
+        title={t('interface.title')}
         icon={<Monitor className="w-5 h-5" />}
+        helpText={t('interface.help')}
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <Select
-            label="Theme"
+            label={t('interface.theme')}
             value={settings.theme}
             onChange={(value) => handleSettingChange('theme', value)}
             options={[
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
-              { value: 'auto', label: 'Auto' }
+              { value: 'light', label: t('interface.light') },
+              { value: 'dark', label: t('interface.dark') },
+              { value: 'auto', label: t('interface.auto') }
             ]}
           />
           
           <Select
-            label="Language"
+            label={t('interface.language')}
             value={settings.language}
             onChange={(value) => handleSettingChange('language', value)}
             options={[
-              { value: 'en', label: 'English' },
-              { value: 'sw', label: 'Swahili' },
-              { value: 'fr', label: 'French' }
+              { value: 'en', label: t('interface.english') },
+              { value: 'sw', label: t('interface.swahili') },
+              { value: 'fr', label: t('interface.french') }
+            ]}
+          />
+          
+          <Select
+            label={t('interface.fontSize')}
+            value={settings.font_size}
+            onChange={(value) => handleSettingChange('font_size', value)}
+            options={[
+              { value: 'tiny', label: `${t('interface.tiny')} (11px)` },
+              { value: 'extra-small', label: `${t('interface.extraSmall')} (12px)` },
+              { value: 'small', label: `${t('interface.small')} (14px)` },
+              { value: 'medium', label: `${t('interface.medium')} (16px)` },
+              { value: 'large', label: `${t('interface.large')} (18px)` }
             ]}
           />
           
           <TextInput
-            label="Currency"
+            label={t('interface.currency')}
             value={settings.currency}
             onChange={(value) => handleSettingChange('currency', value)}
             placeholder="TZS"
           />
           
           <TextInput
-            label="Timezone"
-            value={settings.timezone}
-            onChange={(value) => handleSettingChange('timezone', value)}
-            placeholder="Africa/Dar_es_Salaam"
-          />
-          
-          <TextInput
-            label="Date Format"
+            label={t('interface.dateFormat')}
             value={settings.date_format}
             onChange={(value) => handleSettingChange('date_format', value)}
             placeholder="DD/MM/YYYY"
           />
           
           <Select
-            label="Time Format"
+            label={t('interface.timeFormat')}
             value={settings.time_format}
             onChange={(value) => handleSettingChange('time_format', value)}
             options={[
-              { value: '12', label: '12-hour' },
-              { value: '24', label: '24-hour' }
-            ]}
-          />
-          
-          <Select
-            label="Font Size"
-            value={settings.font_size}
-            onChange={(value) => handleSettingChange('font_size', value)}
-            options={[
-              { value: 'tiny', label: 'Tiny (11px) - Ultra Compact ✨' },
-              { value: 'extra-small', label: 'Extra Small (12px) - Very Compact' },
-              { value: 'small', label: 'Small (14px) - Compact' },
-              { value: 'medium', label: 'Medium (16px) - Default ⭐' },
-              { value: 'large', label: 'Large (18px) - Comfortable' }
+              { value: '12', label: t('interface.12hour') },
+              { value: '24', label: t('interface.24hour') }
             ]}
           />
         </div>
@@ -363,121 +344,143 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
       {/* Display Settings */}
       <SettingsSection
         title="Display Settings"
-        description="Control what information is shown in the POS interface"
         icon={<Eye className="w-5 h-5" />}
+        helpText="Chagua ni taarifa gani zinaonekana kwenye product cards za POS."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ToggleSwitch
             label="Show Product Images"
             checked={settings.show_product_images}
             onChange={(checked) => handleSettingChange('show_product_images', checked)}
+            helpText="Onyesha picha za bidhaa kwenye POS grid."
           />
           
           <ToggleSwitch
             label="Show Stock Levels"
             checked={settings.show_stock_levels}
             onChange={(checked) => handleSettingChange('show_stock_levels', checked)}
+            helpText="Onyesha idadi ya stock kwa kila bidhaa."
           />
           
           <ToggleSwitch
             label="Show Prices"
             checked={settings.show_prices}
             onChange={(checked) => handleSettingChange('show_prices', checked)}
+            helpText="Onyesha bei kwenye product cards."
           />
           
           <ToggleSwitch
             label="Show Barcodes"
             checked={settings.show_barcodes}
             onChange={(checked) => handleSettingChange('show_barcodes', checked)}
+            helpText="Onyesha barcode kwenye product cards."
+          />
+        </div>
+      </SettingsSection>
+
+      {/* Product Grid Settings */}
+      <SettingsSection
+        title="Product Grid Settings"
+        icon={<Eye className="w-5 h-5" />}
+        helpText={
+          <div>
+            <p className="mb-2">Dhibiti layout ya product grid kwenye POS.</p>
+            <p className="mb-2"><strong>Recommendations:</strong></p>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Screen ndogo: 2-3 bidhaa kwa row</li>
+              <li>Screen wastani: 3-4 bidhaa kwa row</li>
+              <li>Monitor kubwa: 4-6 bidhaa kwa row</li>
+              <li>Ultra-wide: 6-8 bidhaa kwa row</li>
+            </ul>
+          </div>
+        }
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Select
+            label="Products Per Row"
+            value={settings.products_per_row.toString()}
+            onChange={(value) => handleSettingChange('products_per_row', parseInt(value))}
+            options={[
+              { value: '2', label: '2 Products' },
+              { value: '3', label: '3 Products' },
+              { value: '4', label: '4 Products (Default)' },
+              { value: '5', label: '5 Products' },
+              { value: '6', label: '6 Products' },
+              { value: '8', label: '8 Products' }
+            ]}
+          />
+          
+          <NumberInput
+            label="Custom Amount"
+            value={settings.products_per_row}
+            onChange={(value) => handleSettingChange('products_per_row', value)}
+            min={2}
+            max={12}
+            step={1}
+            helpText="Weka namba kati ya 2 na 12."
           />
         </div>
         
-        {/* Product Grid Layout */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-start gap-3 mb-4">
-            <Eye className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h4 className="font-medium text-blue-900 mb-1">Product Grid Display</h4>
-              <p className="text-sm text-blue-700 mb-4">
-                Choose how many products to display in the POS grid. More products = more scrolling but see everything at once.
-              </p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Select
-              label="Products Per Page (Quick Select)"
-              value={settings.products_per_page.toString()}
-              onChange={(value) => handleSettingChange('products_per_page', parseInt(value))}
-              options={[
-                { value: '12', label: '12 Products - Minimal (3x4 grid)' },
-                { value: '16', label: '16 Products - Compact (4x4 grid)' },
-                { value: '20', label: '20 Products - Default ⭐ (4x5 grid)' },
-                { value: '24', label: '24 Products - More Items (4x6 grid)' },
-                { value: '30', label: '30 Products - Dense (5x6 grid)' },
-                { value: '40', label: '40 Products - Maximum (5x8 grid)' },
-                { value: '50', label: '50 Products - Power User (5x10 grid)' },
-                { value: '100', label: '100 Products - Show All 📋' }
-              ]}
-            />
-            
-            <NumberInput
-              label="Custom Amount (Advanced)"
-              value={settings.products_per_page}
-              onChange={(value) => handleSettingChange('products_per_page', value)}
-              min={6}
-              max={200}
-              step={1}
-            />
-          </div>
-          
-          <div className="mt-3 text-xs text-blue-600">
-            <strong>💡 Tip:</strong> 
-            <span className="ml-1">
-              Small screen? Use 12-20. Large monitor? Try 30-50. 
-              {settings.products_per_page >= 50 && ' Current: Power user mode! 🚀'}
-              {settings.products_per_page < 20 && ' Current: Comfortable viewing 👀'}
-              {settings.products_per_page >= 20 && settings.products_per_page < 50 && ' Current: Balanced ⚖️'}
-            </span>
-          </div>
+        <div className="mt-4">
+          <Select
+            label="Products Per Page"
+            value={settings.products_per_page.toString()}
+            onChange={(value) => handleSettingChange('products_per_page', parseInt(value))}
+            options={[
+              { value: '12', label: '12 Products' },
+              { value: '16', label: '16 Products' },
+              { value: '20', label: '20 Products (Default)' },
+              { value: '24', label: '24 Products' },
+              { value: '30', label: '30 Products' },
+              { value: '40', label: '40 Products' },
+              { value: '50', label: '50 Products' },
+              { value: '100', label: '100 Products' }
+            ]}
+            helpText="Jumla ya bidhaa za kuonyesha kwa page."
+          />
         </div>
       </SettingsSection>
 
       {/* Behavior Settings */}
       <SettingsSection
         title="Behavior Settings"
-        description="Configure how the POS system behaves during operation"
         icon={<Settings className="w-5 h-5" />}
+        helpText="Dhibiti jinsi POS inavyofanya kazi wakati unachangia."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ToggleSwitch
             label="Auto Complete Search"
             checked={settings.auto_complete_search}
             onChange={(checked) => handleSettingChange('auto_complete_search', checked)}
+            helpText="Onyesha search suggestions wakati unaandika."
           />
           
           <ToggleSwitch
             label="Confirm Delete"
             checked={settings.confirm_delete}
             onChange={(checked) => handleSettingChange('confirm_delete', checked)}
+            helpText="Uliza confirmation kabla ya kufuta item."
           />
           
           <ToggleSwitch
             label="Show Confirmations"
             checked={settings.show_confirmations}
             onChange={(checked) => handleSettingChange('show_confirmations', checked)}
+            helpText="Onyesha success messages baada ya kumaliza action."
           />
           
           <ToggleSwitch
             label="Enable Sound Effects"
             checked={settings.enable_sound_effects}
             onChange={(checked) => handleSettingChange('enable_sound_effects', checked)}
+            helpText="Play sounds wakati unapiga buttons."
           />
           
           <ToggleSwitch
             label="Enable Animations"
             checked={settings.enable_animations}
             onChange={(checked) => handleSettingChange('enable_animations', checked)}
+            helpText="Enable smooth transitions na animations."
           />
         </div>
       </SettingsSection>
@@ -485,14 +488,22 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
       {/* Performance Settings */}
       <SettingsSection
         title="Performance Settings"
-        description="Optimize system performance and caching"
         icon={<Zap className="w-5 h-5" />}
+        helpText="Optimize jinsi POS inavyopakia data kwa speed ya haraka."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ToggleSwitch
             label="Enable Caching"
             checked={settings.enable_caching}
             onChange={(checked) => handleSettingChange('enable_caching', checked)}
+            helpText="Save data kwa muda ili POS ipake haraka."
+          />
+          
+          <ToggleSwitch
+            label="Enable Lazy Loading"
+            checked={settings.enable_lazy_loading}
+            onChange={(checked) => handleSettingChange('enable_lazy_loading', checked)}
+            helpText="Pakia picha na data wakati inahitajika tu."
           />
           
           <NumberInput
@@ -502,12 +513,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
             min={60}
             max={3600}
             step={30}
-          />
-          
-          <ToggleSwitch
-            label="Enable Lazy Loading"
-            checked={settings.enable_lazy_loading}
-            onChange={(checked) => handleSettingChange('enable_lazy_loading', checked)}
+            helpText="Muda wa kukeep cached data kabla ya refresh."
           />
           
           <NumberInput
@@ -517,6 +523,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
             min={10}
             max={200}
             step={10}
+            helpText="Maximum ya bidhaa za kuonyesha kwenye search results."
           />
         </div>
       </SettingsSection>
@@ -524,14 +531,15 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
       {/* Tax Settings */}
       <SettingsSection
         title="Tax Settings"
-        description="Configure tax calculation for sales"
         icon={<Calculator className="w-5 h-5" />}
+        helpText="Weka automatic tax calculation kwa sales."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ToggleSwitch
             label="Enable Tax"
             checked={settings.enable_tax}
             onChange={(checked) => handleSettingChange('enable_tax', checked)}
+            helpText="Calculate na ongeza tax automatically kwa sales."
           />
           
           {settings.enable_tax && (
@@ -542,6 +550,7 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
               min={0}
               max={50}
               step={0.1}
+              helpText="Percent ya tax kwa sales (mfano: 18 kwa 18% VAT)."
             />
           )}
         </div>
@@ -550,117 +559,79 @@ const GeneralSettingsTab = forwardRef<GeneralSettingsTabRef>((props, ref) => {
       {/* Hardware Settings */}
       <SettingsSection
         title="Hardware Settings"
-        description="Configure barcode scanner and hardware devices"
         icon={<Zap className="w-5 h-5" />}
+        helpText="Weka barcode scanner na vifaa vingine."
       >
-        <div className="space-y-4">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <Zap className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <h4 className="font-medium text-blue-900 mb-1">Barcode Scanner</h4>
-                <p className="text-sm text-blue-700 mb-4">
-                  Simplified barcode scanner settings. Advanced options are auto-configured.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <ToggleSwitch
-                    label="Enable Barcode Scanner"
-                    checked={settings.show_barcodes}
-                    onChange={(checked) => handleSettingChange('show_barcodes', checked)}
-                  />
-                  <ToggleSwitch
-                    label="Play Sound on Scan"
-                    checked={settings.enable_sound_effects}
-                    onChange={(checked) => handleSettingChange('enable_sound_effects', checked)}
-                  />
-                </div>
-                <p className="text-xs text-blue-600 mt-3">
-                  💡 <strong>Auto-configured:</strong> Scanner timeout, retry attempts, supported code types, and connection settings are automatically optimized.
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <ToggleSwitch
+            label="Enable Barcode Scanner"
+            checked={settings.show_barcodes}
+            onChange={(checked) => handleSettingChange('show_barcodes', checked)}
+            helpText="Scan barcode kuongeza bidhaa haraka kwenye cart."
+          />
+          <ToggleSwitch
+            label="Play Sound on Scan"
+            checked={settings.enable_sound_effects}
+            onChange={(checked) => handleSettingChange('enable_sound_effects', checked)}
+            helpText="Play sound wakati barcode imescan successfully."
+          />
         </div>
       </SettingsSection>
 
       {/* Notifications */}
       <SettingsSection
         title="Notifications & Alerts"
-        description="Configure important system notifications"
         icon={<Settings className="w-5 h-5" />}
+        helpText="Chagua ni notifications gani zinaonekana kwenye POS."
       >
-        <div className="space-y-4">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <Settings className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1">
-                <h4 className="font-medium text-green-900 mb-1">Key Alerts</h4>
-                <p className="text-sm text-green-700 mb-4">
-                  Enable important notifications to stay informed about your business.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <ToggleSwitch
-                    label="Low Stock Alerts"
-                    checked={settings.show_stock_levels}
-                    onChange={(checked) => handleSettingChange('show_stock_levels', checked)}
-                  />
-                  <ToggleSwitch
-                    label="Payment Confirmations"
-                    checked={settings.show_confirmations}
-                    onChange={(checked) => handleSettingChange('show_confirmations', checked)}
-                  />
-                </div>
-                <p className="text-xs text-green-600 mt-3">
-                  💡 <strong>Note:</strong> Critical system alerts are always enabled for security.
-                </p>
-              </div>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <ToggleSwitch
+            label="Low Stock Alerts"
+            checked={settings.show_stock_levels}
+            onChange={(checked) => handleSettingChange('show_stock_levels', checked)}
+            helpText="Pata notification wakati stock inaisha."
+          />
+          <ToggleSwitch
+            label="Payment Confirmations"
+            checked={settings.show_confirmations}
+            onChange={(checked) => handleSettingChange('show_confirmations', checked)}
+            helpText="Onyesha confirmation messages baada ya payment."
+          />
         </div>
       </SettingsSection>
 
       {/* Security Settings */}
       <SettingsSection
         title="Security Settings"
-        description="Manage passcodes and security features"
         icon={<Shield className="w-5 h-5" />}
-      >
-        <div className="space-y-4">
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <Lock className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-medium text-amber-900 mb-1">Day Closing Passcode</h4>
-                <p className="text-sm text-amber-700 mb-3">
-                  This passcode is required to close and open the day in the POS. Keep it secure and share only with authorized staff.
-                </p>
-                <div className="max-w-md">
-                  <TextInput
-                    label="Passcode (4 digits recommended)"
-                    value={settings.day_closing_passcode || '1234'}
-                    onChange={(value) => handleSettingChange('day_closing_passcode', value)}
-                    placeholder="Enter passcode"
-                    type="password"
-                  />
-                  <p className="text-xs text-amber-600 mt-2">
-                    💡 <strong>Important:</strong> Remember this passcode! You'll need it to close and reopen the day.
-                  </p>
-                </div>
-              </div>
-            </div>
+        helpText={
+          <div>
+            <p className="mb-2"><strong>Security Tips:</strong></p>
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Tumia passcode ambayo unakumbuka lakini ni secure</li>
+              <li>Usitumie "1111" au "1234"</li>
+              <li>Badilisha passcode mara kwa mara</li>
+              <li>Share na wafanyakazi authorized tu</li>
+            </ul>
           </div>
-          
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <Settings className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div>
-                <h4 className="font-medium text-blue-900 mb-1">Passcode Tips</h4>
-                <ul className="text-sm text-blue-700 space-y-1">
-                  <li>• Use a memorable but secure passcode</li>
-                  <li>• Avoid obvious combinations like "1111" or "0000"</li>
-                  <li>• Change passcode regularly for security</li>
-                  <li>• Don't share with unauthorized personnel</li>
-                </ul>
+        }
+      >
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <Lock className="w-5 h-5 text-amber-600 mt-1 flex-shrink-0" />
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Day Closing Passcode
+              </label>
+              <div className="max-w-sm">
+                <TextInput
+                  label=""
+                  value={settings.day_closing_passcode || '1234'}
+                  onChange={(value) => handleSettingChange('day_closing_passcode', value)}
+                  placeholder="Weka passcode"
+                  type="password"
+                  helpText="Inahitajika kufunga na kufungua siku."
+                />
               </div>
             </div>
           </div>

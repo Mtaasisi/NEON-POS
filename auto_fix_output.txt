@@ -1,0 +1,95 @@
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                    AUTOMATIC DATA CLEANUP & FIXES                         ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+This will automatically fix all data issues found in the audit...
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                    AUTOMATIC DATA CLEANUP - STARTING                      ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣  Setting IMEI Status for IMEIs Without Status
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+psql:AUTO_FIX_DATA_ISSUES.sql:36: ERROR:  IMEI child variant must have a parent_variant_id
+CONTEXT:  PL/pgSQL function check_imei_has_parent() line 5 at RAISE
+Updated IMEIs with quantity > 0 to "available" status
+UPDATE 1
+Updated IMEIs with quantity = 0 to "sold" status
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2️⃣  Fixing Invalid IMEI Statuses
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+psql:AUTO_FIX_DATA_ISSUES.sql:77: ERROR:  IMEI child variant must have a parent_variant_id
+CONTEXT:  PL/pgSQL function check_imei_has_parent() line 5 at RAISE
+Fixed "invalid" status to "available" for IMEIs with stock
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3️⃣  Fixing Selling Price Issues
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+psql:AUTO_FIX_DATA_ISSUES.sql:95: ERROR:  Invalid IMEI: <NULL> (must be exactly 15 digits)
+CONTEXT:  PL/pgSQL function validate_new_imei() line 12 at RAISE
+Fixed selling prices (set to cost + 30% markup)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4️⃣  Ensuring Parent Variants Are Correctly Marked
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UPDATE 5
+Marked variants with children as parent variants
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5️⃣  Recalculating All Parent Stock Quantities
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+              parent_id               |   parent_name   | old_quantity | new_quantity | children_count 
+--------------------------------------+-----------------+--------------+--------------+----------------
+ 2149be92-5081-433f-8389-d2f2eec1aff3 | Variant 1       |            1 |            1 |              1
+ 2f7e2225-16bf-47e4-90c7-02cdc0a7b821 | 0000001         |            0 |            0 |              0
+ 36cbd0ac-f137-494b-a49a-eb44983ae05e | 128             |            6 |            6 |              6
+ 3a07fb47-bb75-4976-bb04-7696a0f0a371 | Kibonge         |            0 |            0 |              0
+ 538f073f-a88f-4f65-8507-d8964d0eea6d | 001             |            0 |            0 |              0
+ 5c390e74-e2ed-4aa1-9bcc-46e1af810a1b | Mwembamba       |            0 |            0 |              0
+ 6f3e6f08-544a-46e5-8331-b9e89d4cdc7e | Variant 1       |            3 |            3 |              3
+ 8141f888-e076-4c3c-b362-c8a07c48bff6 | Default Variant |            0 |            0 |              0
+ b255d9ee-0921-4841-821b-8182a83391e0 | Variant 1       |            0 |            0 |              0
+ bce2dfbf-2f8c-4721-a903-1d8fdb55a617 | Default Variant |            0 |            0 |              0
+ d1c2847d-6f9a-4e06-9f85-5efad2edeb58 | Variant 1       |            0 |            0 |              0
+ f5ac09b5-bcee-42a8-a0c4-ad44601ac40a | Default Variant |            0 |            0 |              0
+(12 rows)
+
+
+Parent stocks recalculated
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6️⃣  Syncing Product Stock Quantities
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+UPDATE 19
+Product stock quantities synchronized
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7️⃣  VERIFICATION - Issues Remaining
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+         issue          | count 
+------------------------+-------
+ IMEIs Without Status   | 29
+ Invalid IMEI Status    | 23
+ Selling < Cost Price   | 3
+ Negative Stock         | 0
+ Orphaned IMEI Children | 0
+(5 rows)
+
+
+╔═══════════════════════════════════════════════════════════════════════════╗
+║                    AUTOMATIC DATA CLEANUP - COMPLETED                     ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+
+
+✅ All fixes applied successfully!
+

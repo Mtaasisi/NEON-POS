@@ -450,17 +450,17 @@ Reference: ${transaction.reference || 'N/A'}`;
 
   return (
     <PageErrorBoundary pageName="Payment Management" showDetails={true}>
-      <div className="min-h-screen p-6" style={{ backgroundColor: 'transparent' }}>
-        <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
+      <div className="p-6 flex justify-center">
+        <div className="w-full max-w-7xl">
+          <div className="mb-8 text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Payment Management</h1>
             <p className="text-gray-600">Manage payments, providers, and purchase orders</p>
           </div>
 
-          {/* Tab Navigation */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-            <div className="border-b border-gray-200">
-              <nav className="flex space-x-8 px-6">
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6">
                 <button
                   onClick={() => setActiveTab('tracking')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
@@ -532,7 +532,7 @@ Reference: ${transaction.reference || 'N/A'}`;
           </div>
 
           {/* Tab Content */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div>
             {activeTab === 'tracking' && (
               <PaymentTrackingDashboard
                 key={refreshTrigger} // Force re-render when refreshTrigger changes
@@ -896,7 +896,6 @@ Reference: ${transaction.reference || 'N/A'}`;
               </div>
             )}
           </div>
-        </div>
 
         {/* Payment Detail Modal - Redesigned */}
         {selectedTransaction && (
@@ -1464,6 +1463,7 @@ Reference: ${transaction.reference || 'N/A'}`;
           type="danger"
           loading={isProcessing}
         />
+        </div>
       </div>
     </PageErrorBoundary>
   );

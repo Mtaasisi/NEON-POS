@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear POS Cache</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 10px 10px 10px 0;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+        .danger {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+        .result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+        }
+        .result.success {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+        .result.error {
+            background: #f8d7da;
+            border-left-color: #dc3545;
+        }
+        .cache-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+        .cache-item strong {
+            color: #667eea;
+        }
+        code {
+            background: #f1f3f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear POS Cache</h1>
+        <p class="subtitle">Clear cached product data to see the latest variant names</p>
+        
+        <div>
+            <button onclick="clearProductCache()">Clear Product Cache</button>
+            <button onclick="clearAllCache()" class="danger">Clear All Cache</button>
+            <button onclick="inspectCache()" class="success">Inspect Cache</button>
+            <button onclick="goToPOS()">Open POS</button>
+        </div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function showResult(message, type = 'success') {
+            const resultDiv = document.getElementById('result');
+            resultDiv.className = `result ${type}`;
+            resultDiv.innerHTML = message;
+        }
+
+        function clearProductCache() {
+            try {
+                const keys = [
+                    'pos_products_cache',
+                    'pos_categories_cache',
+                    'lats_products_cache',
+                    'lats_inventory_cache'
+                ];
+                
+                let cleared = [];
+                keys.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    if (value) {
+                        localStorage.removeItem(key);
+                        cleared.push(key);
+                    }
+                });
+                
+                if (cleared.length > 0) {
+                    showResult(`
+                        <strong>✅ Product cache cleared successfully!</strong><br><br>
+                        Cleared items:<br>
+                        ${cleared.map(k => `<div class="cache-item">• <code>${k}</code></div>`).join('')}
+                        <br>
+                        <strong>Next steps:</strong><br>
+                        1. Click "Open POS" button above<br>
+                        2. Login with: care@care.com / 123456<br>
+                        3. Go to Inventory and open product "Final"<br>
+                        4. Variants should now show as "01" and "02"
+                    `, 'success');
+                } else {
+                    showResult('ℹ️ No product cache found (already clear)', 'success');
+                }
+            } catch (error) {
+                showResult(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function clearAllCache() {
+            try {
+                const allKeys = Object.keys(localStorage);
+                const count = allKeys.length;
+                
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                showResult(`
+                    <strong>✅ All cache cleared!</strong><br><br>
+                    Removed <strong>${count}</strong> items from localStorage<br>
+                    Cleared sessionStorage<br><br>
+                    <strong>Note:</strong> You may need to login again<br>
+                    <button onclick="goToPOS()" style="margin-top: 10px;">Open POS</button>
+                `, 'success');
+            } catch (error) {
+                showResult(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function inspectCache() {
+            try {
+                const productCache = localStorage.getItem('pos_products_cache');
+                const categoryCache = localStorage.getItem('pos_categories_cache');
+                
+                let html = '<strong>📊 Cache Inspection:</strong><br><br>';
+                
+                if (productCache) {
+                    try {
+                        const parsed = JSON.parse(productCache);
+                        const products = parsed.data || [];
+                        const age = Date.now() - parsed.timestamp;
+                        const ageMinutes = Math.floor(age / 60000);
+                        
+                        html += `<div class="cache-item">
+                            <strong>pos_products_cache:</strong><br>
+                            • Products: ${products.length}<br>
+                            • Age: ${ageMinutes} minutes<br>
+                            • Version: ${parsed.version}<br>
+                            • Size: ${(productCache.length / 1024).toFixed(2)} KB
+                        </div>`;
+                        
+                        // Check for "Final" product
+                        const finalProduct = products.find(p => p.sku === 'SKU-1761304091007-1KN');
+                        if (finalProduct) {
+                            html += `<div class="cache-item">
+                                <strong>🔍 Product "Final" found in cache:</strong><br>
+                                • Name: ${finalProduct.name}<br>
+                                • Variants: ${finalProduct.variants?.length || 0}<br>`;
+                            
+                            if (finalProduct.variants && finalProduct.variants.length > 0) {
+                                html += '<br><strong>Variant names in cache:</strong><br>';
+                                finalProduct.variants.forEach((v, i) => {
+                                    html += `${i + 1}. <code>${v.name || v.variant_name || 'undefined'}</code><br>`;
+                                });
+                            }
+                            
+                            html += '</div>';
+                        }
+                    } catch (e) {
+                        html += `<div class="cache-item">pos_products_cache: Invalid JSON</div>`;
+                    }
+                } else {
+                    html += '<div class="cache-item">✅ No product cache found (good!)</div>';
+                }
+                
+                if (categoryCache) {
+                    try {
+                        const parsed = JSON.parse(categoryCache);
+                        html += `<div class="cache-item">
+                            <strong>pos_categories_cache:</strong> ${parsed.data?.length || 0} categories
+                        </div>`;
+                    } catch (e) {
+                        html += '<div class="cache-item">pos_categories_cache: Invalid JSON</div>';
+                    }
+                } else {
+                    html += '<div class="cache-item">✅ No category cache found</div>';
+                }
+                
+                showResult(html, 'success');
+            } catch (error) {
+                showResult(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        function goToPOS() {
+            window.location.href = 'http://localhost:5173';
+        }
+
+        // Auto-inspect on load
+        window.onload = function() {
+            inspectCache();
+        };
+    </script>
+</body>
+</html>
+

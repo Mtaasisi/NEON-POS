@@ -348,8 +348,14 @@ const SparePartVariantsSection: React.FC<SparePartVariantsSectionProps> = ({
                       <button
                         type="button"
                         onClick={() => removeVariant(index)}
-                        className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors"
+                        disabled={variants.length === 1}
+                        className={`p-1 rounded transition-colors ${
+                          variants.length === 1
+                            ? 'text-gray-300 cursor-not-allowed'
+                            : 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                        }`}
                         aria-label="Remove variant"
+                        title={variants.length === 1 ? 'Cannot delete the last variant. At least one variant is required.' : 'Remove variant'}
                       >
                         <Trash2 size={16} />
                       </button>

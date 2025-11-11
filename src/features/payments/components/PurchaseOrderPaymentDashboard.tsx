@@ -148,6 +148,9 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
           supplier_id,
           status,
           currency,
+          exchange_rate,
+          total_amount_base_currency,
+          payment_terms,
           total_amount,
           total_paid,
           payment_status,
@@ -176,7 +179,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
       if (supplierIds.length > 0) {
         const { data: suppliers, error: suppliersError } = await supabase
           .from('lats_suppliers')
-          .select('id, name, contact_person, phone')
+          .select('id, name, contact_person, phone, wechat, country, wechat_qr_code, alipay_qr_code, bank_account_details')
           .in('id', supplierIds);
 
         if (suppliersError) {

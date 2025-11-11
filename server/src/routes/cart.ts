@@ -46,7 +46,7 @@ router.post('/add', authenticateToken, validate(addToCartSchema), async (req: Au
     let variant = null;
     if (variantId) {
       const variants = await sql`
-        SELECT id, name, unit_price, selling_price, quantity, is_active
+        SELECT id, name, unit_price, selling_price, quantity, is_active, is_parent, variant_type, parent_variant_id
         FROM lats_product_variants
         WHERE id = ${variantId} AND product_id = ${productId}
         LIMIT 1
@@ -63,8 +63,19 @@ router.post('/add', authenticateToken, validate(addToCartSchema), async (req: Au
       }
 
       // Check variant stock
-      if (variant.quantity < quantity) {
-        throw new ApiError(400, `Insufficient stock. Only ${variant.quantity} available`);
+      // For parent variants, we should calculate stock from children
+      let availableStock = variant.quantity;
+      if (variant.is_parent || variant.variant_type === 'parent') {
+        const childStockResult = await sql`
+          SELECT COALESCE(SUM(quantity), 0) as total_stock
+          FROM lats_product_variants
+          WHERE parent_variant_id = ${variantId} AND is_active = true
+        `;
+        availableStock = childStockResult[0]?.total_stock || 0;
+      }
+      
+      if (availableStock < quantity) {
+        throw new ApiError(400, `Insufficient stock. Only ${availableStock} available`);
       }
     } else {
       // Check product stock
@@ -120,7 +131,7 @@ router.post('/validate', authenticateToken, async (req: AuthRequest, res, next) 
       // Validate product exists and has stock
       if (variantId) {
         const variants = await sql`
-          SELECT quantity, selling_price, is_active
+          SELECT quantity, selling_price, is_active, is_parent, variant_type
           FROM lats_product_variants
           WHERE id = ${variantId}
           LIMIT 1
@@ -136,12 +147,23 @@ router.post('/validate', authenticateToken, async (req: AuthRequest, res, next) 
           continue;
         }
 
-        if (variants[0].quantity < quantity) {
+        // Check stock - for parent variants, calculate from children
+        let availableStock = variants[0].quantity;
+        if (variants[0].is_parent || variants[0].variant_type === 'parent') {
+          const childStockResult = await sql`
+            SELECT COALESCE(SUM(quantity), 0) as total_stock
+            FROM lats_product_variants
+            WHERE parent_variant_id = ${variantId} AND is_active = true
+          `;
+          availableStock = childStockResult[0]?.total_stock || 0;
+        }
+
+        if (availableStock < quantity) {
           validationResults.push({
             productId,
             variantId,
             valid: false,
-            error: `Insufficient stock. Only ${variants[0].quantity} available`,
+            error: `Insufficient stock. Only ${availableStock} available`,
           });
           continue;
         }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, MessageSquare } from 'lucide-react';
 import GlassButton from './GlassButton';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 export interface PromptDialogProps {
   isOpen: boolean;
@@ -30,6 +31,9 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
   type = 'text'
 }) => {
   const [value, setValue] = useState(defaultValue);
+
+  // Prevent body scroll when dialog is open
+  useBodyScrollLock(isOpen);
 
   useEffect(() => {
     if (isOpen) {

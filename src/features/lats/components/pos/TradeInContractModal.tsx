@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import type { TradeInTransaction, CustomerIdType } from '../../types/tradeIn';
 import { createTradeInContract, getTradeInSettings } from '../../lib/tradeInApi';
 import { format } from '../../lib/format';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 interface TradeInContractModalProps {
   isOpen: boolean;
@@ -27,6 +28,9 @@ export const TradeInContractModal: React.FC<TradeInContractModalProps> = ({
   const [loading, setLoading] = useState(true);
   const [termsAndConditions, setTermsAndConditions] = useState('');
   const [ownershipDeclaration, setOwnershipDeclaration] = useState('');
+  
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
   
   // Form state
   const [idNumber, setIdNumber] = useState('');

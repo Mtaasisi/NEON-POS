@@ -15,21 +15,28 @@ const DEFAULT_CONFIG: ReminderConfig = {
 export class ReminderService {
   private config: ReminderConfig;
   private intervalId: NodeJS.Timeout | null = null;
+  private isRunning: boolean = false;
+  private lastCheckTime: number = 0;
+  private readonly CHECK_COOLDOWN = 5 * 60 * 1000; // 5 minutes cooldown to prevent duplicates
 
   constructor(config: Partial<ReminderConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
   start() {
-    if (this.intervalId) {
-      this.stop();
+    // Prevent multiple instances from running
+    if (this.isRunning || this.intervalId) {
+      console.log('⚠️ [ReminderService] Already running, skipping duplicate start');
+      return;
     }
+    
+    this.isRunning = true;
     
     this.intervalId = setInterval(() => {
       this.checkOverdueHandovers();
     }, this.config.checkIntervalMinutes * 60 * 1000);
     
-    // Run immediately on start
+    // Run immediately on start (with cooldown check)
     this.checkOverdueHandovers();
   }
 
@@ -37,10 +44,20 @@ export class ReminderService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
+      this.isRunning = false;
     }
   }
 
   async checkOverdueHandovers() {
+    // Prevent duplicate checks within cooldown period
+    const now = Date.now();
+    if (now - this.lastCheckTime < this.CHECK_COOLDOWN) {
+      console.log(`⏭️ [ReminderService] Skipping check - cooldown active (${Math.round((this.CHECK_COOLDOWN - (now - this.lastCheckTime)) / 1000)}s remaining)`);
+      return;
+    }
+    
+    this.lastCheckTime = now;
+    
     try {
       const cutoffTime = new Date();
       cutoffTime.setHours(cutoffTime.getHours() - this.config.handoverReminderHours);

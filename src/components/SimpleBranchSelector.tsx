@@ -64,7 +64,7 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
     }
   };
 
-  const handleSwitchBranch = (branchId: string) => {
+  const handleSwitchBranch = async (branchId: string) => {
     const branch = branches.find(b => b.id === branchId);
     if (!branch) return;
 
@@ -79,6 +79,21 @@ const SimpleBranchSelector: React.FC<{ className?: string }> = ({ className = ''
     setIsOpen(false);
     
     console.log('%c✅ localStorage updated!', 'color: #00cc00;');
+    
+    // 🔥 Clear cache for branch-specific data
+    try {
+      console.log('%c🗑️ Clearing cache for branch-specific data...', 'color: #ff9900; font-weight: bold;');
+      const { smartCache } = await import('../lib/enhancedCacheManager');
+      await Promise.all([
+        smartCache.invalidateCache('products'),
+        smartCache.invalidateCache('customers'),
+        smartCache.invalidateCache('sales'),
+      ]);
+      console.log('%c✅ Cache cleared!', 'color: #00cc00; font-weight: bold;');
+    } catch (error) {
+      console.error('Failed to clear cache:', error);
+    }
+    
     console.log('%c🔄 PAGE WILL RELOAD IN 500ms...', 'background: #ffcc00; color: black; font-weight: bold; padding: 5px;');
     console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #ff0000; font-weight: bold;');
     

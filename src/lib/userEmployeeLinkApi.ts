@@ -168,7 +168,7 @@ export async function linkUserToEmployeeByEmail(email: string): Promise<boolean>
     // Check if already linked
     if (employee.user_id) {
       if (employee.user_id === user.id) {
-        toast.info('User and employee already linked');
+        toast('User and employee already linked', { icon: 'ℹ️' });
         return true;
       } else {
         toast.error('Employee already linked to another user');
@@ -213,7 +213,7 @@ export async function linkUserToEmployee(userId: string, employeeId: string): Pr
     // Verify employee exists
     const { data: employee, error: empError } = await supabase
       .from('employees')
-      .select('id, email, user_id, full_name')
+      .select('id, email, user_id, first_name, last_name')
       .eq('id', employeeId)
       .single();
 
@@ -236,7 +236,8 @@ export async function linkUserToEmployee(userId: string, employeeId: string): Pr
 
     if (updateError) throw updateError;
 
-    toast.success(`Linked ${user.full_name} to ${employee.full_name}`);
+    const employeeFullName = `${employee.first_name} ${employee.last_name}`;
+    toast.success(`Linked ${user.full_name} to ${employeeFullName}`);
     return true;
   } catch (error: any) {
     console.error('Error linking user to employee:', error);
@@ -299,7 +300,7 @@ export async function createEmployeeForUser(
       .maybeSingle();
 
     if (existing) {
-      toast.info('Employee record already exists for this user');
+      toast('Employee record already exists for this user', { icon: 'ℹ️' });
       return existing.id;
     }
 
@@ -323,7 +324,7 @@ export async function createEmployeeForUser(
       status: 'active',
       employmentType: 'full-time',
       performanceRating: 3.0,
-      skills: []
+      skills: null
     });
 
     return employee.id;
@@ -415,12 +416,13 @@ export async function getAllUserEmployeeLinks(): Promise<UserEmployeeLink[]> {
       .select(`
         id,
         user_id,
-        name,
+        first_name,
+        last_name,
         email,
         position,
         department,
         created_at,
-        users:user_id (
+        users:users!user_id (
           id,
           email,
           full_name,
@@ -437,7 +439,7 @@ export async function getAllUserEmployeeLinks(): Promise<UserEmployeeLink[]> {
       userName: item.users?.full_name || 'Unknown',
       userEmail: item.users?.email || '',
       userRole: item.users?.role || '',
-      employeeName: item.name || 'Unknown',
+      employeeName: `${item.first_name} ${item.last_name}` || 'Unknown',
       employeeEmail: item.email,
       employeePosition: item.position,
       employeeDepartment: item.department,
@@ -498,13 +500,17 @@ export async function getUnlinkedEmployees(): Promise<any[]> {
   try {
     const { data, error } = await supabase
       .from('employees')
-      .select('id, email, full_name, position, is_active')
+      .select('id, email, first_name, last_name, position, status')
       .is('user_id', null)
-      .eq('is_active', true);
+      .eq('status', 'active');
 
     if (error) throw error;
 
-    return (data || []).map(toCamelCase);
+    // Map to include a full_name field for display
+    return (data || []).map(emp => ({
+      ...toCamelCase(emp),
+      fullName: `${emp.first_name} ${emp.last_name}`
+    }));
   } catch (error) {
     console.error('Error getting unlinked employees:', error);
     return [];

@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient';
+import { getProducts } from '../../../lib/latsProductApi';
 
 export interface LiveInventoryMetrics {
   totalValue: number;
@@ -40,6 +41,7 @@ export class LiveInventoryService {
 
   /**
    * Get live inventory metrics by fetching real data from database
+   * 🚀 OPTIMIZED: Uses cached product data to avoid duplicate queries
    */
   static async getLiveInventoryMetrics(): Promise<LiveInventoryMetrics> {
     // Check cache first
@@ -61,11 +63,11 @@ export class LiveInventoryService {
       const currentBranchId = localStorage.getItem('current_branch_id');
       console.log('🏪 [LiveInventoryService] Current branch:', currentBranchId);
       
-      // Build queries with COMPLETE ISOLATION + SHARED PRODUCTS
-      let productsQuery = supabase
-        .from('lats_products')
-        .select('id, name, is_active, branch_id, is_shared');
+      // 🚀 OPTIMIZATION: Use cached products from main API instead of direct DB query
+      // This reuses the existing cache and deduplication system
+      const cachedProducts = await getProducts();
       
+      // Build variants query (still needed as variants aren't always in product response)
       let variantsQuery = supabase
         .from('lats_product_variants')
         .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id, is_shared');
@@ -73,32 +75,34 @@ export class LiveInventoryService {
       // 🔒 ISOLATION + SHARED: Show branch data + shared products from other branches
       if (currentBranchId) {
         console.log('🔒 [LiveInventoryService] ISOLATED MODE - Filtering by branch + shared products:', currentBranchId);
-        // Show products from current branch OR shared products
-        productsQuery = productsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
-        // Show variants from current branch OR shared variants
-        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+        // Show variants from current branch OR shared variants OR unassigned variants
+        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
       } else {
         console.log('⚠️ [LiveInventoryService] No branch selected - showing all data');
       }
       
-      // Fetch products and variants separately (Neon doesn't support PostgREST relationship syntax)
-      const [productsResult, variantsResult] = await Promise.allSettled([
-        productsQuery,
-        variantsQuery
-      ]);
-
-      if (productsResult.status === 'rejected') {
-        console.error('❌ [LiveInventoryService] Error fetching products:', productsResult.reason);
-        throw productsResult.reason;
+      // Fetch variants only (products already cached)
+      const { data: variants, error: variantsError } = await variantsQuery;
+      
+      if (variantsError) {
+        console.error('❌ [LiveInventoryService] Error fetching variants:', variantsError);
+        throw variantsError;
       }
 
-      let products = productsResult.value.data || [];
-      let variants = variantsResult.status === 'fulfilled' ? (variantsResult.value.data || []) : [];
+      // Convert cached products to the format expected by the rest of the function
+      const products = cachedProducts.map(p => ({
+        id: p.id,
+        name: p.name,
+        is_active: p.isActive,
+        branch_id: p.branchId,
+        is_shared: p.isShared
+      }));
       
-      // 🔧 NOTE: We no longer fetch unassigned products separately
-      // The main query already includes:
+      // 🔧 NOTE: We no longer fetch products separately
+      // Using cached products from getProducts() which already has:
       // 1. Products from current branch (branch_id = currentBranchId)
       // 2. Shared products from other branches (is_shared = true)
+      // 3. Unassigned products (branch_id IS NULL)
       // Unassigned products (branch_id = null) are handled separately by the admin
 
       // Map variants to their products

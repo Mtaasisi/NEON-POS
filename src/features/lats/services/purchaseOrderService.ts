@@ -263,11 +263,14 @@ export class PurchaseOrderService {
         }
       }
 
+      // Convert details to JSON string for PostgreSQL TEXT column
+      const detailsString = typeof audit.details === 'string' ? audit.details : JSON.stringify(audit.details);
+
       // Try using the helper function first (more secure)
       const { data: auditId, error: functionError } = await supabase.rpc('log_purchase_order_audit', {
         p_purchase_order_id: audit.purchaseOrderId,
         p_action: audit.action,
-        p_details: audit.details,
+        p_details: detailsString,
         p_user_id: userId
       });
 
@@ -282,7 +285,7 @@ export class PurchaseOrderService {
             action: audit.action,
             user_id: userId,
             created_by: userId,
-            details: audit.details,
+            details: detailsString,
             timestamp: new Date().toISOString()
           });
 
@@ -403,13 +406,13 @@ export class PurchaseOrderService {
               ? supabase.from('lats_products').select('id, name, sku, description').in('id', productIds)
               : Promise.resolve({ data: [], error: null }),
             variantIds.length > 0
-              ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds)
+              ? supabase.from('lats_product_variants').select('id, name, variant_name, sku').in('id', variantIds)  // 🔧 FIX: Select both name columns
               : Promise.resolve({ data: [], error: null })
           ]);
 
           // Map data for easy lookup
           const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
-          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
+          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, { ...v, name: v.name || v.variant_name || 'Unnamed' }]) || []);  // 🔧 FIX: Prioritize 'name' first
           
           // Map the data to ensure proper structure and validate product IDs
           const mappedData = items.map((item, index) => {
@@ -1049,7 +1052,7 @@ export class PurchaseOrderService {
         async () => {
           const { data: items, error } = await supabase
             .from('inventory_items')
-            .select('id, product_id, variant_id, serial_number, item_number, imei, mac_address, barcode, status, location, shelf, bin, purchase_date, warranty_start, warranty_end, cost_price, selling_price, notes, metadata, created_at')
+            .select('id, product_id, variant_id, serial_number, item_number, mac_address, barcode, status, location, shelf, bin, purchase_date, warranty_start, warranty_end, cost_price, selling_price, notes, metadata, created_at')
             .contains('metadata', { purchase_order_id: purchaseOrderId })
             .order('created_at', { ascending: false });
           
@@ -1068,13 +1071,13 @@ export class PurchaseOrderService {
               ? supabase.from('lats_products').select('id, name, sku, category_id').in('id', productIds)
               : Promise.resolve({ data: [], error: null }),
             variantIds.length > 0
-              ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds)
+              ? supabase.from('lats_product_variants').select('id, name, variant_name, sku').in('id', variantIds)  // 🔧 FIX: Select both name columns
               : Promise.resolve({ data: [], error: null })
           ]);
 
           // Map data for easy lookup
           const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
-          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
+          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, { ...v, name: v.name || v.variant_name || 'Unnamed' }]) || []);  // 🔧 FIX: Prioritize 'name' first
 
           // Combine data
           return items.map(item => ({
@@ -1149,13 +1152,13 @@ export class PurchaseOrderService {
               ? supabase.from('lats_products').select('id, name, sku').in('id', productIds)
               : Promise.resolve({ data: [], error: null }),
             variantIds.length > 0
-              ? supabase.from('lats_product_variants').select('id, name, sku').in('id', variantIds)
+              ? supabase.from('lats_product_variants').select('id, name, variant_name, sku').in('id', variantIds)  // 🔧 FIX: Select both name columns
               : Promise.resolve({ data: [], error: null })
           ]);
 
           // Map data for easy lookup
           const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
-          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
+          const variantsMap = new Map(variantsResult.data?.map(v => [v.id, { ...v, name: v.name || v.variant_name || 'Unnamed' }]) || []);  // 🔧 FIX: Prioritize 'name' first
 
           // Combine data
           return adjustmentItems.map(item => ({
@@ -1511,7 +1514,7 @@ export class PurchaseOrderService {
     }
   }
 
-  // Process serial numbers for received items
+  // Process serial numbers for received items (UPDATED: Now creates IMEI variants)
   private static async processSerialNumbers(
     purchaseOrderId: string,
     receivedItems: Array<{ 
@@ -1524,15 +1527,27 @@ export class PurchaseOrderService {
         barcode?: string;
         location?: string;
         notes?: string;
+        cost_price?: number;
+        selling_price?: number;
+        warranty_start?: string;
+        warranty_end?: string;
+        warranty_months?: number;
+        condition?: string;
       }>;
     }>,
     userId: string
   ): Promise<void> {
     try {
-      // Get purchase order items to get product_id and variant_id
+      // Get purchase order items with full details
       const { data: orderItems, error: itemsError } = await supabase
         .from('lats_purchase_order_items')
-        .select('id, product_id, variant_id')
+        .select(`
+          id, 
+          product_id, 
+          variant_id, 
+          unit_cost,
+          product:lats_products(id, name, branch_id)
+        `)
         .eq('purchase_order_id', purchaseOrderId)
         .in('id', receivedItems.map(item => item.id));
 
@@ -1540,6 +1555,8 @@ export class PurchaseOrderService {
         console.error('Error fetching order items for serial numbers:', itemsError);
         return;
       }
+
+      console.log('📦 Processing IMEI variants for received items...');
 
       // Process each item with serial numbers
       for (const receivedItem of receivedItems) {
@@ -1553,81 +1570,166 @@ export class PurchaseOrderService {
           continue;
         }
 
-        // Create inventory items for each serial number
-        const inventoryItems = receivedItem.serialNumbers.map(serial => ({
-          product_id: orderItem.product_id,
-          variant_id: orderItem.variant_id,
-          serial_number: serial.serial_number,
-          imei: serial.imei || null,
-          mac_address: serial.mac_address || null,
-          barcode: serial.barcode || null,
-          status: 'pending_pricing' as const, // Changed from 'available' to 'pending_pricing'
-          purchase_order_id: purchaseOrderId, // Add PO reference for querying
-          location: serial.location || null,
-          warranty_start: serial.warranty_start || null,
-          warranty_end: serial.warranty_end || null,
-          cost_price: serial.cost_price || orderItem.unit_cost || 0,
-          selling_price: serial.selling_price || null,
-          notes: serial.notes || `Received from purchase order ${purchaseOrderId}`,
-          metadata: {
-            purchase_order_id: purchaseOrderId,
-            purchase_order_item_id: receivedItem.id,
-            received_by: userId,
-            received_at: new Date().toISOString(),
-            warranty_months: serial.warranty_months || 12
-          }
-        }));
-
-        // Insert inventory items
-        const { error: insertError } = await supabase
-          .from('inventory_items')
-          .insert(inventoryItems);
-
-        if (insertError) {
-          console.error(`Error inserting inventory items for order item ${receivedItem.id}:`, insertError);
+        const product = orderItem.product as any;
+        if (!product) {
+          console.warn(`Product not found for order item ${receivedItem.id}`);
           continue;
         }
 
-        // Get the inserted inventory items to create movement records
-        const { data: insertedItems, error: fetchError } = await supabase
-          .from('inventory_items')
-          .select('id')
-          .eq('product_id', orderItem.product_id)
-          .in('serial_number', receivedItem.serialNumbers.map(s => s.serial_number))
-          .order('created_at', { ascending: false })
-          .limit(receivedItem.serialNumbers.length);
+        // Check if any item has IMEI - if so, use new IMEI variant system
+        const hasIMEI = receivedItem.serialNumbers.some(s => s.imei && s.imei.trim() !== '');
 
-        if (fetchError || !insertedItems) {
-          console.error('Error fetching inserted inventory items:', fetchError);
-          continue;
-        }
+        if (hasIMEI) {
+          // ✅ NEW SYSTEM: Parent-Child IMEI Variant System
+          console.log(`✅ Using Parent-Child IMEI variant system for ${receivedItem.serialNumbers.length} devices`);
 
-        // Create movement records for each serial number
-        const movements = receivedItem.serialNumbers.map((serial, index) => ({
-          inventory_item_id: insertedItems[index]?.id,
-          movement_type: 'received' as const,
-          from_status: null,
-          to_status: 'pending_pricing', // Changed to match new status
-          reference_id: purchaseOrderId,
-          reference_type: 'purchase_order',
-          notes: `Received from purchase order ${purchaseOrderId} - pending pricing`,
-          created_by: userId
-        })).filter(movement => movement.inventory_item_id);
+          // Prepare variant data
+          const variants = receivedItem.serialNumbers
+            .filter(serial => serial.imei && serial.imei.trim() !== '')
+            .map(serial => ({
+              imei: serial.imei!,
+              serial_number: serial.serial_number,
+              mac_address: serial.mac_address,
+              condition: serial.condition || 'new',
+              cost_price: serial.cost_price || orderItem.unit_cost || 0,
+              // ✅ FIX: Pass null instead of 0 to let database inherit from parent
+              selling_price: serial.selling_price ?? null,
+              location: serial.location,
+              warranty_start: serial.warranty_start,
+              warranty_end: serial.warranty_end,
+              notes: serial.notes || `Received from PO ${purchaseOrderId}`,
+              source: 'purchase' as const,
+            }));
 
-        if (movements.length > 0) {
-          const { error: movementError } = await supabase
-            .from('serial_number_movements')
-            .insert(movements);
+          if (variants.length > 0 && orderItem.variant_id) {
+            // ✅ Use Parent-Child System: Add IMEIs to parent variant
+            const { addIMEIsToParentVariant, convertToParentVariant } = await import('../lib/imeiVariantService');
+            
+            // First, ensure the variant is marked as a parent
+            await convertToParentVariant(orderItem.variant_id);
+            console.log(`✅ Variant ${orderItem.variant_id} marked as parent`);
+            
+            // Add all IMEIs as children of the parent variant
+            const result = await addIMEIsToParentVariant(
+              orderItem.variant_id, // Parent variant ID from PO
+              variants
+            );
 
-          if (movementError) {
-            console.error('Error creating movement records:', movementError);
+            if (result.success) {
+              console.log(`✅ Added ${result.created} IMEI children to parent variant ${orderItem.variant_id}`);
+              if (result.failed > 0) {
+                console.warn(`⚠️ Failed to add ${result.failed} IMEIs:`, result.errors);
+              }
+            } else {
+              console.error(`❌ Error adding IMEIs to parent variant:`, result.errors);
+            }
+          } else if (variants.length > 0 && !orderItem.variant_id) {
+            // Fallback: Create parent variant if none exists
+            console.warn(`⚠️ No variant_id found in PO item. Creating parent variant...`);
+            const { createParentVariant, addIMEIsToParentVariant } = await import('../lib/imeiVariantService');
+            
+            const parentResult = await createParentVariant({
+              product_id: orderItem.product_id,
+              variant_name: 'Default Variant',
+              branch_id: product.branch_id,
+              cost_price: variants[0].cost_price,
+              selling_price: variants[0].selling_price,
+            });
+
+            if (parentResult.success && parentResult.data) {
+              const result = await addIMEIsToParentVariant(parentResult.data.id, variants);
+              if (result.success) {
+                console.log(`✅ Created parent variant and added ${result.created} IMEI children`);
+              }
+            }
           }
+
+          // Handle items without IMEI (if any) - fall back to old system
+          const itemsWithoutIMEI = receivedItem.serialNumbers.filter(
+            serial => !serial.imei || serial.imei.trim() === ''
+          );
+
+          if (itemsWithoutIMEI.length > 0) {
+            console.log(`⚠️ ${itemsWithoutIMEI.length} items without IMEI, using legacy inventory_items`);
+            await this.createLegacyInventoryItems(
+              purchaseOrderId,
+              orderItem,
+              itemsWithoutIMEI,
+              userId
+            );
+          }
+        } else {
+          // ⚠️ LEGACY SYSTEM: No IMEI, use old inventory_items approach
+          console.log(`⚠️ Using legacy inventory_items for ${receivedItem.serialNumbers.length} items (no IMEI)`);
+          await this.createLegacyInventoryItems(
+            purchaseOrderId,
+            orderItem,
+            receivedItem.serialNumbers,
+            userId
+          );
         }
 
-        console.log(`✅ Processed ${receivedItem.serialNumbers.length} serial numbers for order item ${receivedItem.id}`);
+        console.log(`✅ Processed ${receivedItem.serialNumbers.length} items for order item ${receivedItem.id}`);
       }
     } catch (error) {
       console.error('Error processing serial numbers:', error);
+    }
+  }
+
+  // Legacy method for items without IMEI
+  private static async createLegacyInventoryItems(
+    purchaseOrderId: string,
+    orderItem: any,
+    serialNumbers: Array<{
+      serial_number: string;
+      imei?: string;
+      mac_address?: string;
+      barcode?: string;
+      location?: string;
+      notes?: string;
+      cost_price?: number;
+      selling_price?: number;
+      warranty_start?: string;
+      warranty_end?: string;
+      warranty_months?: number;
+    }>,
+    userId: string
+  ): Promise<void> {
+    try {
+      const inventoryItems = serialNumbers.map(serial => ({
+        product_id: orderItem.product_id,
+        variant_id: orderItem.variant_id,
+        serial_number: serial.serial_number,
+        imei: serial.imei || null,
+        mac_address: serial.mac_address || null,
+        barcode: serial.barcode || null,
+        status: 'available' as const,
+        purchase_order_id: purchaseOrderId,
+        location: serial.location || null,
+        warranty_start: serial.warranty_start || null,
+        warranty_end: serial.warranty_end || null,
+        cost_price: serial.cost_price || orderItem.unit_cost || 0,
+        selling_price: serial.selling_price || null,
+        notes: serial.notes || `Received from purchase order ${purchaseOrderId}`,
+        metadata: {
+          purchase_order_id: purchaseOrderId,
+          purchase_order_item_id: orderItem.id,
+          received_by: userId,
+          received_at: new Date().toISOString(),
+          warranty_months: serial.warranty_months || 12,
+          system: 'legacy'
+        }
+      }));
+
+      const { error: insertError } = await supabase
+        .from('inventory_items')
+        .insert(inventoryItems);
+
+      if (insertError) {
+        console.error(`Error inserting legacy inventory items:`, insertError);
+      }
+    } catch (error) {
+      console.error('Error creating legacy inventory items:', error);
     }
   }
 
@@ -1924,7 +2026,6 @@ export class PurchaseOrderService {
     product_name: string;
     variant_name?: string;
     serial_number: string;
-    imei?: string;
     cost_price: number;
     selling_price?: number;
     location?: string;
@@ -1932,7 +2033,7 @@ export class PurchaseOrderService {
     try {
       const { data: items, error } = await supabase
         .from('inventory_items')
-        .select('id, product_id, variant_id, serial_number, imei, cost_price, selling_price, location')
+        .select('id, product_id, variant_id, serial_number, cost_price, selling_price, location')
         .eq('purchase_order_id', purchaseOrderId)
         .eq('status', 'pending_pricing');
 
@@ -1954,13 +2055,13 @@ export class PurchaseOrderService {
           ? supabase.from('lats_products').select('id, name').in('id', productIds)
           : Promise.resolve({ data: [], error: null }),
         variantIds.length > 0
-          ? supabase.from('lats_product_variants').select('id, name').in('id', variantIds)
+          ? supabase.from('lats_product_variants').select('id, name, variant_name').in('id', variantIds)  // 🔧 FIX: Select both name columns
           : Promise.resolve({ data: [], error: null })
       ]);
 
       // Map data for easy lookup
       const productsMap = new Map(productsResult.data?.map(p => [p.id, p]) || []);
-      const variantsMap = new Map(variantsResult.data?.map(v => [v.id, v]) || []);
+      const variantsMap = new Map(variantsResult.data?.map(v => [v.id, { ...v, name: v.name || v.variant_name || 'Unnamed' }]) || []);  // 🔧 FIX: Prioritize 'name' first
 
       return items.map((item: any) => ({
         inventory_item_id: item.id,

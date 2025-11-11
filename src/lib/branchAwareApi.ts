@@ -183,7 +183,13 @@ export const getBranchProducts = async () => {
     `)
     .eq('is_active', true);
 
-  query = await addBranchFilter(query, 'products');
+  // Apply branch filter without awaiting (to keep query builder)
+  const branchId = getCurrentBranchId();
+  const shared = await isDataShared('products');
+  
+  if (branchId && !shared) {
+    query = query.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+  }
 
   const { data, error } = await query;
 

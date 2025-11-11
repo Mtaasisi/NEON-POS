@@ -146,6 +146,10 @@ export interface UserSettings {
       inventoryWidget: boolean;
       activityFeedWidget: boolean;
     };
+    widgetSizes?: {
+      [key: string]: 'small' | 'medium' | 'large';
+    };
+    autoArrange?: boolean;
   };
 }
 

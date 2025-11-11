@@ -43,10 +43,15 @@ router.get('/', authenticateToken, validateQuery(searchSchema), async (req: Auth
               'selling_price', v.selling_price,
               'cost_price', v.cost_price,
               'quantity', v.quantity,
-              'is_active', v.is_active
+              'is_active', v.is_active,
+              'is_parent', v.is_parent,
+              'variant_type', v.variant_type,
+              'parent_variant_id', v.parent_variant_id
             ))
             FROM lats_product_variants v
-            WHERE v.product_id = p.id AND v.is_active = true
+            WHERE v.product_id = p.id 
+              AND v.is_active = true
+              AND v.parent_variant_id IS NULL
           ) as variants
         FROM lats_products p
         LEFT JOIN lats_categories c ON p.category_id = c.id
@@ -73,10 +78,15 @@ router.get('/', authenticateToken, validateQuery(searchSchema), async (req: Auth
               'selling_price', v.selling_price,
               'cost_price', v.cost_price,
               'quantity', v.quantity,
-              'is_active', v.is_active
+              'is_active', v.is_active,
+              'is_parent', v.is_parent,
+              'variant_type', v.variant_type,
+              'parent_variant_id', v.parent_variant_id
             ))
             FROM lats_product_variants v
-            WHERE v.product_id = p.id AND v.is_active = true
+            WHERE v.product_id = p.id 
+              AND v.is_active = true
+              AND v.parent_variant_id IS NULL
           ) as variants
         FROM lats_products p
         LEFT JOIN lats_categories c ON p.category_id = c.id
@@ -120,10 +130,14 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res, next) => {
             'selling_price', v.selling_price,
             'cost_price', v.cost_price,
             'quantity', v.quantity,
-            'is_active', v.is_active
+            'is_active', v.is_active,
+            'is_parent', v.is_parent,
+            'variant_type', v.variant_type,
+            'parent_variant_id', v.parent_variant_id
           ))
           FROM lats_product_variants v
           WHERE v.product_id = p.id
+            AND v.parent_variant_id IS NULL
         ) as variants
       FROM lats_products p
       LEFT JOIN lats_categories c ON p.category_id = c.id
@@ -159,16 +173,20 @@ router.get('/search', authenticateToken, async (req: AuthRequest, res, next) => 
       SELECT 
         p.*,
         c.name as category_name,
-        (
+          (
           SELECT json_agg(json_build_object(
             'id', v.id,
             'name', v.name,
             'unit_price', v.unit_price,
             'selling_price', v.selling_price,
-            'quantity', v.quantity
+            'quantity', v.quantity,
+            'is_parent', v.is_parent,
+            'variant_type', v.variant_type
           ))
           FROM lats_product_variants v
-          WHERE v.product_id = p.id AND v.is_active = true
+          WHERE v.product_id = p.id 
+            AND v.is_active = true
+            AND v.parent_variant_id IS NULL
         ) as variants
       FROM lats_products p
       LEFT JOIN lats_categories c ON p.category_id = c.id

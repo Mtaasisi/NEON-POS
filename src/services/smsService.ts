@@ -63,11 +63,21 @@ class SMSService {
       console.log('🔧 Initializing SMS service from integrations...');
       
       // Get full integration (not just credentials) to access config
+      // Add timeout to prevent blocking app startup
       const { getIntegration } = await import('../lib/integrationsApi');
-      const integration = await getIntegration('SMS_GATEWAY');
+      
+      // Wrap in a timeout promise to prevent blocking
+      const timeoutMs = 15000; // 15 second timeout for initialization
+      const integrationPromise = getIntegration('SMS_GATEWAY');
+      const timeoutPromise = new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('SMS initialization timeout')), timeoutMs)
+      );
+      
+      const integration = await Promise.race([integrationPromise, timeoutPromise]);
       
       if (!integration || !integration.is_enabled) {
         console.warn('⚠️ SMS integration not configured. Please set up SMS in Admin Settings → Integrations');
+        this.initialized = true;
         return;
       }
 
@@ -92,8 +102,19 @@ class SMSService {
       
       this.initialized = true;
     } catch (error) {
-      console.warn('❌ SMS service configuration error:', error);
-      this.initialized = true; // Still mark as initialized to prevent infinite waiting
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Check if it's a timeout error
+      if (errorMsg.includes('timeout')) {
+        console.warn('⏱️ SMS service initialization timed out - will retry on first use');
+        console.warn('   This is normal during database cold starts or slow connections');
+      } else {
+        console.warn('❌ SMS service configuration error:', errorMsg);
+      }
+      
+      // Mark as initialized anyway to prevent blocking
+      // The service will retry when actually needed
+      this.initialized = true;
     }
   }
 

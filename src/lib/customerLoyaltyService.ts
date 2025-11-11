@@ -6,7 +6,7 @@ export interface LoyaltyCustomer {
   phone: string;
   email: string;
   points: number;
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum';
+  tier: 'interested' | 'engaged' | 'payment_customer' | 'active' | 'regular' | 'premium' | 'vip';
   totalSpent: number;
   joinDate: string;
   lastPurchase: string;
@@ -75,15 +75,20 @@ class CustomerLoyaltyService {
       console.log(`🔍 Fetching loyalty customers page ${page} with ${pageSize} per page...`);
       
       // Get branch filtering helper
-      const { addBranchFilter } = await import('./branchAwareApi');
+      const { getCurrentBranchId, isDataShared: checkIsDataShared } = await import('./branchAwareApi');
       
       // First, get the total count for pagination
       let countQuery = supabase
         .from('customers')
         .select('id', { count: 'exact', head: true });
 
-      // Apply branch filter to count query
-      countQuery = await addBranchFilter(countQuery, 'customers');
+      // Apply branch filter to count query (don't execute yet, just get modified query)
+      const branchId = getCurrentBranchId();
+      const isCustomersShared = await checkIsDataShared('customers');
+      
+      if (branchId && !isCustomersShared) {
+        countQuery = countQuery.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+      }
 
       // Apply filters to count query
       if (tierFilter && tierFilter !== 'all') {
@@ -121,8 +126,10 @@ class CustomerLoyaltyService {
         .order('created_at', { ascending: false })
         .range(offset, offset + pageSize - 1);
 
-      // Apply branch filter
-      query = await addBranchFilter(query, 'customers');
+      // Apply branch filter (don't execute, just modify query)
+      if (branchId && !isCustomersShared) {
+        query = query.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+      }
 
       // Apply filters
       if (tierFilter && tierFilter !== 'all') {
@@ -179,7 +186,7 @@ class CustomerLoyaltyService {
           lastPurchase: customer.last_purchase || customer.last_visit || customer.created_at,
           orders: customer.total_orders || 0,
           status: customer.is_active ? 'active' : 'inactive',
-          loyaltyLevel: customer.loyalty_level || 'bronze',
+          loyaltyLevel: customer.loyalty_level || 'interested',
           lastVisit: customer.last_visit || customer.created_at,
           isActive: customer.is_active || false,
           customerId: customer.id
@@ -240,15 +247,20 @@ class CustomerLoyaltyService {
       console.log('🔍 Fetching all loyalty customers...');
       
       // Get branch filtering helper
-      const { addBranchFilter } = await import('./branchAwareApi');
+      const { getCurrentBranchId, isDataShared: checkIsDataShared } = await import('./branchAwareApi');
       
       // First, get the total count to know how many customers we need to fetch
       let countQuery = supabase
         .from('customers')
         .select('id', { count: 'exact', head: true });
       
-      // Apply branch filter to count
-      countQuery = await addBranchFilter(countQuery, 'customers');
+      // Apply branch filter to count (don't execute, just modify query)
+      const branchId = getCurrentBranchId();
+      const isCustomersShared = await checkIsDataShared('customers');
+      
+      if (branchId && !isCustomersShared) {
+        countQuery = countQuery.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+      }
       
       const { count: totalCustomerCount, error: countError } = await countQuery;
 
@@ -279,8 +291,10 @@ class CustomerLoyaltyService {
           .order('created_at', { ascending: false })
           .range(from, to);
 
-        // Apply branch filter
-        query = await addBranchFilter(query, 'customers');
+        // Apply branch filter (don't execute, just modify query)
+        if (branchId && !isCustomersShared) {
+          query = query.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+        }
 
         // Apply filters
         if (tierFilter && tierFilter !== 'all') {
@@ -369,7 +383,7 @@ class CustomerLoyaltyService {
           lastPurchase: lastPurchase || customer.last_visit || customer.created_at,
           orders: totalOrders,
           status: customer.is_active ? 'active' : 'inactive',
-          loyaltyLevel: customer.loyalty_level || 'bronze',
+          loyaltyLevel: customer.loyalty_level || 'interested',
           lastVisit: customer.last_visit || customer.created_at,
           isActive: customer.is_active || false,
           customerId: customer.id
@@ -459,7 +473,7 @@ class CustomerLoyaltyService {
 
       const totalCustomers = totalCustomerCount || 0;
       const totalPoints = (allCustomers || []).reduce((sum, customer) => sum + (customer.points || 0), 0);
-      const vipCustomers = (allCustomers || []).filter(c => c.loyalty_level === 'platinum').length;
+      const vipCustomers = (allCustomers || []).filter(c => c.loyalty_level === 'vip').length;
       const activeCustomers = (allCustomers || []).filter(c => c.is_active).length;
       
       // Calculate total revenue from all sales (lats_sales table doesn't have branch_id)
@@ -672,7 +686,7 @@ class CustomerLoyaltyService {
       }
 
       const points = customer?.points || 0;
-      const currentTier = customer?.loyalty_level || 'bronze';
+      const currentTier = customer?.loyalty_level || 'interested';
       const newTier = this.calculateTierFromPoints(points);
 
       if (newTier !== currentTier) {
@@ -703,25 +717,34 @@ class CustomerLoyaltyService {
   }
 
   // Helper methods
-  private mapLoyaltyLevel(level: string): 'bronze' | 'silver' | 'gold' | 'platinum' {
+  private mapLoyaltyLevel(level: string): 'interested' | 'engaged' | 'payment_customer' | 'active' | 'regular' | 'premium' | 'vip' {
     switch (level?.toLowerCase()) {
-      case 'platinum':
-        return 'platinum';
-      case 'gold':
-        return 'gold';
-      case 'silver':
-        return 'silver';
-      case 'bronze':
+      case 'vip':
+        return 'vip';
+      case 'premium':
+        return 'premium';
+      case 'regular':
+        return 'regular';
+      case 'active':
+        return 'active';
+      case 'payment_customer':
+        return 'payment_customer';
+      case 'engaged':
+        return 'engaged';
+      case 'interested':
       default:
-        return 'bronze';
+        return 'interested';
     }
   }
 
   private calculateTierFromPoints(points: number): string {
-    if (points >= 5000) return 'platinum';
-    if (points >= 2000) return 'gold';
-    if (points >= 1000) return 'silver';
-    return 'bronze';
+    if (points >= 1000) return 'vip';
+    if (points >= 700) return 'premium';
+    if (points >= 400) return 'regular';
+    if (points >= 200) return 'active';
+    if (points >= 100) return 'payment_customer';
+    if (points >= 50) return 'engaged';
+    return 'interested';
   }
 
   // Additional methods for the modal
@@ -780,7 +803,7 @@ class CustomerLoyaltyService {
 
       const totalCustomers = customers?.length || 0;
       const totalPoints = customers?.reduce((sum, c) => sum + (c.points || 0), 0) || 0;
-      const vipCustomers = customers?.filter(c => c.loyalty_level === 'platinum' || c.loyalty_level === 'gold').length || 0;
+      const vipCustomers = customers?.filter(c => c.loyalty_level === 'vip' || c.loyalty_level === 'premium').length || 0;
       const activeCustomers = customers?.filter(c => c.is_active).length || 0;
       const totalSpent = customers?.reduce((sum, c) => sum + (c.total_spent || 0), 0) || 0;
       const averagePoints = totalCustomers > 0 ? totalPoints / totalCustomers : 0;

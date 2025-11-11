@@ -46,14 +46,32 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
         products.forEach(product => {
           if (product.variants && product.variants.length > 0) {
             // Calculate total quantity and average min quantity for product
-            const totalQuantity = product.variants.reduce((sum, v) => sum + (v.quantity || 0), 0);
-            const totalMinQuantity = product.variants.reduce((sum, v) => sum + (v.minQuantity || 0), 0);
+            // Ensure all values are valid numbers (not NaN or undefined)
+            const totalQuantity = product.variants.reduce((sum, v) => {
+              const qty = Number(v.quantity);
+              return sum + (isNaN(qty) ? 0 : qty);
+            }, 0);
+            
+            const totalMinQuantity = product.variants.reduce((sum, v) => {
+              const minQty = Number(v.minQuantity);
+              return sum + (isNaN(minQty) ? 0 : minQty);
+            }, 0);
+            
             const avgMinQuantity = totalMinQuantity / product.variants.length;
             
             // Calculate stock percentage (quantity vs min quantity)
-            const stockPercentage = avgMinQuantity > 0 
-              ? Math.min(100, Math.round((totalQuantity / avgMinQuantity) * 100))
-              : (totalQuantity > 0 ? 100 : 0);
+            // Add additional safety checks to prevent NaN
+            let stockPercentage = 0;
+            if (avgMinQuantity > 0 && !isNaN(avgMinQuantity) && !isNaN(totalQuantity)) {
+              stockPercentage = Math.min(100, Math.round((totalQuantity / avgMinQuantity) * 100));
+            } else if (totalQuantity > 0) {
+              stockPercentage = 100;
+            }
+            
+            // Final safety check to ensure stockPercentage is a valid number
+            if (isNaN(stockPercentage) || !isFinite(stockPercentage)) {
+              stockPercentage = 0;
+            }
             
             // Determine status
             let status: 'good' | 'low' | 'critical' = 'good';
@@ -79,12 +97,19 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
               minQuantity: Math.round(avgMinQuantity)
             });
             
-            console.log(`📦 Product: "${productName}" | Qty: ${totalQuantity} | Min: ${Math.round(avgMinQuantity)} | Status: ${status}`);
+            console.log(`📦 Product: "${productName}" | Qty: ${totalQuantity} | Min: ${Math.round(avgMinQuantity)} | Stock%: ${stockPercentage} | Status: ${status}`);
           }
         });
         
         // Sort by status (critical first, then low, then good) and limit to top 10
         const sortedItems = stockItems
+          .filter(item => {
+            // Final validation: ensure all numeric values are valid
+            const hasValidStock = !isNaN(item.stock) && isFinite(item.stock) && item.stock >= 0;
+            const hasValidQuantity = !isNaN(item.actualQuantity) && isFinite(item.actualQuantity);
+            const hasValidMin = !isNaN(item.minQuantity) && isFinite(item.minQuantity);
+            return hasValidStock && hasValidQuantity && hasValidMin;
+          })
           .sort((a, b) => {
             const statusOrder = { critical: 0, low: 1, good: 2 };
             if (statusOrder[a.status] !== statusOrder[b.status]) {
@@ -97,7 +122,12 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
         console.log('📊 Final stock data for chart:', sortedItems);
         console.log(`📊 Low stock count: ${lowStockCounter}, Critical: ${criticalStockCounter}`);
         
-        setStockData(sortedItems);
+        // Extra safety: only set data if we have valid items
+        if (sortedItems.length > 0) {
+          setStockData(sortedItems);
+        } else {
+          setStockData([]);
+        }
         setLowStockCount(lowStockCounter + criticalStockCounter);
       }
       
@@ -166,10 +196,22 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
     );
   }
 
-  console.log('📊 Rendering chart with data:', stockData);
-  console.log('📊 Data length:', stockData.length);
-  console.log('📊 First item:', stockData[0]);
-  console.log('📊 All items stock values:', stockData.map(item => ({ name: item.name, stock: item.stock, status: item.status })));
+  // Safety check: ensure stockData is an array
+  const safeStockData = Array.isArray(stockData) ? stockData : [];
+
+  // Filter out any items with invalid stock values before rendering
+  const validStockData = safeStockData.filter(item => {
+    const isValid = !isNaN(item.stock) && isFinite(item.stock) && item.stock >= 0;
+    if (!isValid) {
+      console.warn('⚠️ Filtering out invalid stock item:', item);
+    }
+    return isValid;
+  });
+  
+  console.log('📊 Rendering chart with data:', validStockData);
+  console.log('📊 Data length:', validStockData.length);
+  console.log('📊 First item:', validStockData[0]);
+  console.log('📊 All items stock values:', validStockData.map(item => ({ name: item.name, stock: item.stock, status: item.status })));
 
   return (
     <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
@@ -180,9 +222,9 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
             <Package className="w-5 h-5 text-gray-700" />
             <h3 className="text-sm font-medium text-gray-900">Stock Levels</h3>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{stockData.length}</p>
+          <p className="text-3xl font-bold text-gray-900">{validStockData.length}</p>
           <p className="text-xs text-gray-500 mt-1">
-            {stockData.length === 10 ? 'Top 10 products' : `Product${stockData.length !== 1 ? 's' : ''} tracked`}
+            {validStockData.length === 10 ? 'Top 10 products' : `Product${validStockData.length !== 1 ? 's' : ''} tracked`}
           </p>
         </div>
         {lowStockCount > 0 && (
@@ -198,7 +240,7 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
       </div>
 
       {/* No Data Message */}
-      {stockData.length === 0 ? (
+      {validStockData.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-gray-400">
           <Package className="w-12 h-12 mb-2 opacity-50" />
           <p className="text-sm">No inventory data available</p>
@@ -208,35 +250,45 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
         <>
           {/* Chart */}
           <div className="flex-grow -mx-2 min-h-48">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={stockData} layout="horizontal" margin={{ left: 0, right: 10 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
-            <XAxis 
-              type="number" 
-              domain={[0, 100]}
-              stroke="#9ca3af" 
-              tick={{ fill: '#6b7280', fontSize: 11 }}
-              tickLine={false}
-              axisLine={false}
-              tickFormatter={(value) => `${value}%`}
-            />
-            <YAxis 
-              type="category"
-              dataKey="name" 
-              stroke="#9ca3af" 
-              tick={{ fill: '#6b7280', fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-              width={120}
-            />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
-            <Bar dataKey="stock" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#10b981">
-              {stockData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={getBarColor(entry.status)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        {validStockData.length > 0 && (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart 
+              data={validStockData} 
+              layout="horizontal" 
+              margin={{ left: 0, right: 10 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" horizontal={false} />
+              <XAxis 
+                type="number" 
+                domain={[0, 100]}
+                allowDataOverflow={false}
+                stroke="#9ca3af" 
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(value) => {
+                  const num = Number(value);
+                  return isNaN(num) ? '0%' : `${num}%`;
+                }}
+              />
+              <YAxis 
+                type="category"
+                dataKey="name" 
+                stroke="#9ca3af" 
+                tick={{ fill: '#6b7280', fontSize: 10 }}
+                tickLine={false}
+                axisLine={false}
+                width={120}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+              <Bar dataKey="stock" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#10b981">
+                {validStockData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={getBarColor(entry.status)} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
 
           {/* Legend */}

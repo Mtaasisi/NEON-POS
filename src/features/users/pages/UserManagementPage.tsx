@@ -28,7 +28,7 @@ import {
   type CreateUserData as ApiCreateUserData,
   type UpdateUserData as ApiUpdateUserData
 } from '../../../lib/userApi';
-import { bulkAssignUserToBranches } from '../../../lib/userBranchApi';
+import { bulkAssignUserToBranches, getUserBranchAssignments } from '../../../lib/userBranchApi';
 
 interface User {
   id: string;
@@ -43,6 +43,10 @@ interface User {
   phone?: string;
   department?: string;
   permissions: string[];
+  accessAllBranches?: boolean;
+  assignedBranches?: string[];
+  employeeLinked?: boolean;
+  employeeName?: string;
 }
 
 interface Role {
@@ -82,8 +86,31 @@ const UserManagementPage: React.FC = () => {
     setIsLoading(true);
     try {
       const dbUsers = await fetchAllUsers();
-      const transformedUsers = dbUsers.map(transformUserForUI);
-      setUsers(transformedUsers);
+      
+      // Load branch assignments for each user
+      const usersWithBranches = await Promise.all(
+        dbUsers.map(async (user) => {
+          try {
+            const branchAssignments = await getUserBranchAssignments(user.id);
+            const branchIds = branchAssignments.map(a => a.branch_id);
+            const transformed = transformUserForUI(user);
+            return {
+              ...transformed,
+              assignedBranches: branchIds,
+              accessAllBranches: branchIds.length === 0 // If no branches assigned, assume all access
+            };
+          } catch (error) {
+            console.error(`Error loading branches for user ${user.id}:`, error);
+            return {
+              ...transformUserForUI(user),
+              assignedBranches: [],
+              accessAllBranches: true
+            };
+          }
+        })
+      );
+      
+      setUsers(usersWithBranches);
 
       // Calculate roles data
       const rolesMap = new Map<string, number>();
@@ -578,13 +605,14 @@ const UserManagementPage: React.FC = () => {
           </div>
         </GlassCard>
         
-        <GlassCard className="bg-gradient-to-br from-yellow-50 to-yellow-100">
+        <GlassCard className="bg-gradient-to-br from-purple-50 to-purple-100">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-yellow-600">Pending Users</p>
-              <p className="text-2xl font-bold text-yellow-900">{metrics.pendingUsers}</p>
+              <p className="text-sm font-medium text-purple-600">Admins</p>
+              <p className="text-2xl font-bold text-purple-900">{users.filter(u => u.role === 'admin').length}</p>
+              <p className="text-xs text-purple-500">Full Access</p>
             </div>
-            <AlertTriangle className="w-8 h-8 text-yellow-600" />
+            <Shield className="w-8 h-8 text-purple-600" />
           </div>
         </GlassCard>
         
@@ -702,12 +730,10 @@ const UserManagementPage: React.FC = () => {
                   />
                 </th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">User</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Username</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Role</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Department</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">Role & Status</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">Branch Access</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Permissions</th>
-                <th className="text-left py-3 px-4 font-semibold text-gray-900">Last Login</th>
+                <th className="text-left py-3 px-4 font-semibold text-gray-900">Last Activity</th>
                 <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
               </tr>
             </thead>
@@ -729,93 +755,134 @@ const UserManagementPage: React.FC = () => {
                     />
                   </td>
                   <td className="py-3 px-4">
-                    <div>
-                      <p className="font-medium text-gray-900">
-                        {user.firstName} {user.lastName}
-                      </p>
-                      <p className="text-sm text-gray-500">{user.email}</p>
-                      {user.phone && (
-                        <p className="text-xs text-gray-400">{user.phone}</p>
+                    <div className="flex items-center gap-3">
+                      {/* Avatar with initials */}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                        <span className="text-white font-semibold text-sm">
+                          {user.firstName?.[0]}{user.lastName?.[0]}
+                        </span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">
+                          {user.firstName} {user.lastName}
+                        </p>
+                        <p className="text-sm text-gray-500 truncate">{user.email}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {user.username && (
+                            <span className="text-xs text-gray-400 font-mono">
+                              @{user.username}
+                            </span>
+                          )}
+                          {user.phone && (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <Phone size={10} />
+                              {user.phone}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="space-y-1">
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
+                        {user.role.replace('-', ' ')}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(user.status)}`}>
+                          {user.status}
+                        </span>
+                      </div>
+                      {user.department && (
+                        <div className="text-xs text-gray-500 mt-1">
+                          {user.department}
+                        </div>
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    {user.username ? (
-                      <span className="font-mono bg-gray-100 px-2 py-1 rounded">
-                        {user.username}
-                      </span>
+                  <td className="py-3 px-4">
+                    {user.accessAllBranches === true ? (
+                      <div className="flex items-center gap-1 text-green-600">
+                        <CheckCircle size={14} />
+                        <span className="text-xs font-medium">All Branches</span>
+                      </div>
+                    ) : user.assignedBranches && user.assignedBranches.length > 0 ? (
+                      <div className="text-xs">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded font-medium">
+                          {user.assignedBranches.length} {user.assignedBranches.length === 1 ? 'Branch' : 'Branches'}
+                        </span>
+                      </div>
                     ) : (
-                      <span className="text-gray-400 italic">Not set</span>
+                      <span className="text-xs text-yellow-600 flex items-center gap-1">
+                        <AlertTriangle size={12} />
+                        No access
+                      </span>
                     )}
                   </td>
                   <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
-                      {user.role.replace('-', ' ')}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(user.status)}`}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    {user.department || 'N/A'}
-                  </td>
-                  <td className="py-3 px-4">
                     {user.permissions && user.permissions.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {user.permissions.slice(0, 2).map((perm) => (
-                          <span
-                            key={perm}
-                            className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs"
-                            title={perm}
-                          >
-                            {perm}
+                      user.permissions.includes('all') ? (
+                        <div className="flex items-center gap-1">
+                          <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
+                            Full Access ✓
                           </span>
-                        ))}
-                        {user.permissions.length > 2 && (
+                        </div>
+                      ) : (
+                        <div>
                           <span 
-                            className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
-                            title={user.permissions.slice(2).join(', ')}
+                            className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium cursor-help"
+                            title={user.permissions.join(', ')}
                           >
-                            +{user.permissions.length - 2}
+                            {user.permissions.length} permission{user.permissions.length !== 1 ? 's' : ''}
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )
                     ) : (
                       <span className="text-gray-400 italic text-xs">None</span>
                     )}
                   </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">
-                    {user.lastLogin ? formatDate(user.lastLogin) : 'Never'}
+                  <td className="py-3 px-4">
+                    <div className="text-sm">
+                      {user.lastLogin ? (
+                        <div>
+                          <div className="text-gray-900 font-medium">{formatDate(user.lastLogin)}</div>
+                          <div className="text-xs text-gray-500">Last login</div>
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-gray-400 italic">Not logged in</div>
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-400 mt-1">
+                        Created: {formatDate(user.createdAt)}
+                      </div>
+                    </div>
                   </td>
                   <td className="py-3 px-4">
-                    <div className="flex gap-2">
+                    <div className="flex gap-1">
                       <GlassButton
                         onClick={() => handleEditUser(user)}
                         variant="ghost"
                         size="sm"
-                        icon={<Edit size={16} />}
-                      >
-                        Edit
-                      </GlassButton>
+                        icon={<Edit size={14} />}
+                        title="Edit user"
+                      />
                       <GlassButton
                         onClick={() => handleToggleUserStatus(user.id)}
                         variant="ghost"
                         size="sm"
-                        icon={user.status === 'active' ? <UserX size={16} /> : <UserCheck size={16} />}
-                      >
-                        {user.status === 'active' ? 'Deactivate' : 'Activate'}
-                      </GlassButton>
+                        icon={user.status === 'active' ? <Lock size={14} /> : <Unlock size={14} />}
+                        title={user.status === 'active' ? 'Deactivate' : 'Activate'}
+                        className={user.status === 'active' ? 'text-orange-600' : 'text-green-600'}
+                      />
                       <GlassButton
                         onClick={() => handleDeleteUser(user.id)}
                         variant="ghost"
                         size="sm"
-                        icon={<Trash2 size={16} />}
+                        icon={<Trash2 size={14} />}
                         className="text-red-600 hover:text-red-700"
-                      >
-                        Delete
-                      </GlassButton>
+                        title="Delete user"
+                      />
                     </div>
                   </td>
                 </tr>

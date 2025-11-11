@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 import { ProductImage } from '../lib/robustImageService';
+import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 
 interface ImagePopupModalProps {
   images: ProductImage[] | string[];
@@ -24,6 +25,9 @@ export const ImagePopupModal: React.FC<ImagePopupModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState({ x: 0, y: 0 });
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
   // Reset state when modal opens
   useEffect(() => {

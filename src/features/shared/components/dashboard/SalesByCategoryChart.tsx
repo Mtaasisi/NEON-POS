@@ -89,18 +89,24 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({ clas
       (saleItems || []).forEach((item: any) => {
         const product = productsMap.get(item.product_id);
         const category = product?.category || 'Uncategorized';
-        const price = typeof item.unit_price === 'string' ? parseFloat(item.unit_price) : item.unit_price || 0;
-        const quantity = item.quantity || 0;
+        
+        // Validate price and quantity
+        const rawPrice = typeof item.unit_price === 'string' ? parseFloat(item.unit_price) : item.unit_price;
+        const price = isNaN(rawPrice) || rawPrice === null || rawPrice === undefined ? 0 : rawPrice;
+        const quantity = isNaN(item.quantity) || item.quantity === null || item.quantity === undefined ? 0 : item.quantity;
         const revenue = price * quantity;
         
-        total += revenue;
+        // Validate revenue
+        const validRevenue = isNaN(revenue) || !isFinite(revenue) ? 0 : revenue;
+        
+        total += validRevenue;
         
         if (categoryMap.has(category)) {
           const existing = categoryMap.get(category)!;
-          existing.total += revenue;
+          existing.total += validRevenue;
           existing.count += quantity;
         } else {
-          categoryMap.set(category, { total: revenue, count: quantity });
+          categoryMap.set(category, { total: validRevenue, count: quantity });
         }
       });
       
@@ -118,11 +124,21 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({ clas
           count: data.count,
           color: colors[index % colors.length]
         }))
+        .filter(item => {
+          // Validate all numeric values
+          const isValid = !isNaN(item.sales) && isFinite(item.sales) && 
+                         !isNaN(item.count) && isFinite(item.count);
+          if (!isValid) {
+            console.warn('⚠️ Filtering out invalid category data:', item);
+          }
+          return isValid;
+        })
         .sort((a, b) => b.sales - a.sales)
         .slice(0, 8); // Top 8 categories
       
+      const validTotal = isNaN(total) || !isFinite(total) ? 0 : total;
       setCategoryData(chartData);
-      setTotalSales(total);
+      setTotalSales(validTotal);
       
     } catch (error) {
       console.error('Error loading category data:', error);
@@ -132,9 +148,13 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({ clas
   };
 
   const formatCurrency = (value: number) => {
-    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-    if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-    return value.toFixed(0);
+    // Validate value
+    const num = Number(value);
+    if (isNaN(num) || !isFinite(num)) return '0';
+    
+    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `${(num / 1000).toFixed(0)}K`;
+    return num.toFixed(0);
   };
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -200,8 +220,9 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({ clas
         <>
           {/* Chart */}
           <div className="flex-grow -mx-2 min-h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+            {categoryData.length > 0 && (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                 <XAxis 
                   dataKey="name" 
@@ -229,6 +250,7 @@ export const SalesByCategoryChart: React.FC<SalesByCategoryChartProps> = ({ clas
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           {/* Top Category Highlight */}

@@ -165,7 +165,7 @@ export const PaymentMethodsChart: React.FC<PaymentMethodsChartProps> = ({ classN
   }
 
   return (
-    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
+    <div className={`bg-white rounded-2xl p-6 h-full flex flex-col w-full ${className}`}>
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div>
@@ -211,9 +211,16 @@ export const PaymentMethodsChart: React.FC<PaymentMethodsChartProps> = ({ classN
             </ResponsiveContainer>
           </div>
 
-          {/* Legend */}
+          {/* Legend - Auto-fit Grid */}
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="grid grid-cols-2 gap-3">
+            <div 
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))',
+                gap: 'clamp(0.5rem, 1.5vw, 0.75rem)',
+                gridAutoRows: '1fr'
+              }}
+            >
               {paymentData.map((item, index) => {
                 const percentage = totalAmount > 0 ? ((item.value / totalAmount) * 100).toFixed(0) : 0;
                 return (

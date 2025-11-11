@@ -19,6 +19,7 @@ interface PurchaseOrderMetrics {
     supplier: string;
     status: string;
     totalAmount: number;
+    currency: string;
     createdAt: string;
   }>;
 }
@@ -49,7 +50,7 @@ export const PurchaseOrderWidget: React.FC<PurchaseOrderWidgetProps> = ({ classN
       // FIXED: Query without PostgREST syntax
       let query = supabase
         .from('lats_purchase_orders')
-        .select('id, po_number, status, total_amount, created_at, supplier_id')
+        .select('id, po_number, status, total_amount, created_at, supplier_id, currency, exchange_rate, total_amount_base_currency, payment_terms')
         .order('created_at', { ascending: false });
       
       // Apply branch filter if branch is selected
@@ -96,6 +97,7 @@ export const PurchaseOrderWidget: React.FC<PurchaseOrderWidgetProps> = ({ classN
         supplier: order.supplier_id && suppliersMap.get(order.supplier_id)?.name || 'Unknown Supplier',
         status: order.status,
         totalAmount: order.total_amount || 0,
+        currency: order.currency || 'TZS',
         createdAt: order.created_at
       }));
 
@@ -138,10 +140,10 @@ export const PurchaseOrderWidget: React.FC<PurchaseOrderWidgetProps> = ({ classN
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-TZ', {
+  const formatCurrency = (amount: number, currency: string = 'TZS') => {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'TZS',
+      currency: currency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(amount);
@@ -252,7 +254,7 @@ export const PurchaseOrderWidget: React.FC<PurchaseOrderWidgetProps> = ({ classN
                 </span>
                 <div className="flex flex-col items-end gap-1">
                   <span className="text-xs font-semibold text-gray-900">
-                    {formatCurrency(order.totalAmount)}
+                    {formatCurrency(order.totalAmount, order.currency)}
                   </span>
                   <span className="text-xs text-gray-400">
                     {formatDate(order.createdAt)}

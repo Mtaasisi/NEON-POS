@@ -1,11 +1,13 @@
 // Universal Form Components for Settings
 import React from 'react';
+import HelpTooltip from './HelpTooltip';
 
 // Toggle Switch Component
 interface ToggleSwitchProps {
   id: string;
   label: string;
   description?: string;
+  helpText?: string | React.ReactNode;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
@@ -15,17 +17,21 @@ export const ToggleSwitch: React.FC<ToggleSwitchProps> = ({
   id,
   label,
   description,
+  helpText,
   checked,
   onChange,
   disabled = false
 }) => {
   return (
     <div className="flex items-center justify-between">
-      <div>
-        <div className="font-medium text-gray-900">{label}</div>
-        {description && <div className="text-sm text-gray-600">{description}</div>}
+      <div className="flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-medium text-gray-900">{label}</span>
+          {helpText && <HelpTooltip content={helpText} />}
+        </div>
+        {description && <div className="text-sm text-gray-600 mt-1">{description}</div>}
       </div>
-      <label className="relative inline-flex items-center cursor-pointer">
+      <label className="relative inline-flex items-center cursor-pointer ml-4">
         <input
           type="checkbox"
           id={id}
@@ -45,6 +51,7 @@ interface NumberInputProps {
   id: string;
   label: string;
   description?: string;
+  helpText?: string | React.ReactNode;
   value: number;
   onChange: (value: number) => void;
   min?: number;
@@ -58,6 +65,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   id,
   label,
   description,
+  helpText,
   value,
   onChange,
   min,
@@ -68,8 +76,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 }) => {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-2">
-        {label}
+      <label htmlFor={id} className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+        <span>{label}</span>
+        {helpText && <HelpTooltip content={helpText} />}
       </label>
       <input
         type="number"
@@ -96,29 +105,34 @@ interface TextInputProps {
   id: string;
   label: string;
   description?: string;
+  helpText?: string | React.ReactNode;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
   multiline?: boolean;
   rows?: number;
+  type?: string;
 }
 
 export const TextInput: React.FC<TextInputProps> = ({
   id,
   label,
   description,
+  helpText,
   value,
   onChange,
   placeholder,
   disabled = false,
   multiline = false,
-  rows = 3
+  rows = 3,
+  type = 'text'
 }) => {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-2">
-        {label}
+      <label htmlFor={id} className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+        <span>{label}</span>
+        {helpText && <HelpTooltip content={helpText} />}
       </label>
       {multiline ? (
         <textarea
@@ -132,7 +146,7 @@ export const TextInput: React.FC<TextInputProps> = ({
         />
       ) : (
         <input
-          type="text"
+          type={type}
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -156,6 +170,7 @@ interface SelectProps {
   id: string;
   label: string;
   description?: string;
+  helpText?: string | React.ReactNode;
   value: string;
   onChange: (value: string) => void;
   options: SelectOption[];
@@ -167,6 +182,7 @@ export const Select: React.FC<SelectProps> = ({
   id,
   label,
   description,
+  helpText,
   value,
   onChange,
   options,
@@ -175,8 +191,9 @@ export const Select: React.FC<SelectProps> = ({
 }) => {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-2">
-        {label}
+      <label htmlFor={id} className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+        <span>{label}</span>
+        {helpText && <HelpTooltip content={helpText} />}
       </label>
       <select
         id={id}
@@ -202,6 +219,7 @@ interface TimeInputProps {
   id: string;
   label: string;
   description?: string;
+  helpText?: string | React.ReactNode;
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
@@ -211,14 +229,16 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   id,
   label,
   description,
+  helpText,
   value,
   onChange,
   disabled = false
 }) => {
   return (
     <div>
-      <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-2">
-        {label}
+      <label htmlFor={id} className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+        <span>{label}</span>
+        {helpText && <HelpTooltip content={helpText} />}
       </label>
       <input
         type="time"
@@ -237,6 +257,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 interface SettingsSectionProps {
   title: string;
   description?: string;
+  helpText?: string | React.ReactNode;
   icon: React.ReactNode;
   colorClass?: string;
   children: React.ReactNode;
@@ -245,19 +266,23 @@ interface SettingsSectionProps {
 export const SettingsSection: React.FC<SettingsSectionProps> = ({
   title,
   description,
+  helpText,
   icon,
   colorClass = "bg-white border-gray-200",
   children
 }) => {
   return (
     <div className={`p-6 rounded-xl border ${colorClass}`}>
-      <div className="flex items-center gap-2 mb-4">
-        <div className="p-1 rounded">
+      <div className="flex items-start gap-2 mb-4">
+        <div className="p-1 rounded mt-0.5">
           {icon}
         </div>
-        <div>
-          <h3 className="font-semibold text-gray-900">{title}</h3>
-          {description && <p className="text-sm text-gray-600">{description}</p>}
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-gray-900">{title}</h3>
+            {helpText && <HelpTooltip content={helpText} />}
+          </div>
+          {description && <p className="text-sm text-gray-600 mt-1">{description}</p>}
         </div>
       </div>
       <div className="space-y-4">

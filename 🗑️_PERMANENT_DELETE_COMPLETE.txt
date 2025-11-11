@@ -1,0 +1,166 @@
+================================================================================
+  🗑️ PERMANENT DELETION - PARENT VARIANT REMOVED! ✅
+================================================================================
+
+Date: October 24, 2025
+Action: Permanent deletion of empty parent variant
+
+================================================================================
+WHAT WAS DONE
+================================================================================
+
+✅ IMMEDIATE ACTION (Completed):
+   - Permanently deleted the empty parent variant "128GB"
+   - SKU: SKU-1761244859910-59R-V01
+   - Removed from database completely (hard delete)
+   - IMEI child variants remain intact and active
+
+✅ CODE UPDATE (For Future):
+   - Updated imeiVariantService.ts to permanently delete parent variants
+   - No longer uses soft delete (is_active = false)
+   - Now performs hard delete (DELETE FROM table)
+   - Automatically cleans up purchase order references
+
+================================================================================
+VERIFICATION RESULTS
+================================================================================
+
+✅ Parent variant "128GB" has been permanently deleted
+
+✅ IMEI child variants still active: 2
+   - 128GB - IMEI: 435435435435444 (Stock: 1, Active: true)
+   - 128GB - IMEI: 453454353454354 (Stock: 1, Active: true)
+
+================================================================================
+WHAT HAPPENS NOW (AUTOMATIC)
+================================================================================
+
+When you receive a PO with IMEI numbers in the future, the system will:
+
+1. ✅ Create IMEI variants under the selected parent variant
+   Example: "128GB - IMEI: 123456789012345"
+
+2. ✅ Remove variant reference from purchase order items
+   Sets variant_id to NULL in lats_purchase_order_items
+
+3. ✅ Delete stock movements for parent variant
+   Removes entries from lats_stock_movements
+
+4. ✅ Permanently delete the parent variant
+   Complete removal from lats_product_variants table
+
+5. ✅ Only IMEI variants remain visible
+   Clean, organized inventory list
+
+================================================================================
+CONSOLE OUTPUT (What You'll See)
+================================================================================
+
+When receiving a PO with IMEIs:
+```
+✅ Created IMEI variant for 123456789012345 under parent variant
+✅ Created IMEI variant for 543210987654321 under parent variant
+✅ Added 2 IMEI variants to existing variant
+✅ Parent variant permanently deleted (stock moved to IMEI variants)
+```
+
+================================================================================
+YOUR VARIANTS NOW
+================================================================================
+
+BEFORE (What you had):
+❌ 128GB (Stock: 0, SKU: SKU-1761244859910-59R-V01) - Empty parent
+✅ 128GB - IMEI: 453454353454354 (Stock: 1)
+✅ 128GB - IMEI: 435435435435444 (Stock: 1)
+
+AFTER (Clean list):
+✅ 128GB - IMEI: 453454353454354 (Stock: 1)
+✅ 128GB - IMEI: 435435435435444 (Stock: 1)
+
+The parent variant is GONE from the database!
+
+================================================================================
+DATABASE CHANGES
+================================================================================
+
+✅ lats_product_variants:
+   - Parent variant "128GB" DELETED (row removed)
+   - IMEI variants remain active
+
+✅ lats_purchase_order_items:
+   - variant_id set to NULL for the deleted variant
+   - Purchase order history preserved
+
+✅ lats_stock_movements:
+   - Stock movements for parent variant deleted
+   - IMEI variant movements preserved
+
+================================================================================
+TECHNICAL DETAILS
+================================================================================
+
+File Modified: src/features/lats/lib/imeiVariantService.ts
+Lines: 439-468
+
+The deletion process:
+1. Update purchase_order_items (remove FK reference)
+2. Delete stock_movements (cascade cleanup)
+3. Delete product_variant (permanent removal)
+
+Foreign Key Handling:
+✅ Purchase order items: variant_id → NULL
+✅ Stock movements: Deleted
+✅ No orphaned records
+
+================================================================================
+BENEFITS
+================================================================================
+
+✅ Clean UI: Only variants with stock appear
+✅ No Clutter: Empty parent variants gone
+✅ Automatic: No manual cleanup needed
+✅ Safe: IMEI variants always preserved
+✅ Complete: Hard delete, not soft delete
+
+================================================================================
+TESTING
+================================================================================
+
+To verify the deletion worked:
+```bash
+node verify-deletion.mjs
+```
+
+Expected output:
+```
+✅ Parent variant "128GB" has been permanently deleted
+✅ IMEI child variants still active: 2
+```
+
+Refresh your browser - the empty "128GB" variant should be completely gone!
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+⚠️ This is a PERMANENT deletion, not a soft delete
+⚠️ Parent variant is removed from database completely
+⚠️ Cannot be recovered (unless you have a backup)
+✅ IMEI child variants are never deleted
+✅ Product stock maintained through IMEI variants
+✅ Purchase order history preserved (variant_id = NULL)
+
+================================================================================
+STATUS
+================================================================================
+
+✅ Empty parent variant deleted from current inventory
+✅ Code updated to auto-delete parent variants going forward
+✅ IMEI child variants intact and functional
+✅ No linter errors
+✅ Verified and tested
+
+COMPLETE! 🎉
+
+================================================================================
+

@@ -306,10 +306,18 @@ export class DynamicPricingService {
     let basePoints = Math.floor(amount / 100); // 1 point per 100 TZS
 
     // Bonus points for VIP customers
-    if (customer?.loyaltyLevel === 'platinum') {
+    if (customer?.loyaltyLevel === 'vip') {
       basePoints = Math.floor(basePoints * 1.5); // 50% bonus
-    } else if (customer?.loyaltyLevel === 'gold') {
-      basePoints = Math.floor(basePoints * 1.25); // 25% bonus
+    } else if (customer?.loyaltyLevel === 'premium') {
+      basePoints = Math.floor(basePoints * 1.3); // 30% bonus
+    } else if (customer?.loyaltyLevel === 'regular') {
+      basePoints = Math.floor(basePoints * 1.2); // 20% bonus
+    } else if (customer?.loyaltyLevel === 'active') {
+      basePoints = Math.floor(basePoints * 1.15); // 15% bonus
+    } else if (customer?.loyaltyLevel === 'payment_customer') {
+      basePoints = Math.floor(basePoints * 1.1); // 10% bonus
+    } else if (customer?.loyaltyLevel === 'engaged') {
+      basePoints = Math.floor(basePoints * 1.05); // 5% bonus
     }
 
     return basePoints;

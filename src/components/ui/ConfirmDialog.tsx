@@ -6,6 +6,7 @@
 import React from 'react';
 import { AlertTriangle, Info, CheckCircle, XCircle, X } from 'lucide-react';
 import { useModal } from '../../utils/modalManager';
+import { useBodyScrollLock } from '../../hooks/useBodyScrollLock';
 
 export type ConfirmType = 'danger' | 'warning' | 'info' | 'success';
 
@@ -59,6 +60,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   type = 'warning',
   isLoading = false,
 }) => {
+  // Prevent body scroll when dialog is open
+  useBodyScrollLock(isOpen);
+  
   const { handleBackdropClick } = useModal(isOpen, onClose);
   const config = typeConfig[type];
   const Icon = config.icon;

@@ -185,7 +185,8 @@ export function processProductData(products: Product[]): Product[] {
         
         if (processedVariant.variant_name !== undefined) {
           processedVariant.name = processedVariant.variant_name;
-          delete processedVariant.variant_name;
+          // ✅ Keep variant_name for compatibility - don't delete it
+          // delete processedVariant.variant_name;
         }
         
         // Use selling_price

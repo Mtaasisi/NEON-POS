@@ -8,6 +8,8 @@ import {
   isQuickActionAllowedForRole
 } from '../config/roleBasedWidgets';
 
+export type WidgetSize = 'small' | 'medium' | 'large'; // 1, 2, or 3 columns
+
 export interface DashboardSettings {
   quickActions: {
     // Core Business Features
@@ -89,6 +91,10 @@ export interface DashboardSettings {
     salesByCategoryChart: boolean;
     profitMarginChart: boolean;
   };
+  widgetSizes?: {
+    [key: string]: WidgetSize;
+  };
+  autoArrange?: boolean;
 }
 
 const defaultDashboardSettings: DashboardSettings = {
@@ -171,17 +177,15 @@ const defaultDashboardSettings: DashboardSettings = {
     paymentMethodsChart: true,
     salesByCategoryChart: true,
     profitMarginChart: true
-  }
+  },
+  autoArrange: false
 };
 
 export function useDashboardSettings() {
   const { currentUser } = useAuth();
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>(defaultDashboardSettings);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadDashboardSettings();
-  }, [currentUser?.id]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const loadDashboardSettings = async () => {
     if (!currentUser?.id) {
@@ -227,6 +231,10 @@ export function useDashboardSettings() {
                             (userSettings.dashboard.widgets[widgetKey] ?? true);
             return acc;
           }, {} as DashboardSettings['widgets']),
+          // Include widget sizes from user settings
+          widgetSizes: userSettings.dashboard.widgetSizes || {},
+          // Include auto arrange setting from user settings
+          autoArrange: userSettings.dashboard.autoArrange ?? false
         };
         setDashboardSettings(mergedSettings);
       } else {
@@ -256,6 +264,24 @@ export function useDashboardSettings() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadDashboardSettings();
+  }, [currentUser?.id, refreshTrigger]);
+
+  // Listen for settings changes from other components
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      console.log('Dashboard settings changed, reloading...');
+      setRefreshTrigger(prev => prev + 1);
+    };
+
+    window.addEventListener('dashboardSettingsChanged', handleSettingsChange);
+    
+    return () => {
+      window.removeEventListener('dashboardSettingsChanged', handleSettingsChange);
+    };
+  }, []);
 
   const isQuickActionEnabled = (action: keyof DashboardSettings['quickActions']): boolean => {
     // Check role-based permissions first
@@ -295,6 +321,24 @@ export function useDashboardSettings() {
     loadDashboardSettings();
   };
 
+  const getWidgetSize = (widget: string): WidgetSize => {
+    return dashboardSettings.widgetSizes?.[widget] || 'medium';
+  };
+
+  const getWidgetColumnSpan = (widget: string): number => {
+    const size = getWidgetSize(widget);
+    switch (size) {
+      case 'small': return 1;
+      case 'medium': return 2;
+      case 'large': return 3;
+      default: return 2;
+    }
+  };
+
+  const getAutoArrange = (): boolean => {
+    return dashboardSettings.autoArrange ?? false;
+  };
+
   return {
     dashboardSettings,
     loading,
@@ -302,7 +346,10 @@ export function useDashboardSettings() {
     isWidgetEnabled,
     getEnabledQuickActions,
     getEnabledWidgets,
-    refreshSettings
+    refreshSettings,
+    getWidgetSize,
+    getWidgetColumnSpan,
+    getAutoArrange
   };
 }
 
