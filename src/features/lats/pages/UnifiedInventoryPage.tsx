@@ -33,6 +33,8 @@ import { format } from '../lib/format';
 import { latsEventBus } from '../lib/data/eventBus';
 import { LiveInventoryService, LiveInventoryMetrics } from '../lib/liveInventoryService';
 import { Category, Supplier, StockMovement, Product } from '../types/inventory';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { DashboardSkeleton } from '../../../components/ui/SkeletonLoaders';
 
 // Tab types
 type TabType = 'inventory' | 'purchase-orders' | 'analytics';
@@ -42,6 +44,9 @@ const UnifiedInventoryPage: React.FC = () => {
   
   // Product modals
   const productModals = useProductModals();
+  
+  // Unified loading system
+  const { startLoading, updateProgress, completeLoading, failLoading } = useLoadingJob();
   
   // Error handling
   const { errorState, clearError, withErrorHandling } = useErrorHandler({
@@ -170,10 +175,13 @@ const UnifiedInventoryPage: React.FC = () => {
         return;
       }
 
+      const jobId = startLoading('Loading inventory data...');
+      
       await withErrorHandling(async () => {
         setIsDataLoading(true);
         setDbStatus('connecting');
         setShowLoadingSkeleton(true);
+        updateProgress(jobId, 10);
         
         try {
           const loadingStartTime = Date.now();
@@ -187,33 +195,70 @@ const UnifiedInventoryPage: React.FC = () => {
             sales: false
           });
 
-          // Load essential data in parallel (categories, suppliers)
+          if (import.meta.env.MODE === 'development') {
+            console.log('🔄 [UnifiedInventory] Starting optimized parallel data loading...');
+          }
+
+          // 🚀 OPTIMIZED: Load essential data in parallel with error isolation
           const essentialDataPromises = [
             loadCategories().then(() => {
               setLoadingProgress(prev => ({ ...prev, categories: true }));
+              if (import.meta.env.MODE === 'development') {
+                console.log('✅ [UnifiedInventory] Categories loaded');
+              }
+            }).catch(err => {
+              console.error('❌ Failed to load categories:', err);
+              setLoadingProgress(prev => ({ ...prev, categories: true })); // Mark as complete even on error
             }),
             loadSuppliers().then(() => {
               setLoadingProgress(prev => ({ ...prev, suppliers: true }));
+              if (import.meta.env.MODE === 'development') {
+                console.log('✅ [UnifiedInventory] Suppliers loaded');
+              }
+            }).catch(err => {
+              console.error('❌ Failed to load suppliers:', err);
+              setLoadingProgress(prev => ({ ...prev, suppliers: true })); // Mark as complete even on error
             })
           ];
 
-          await Promise.all(essentialDataPromises);
+          await Promise.allSettled(essentialDataPromises);
+          updateProgress(jobId, 40);
 
-          // Load products (most important for UI)
-          await loadProducts({ page: 1, limit: 100 });
+          // Load products (most important for UI) - optimized
+          await loadProducts({ page: 1, limit: 100 }).catch(err => {
+            console.error('❌ Failed to load products:', err);
+          });
           setLoadingProgress(prev => ({ ...prev, products: true }));
+          updateProgress(jobId, 70);
 
-          // Load secondary data in parallel (stock movements and sales)
+          if (import.meta.env.MODE === 'development') {
+            console.log('✅ [UnifiedInventory] Products loaded');
+          }
+
+          // 🚀 OPTIMIZED: Load secondary data in parallel with error isolation
           const secondaryDataPromises = [
             loadStockMovements().then(() => {
               setLoadingProgress(prev => ({ ...prev, stockMovements: true }));
+              if (import.meta.env.MODE === 'development') {
+                console.log('✅ [UnifiedInventory] Stock movements loaded');
+              }
+            }).catch(err => {
+              console.error('❌ Failed to load stock movements:', err);
+              setLoadingProgress(prev => ({ ...prev, stockMovements: true })); // Mark as complete even on error
             }),
             loadSales().then(() => {
               setLoadingProgress(prev => ({ ...prev, sales: true }));
+              if (import.meta.env.MODE === 'development') {
+                console.log('✅ [UnifiedInventory] Sales loaded');
+              }
+            }).catch(err => {
+              console.error('❌ Failed to load sales:', err);
+              setLoadingProgress(prev => ({ ...prev, sales: true })); // Mark as complete even on error
             })
           ];
 
-          await Promise.all(secondaryDataPromises);
+          await Promise.allSettled(secondaryDataPromises);
+          updateProgress(jobId, 100);
 
           // Cache the loaded data
           setDataCache({
@@ -230,11 +275,13 @@ const UnifiedInventoryPage: React.FC = () => {
           setDbStatus('connected');
           setLastDataLoadTime(Date.now());
           setShowLoadingSkeleton(false);
+          completeLoading(jobId);
           
         } catch (error) {
           toast.error('Failed to load data from database');
           setDbStatus('error');
           setShowLoadingSkeleton(false);
+          failLoading(jobId, 'Failed to load inventory data');
         } finally {
           setIsDataLoading(false);
         }
@@ -801,6 +848,11 @@ const UnifiedInventoryPage: React.FC = () => {
     );
   }
 
+  // Show skeleton while loading
+  if (showLoadingSkeleton && products.length === 0) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <PageErrorBoundary pageName="Unified Inventory Management" showDetails={true}>
       
@@ -865,6 +917,14 @@ const UnifiedInventoryPage: React.FC = () => {
               title="Add a new product (⌘N)"
             >
               Add Product
+            </GlassButton>
+            <GlassButton
+              onClick={() => navigate('/lats/purchase-order/create')}
+              icon={<Truck size={18} />}
+              className="bg-gradient-to-r from-orange-500 to-amber-600 text-white"
+              title="Create Purchase Order (⌘⇧O)"
+            >
+              Create PO
             </GlassButton>
             <GlassButton
               onClick={() => navigate('/lats/bulk-import')}

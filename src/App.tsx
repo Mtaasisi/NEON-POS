@@ -23,11 +23,14 @@ import './lib/branchDataCleanup';
 import GlobalLoadingProgress from './features/shared/components/ui/GlobalLoadingProgress';
 import DynamicPageLoader from './features/shared/components/ui/DynamicPageLoader';
 // Enhanced lazy component wrapper to handle primitive conversion errors
-const createSafeLazyComponent = (importFunction: () => Promise<any>) => {
+const createSafeLazyComponent = (importFunction: () => Promise<any>, componentName: string = 'Unknown') => {
   return lazy(() => {
+    console.log(`🔄 Lazy loading component: ${componentName}`);
     return importFunction().catch((error) => {
-      console.error('Lazy import error:', error);
-      
+      console.error(`❌ Lazy import error for ${componentName}:`, error);
+      console.error('Error stack:', error.stack);
+      console.error('Error message:', error.message);
+
       // Return a simple fallback component for any import error
       return {
         default: () => (
@@ -39,7 +42,10 @@ const createSafeLazyComponent = (importFunction: () => Promise<any>) => {
                 </svg>
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Component Loading Error</h3>
-              <p className="text-gray-600 mb-4">There was an error loading this component. Please refresh the page.</p>
+              <p className="text-gray-600 mb-4">There was an error loading {componentName}. Please refresh the page.</p>
+              <div className="text-xs text-gray-500 mb-4">
+                Error: {error.message}
+              </div>
               <button
                 onClick={() => window.location.reload()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
@@ -56,19 +62,20 @@ const createSafeLazyComponent = (importFunction: () => Promise<any>) => {
 
 // Dynamic imports for all pages
 const LoginPage = lazy(() => import('./features/shared/pages/LoginPage'));
-const ConditionalDashboard = createSafeLazyComponent(() => import('./features/shared/components/ConditionalDashboard'));
+const ConditionalDashboard = createSafeLazyComponent(() => import('./features/shared/components/ConditionalDashboard'), 'ConditionalDashboard');
 const NewDevicePage = lazy(() => import('./features/devices/pages/NewDevicePage'));
-const DevicesPage = createSafeLazyComponent(() => import('./features/devices/pages/DevicesPage'));
+const DevicesPage = createSafeLazyComponent(() => import('./features/devices/pages/DevicesPage'), 'DevicesPage');
 
 const CustomersPage = lazy(() => import('./features/customers/pages/CustomersPage'));
 const CustomerDataUpdatePage = lazy(() => import('./features/customers/pages/CustomerDataUpdatePage'));
-const AppLayout = createSafeLazyComponent(() => import('./layout/AppLayout'));
+const AppLayout = createSafeLazyComponent(() => import('./layout/AppLayout'), 'AppLayout');
 import { ErrorBoundary } from './features/shared/components/ErrorBoundary';
 import DynamicImportErrorBoundary from './features/shared/components/DynamicImportErrorBoundary';
 import UrlValidatedRoute from './components/UrlValidatedRoute';
 import NativeOnlyRoute from './components/NativeOnlyRoute';
 import MobileOnlyRedirect from './components/MobileOnlyRedirect';
 import DefaultRedirect from './components/DefaultRedirect';
+import InlineLoader from './components/ui/InlineLoader';
 const AdminSettingsPage = lazy(() => import('./features/admin/pages/AdminSettingsPage'));
 const IntegrationsTestPage = lazy(() => import('./features/admin/pages/IntegrationsTestPage'));
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
@@ -114,6 +121,7 @@ const CustomerLoyaltyPage = lazy(() => import('./features/customer-portal/pages/
 // Test Pages
 const TestImageUpload = lazy(() => import('./pages/TestImageUpload'));
 const BackgroundRemovalPage = lazy(() => import('./pages/BackgroundRemovalPage'));
+const UnifiedLoadingExample = lazy(() => import('./features/shared/components/examples/UnifiedLoadingExample'));
 
 // Mobile App Pages
 const MobileLayout = lazy(() => import('./features/mobile/components/MobileLayout'));
@@ -156,7 +164,7 @@ const AddProductPage = lazy(() => import('./features/lats/pages/AddProductPage')
 const EditProductPage = lazy(() => import('./features/lats/pages/EditProductPage'));
 const BulkImportPage = lazy(() => import('./features/lats/pages/BulkImportPage'));
 
-const POSPage = createSafeLazyComponent(() => import('./features/lats/pages/POSPageOptimized'));
+const POSPage = createSafeLazyComponent(() => import('./features/lats/pages/POSPageOptimized'), 'POSPage');
 
 const InventoryManagementPage = lazy(() => import('./features/lats/pages/InventoryManagementPage'));
 const StorageRoomManagementPage = lazy(() => import('./features/lats/pages/StorageRoomManagementPage'));
@@ -183,6 +191,7 @@ import BackgroundDataLoader from './components/BackgroundDataLoader';
 import ProductPreloader from './components/ProductPreloader';
 import { POSSettingsDatabaseSetup } from './components/POSSettingsDatabaseSetup';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { StorageLocationPickerProvider } from './features/lats/components/storage/StorageLocationPickerProvider';
 
 
 // Error fallback for dynamic imports
@@ -263,15 +272,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     isAuthenticated = auth.isAuthenticated;
     loading = auth.loading;
   } catch (error) {
-    // During hot reload, show loading state instead of error (silently handled)
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading application...</p>
-        </div>
-      </div>
-    );
+    // During hot reload, show minimal transparent loading
+    return <InlineLoader fullscreen transparent message="Loading application..." />;
   }
   
   // Handle any errors during render
@@ -297,16 +299,9 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     );
   }
   
-  // Show loading state while checking authentication
+  // Show minimal loading state - transparent, non-blocking
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <InlineLoader fullscreen transparent />;
   }
   
   // Handle authentication check
@@ -394,16 +389,9 @@ const RoleProtectedRoute: React.FC<{
     );
   }
   
-  // Show loading state while checking authentication
+  // Show minimal loading state - transparent, non-blocking
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <InlineLoader fullscreen transparent />;
   }
   
   // Handle role-based access control
@@ -1021,6 +1009,12 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           </Suspense>
         } />
         
+        <Route path="/test-loading" element={
+          <Suspense fallback={<DynamicPageLoader />}>
+            <UnifiedLoadingExample />
+          </Suspense>
+        } />
+        
         <Route path="*" element={<DefaultRedirect />} />
       </Routes>
     </>
@@ -1173,25 +1167,25 @@ function App() {
     : '';
 
   return (
-    <ErrorBoundary>
-      <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-        <ThemeProvider>
-          <AuthProvider>
-            <GlobalSearchProvider>
-              <BranchProvider>
-                <DateRangeProvider>
-                  <ErrorProvider>
-                    {/* <RepairProvider> */}
-                    <DevicesProvider>
-                    <CustomersProvider>
-                      <UserGoalsProvider>
-                        <PaymentsProvider>
-                          <PaymentMethodsProvider>
-                            <LoadingProvider>
-                            <GeneralSettingsProvider>
-                                <SuppliersProvider>
-                                  <WhatsAppProvider>
-                                  <POSSettingsDatabaseSetup>
+    <BrowserRouter basename={basename} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+      <ThemeProvider>
+        <AuthProvider>
+          <GlobalSearchProvider>
+            <BranchProvider>
+              <DateRangeProvider>
+                <ErrorProvider>
+                  {/* <RepairProvider> */}
+                  <DevicesProvider>
+                  <CustomersProvider>
+                    <UserGoalsProvider>
+                      <PaymentsProvider>
+                        <PaymentMethodsProvider>
+                          <LoadingProvider>
+                          <GeneralSettingsProvider>
+                              <SuppliersProvider>
+                                <WhatsAppProvider>
+                                <POSSettingsDatabaseSetup>
+                                  <StorageLocationPickerProvider>
                                     <MobileOnlyRedirect>
                                       <AppContent 
                                         isOnline={isOnline} 
@@ -1203,24 +1197,24 @@ function App() {
                                       <PreloadIndicator />
                                       <ErrorManager />
                                     </MobileOnlyRedirect>
-                                  </POSSettingsDatabaseSetup>
-                                </WhatsAppProvider>
-                              </SuppliersProvider>
-                          </GeneralSettingsProvider>
-                          </LoadingProvider>
-                        </PaymentMethodsProvider>
-                      </PaymentsProvider>
-                    </UserGoalsProvider>
-                  </CustomersProvider>
-                  </DevicesProvider>
-                  {/* </RepairProvider> */}
-                  </ErrorProvider>
-                </DateRangeProvider>
-              </BranchProvider>
-            </GlobalSearchProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </BrowserRouter>
+                                  </StorageLocationPickerProvider>
+                                </POSSettingsDatabaseSetup>
+                              </WhatsAppProvider>
+                            </SuppliersProvider>
+                        </GeneralSettingsProvider>
+                        </LoadingProvider>
+                      </PaymentMethodsProvider>
+                    </PaymentsProvider>
+                  </UserGoalsProvider>
+                </CustomersProvider>
+                </DevicesProvider>
+                {/* </RepairProvider> */}
+                </ErrorProvider>
+              </DateRangeProvider>
+            </BranchProvider>
+          </GlobalSearchProvider>
+        </AuthProvider>
+      </ThemeProvider>
       <Toaster
         position="top-right"
         toastOptions={{
@@ -1245,8 +1239,7 @@ function App() {
           },
         }}
       />
-      
-    </ErrorBoundary>
+    </BrowserRouter>
   );
 }
 

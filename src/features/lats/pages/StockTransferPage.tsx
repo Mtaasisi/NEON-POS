@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../lib/supabaseClient';
@@ -23,7 +23,8 @@ import {
   Eye,
   Check,
   X,
-  RefreshCw
+  RefreshCw,
+  Info
 } from 'lucide-react';
 import {
   getStockTransfers,
@@ -37,6 +38,7 @@ import {
   StockTransfer,
   CreateTransferRequest
 } from '../../../lib/stockTransferApi';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface Branch {
   id: string;
@@ -84,43 +86,61 @@ const StockTransferPage: React.FC = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  useEffect(() => {
+  // 🚀 OPTIMIZED: Load transfers and stats in parallel
+  const loadTransfers = useCallback(async () => {
     console.log('🏪 [StockTransferPage] Current Branch ID:', currentBranchId);
     console.log('🏪 [StockTransferPage] Status Filter:', statusFilter);
     console.log('🏪 [StockTransferPage] Direction Filter:', directionFilter);
-    loadTransfers();
-    loadStats();
-  }, [currentBranchId, statusFilter, directionFilter]);
 
-  const loadTransfers = async () => {
+    setLoading(true);
+    const startTime = Date.now();
+
     try {
-      setLoading(true);
-      console.log('🏪 [StockTransferPage] Loading transfers for branch:', currentBranchId);
-      const data = await getStockTransfers(currentBranchId, statusFilter === 'all' ? undefined : statusFilter);
-      console.log('🏪 [StockTransferPage] Received transfers:', data.length);
-      setTransfers(data);
+      if (import.meta.env.MODE === 'development') {
+        console.log('🔄 [StockTransferPage] Starting parallel data loading...');
+      }
+
+      await Promise.allSettled([
+        getStockTransfers(currentBranchId, statusFilter === 'all' ? undefined : statusFilter)
+          .then((data) => {
+            console.log('🏪 [StockTransferPage] Received transfers:', data.length);
+            setTransfers(data);
+            return data;
+          })
+          .catch((err) => {
+            console.error('❌ Failed to load transfers:', err);
+            toast.error('Failed to load transfers');
+            return [];
+          }),
+        currentBranchId
+          ? getTransferStats(currentBranchId)
+              .then((data) => {
+                console.log('🏪 [StockTransferPage] Received stats:', data);
+                setStats(data);
+                return data;
+              })
+              .catch((err) => {
+                console.error('❌ Failed to load stats:', err);
+                return null;
+              })
+          : Promise.resolve(null)
+      ]);
+
+      const endTime = Date.now();
+      if (import.meta.env.MODE === 'development') {
+        console.log(`✅ [StockTransferPage] Optimized parallel loading completed in ${endTime - startTime}ms`);
+      }
     } catch (error) {
-      console.error('Failed to load transfers:', error);
-      toast.error('Failed to load transfers');
+      console.error('❌ [StockTransferPage] Error in optimized loading:', error);
+      toast.error('Failed to load stock transfer data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentBranchId, statusFilter, directionFilter]);
 
-  const loadStats = async () => {
-    if (!currentBranchId) {
-      console.warn('⚠️ [StockTransferPage] No branch ID - skipping stats');
-      return;
-    }
-    try {
-      console.log('🏪 [StockTransferPage] Loading stats for branch:', currentBranchId);
-      const data = await getTransferStats(currentBranchId);
-      console.log('🏪 [StockTransferPage] Received stats:', data);
-      setStats(data);
-    } catch (error) {
-      console.error('Failed to load stats:', error);
-    }
-  };
+  useEffect(() => {
+    loadTransfers();
+  }, [loadTransfers]);
 
   const filteredTransfers = (transfers || []).filter((transfer) => {
     // Direction filter
@@ -179,7 +199,7 @@ const StockTransferPage: React.FC = () => {
         actions={[
           {
             label: 'Refresh',
-            onClick: loadTransfers,
+            onClick: () => window.location.reload(), // Simple refresh for now
             variant: 'secondary' as const,
             icon: <RefreshCw size={18} />,
             disabled: loading
@@ -362,8 +382,7 @@ const StockTransferPage: React.FC = () => {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
-            loadTransfers();
-            loadStats();
+            // Data will reload automatically via useEffect
           }}
         />
       )}
@@ -375,10 +394,7 @@ const StockTransferPage: React.FC = () => {
           currentBranchId={currentBranchId}
           currentUserId={currentUser?.id || ''}
           onClose={() => setSelectedTransfer(null)}
-          onUpdate={() => {
-            loadTransfers();
-            loadStats();
-          }}
+          onUpdate={loadTransfers}
         />
       )}
     </div>
@@ -757,6 +773,14 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [tempSelection, setTempSelection] = useState({ entity_id: '', quantity: 1 });
 
+  // Debug state for showing product availability info
+  const [debugInfo, setDebugInfo] = useState<{
+    totalVariants: number;
+    variantsWithStock: number;
+    variantsWithAvailableStock: number;
+    currentBranchId: string;
+  } | null>(null);
+
   useEffect(() => {
     loadBranches();
     loadVariants();
@@ -868,6 +892,51 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
   const loadVariants = async () => {
     try {
       setLoadingProducts(true);
+
+      // DEBUG: Log current branch information
+      console.log('🏪 [CreateTransferModal] Loading variants for branch:', currentBranchId);
+      console.log('🏪 [CreateTransferModal] Current branch type:', typeof currentBranchId);
+
+      // First, let's check if we have any variants at all for this branch (including those with 0 quantity)
+      const { data: allVariants, error: debugError } = await supabase
+        .from('lats_product_variants')
+        .select(`
+          id,
+          product_id,
+          name,
+          variant_name,
+          sku,
+          quantity,
+          reserved_quantity,
+          branch_id,
+          product:lats_products!product_id(name)
+        `)
+        .eq('branch_id', currentBranchId);
+
+      if (debugError) {
+        console.error('❌ Debug query failed:', debugError);
+      } else {
+        console.log('📊 [CreateTransferModal] All variants for branch:', allVariants?.length || 0);
+        if (allVariants && allVariants.length > 0) {
+          console.log('📦 [CreateTransferModal] Sample variants:', allVariants.slice(0, 3).map(v => ({
+            id: v.id,
+            name: v.name || v.variant_name,
+            quantity: v.quantity,
+            reserved: v.reserved_quantity || 0,
+            available: (v.quantity || 0) - (v.reserved_quantity || 0),
+            branch_id: v.branch_id
+          })));
+
+          // Check how many have quantity > 0
+          const withStock = allVariants.filter(v => (v.quantity || 0) > 0);
+          console.log('✅ [CreateTransferModal] Variants with stock (quantity > 0):', withStock.length);
+
+          // Check available stock (quantity - reserved)
+          const withAvailableStock = allVariants.filter(v => ((v.quantity || 0) - (v.reserved_quantity || 0)) > 0);
+          console.log('✅ [CreateTransferModal] Variants with available stock:', withAvailableStock.length);
+        }
+      }
+
       const { data, error } = await supabase
         .from('lats_product_variants')
         .select(`
@@ -877,6 +946,7 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
           variant_name,
           sku,
           quantity,
+          reserved_quantity,
           selling_price,
           branch_id,
           product:lats_products!product_id(name)
@@ -895,14 +965,36 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
         });
         throw error;
       }
+
+      console.log('✅ [CreateTransferModal] Final variants loaded:', data?.length || 0);
       setVariants(data || []);
+
+      // Store debug information
+      if (allVariants) {
+        const totalVariants = allVariants.length;
+        const variantsWithStock = allVariants.filter(v => (v.quantity || 0) > 0).length;
+        const variantsWithAvailableStock = allVariants.filter(v => ((v.quantity || 0) - (v.reserved_quantity || 0)) > 0).length;
+
+        setDebugInfo({
+          totalVariants,
+          variantsWithStock,
+          variantsWithAvailableStock,
+          currentBranchId: currentBranchId || 'undefined'
+        });
+      }
+
       if (data && data.length > 0) {
-        toast.success(`${data.length} products available`);
+        toast.success(`${data.length} products available for transfer`);
+      } else {
+        console.warn('⚠️ [CreateTransferModal] No products available for transfer');
+        toast.error('No products available for transfer. Check if products exist and have stock.', {
+          duration: 5000
+        });
       }
     } catch (error: any) {
-      console.error('Failed to load variants:', error);
+      console.error('❌ Failed to load variants:', error);
       console.error('Full error object:', JSON.stringify(error, null, 2));
-      toast.error('Failed to load products');
+      toast.error('Failed to load products for transfer');
     } finally {
       setLoadingProducts(false);
     }
@@ -1198,6 +1290,52 @@ const CreateTransferModal: React.FC<CreateTransferModalProps> = ({
                       </span>
                     )}
                   </label>
+
+                  {/* Debug Information */}
+                  {debugInfo && !loadingProducts && (
+                    <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="text-xs text-blue-800">
+                        <div className="font-medium mb-1">📊 Stock Transfer Debug Info:</div>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div>Branch ID: <span className="font-mono">{debugInfo.currentBranchId}</span></div>
+                          <div>Total Variants: {debugInfo.totalVariants}</div>
+                          <div>With Stock: {debugInfo.variantsWithStock}</div>
+                          <div>Available: {debugInfo.variantsWithAvailableStock}</div>
+                        </div>
+                        {debugInfo.variantsWithStock === 0 && (
+                          <div className="mt-2 p-2 bg-yellow-100 border border-yellow-300 rounded text-yellow-800">
+                            ⚠️ No products with stock found for this branch. Check:
+                            <ul className="mt-1 ml-4 list-disc text-xs">
+                              <li>Products exist in inventory</li>
+                              <li>Products have quantity &gt; 0</li>
+                              <li>Branch ID is correct (current: {debugInfo.currentBranchId})</li>
+                              <li>Database connection</li>
+                              <li>Check browser console for detailed logs</li>
+                            </ul>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                console.log('🔍 [Stock Transfer Debug] Reloading variants...');
+                                loadVariants();
+                                toast.success('🔄 Reloading products... Check console for details', {
+                                  duration: 3000
+                                });
+                              }}
+                              className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                            >
+                              <RefreshCw className="w-3 h-3 inline mr-1" />
+                              Reload Products
+                            </button>
+                          </div>
+                        )}
+                        {debugInfo.variantsWithStock > 0 && filteredProducts.length === 0 && (
+                          <div className="mt-2 p-2 bg-orange-100 border border-orange-300 rounded text-orange-800">
+                            ⚠️ Products exist but none match search/filter criteria
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <div className="border-2 border-gray-200 rounded-lg h-96 overflow-y-auto bg-gray-50 p-3">
                     {loadingProducts ? (
                       <div className="flex items-center justify-center h-full">

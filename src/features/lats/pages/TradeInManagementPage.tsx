@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { History, DollarSign } from 'lucide-react';
 import TradeInHistoryTab from '../components/tradeIn/TradeInHistoryTab';
 import TradeInPricingTab from '../components/tradeIn/TradeInPricingTab';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 type TabType = 'history' | 'pricing';
 

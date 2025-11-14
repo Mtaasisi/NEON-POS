@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import { 
+import {
   Package, Search, Plus, RefreshCw,
-  AlertCircle, Edit, Eye, Trash2, DollarSign, FileText, 
-  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle, MoreVertical, Zap, Truck
+  AlertCircle, Edit, Eye, Trash2, DollarSign, FileText,
+  Clock, CheckSquare, Send, CheckCircle, CreditCard, Copy, PackageCheck, Calculator, XCircle, MoreVertical, Zap, Truck, BarChart3, Users
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -15,11 +15,21 @@ import CBMCalculatorModal from '../../calculator/components/CBMCalculatorModal';
 import { supabase } from '../../../lib/supabaseClient';
 import EnhancedSupplierManagementPage from '../../settings/pages/EnhancedSupplierManagementPage';
 import StyledActionMenu, { ActionMenuItem } from '../components/purchase-order/StyledActionMenu';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
+
+// Enhanced PO components
+import { POAnalyticsWidget } from '../components/purchase-order/POAnalyticsWidget';
+import { POCollaborationWidget } from '../components/purchase-order/POCollaborationWidget';
+import { POApprovalWorkflow } from '../components/purchase-order/POApprovalWorkflow';
+import { POReportingAnalytics } from '../components/purchase-order/POReportingAnalytics';
+import ComprehensivePaymentModal from '../components/pos/ComprehensivePaymentModal';
 
 const PurchaseOrdersPage: React.FC = () => {
   const {} = useAuth(); // Destructure to avoid unused variable warning
   const navigate = useNavigate();
   const { confirm } = useDialog();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   // Database state management
   const { 
@@ -45,6 +55,14 @@ const PurchaseOrdersPage: React.FC = () => {
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const moreButtonRefs = React.useRef<{ [key: string]: HTMLButtonElement | null }>({});
 
+  // Enhanced feature states
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showCollaboration, setShowCollaboration] = useState(false);
+  const [showApprovalWorkflow, setShowApprovalWorkflow] = useState(false);
+  const [showReporting, setShowReporting] = useState(false);
+  const [showComprehensivePayment, setShowComprehensivePayment] = useState(false);
+  const [selectedPOForPayment, setSelectedPOForPayment] = useState<any>(null);
+
   // Close dropdown when clicking outside or on escape
   React.useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -60,15 +78,18 @@ const PurchaseOrdersPage: React.FC = () => {
   // Enhanced load function with timestamp
   const handleLoadPurchaseOrders = async () => {
     console.log('🔄 [PurchaseOrdersPage] Loading purchase orders...');
+    const jobId = startLoading('Loading purchase orders...');
     const startTime = Date.now();
     try {
       await loadPurchaseOrders();
       const endTime = Date.now();
       setLastUpdated(new Date());
+      completeLoading(jobId);
       console.log(`✅ [PurchaseOrdersPage] Purchase orders loaded in ${endTime - startTime}ms`);
       console.log('📊 [PurchaseOrdersPage] Total orders:', purchaseOrders?.length || 0);
     } catch (error) {
       console.error('❌ [PurchaseOrdersPage] Error loading purchase orders:', error);
+      failLoading(jobId, 'Failed to load purchase orders');
     }
   };
 
@@ -372,8 +393,8 @@ const PurchaseOrdersPage: React.FC = () => {
       onClick: () => navigate(`/lats/purchase-orders/${order.id}`)
     });
 
-    // Edit (for draft orders)
-    if (order.status === 'draft') {
+    // Edit (for draft, sent, confirmed, and shipped orders - before receiving)
+    if (['draft', 'sent', 'confirmed', 'shipped'].includes(order.status)) {
       actions.push({
         id: 'edit',
         label: 'Edit Order',
@@ -381,7 +402,7 @@ const PurchaseOrdersPage: React.FC = () => {
         icon: <Edit className="w-5 h-5" />,
         color: 'bg-green-500',
         hoverColor: 'hover:bg-green-50',
-        onClick: () => navigate(`/lats/purchase-orders/${order.id}?edit=true`)
+        onClick: () => navigate(`/lats/purchase-order/create?edit=${order.id}`)
       });
     }
 
@@ -769,10 +790,46 @@ const PurchaseOrdersPage: React.FC = () => {
               disabled={isLoading}
               className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 bg-white"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              {isLoading ? (
+                <LoadingSpinner size="sm" color="blue" />
+              ) : (
+                <RefreshCw className="w-4 h-4" />
+              )}
               <span className="hidden sm:inline">Refresh</span>
             </button>
             
+            {/* Enhanced Feature Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAnalytics(true)}
+                className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                title="PO Analytics"
+              >
+                <BarChart3 className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setShowCollaboration(true)}
+                className="p-2 bg-green-100 text-green-600 rounded-lg hover:bg-green-200 transition-colors"
+                title="Team Collaboration"
+              >
+                <Users className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setShowApprovalWorkflow(true)}
+                className="p-2 bg-purple-100 text-purple-600 rounded-lg hover:bg-purple-200 transition-colors"
+                title="Approval Workflow"
+              >
+                <CheckSquare className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setShowReporting(true)}
+                className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
+                title="Advanced Reporting"
+              >
+                <FileText className="w-4 h-4" />
+              </button>
+            </div>
+
             {/* Last Updated Timestamp */}
             {lastUpdated && (
               <div className="text-xs text-gray-600 bg-gray-100 px-3 py-2 rounded-lg">
@@ -800,8 +857,7 @@ const PurchaseOrdersPage: React.FC = () => {
       {isLoading ? (
         <GlassCard className="p-12">
           <div className="flex items-center justify-center">
-            <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-            <span className="ml-4 text-gray-700 font-medium">Loading purchase orders...</span>
+            <LoadingSpinner size="sm" color="purple" />
           </div>
         </GlassCard>
       ) : filteredOrders.length === 0 ? (
@@ -841,10 +897,12 @@ const PurchaseOrdersPage: React.FC = () => {
 
           {/* Table Body - Flat Style - Responsive cards on mobile */}
           <div className="divide-y divide-gray-200">
-            {filteredOrders.map((order) => (
-              <div key={order.id} className="hover:bg-gray-50 transition-colors">
-                {/* Mobile Card View - shown on small screens */}
-                <div className="md:hidden px-3 sm:px-4 py-4">
+            {filteredOrders.map((order) => {
+              const orderActions = getSmartActionButtons(order);
+              return (
+                <div key={order.id} className="hover:bg-gray-50 transition-colors">
+                  {/* Mobile Card View - shown on small screens */}
+                  <div className="md:hidden px-3 sm:px-4 py-4">
                   <div className="space-y-3">
                     {/* Order Number and Status */}
                     <div className="flex items-start justify-between">
@@ -900,7 +958,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     
                     {/* Actions */}
                     <div className="flex items-center gap-2 pt-2">
-                      {getSmartActionButtons(order).map((action, index) => (
+                      {orderActions.map((action, index) => (
                         <div key={`${action.type}-${index}`} className="relative flex-1">
                           <button
                             ref={action.type === 'more' ? (el) => { moreButtonRefs.current[order.id] = el; } : undefined}
@@ -1070,7 +1128,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     {/* Smart Actions - Simplified */}
                     <div className="col-span-1">
                       <div className="flex items-center justify-end gap-2 relative">
-                        {getSmartActionButtons(order).map((action, index) => (
+                        {orderActions.map((action, index) => (
                           <div key={`${action.type}-${index}`} className="relative">
                             <button
                               ref={action.type === 'more' ? (el) => { moreButtonRefs.current[order.id] = el; } : undefined}
@@ -1102,7 +1160,8 @@ const PurchaseOrdersPage: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </GlassCard>
         )}
@@ -1117,6 +1176,124 @@ const PurchaseOrdersPage: React.FC = () => {
         isOpen={showCbmCalculator}
         onClose={() => setShowCbmCalculator(false)}
       />
+
+      {/* Enhanced PO Analytics Modal */}
+      {showAnalytics && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">PO Analytics</h2>
+                <button
+                  onClick={() => setShowAnalytics(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <POAnalyticsWidget />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PO Collaboration Modal */}
+      {showCollaboration && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Team Collaboration</h2>
+                <button
+                  onClick={() => setShowCollaboration(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <POCollaborationWidget
+                onInviteUser={(email, role) => console.log('Invite user:', email, role)}
+                onSendMessage={(message) => console.log('Send message:', message)}
+                onRequestApproval={() => console.log('Request approval')}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PO Approval Workflow Modal */}
+      {showApprovalWorkflow && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Approval Workflow</h2>
+                <button
+                  onClick={() => setShowApprovalWorkflow(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <POApprovalWorkflow
+                onApprove={(stepId, comments) => console.log('Approve step:', stepId, comments)}
+                onReject={(stepId, comments) => console.log('Reject step:', stepId, comments)}
+                onRequestChanges={(stepId, comments) => console.log('Request changes:', stepId, comments)}
+                onSubmitForApproval={() => console.log('Submit for approval')}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PO Reporting Analytics Modal */}
+      {showReporting && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Advanced PO Reporting</h2>
+                <button
+                  onClick={() => setShowReporting(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <POReportingAnalytics
+                onExport={(format) => console.log('Export report as:', format)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comprehensive Payment Modal */}
+      {showComprehensivePayment && selectedPOForPayment && (
+        <ComprehensivePaymentModal
+          isOpen={showComprehensivePayment}
+          onClose={() => {
+            setShowComprehensivePayment(false);
+            setSelectedPOForPayment(null);
+          }}
+          totalAmount={selectedPOForPayment.totalAmount || 0}
+          discountAmount={0}
+          onProcessPayment={async (paymentData) => {
+            console.log('Processing PO payment:', paymentData);
+            // Handle PO payment processing logic here
+            setShowComprehensivePayment(false);
+            setSelectedPOForPayment(null);
+          }}
+        />
+      )}
     </div>
   );
 };

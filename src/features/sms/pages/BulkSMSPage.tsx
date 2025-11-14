@@ -3,6 +3,7 @@ import { supabase } from '../../../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { Search, Filter, Check } from 'lucide-react';
 import { format } from '../../lats/lib/format';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface Customer {
   id: string;
@@ -34,6 +35,7 @@ const calculateSMSInfo = (message: string) => {
 };
 
 const BulkSMSPage: React.FC = () => {
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -121,6 +123,7 @@ const BulkSMSPage: React.FC = () => {
   }, []);
 
   const fetchCustomers = async () => {
+    const jobId = startLoading('Loading customers...');
     try {
       setLoading(true);
       // @ts-ignore - Neon query builder implements thenable interface
@@ -131,8 +134,10 @@ const BulkSMSPage: React.FC = () => {
 
       if (error) throw error;
       setCustomers(data || []);
+      completeLoading(jobId);
     } catch (error: any) {
       console.error('Error fetching customers:', error);
+      failLoading(jobId, 'Failed to load customers');
       toast.error('Failed to load customers');
     } finally {
       setLoading(false);

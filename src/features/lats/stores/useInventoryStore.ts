@@ -735,6 +735,13 @@ export const useInventoryStore = create<InventoryState>()(
           if (cachedProducts && cachedProducts.length > 0) {
             console.log(`⚡ [useInventoryStore] Using localStorage cache (${cachedProducts.length} products)`);
             set({ products: cachedProducts, isLoading: false });
+            
+            // ⚡ CRITICAL FIX: Also preload child variants when using cache!
+            const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+            childVariantsCacheService.preloadAllChildVariants(cachedProducts).catch(err => {
+              console.warn('⚠️ Failed to preload child variants from cache (non-critical):', err);
+            });
+            
             return;
           }
         }
@@ -742,7 +749,17 @@ export const useInventoryStore = create<InventoryState>()(
         // 🚀 OPTIMIZED: Re-enabled memory cache with 10-minute expiry
         if (!filters && state.isCacheValid('products')) {
           console.log('⚡ [useInventoryStore] Using memory cache (valid for 10 min)');
-          set({ products: state.dataCache.products || [] });
+          const cachedProducts = state.dataCache.products || [];
+          set({ products: cachedProducts });
+          
+          // ⚡ CRITICAL FIX: Also preload child variants when using memory cache!
+          if (cachedProducts.length > 0) {
+            const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+            childVariantsCacheService.preloadAllChildVariants(cachedProducts).catch(err => {
+              console.warn('⚠️ Failed to preload child variants from memory cache (non-critical):', err);
+            });
+          }
+          
           return;
         }
         
@@ -837,6 +854,13 @@ export const useInventoryStore = create<InventoryState>()(
               get().updateCache('products', processedProducts);
               // 🚀 ALSO save to localStorage for instant loads!
               productCacheService.saveProducts(processedProducts);
+              
+              // ⚡ PERFORMANCE: Preload ALL child variants in background (non-blocking)
+              // This makes variant selection modals instant!
+              const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+              childVariantsCacheService.preloadAllChildVariants(processedProducts).catch(err => {
+                console.warn('⚠️ Failed to preload child variants (non-critical):', err);
+              });
             }
             
             latsAnalytics.track('products_loaded', { 

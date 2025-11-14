@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { PackageCheck, X, AlertCircle, Package, MapPin, Building, LayoutGrid } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { PackageCheck, X, AlertCircle, Package, MapPin, Zap, PlusCircle, RotateCcw, Plus, Minus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { storageRoomApi, StorageRoom } from '../../../settings/utils/storageRoomApi';
-import { storeShelfApi, StoreShelf } from '../../../settings/utils/storeShelfApi';
+import { useStorageLocationPicker } from '../storage/StorageLocationPickerProvider';
 
 interface PurchaseOrderItem {
   id: string;
@@ -75,25 +74,23 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     serialNumbers: SerialNumberData[];
   }>>(new Map());
 
-  // Storage location state
-  const [storageRooms, setStorageRooms] = useState<StorageRoom[]>([]);
-  const [allShelves, setAllShelves] = useState<Record<string, StoreShelf[]>>({});
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [selectedLocationIndex, setSelectedLocationIndex] = useState<{ itemId: string; index: number } | null>(null);
-  const [selectedRoomId, setSelectedRoomId] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
+  // Global storage picker
+  const { open: openStoragePicker } = useStorageLocationPicker();
 
-  // Load storage rooms on mount
+  // Block body scroll when modal is open
   useEffect(() => {
-    loadStorageRooms();
-  }, []);
-
-  // Load all shelves for all rooms
-  useEffect(() => {
-    if (storageRooms.length > 0) {
-      loadAllShelves();
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
     }
-  }, [storageRooms]);
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  // Legacy local storage-room modal removed in favor of global picker
 
   // Initialize received items when modal opens - Auto-generate rows based on quantity
   useEffect(() => {
@@ -115,32 +112,19 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
       const initialItems = new Map();
       purchaseOrder.items.forEach(item => {
         const remainingQty = item.quantity - (item.receivedQuantity || 0);
-        
+
         // For FULL mode: receive all remaining items
-        // For PARTIAL mode: start with 0, let user choose
-        const initialQuantity = mode === 'full' ? remainingQty : 0;
+        // For PARTIAL mode: start with 1 if available
+        const initialQuantity = mode === 'full'
+          ? remainingQty
+          : remainingQty > 0
+            ? 1
+            : 0;
         
         // Auto-generate empty serial number rows for each quantity
         const serialNumbers: SerialNumberData[] = [];
         for (let i = 0; i < initialQuantity; i++) {
-          const warrantyStart = new Date().toISOString().split('T')[0];
-          const warrantyEndDate = new Date();
-          warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
-          const warrantyEnd = warrantyEndDate.toISOString().split('T')[0];
-          
-          serialNumbers.push({
-            serial_number: '',
-            imei: '',
-            mac_address: '',
-            barcode: '',
-            location: '',
-            warranty_start: warrantyStart,
-            warranty_end: warrantyEnd,
-            warranty_months: 12,
-            cost_price: item.costPrice || item.cost_price || item.unitCost || 0,
-            selling_price: undefined,
-            notes: ''
-          });
+          serialNumbers.push(createEmptySerialNumber(item));
         }
         
         initialItems.set(item.id, {
@@ -152,74 +136,38 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     }
   }, [isOpen, purchaseOrder.items, mode, initialReceivedItems]);
 
-  const loadStorageRooms = async () => {
-    try {
-      const rooms = await storageRoomApi.getAll();
-      setStorageRooms(rooms || []);
-    } catch (error) {
-      console.error('Error loading storage rooms:', error);
-      setStorageRooms([]);
-    }
+  // Data loading handled in provider
+
+  const createEmptySerialNumber = (item: PurchaseOrderItem): SerialNumberData => {
+    const warrantyStart = new Date().toISOString().split('T')[0];
+    const warrantyEndDate = new Date();
+    warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
+    const warrantyEnd = warrantyEndDate.toISOString().split('T')[0];
+
+    return {
+      serial_number: '',
+      imei: '',
+      mac_address: '',
+      barcode: '',
+      location: '',
+      warranty_start: warrantyStart,
+      warranty_end: warrantyEnd,
+      warranty_months: 12,
+      cost_price: Number(item.costPrice || item.cost_price || item.unitCost || 0),
+      selling_price: undefined,
+      notes: ''
+    };
   };
 
-  const loadAllShelves = async () => {
+  const openLocationPicker = async (itemId: string, index: number) => {
     try {
-      const shelvesData: Record<string, StoreShelf[]> = {};
-      
-      for (const room of storageRooms) {
-        const roomShelves = await storeShelfApi.getShelvesByStorageRoom(room.id);
-        shelvesData[room.id] = roomShelves || [];
+      const result = await openStoragePicker();
+      if (result) {
+        updateSerialNumber(itemId, index, 'location', result.label);
       }
-      
-      setAllShelves(shelvesData);
     } catch (error) {
-      console.error('Error loading shelves:', error);
-      setAllShelves({});
+      console.error('Error opening storage location picker:', error);
     }
-  };
-
-  const handleLocationSelect = (roomId: string, shelfId: string) => {
-    console.log('handleLocationSelect called:', { roomId, shelfId, selectedLocationIndex });
-    
-    if (!selectedLocationIndex) {
-      console.log('No selectedLocationIndex, returning');
-      return;
-    }
-
-    const room = storageRooms.find(r => r.id === roomId);
-    const shelf = allShelves[roomId]?.find(s => s.id === shelfId);
-    
-    console.log('Found room and shelf:', { room, shelf });
-    
-    if (room && shelf) {
-      const locationText = `${room.code} - ${shelf.code}`;
-      console.log('Updating location to:', locationText);
-      updateSerialNumber(
-        selectedLocationIndex.itemId, 
-        selectedLocationIndex.index, 
-        'location', 
-        locationText
-      );
-    }
-    
-    setShowLocationModal(false);
-    setSelectedLocationIndex(null);
-  };
-
-  const openLocationModal = (itemId: string, index: number) => {
-    setSelectedLocationIndex({ itemId, index });
-    setSelectedRoomId(storageRooms[0]?.id || '');
-    setShowLocationModal(true);
-  };
-
-  const getFilteredShelves = () => {
-    const shelves = allShelves[selectedRoomId] || [];
-    if (!searchTerm) return shelves;
-    
-    return shelves.filter(shelf => 
-      shelf.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (shelf.name && shelf.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
   };
 
   const updateSerialNumber = (itemId: string, index: number, field: keyof SerialNumberData, value: string | number) => {
@@ -309,26 +257,9 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
       // Generate serial number fields based on new quantity
       const serialNumbers: SerialNumberData[] = [];
       for (let i = 0; i < validQuantity; i++) {
-        const warrantyStart = new Date().toISOString().split('T')[0];
-        const warrantyEndDate = new Date();
-        warrantyEndDate.setMonth(warrantyEndDate.getMonth() + 12);
-        const warrantyEnd = warrantyEndDate.toISOString().split('T')[0];
-        
         // Keep existing serial data if available, otherwise create new
         const existingSerial = current.serialNumbers[i];
-        serialNumbers.push(existingSerial || {
-          serial_number: '',
-          imei: '',
-          mac_address: '',
-          barcode: '',
-          location: '',
-          warranty_start: warrantyStart,
-          warranty_end: warrantyEnd,
-          warranty_months: 12,
-          cost_price: item.cost_price,
-          selling_price: undefined,
-          notes: ''
-        });
+        serialNumbers.push(existingSerial || createEmptySerialNumber(item));
       }
       
       newMap.set(itemId, {
@@ -337,6 +268,111 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
       });
       return newMap;
     });
+  };
+
+  const receivedItemsEntries = useMemo(() => Array.from(receivedItems.entries()), [receivedItems]);
+
+  const selectedItemCount = useMemo(() => {
+    return receivedItemsEntries.filter(([, data]) => data.quantity > 0).length;
+  }, [receivedItemsEntries]);
+
+  const isAllPendingSelected = useMemo(() => {
+    return purchaseOrder.items.every(item => {
+      const remainingQty = item.quantity - (item.receivedQuantity || 0);
+      if (remainingQty <= 0) return true;
+      const entry = receivedItems.get(item.id);
+      return entry?.quantity === remainingQty;
+    });
+  }, [purchaseOrder.items, receivedItems]);
+
+  const isOneEachSelected = useMemo(() => {
+    return purchaseOrder.items.every(item => {
+      const remainingQty = item.quantity - (item.receivedQuantity || 0);
+      if (remainingQty <= 0) return true;
+      const entry = receivedItems.get(item.id);
+      return entry?.quantity === 1;
+    });
+  }, [purchaseOrder.items, receivedItems]);
+
+  type QuickActionType = 'fill_all' | 'fill_one_each' | 'clear_all';
+
+  const applyQuickAction = (action: QuickActionType) => {
+    if (mode !== 'partial') return;
+
+    const hasPendingItems = purchaseOrder.items.some(item => {
+      const remainingQty = item.quantity - (item.receivedQuantity || 0);
+      return remainingQty > 0;
+    });
+
+    if (!hasPendingItems) {
+      toast.error('No pending items available for this action');
+      return;
+    }
+
+    setReceivedItems(prev => {
+      const newMap = new Map(prev);
+
+      purchaseOrder.items.forEach(item => {
+        const remainingQty = item.quantity - (item.receivedQuantity || 0);
+        const current = newMap.get(item.id) || { quantity: 0, serialNumbers: [] };
+
+        if (remainingQty <= 0) {
+          newMap.set(item.id, {
+            quantity: 0,
+            serialNumbers: []
+          });
+          return;
+        }
+
+        let nextQuantity = current.quantity;
+
+        switch (action) {
+          case 'fill_all':
+            nextQuantity = remainingQty;
+            break;
+          case 'fill_one_each':
+            nextQuantity = Math.min(1, remainingQty);
+            break;
+          case 'clear_all':
+            nextQuantity = 0;
+            break;
+          default:
+            break;
+        }
+
+        const serialNumbers: SerialNumberData[] = [];
+        for (let i = 0; i < nextQuantity; i++) {
+          const existingSerial = current.serialNumbers[i];
+          serialNumbers.push(existingSerial || createEmptySerialNumber(item));
+        }
+
+        newMap.set(item.id, {
+          quantity: nextQuantity,
+          serialNumbers
+        });
+      });
+
+      return newMap;
+    });
+
+    switch (action) {
+      case 'fill_all':
+        toast.success('All pending quantities selected');
+        break;
+      case 'fill_one_each':
+        toast.success('Set quantity to 1 for each pending item');
+        break;
+      case 'clear_all':
+        toast.success('Selections cleared');
+        break;
+      default:
+        break;
+    }
+  };
+
+  const adjustReceivingQuantity = (itemId: string, delta: number) => {
+    const currentQuantity = receivedItems.get(itemId)?.quantity || 0;
+    updateReceivingQuantity(itemId, currentQuantity + delta);
   };
 
   const handleConfirm = async () => {
@@ -468,40 +504,97 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        {/* Icon Header */}
-        <div className="p-8 bg-gradient-to-br from-green-50 to-emerald-50 text-center">
-          <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Package className="w-8 h-8 text-white" />
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg">
+              <Package className="w-8 h-8 text-white" />
+            </div>
+            
+            {/* Text and Summary */}
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-3">
+                {mode === 'full' ? 'Add Serial Numbers' : 'Select Items & Add Serial Numbers'}
+              </h3>
+              
+              {/* Summary Info */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm">
+                  <span className="text-gray-600">Total:</span>
+                  <span className="text-gray-900 font-bold ml-1">
+                    {getTotalReceivedItems()} items
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm">
+                  <span className="text-gray-900 font-medium">
+                    {purchaseOrder.items.length} {purchaseOrder.items.length === 1 ? 'product' : 'products'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                  <span className="text-green-700 font-medium">Cost: </span>
+                  <span className="text-green-900 font-bold">
+                    {formatCurrency(getTotalCost())}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">
-            {mode === 'full' ? 'Add Serial Numbers' : 'Select Items & Add Serial Numbers'}
-          </h3>
-          
-          {/* Summary Info */}
-          <div className="flex items-center justify-center gap-3 text-sm mt-4">
-            <div className="px-4 py-2 bg-white rounded-lg shadow-sm">
-              <span className="text-gray-600">Total:</span>
-              <span className="text-gray-900 font-bold ml-1">
-                {getTotalReceivedItems()} items
-              </span>
+
+          {/* Quick Actions */}
+          {mode === 'partial' && (
+            <div className="mt-6 space-y-3">
+              <div className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Quick Actions</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => applyQuickAction('fill_all')}
+                  disabled={isAllPendingSelected}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm ${
+                    isAllPendingSelected
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  <Zap className="w-4 h-4" />
+                  Receive All Pending
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => applyQuickAction('fill_one_each')}
+                  disabled={isOneEachSelected}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm ${
+                    isOneEachSelected
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  Receive 1 Each
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => applyQuickAction('clear_all')}
+                  disabled={selectedItemCount === 0}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm ${
+                    selectedItemCount === 0
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-gray-900 text-white hover:bg-gray-800'
+                  }`}
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Clear Selections
+                </button>
+              </div>
             </div>
-            <div className="px-4 py-2 bg-white rounded-lg shadow-sm">
-              <span className="text-gray-900 font-medium">
-                {purchaseOrder.items.length} {purchaseOrder.items.length === 1 ? 'product' : 'products'}
-              </span>
-            </div>
-            <div className="px-4 py-2 bg-green-100 rounded-lg shadow-sm border border-green-300">
-              <span className="text-green-700 font-medium">Cost: </span>
-              <span className="text-green-900 font-bold">
-                {formatCurrency(getTotalCost())}
-              </span>
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Table Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="space-y-8">
+        {/* Scrollable Products List Section */}
+        <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+          <div className="space-y-4 py-4">
             {purchaseOrder.items.map((item) => {
               const itemData = receivedItems.get(item.id) || { quantity: 0, serialNumbers: [] };
               const remainingQty = item.quantity - (item.receivedQuantity || 0);
@@ -517,62 +610,100 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                                  (item.product?.name || '') + 
                                  (variantName ? ` - ${variantName}` : '');
               
+              const hasSerialNumbers = itemData.quantity > 0;
+
               return (
-                <div key={item.id} className={`rounded-xl p-5 border ${
-                  itemData.quantity > 0 ? 'bg-white border-gray-300 shadow-sm' : 'bg-gray-50 border-gray-200'
+                <div key={item.id} className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 ${
+                  hasSerialNumbers
+                    ? 'border-green-200 hover:border-green-300 hover:shadow-md'
+                    : 'border-gray-200 hover:border-gray-300 hover:shadow-md'
                 }`}>
-                  {/* Product Header */}
-                  <div className="mb-4 pb-4 border-b border-gray-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
+                  {/* Item Header */}
+                  <div className="flex items-start justify-between p-6">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
                         <h4 className="text-lg font-bold text-gray-900">{productName}</h4>
-                        <p className="text-sm text-gray-500 mt-1">
-                          Cost: <span className="font-semibold text-gray-900">{formatCurrency(Number(item.costPrice || item.cost_price || item.unitCost || 0))}</span>
-                        </p>
+                        {/* Status Badge */}
+                        {hasSerialNumbers && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-500 text-white shadow-sm">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Active
+                          </span>
+                        )}
                       </div>
+                      {variantName && (
+                        <p className="text-sm text-gray-600 mt-1">Variant: {variantName}</p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-1">
+                        Cost: <span className="font-semibold text-gray-900">{formatCurrency(Number(item.costPrice || item.cost_price || item.unitCost || 0))}</span> • 
+                        Available: {remainingQty} units
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
                       {mode === 'partial' && (
                         <div className="ml-4">
-                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                          <label className="block text-xs font-medium text-gray-600 mb-1 text-right">
                             Receiving:
                           </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max={remainingQty}
-                            value={itemData.quantity}
-                            onChange={(e) => updateReceivingQuantity(item.id, parseInt(e.target.value) || 0)}
-                            className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-center font-bold text-lg"
-                          />
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => adjustReceivingQuantity(item.id, -1)}
+                              disabled={itemData.quantity <= 0}
+                              className="w-12 h-12 flex items-center justify-center rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-100 transition disabled:opacity-40 disabled:cursor-not-allowed text-lg"
+                            >
+                              <Minus className="w-5 h-5" />
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              max={remainingQty}
+                              value={itemData.quantity}
+                              onChange={(e) => updateReceivingQuantity(item.id, parseInt(e.target.value, 10) || 0)}
+                              className="w-28 px-4 py-3 border-2 border-gray-300 rounded-2xl focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-200/50 text-center font-bold text-xl [appearance:textfield] [-moz-appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => adjustReceivingQuantity(item.id, 1)}
+                              disabled={itemData.quantity >= remainingQty}
+                              className="w-12 h-12 flex items-center justify-center rounded-xl border-2 border-gray-200 text-gray-700 hover:bg-gray-100 transition disabled:opacity-40 disabled:cursor-not-allowed text-lg"
+                            >
+                              <Plus className="w-5 h-5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                       {mode === 'full' && (
-                        <div className="ml-4 px-4 py-2 bg-blue-50 rounded-lg">
+                        <div className="px-4 py-2 bg-green-50 rounded-xl border border-green-200">
                           <p className="text-xs text-gray-600">Receiving:</p>
-                          <p className="text-lg font-bold text-blue-700">{itemData.quantity} pcs</p>
+                          <p className="text-lg font-bold text-green-700">{itemData.quantity} pcs</p>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Table - Only show if items selected */}
+                  {/* Content Section - Always Visible */}
                   {itemData.quantity > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="bg-gray-100">
-                          <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 w-12">#</th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
-                            Product Name
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[250px]">
-                            Serial Number / IMEI *
-                          </th>
-                          <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[180px]">
-                            Location
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
+                  <div className="px-6 pb-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 w-12">#</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
+                              Product Name
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[250px]">
+                              Serial Number / IMEI *
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[180px]">
+                              Location
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
                         {itemData.serialNumbers.map((serial, index) => (
                           <tr 
                             key={index} 
@@ -620,7 +751,7 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openLocationModal(item.id, index);
+                                  openLocationPicker(item.id, index);
                                 }}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg hover:border-blue-400 bg-white text-left flex items-center gap-2 transition-colors cursor-pointer"
                               >
@@ -632,22 +763,18 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                             </td>
                           </tr>
                         ))}
-                      </tbody>
-                    </table>
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                   ) : mode === 'partial' ? (
-                    <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center">
-                      <Package className="w-10 h-10 text-gray-400 mx-auto mb-2" />
-                      <p className="text-gray-600 font-medium">Set quantity above to add serial numbers</p>
+                    <div className="px-6 pb-6">
+                      <div className="p-6 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center">
+                        <Package className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                        <p className="text-gray-600 font-medium">Set quantity above to add serial numbers</p>
+                      </div>
                     </div>
                   ) : null}
-
-                  {/* Table Footer Info */}
-                  {itemData.quantity > 0 && (
-                    <div className="mt-3 text-xs text-gray-500">
-                      * Serial Number / IMEI is required
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -688,163 +815,7 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
         </div>
       </div>
 
-      {/* Storage Location Modal */}
-      {showLocationModal && (
-        <div 
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100000] p-4"
-          onClick={() => {
-            setShowLocationModal(false);
-            setSelectedLocationIndex(null);
-          }}
-          style={{ pointerEvents: 'auto' }}
-        >
-          <div 
-            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[85vh] overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-green-50 to-blue-50">
-              <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-green-600" />
-                <h3 className="text-lg font-bold text-gray-900">Select Storage Location</h3>
-              </div>
-              <button
-                onClick={() => {
-                  setShowLocationModal(false);
-                  setSelectedLocationIndex(null);
-                }}
-                className="p-2 hover:bg-white/50 rounded transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            {/* Storage Room Tabs */}
-            <div className="border-b border-gray-200 bg-gray-50">
-              <div className="flex overflow-x-auto px-4 py-2 gap-2">
-                {storageRooms.map((room) => (
-                  <button
-                    key={room.id}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedRoomId(room.id);
-                    }}
-                    className={`flex-shrink-0 px-4 py-2 rounded font-medium text-sm transition-colors cursor-pointer ${
-                      selectedRoomId === room.id
-                        ? 'bg-green-600 text-white shadow-md'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Building className="w-4 h-4" />
-                      <span>{room.name}</span>
-                      <span className="text-xs opacity-75">({room.code})</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Search Bar */}
-            <div className="p-4 border-b border-gray-200 bg-white">
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input
-                  type="text"
-                  placeholder="Search shelves by code..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2 bg-white border-2 border-gray-300 rounded-lg focus:outline-none focus:border-green-500"
-                />
-              </div>
-            </div>
-
-            {/* Shelves Grid */}
-            <div className="p-4 overflow-y-auto max-h-[50vh]">
-              {getFilteredShelves().length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3" style={{ pointerEvents: 'auto' }}>
-                  {getFilteredShelves().map((shelf) => {
-                    if (!shelf || !shelf.code) return null;
-                    
-                    const currentRoom = storageRooms.find(r => r.id === selectedRoomId);
-                    const roomCode = currentRoom?.code || '';
-                    const completeCellNumber = shelf.code.startsWith(roomCode) 
-                      ? shelf.code 
-                      : `${roomCode}${shelf.code}`;
-                    
-                    const foundLetter = shelf.code.toUpperCase().match(/[A-Z]/)?.[0];
-                    
-                    const getLetterColor = (letter: string) => {
-                      const colors: { [key: string]: string } = {
-                        'A': 'bg-blue-500',
-                        'B': 'bg-green-500',
-                        'C': 'bg-purple-500',
-                        'D': 'bg-orange-500',
-                        'E': 'bg-red-500',
-                        'F': 'bg-teal-500',
-                        'G': 'bg-pink-500',
-                        'H': 'bg-indigo-500'
-                      };
-                      return colors[letter] || 'bg-gray-500';
-                    };
-                    
-                    const bgColor = foundLetter ? getLetterColor(foundLetter) : 'bg-gray-500';
-                    
-                    return (
-                      <button
-                        key={shelf.id}
-                        type="button"
-                        onClick={(e) => {
-                          console.log('Shelf button clicked:', shelf.code);
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleLocationSelect(selectedRoomId, shelf.id);
-                        }}
-                        onMouseDown={(e) => {
-                          console.log('Shelf button mouse down:', shelf.code);
-                          e.stopPropagation();
-                        }}
-                        className={`py-3 px-2 rounded-lg border-2 font-bold text-center text-white text-sm ${bgColor} border-transparent hover:border-white hover:shadow-lg transition-all cursor-pointer`}
-                        style={{ pointerEvents: 'auto', zIndex: 1 }}
-                      >
-                        {completeCellNumber}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <LayoutGrid size={48} className="text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">No Shelves Found</h3>
-                  <p className="text-sm text-gray-600">
-                    {searchTerm 
-                      ? 'Try adjusting your search.'
-                      : 'No shelves available in this room.'
-                    }
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex justify-between items-center p-4 border-t border-gray-200 bg-gray-50">
-              <div className="text-sm text-gray-600">
-                {getFilteredShelves().length} shelf{getFilteredShelves().length !== 1 ? 'ves' : ''} available
-              </div>
-              <button
-                onClick={() => {
-                  setShowLocationModal(false);
-                  setSelectedLocationIndex(null);
-                }}
-                className="px-4 py-2 text-gray-700 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Global storage picker provided at app root; no local modal needed */}
       </div>
     </>
   );

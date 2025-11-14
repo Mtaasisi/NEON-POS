@@ -24,6 +24,7 @@ import toast from 'react-hot-toast';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { supabase } from '../../../lib/supabaseClient';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface IntegrationConfig {
   sms: {

@@ -23,6 +23,7 @@ import {
   SUPPORTED_CURRENCIES
 } from '../lib/purchaseOrderUtils';
 import { ShippedItem, PurchaseOrder } from '../types/inventory';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface ShippedItemWithDetails extends ShippedItem {
   product?: any;
@@ -34,6 +35,7 @@ const ShippedItemsPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   const { purchaseOrderId } = useParams<{ purchaseOrderId?: string }>();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
 
   // Store state
   const {
@@ -75,6 +77,7 @@ const ShippedItemsPage: React.FC = () => {
   // Load data on component mount
   useEffect(() => {
     const loadData = async () => {
+      const jobId = startLoading('Loading shipped items...');
       try {
         await Promise.all([
           loadPurchaseOrders(),
@@ -85,13 +88,15 @@ const ShippedItemsPage: React.FC = () => {
         if (purchaseOrderId) {
           await loadShippedItems(purchaseOrderId);
         }
+        completeLoading(jobId);
       } catch (error) {
         console.error('Error loading shipped items data:', error);
+        failLoading(jobId, 'Failed to load shipped items');
       }
     };
 
     loadData();
-  }, [loadPurchaseOrders, loadProducts, loadSuppliers, loadShippedItems, purchaseOrderId]);
+  }, [loadPurchaseOrders, loadProducts, loadSuppliers, loadShippedItems, purchaseOrderId, startLoading, completeLoading, failLoading]);
 
   // Reset display count when filters change
   useEffect(() => {

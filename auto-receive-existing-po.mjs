@@ -68,11 +68,18 @@ async function main() {
   let browser, page;
   
   try {
-    // Launch browser
+    // Launch browser with extensions disabled
     browser = await puppeteer.launch({
       headless: false,
       defaultViewport: { width: 1920, height: 1080 },
-      args: ['--start-maximized', '--no-sandbox']
+      args: ['--start-maximized',
+        '--no-sandbox',
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-default-apps',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding', '--disable-extensions', '--disable-plugins', '--disable-default-apps', '--disable-background-timer-throttling', '--disable-renderer-backgrounding']],
+      ignoreDefaultArgs: ['--enable-automation']
     });
     
     page = await browser.newPage();
@@ -80,8 +87,14 @@ async function main() {
     
     // Suppress non-critical console messages
     page.on('console', msg => {
-      if (msg.type() === 'error' && !msg.text().includes('DevTools')) {
-        logWarning(`Browser: ${msg.text().substring(0, 80)}...`);
+      const text = msg.text();
+      // Ignore extension context invalidated errors and other non-critical messages
+      if (msg.type() === 'error' &&
+          !text.includes('DevTools') &&
+          !text.includes('Extension context invalidated') &&
+          !text.includes('chrome-extension://') &&
+          !text.includes('moz-extension://')) {
+        logWarning(`Browser: ${text.substring(0, 80)}...`);
       }
     });
     

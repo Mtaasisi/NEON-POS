@@ -68,6 +68,19 @@ const ShippingConfigurationModal: React.FC<ShippingConfigurationModalProps> = ({
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const [loadingData, setLoadingData] = useState(true);
 
+  // Block body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   // Load shipping data from database
   useEffect(() => {
     if (isOpen) {

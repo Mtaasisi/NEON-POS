@@ -1060,12 +1060,15 @@ async function main() {
         width: 1920,
         height: 1080
       },
-      args: [
-        '--no-sandbox',
+      args: ['--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-web-security'
-      ]
+        '--disable-web-security',
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-default-apps',
+        '--disable-background-timer-throttling',
+        '--disable-renderer-backgrounding']
     });
     
     page = await browser.newPage();

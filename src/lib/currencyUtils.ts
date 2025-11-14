@@ -106,3 +106,30 @@ export const getCurrencyOptions = () => {
     currency
   }));
 };
+
+/**
+ * Format object with common formatting methods
+ */
+export const format = {
+  /**
+   * Format amount as money using default currency
+   */
+  money: (amount: number): string => {
+    return formatCurrency(amount, DEFAULT_CURRENCY);
+  },
+
+  /**
+   * Format amount as money with specific currency
+   */
+  moneyWithCurrency: (amount: number, currencyCode: string): string => {
+    const currency = getCurrencyByCode(currencyCode) || DEFAULT_CURRENCY;
+    return formatCurrency(amount, currency);
+  },
+
+  /**
+   * Format amount cleanly (without trailing zeros)
+   */
+  clean: (amount: number): string => {
+    return formatCurrencyClean(amount, DEFAULT_CURRENCY);
+  }
+};

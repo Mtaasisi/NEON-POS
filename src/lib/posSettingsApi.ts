@@ -544,7 +544,7 @@ export class POSSettingsAPI {
           cache_duration: 300,
           enable_lazy_loading: true,
           max_search_results: 50,
-          enable_tax: true,
+          enable_tax: false,
           tax_rate: 16
         };
       

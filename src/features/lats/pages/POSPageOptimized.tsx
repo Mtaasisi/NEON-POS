@@ -48,6 +48,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ShoppingCart, X, CheckCircle, User, Package, DollarSign } from 'lucide-react';
 import { useCustomers } from '../../../context/CustomersContext';
 import { useAuth } from '../../../context/AuthContext';
 import { useBranch } from '../../../context/BranchContext';
@@ -71,6 +72,11 @@ import ZenoPayPaymentModal from '../components/pos/ZenoPayPaymentModal';
 import POSInstallmentModal from '../components/pos/POSInstallmentModal';
 import TradeInContractModal from '../components/pos/TradeInContractModal';
 import TradeInPricingModal from '../components/pos/TradeInPricingModal';
+import VariantSelectionModal from '../components/pos/VariantSelectionModal';
+import ComprehensivePaymentModal from '../components/pos/ComprehensivePaymentModal';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import ProductGridSkeleton from '../../../components/ui/ProductGridSkeleton';
+import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 
 // Lazy load TradeInCalculator to avoid circular dependency issues with getAllSpareParts
 const TradeInCalculator = React.lazy(() => import('../components/pos/TradeInCalculator'));
@@ -332,6 +338,9 @@ const POSPageOptimized: React.FC = () => {
     loadSales
   } = useInventoryStore();
 
+  // Unified loading system for non-blocking loading indicators
+  const { startLoading, updateProgress, completeLoading, failLoading } = useLoadingJob();
+
   // Track if we've already logged product load status
   const hasLoggedProductStatus = useRef(false);
   // Track if initial data load has been triggered
@@ -468,7 +477,7 @@ const POSPageOptimized: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
-  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('all'); // Changed from 'in-stock' to 'all' for faster initial display
+  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('in-stock'); // Default to in-stock to show only available products
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock' | 'recent' | 'sales'>('sales');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -516,6 +525,10 @@ const POSPageOptimized: React.FC = () => {
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [showDraftNotification, setShowDraftNotification] = useState(false);
   const [draftNotes, setDraftNotes] = useState('');
+  const [showPOSSummaryModal, setShowPOSSummaryModal] = useState(false);
+  const [showVariantSelectionModal, setShowVariantSelectionModal] = useState(false);
+  const [selectedProductForVariants, setSelectedProductForVariants] = useState<any>(null);
+  const [cartItemForIMEIUpdate, setCartItemForIMEIUpdate] = useState<any>(null);
 
   // Draft management
   const { 
@@ -614,6 +627,9 @@ const POSPageOptimized: React.FC = () => {
   // Payment processing
   const [showZenoPayPayment, setShowZenoPayPayment] = useState(false);
   const [showInstallmentModal, setShowInstallmentModal] = useState(false);
+  const [showReturnsModal, setShowReturnsModal] = useState(false);
+  const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
+  const [showLoyaltyModal, setShowLoyaltyModal] = useState(false);
 
   // Trade-In state
   const [showTradeInCalculator, setShowTradeInCalculator] = useState(false);
@@ -714,6 +730,35 @@ const POSPageOptimized: React.FC = () => {
     }
   }, [dbProducts, lowStockThreshold]);
 
+  // Show loading indicator when search query changes (debounced)
+  useEffect(() => {
+    if (debouncedSearchQuery) {
+      const jobId = startLoading('Filtering products...');
+      // Simulate filter time
+      setTimeout(() => {
+        completeLoading(jobId);
+      }, 300);
+    }
+  }, [debouncedSearchQuery, startLoading, completeLoading]);
+
+  // Show loading indicator when category filter changes
+  useEffect(() => {
+    if (selectedCategory) {
+      const jobId = startLoading('Filtering by category...');
+      setTimeout(() => {
+        completeLoading(jobId);
+      }, 200);
+    }
+  }, [selectedCategory, startLoading, completeLoading]);
+
+  // Show loading indicator when stock filter changes
+  useEffect(() => {
+    const jobId = startLoading('Applying filters...');
+    setTimeout(() => {
+      completeLoading(jobId);
+    }, 200);
+  }, [stockFilter, sortBy, sortOrder, startLoading, completeLoading]);
+
   // Load initial data with comprehensive error handling - OPTIMIZED
   useEffect(() => {
     // Prevent multiple simultaneous loads
@@ -723,9 +768,12 @@ const POSPageOptimized: React.FC = () => {
     initialLoadTriggered.current = true;
 
     const loadInitialData = async () => {
+      const jobId = startLoading('Loading POS data...');
+      
       try {
         console.log('🚀 [POS] Starting optimized data load...');
         const startTime = Date.now();
+        updateProgress(jobId, 10);
 
         // CRITICAL: Load only essential data first (products + categories)
         const results = await Promise.allSettled([
@@ -735,6 +783,7 @@ const POSPageOptimized: React.FC = () => {
 
         const loadTime = Date.now() - startTime;
         console.log(`✅ [POS] Essential data loaded in ${loadTime}ms`);
+        updateProgress(jobId, 60);
 
         // Detect cold start (Neon database waking up)
         if (loadTime > 10000) {
@@ -742,13 +791,16 @@ const POSPageOptimized: React.FC = () => {
         }
 
         // Load non-critical data in background (don't wait for it)
+        const backgroundJobId = startLoading('Loading additional data...');
         Promise.allSettled([
           loadSuppliers(),
           loadSales()
         ]).then(() => {
           console.log('✅ [POS] Background data loaded');
+          completeLoading(backgroundJobId);
         }).catch(err => {
           console.warn('⚠️ [POS] Background data failed (non-critical):', err);
+          failLoading(backgroundJobId, 'Background data failed');
         });
 
         // Check results for critical data only
@@ -763,7 +815,10 @@ const POSPageOptimized: React.FC = () => {
           })
           .filter(Boolean);
 
+        updateProgress(jobId, 90);
+
         if (errors.length > 0) {
+          failLoading(jobId, `Failed to load: ${errors.join(', ')}`);
           toast.error(`Failed to load: ${errors.join(', ')}. Please refresh.`);
         } else {
           // Show appropriate message based on load time
@@ -772,12 +827,15 @@ const POSPageOptimized: React.FC = () => {
           } else {
             toast.success('POS ready!', { duration: 2000 });
           }
+          updateProgress(jobId, 100);
+          completeLoading(jobId);
         }
 
         setDataLoaded(true);
         setLastLoadTime(Date.now());
       } catch (error) {
         console.error('Critical error loading initial data:', error);
+        failLoading(jobId, 'Critical error loading POS data');
         toast.error('Critical error loading POS data. Please refresh the page.');
       }
     };
@@ -785,7 +843,7 @@ const POSPageOptimized: React.FC = () => {
     if (!dataLoaded || (isCachingEnabled && Date.now() - lastLoadTime > CACHE_DURATION_MS)) {
       loadInitialData();
     }
-  }, [dataLoaded, lastLoadTime, isCachingEnabled, loadProducts, loadCategories, loadSuppliers, loadSales]);
+  }, [dataLoaded, lastLoadTime, isCachingEnabled, loadProducts, loadCategories, loadSuppliers, loadSales, startLoading, updateProgress, completeLoading, failLoading]);
 
   // Monitor categories loading
   useEffect(() => {
@@ -945,13 +1003,24 @@ const POSPageOptimized: React.FC = () => {
   };
 
   const handleUnifiedSearch = (query: string) => {
-    // Check if it's a barcode
-    if (/^\d{8,}$/.test(query)) {
-      // It's likely a barcode
-      startQrCodeScanner();
-    } else {
-      // Regular search
-      setShowSearchResults(true);
+    const jobId = startLoading('Searching products...');
+    
+    try {
+      // Check if it's a barcode
+      if (/^\d{8,}$/.test(query)) {
+        // It's likely a barcode
+        updateProgress(jobId, 50);
+        startQrCodeScanner();
+        completeLoading(jobId);
+      } else {
+        // Regular search
+        updateProgress(jobId, 50);
+        setShowSearchResults(true);
+        updateProgress(jobId, 100);
+        completeLoading(jobId);
+      }
+    } catch (error: any) {
+      failLoading(jobId, 'Search failed');
     }
   };
 
@@ -1175,8 +1244,17 @@ const POSPageOptimized: React.FC = () => {
             setDailyClosureInfo(null);
             setSessionStartTime(new Date().toISOString());
             return;
+          } else if (closureError.message?.includes('No data returned from insert') || 
+                     closureError.message?.includes('RLS') || 
+                     closureError.message?.includes('policy')) {
+            // RLS policy error - suppress and use fallback
+            console.warn('⚠️ Daily closure check blocked by RLS policies - using fallback mode');
+            setIsDailyClosed(false);
+            setDailyClosureInfo(null);
+            setSessionStartTime(new Date().toISOString());
+            return;
           } else {
-            console.error('❌ Error checking daily closure status:', closureError);
+            console.warn('⚠️ Error checking daily closure status:', closureError.message || closureError);
           }
         }
 
@@ -1279,8 +1357,18 @@ const POSPageOptimized: React.FC = () => {
             }
 
             if (createError) {
+              // Check for RLS policy errors (common when policies aren't set up yet)
+              if (createError.message?.includes('No data returned from insert') || 
+                  createError.message?.includes('RLS') || 
+                  createError.message?.includes('policy')) {
+                console.warn('⚠️ Cannot create session (RLS policies may need configuration) - using fallback mode');
+                setSessionStartTime(new Date().toISOString());
+                setIsDailyClosed(false);
+                setDailyClosureInfo(null);
+                return;
+              }
               // If table doesn't exist or has issues, just use current time
-              if (createError.code === '42P01' || createError.code === '42703' || 
+              else if (createError.code === '42P01' || createError.code === '42703' || 
                   createError.message?.includes('400') || createError.message?.includes('Bad Request')) {
                 console.warn('⚠️ Cannot create session (table not ready) - using fallback');
                 // Fallback to current time
@@ -1421,7 +1509,7 @@ const POSPageOptimized: React.FC = () => {
   // This is called BEFORE adding to cart to allow variant selection
   const checkForIMEIVariants = useCallback(async (product: any): Promise<boolean> => {
     try {
-      // ✅ NEW: Check for parent variants with IMEI children
+      // ✅ OPTIMIZED: Single query to check for IMEI children using IN clause
       const { data: parentVariants } = await supabase
         .from('lats_product_variants')
         .select('id, variant_name, name, is_parent, variant_type, quantity')
@@ -1434,23 +1522,27 @@ const POSPageOptimized: React.FC = () => {
         return false; // No variants with stock
       }
 
-      // Check if any parent has IMEI children
-      for (const parent of parentVariants) {
-        if (parent.is_parent || parent.variant_type === 'parent') {
-          // This is a parent - check if it has IMEI children
-          const { count } = await supabase
-            .from('lats_product_variants')
-            .select('id', { count: 'exact', head: true })
-            .eq('parent_variant_id', parent.id)
-            .eq('variant_type', 'imei_child')
-            .eq('is_active', true)
-            .gt('quantity', 0);
+      // Get all parent IDs
+      const parentIds = parentVariants
+        .filter(p => p.is_parent || p.variant_type === 'parent')
+        .map(p => p.id);
 
-          if (count && count > 0) {
-            console.log(`✅ Parent variant "${parent.variant_name}" has ${count} IMEI children`);
-            return true; // Has IMEI children - show selector
-          }
-        }
+      if (parentIds.length === 0) {
+        return false; // No parent variants
+      }
+
+      // ⚡ PERFORMANCE FIX: Single query to check all parents at once
+      const { count } = await supabase
+        .from('lats_product_variants')
+        .select('id', { count: 'exact', head: true })
+        .in('parent_variant_id', parentIds)
+        .eq('variant_type', 'imei_child')
+        .eq('is_active', true)
+        .gt('quantity', 0);
+
+      if (count && count > 0) {
+        console.log(`✅ Product has ${count} IMEI children across ${parentIds.length} parents`);
+        return true; // Has IMEI children - show selector
       }
 
       return false; // No IMEI children found
@@ -1704,6 +1796,37 @@ const POSPageOptimized: React.FC = () => {
     }
   }, [cartItems]);
 
+  // Handle IMEI selection for cart items
+  const handleCartItemIMEISelect = useCallback(async (item: any) => {
+    try {
+      console.log('🔍 Opening IMEI selection modal for cart item:', item);
+
+      // Fetch the product details to get variants
+      const { data: product } = await supabase
+        .from('lats_products')
+        .select(`
+          *,
+          product_variants:lats_product_variants(*)
+        `)
+        .eq('id', item.productId)
+        .single();
+
+      if (!product) {
+        toast.error('Product not found');
+        return;
+      }
+
+      // Set the product for variant selection
+      setSelectedProductForVariants(product);
+      setShowVariantSelectionModal(true);
+      setCartItemForIMEIUpdate(item);
+
+    } catch (error) {
+      console.error('Error opening IMEI selection modal:', error);
+      toast.error('Failed to open IMEI selection. Please try again.');
+    }
+  }, []);
+
   const removeCartItem = useCallback((itemId: string) => {
     try {
       if (!itemId) {
@@ -1827,26 +1950,78 @@ const POSPageOptimized: React.FC = () => {
       const itemsRequiringIMEIVariants = await Promise.all(
         cartItems.map(async (item) => {
           try {
-            // Check if this product has IMEI variants (new system)
-            const { data: imeiVariants } = await supabase
-              .from('lats_product_variants')
-              .select('id, variant_attributes')
-              .eq('product_id', item.productId)
-              .not('variant_attributes->imei', 'is', null)
-              .eq('is_active', true)
-              .gt('quantity', 0)
-              .limit(1);
-            
-            if (imeiVariants && imeiVariants.length > 0) {
-              // This product has IMEI variants, check if they're selected
+            console.log('🔍 Checking IMEI requirement for item:', {
+              productName: item.productName,
+              variantId: item.variantId,
+              variantName: item.variantName,
+              selectedSerialNumbers: item.selectedSerialNumbers,
+              selectedIMEIVariants: item.selectedIMEIVariants
+            });
+
+            // Check if this specific variant requires IMEI selection
+            let requiresIMEI = false;
+
+            if (item.variantId && item.variantId !== 'default') {
+              // First check if this variant has IMEI child variants
+              const { count: imeiChildrenCount } = await supabase
+                .from('lats_product_variants')
+                .select('id', { count: 'exact', head: true })
+                .eq('parent_variant_id', item.variantId)
+                .eq('variant_type', 'imei_child')
+                .eq('is_active', true)
+                .gt('quantity', 0);
+
+              if ((imeiChildrenCount || 0) > 0) {
+                // Variant has IMEI children, requires IMEI selection
+                console.log(`📱 Variant ${item.variantId} has ${imeiChildrenCount} IMEI children - REQUIRES IMEI selection`);
+                requiresIMEI = true;
+              } else {
+                // Check if this variant itself is an IMEI variant
+                const { data: variant } = await supabase
+                  .from('lats_product_variants')
+                  .select('variant_attributes')
+                  .eq('id', item.variantId)
+                  .eq('is_active', true)
+                  .single();
+
+                console.log(`📱 Variant ${item.variantId} IMEI check:`, {
+                  hasIMEIAttribute: !!variant?.variant_attributes?.imei,
+                  variantAttributes: variant?.variant_attributes
+                });
+
+                // If it's an IMEI variant, no further selection needed
+                // If it's not an IMEI variant and has no IMEI children, no selection needed
+                requiresIMEI = false;
+              }
+            } else {
+              // No specific variant selected (default variant)
+              // Check if the product has any variants that require IMEI
+              const { data: imeiVariants } = await supabase
+                .from('lats_product_variants')
+                .select('id')
+                .eq('product_id', item.productId)
+                .not("variant_attributes->>'imei'", 'is', null)
+                .eq('is_active', true)
+                .gt('quantity', 0)
+                .limit(1);
+
+              requiresIMEI = imeiVariants && imeiVariants.length > 0;
+            }
+
+            if (requiresIMEI) {
+              // Check if IMEI variants are selected
               const hasSelected = item.selectedIMEIVariants && item.selectedIMEIVariants.length > 0;
-              
+
+              console.log(`⚠️ Item ${item.productName} (${item.variantName}) REQUIRES IMEI - hasSelected: ${hasSelected}`);
+
               return {
                 item,
                 requiresIMEI: true,
                 hasSelected: hasSelected
               };
             }
+
+            console.log(`✅ Item ${item.productName} (${item.variantName}) does NOT require IMEI`);
             return null;
           } catch (error) {
             console.warn('Error checking IMEI variants for item:', item, error);
@@ -1871,11 +2046,18 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
-      setShowPaymentModal(true);
+      // Show summary modal first before payment
+      setShowPOSSummaryModal(true);
     } catch (error) {
       console.error('Error in handleProcessPayment:', error);
       toast.error('Failed to initialize payment. Please try again.');
     }
+  };
+
+  // Handle confirming the sale summary and proceeding to payment
+  const handleConfirmSaleSummary = () => {
+    setShowPOSSummaryModal(false);
+    setShowPaymentModal(true);
   };
 
   const handleRefreshData = async () => {
@@ -2057,7 +2239,7 @@ const POSPageOptimized: React.FC = () => {
 
   // Tax rate from settings
   const TAX_RATE = generalSettings?.tax_rate || 18; // Default 18% VAT for Tanzania
-  const isTaxEnabled = generalSettings?.enable_tax !== false; // Default to true if not set
+  const isTaxEnabled = generalSettings?.enable_tax === true; // Only enable tax if explicitly set to true
 
   // Calculate totals with validation
   const totalAmount = useMemo(() => {
@@ -2264,47 +2446,44 @@ const POSPageOptimized: React.FC = () => {
           sessionStartTime={sessionStartTime}
         />
 
-        {/* Payment Modal - Required for payment processing */}
-        <PaymentsPopupModal
+        {/* Comprehensive Payment Modal - Supports multiple payment methods */}
+        <ComprehensivePaymentModal
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
-          amount={tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount}
-          customerId={selectedCustomer?.id}
-          customerName={selectedCustomer?.name || 'Walk-in Customer'}
-          description={`POS Sale - ${cartItems.length} items${tradeInDiscount > 0 ? ` (Trade-In: -${format.money(tradeInDiscount)})` : ''}`}
-          onPaymentComplete={async (payments, totalPaid) => {
+          totalAmount={totalAmount}
+          discountAmount={discountAmount + tradeInDiscount}
+          onProcessPayment={async (paymentData) => {
             try {
-              // Validate payment data before processing
-              if (!payments || payments.length === 0) {
-                throw new Error('No payment data received');
+              console.log('Processing comprehensive payment:', paymentData);
+
+              // Handle different payment types
+              let payments = [];
+              let totalPaid = 0;
+
+              if (paymentData.method === 'split') {
+                // Handle split payments
+                payments = paymentData.splitPayments.map((split: any) => ({
+                  paymentMethod: split.methodId,
+                  amount: split.amount,
+                  reference: split.reference || null
+                }));
+                totalPaid = paymentData.totalAmount;
+              } else {
+                // Handle single payment
+                payments = [{
+                  paymentMethod: paymentData.method,
+                  amount: paymentData.amount,
+                  reference: paymentData.reference || null,
+                  loyaltyPoints: paymentData.loyaltyPoints || null,
+                  giftCardCode: paymentData.giftCardCode || null
+                }];
+                totalPaid = paymentData.amount;
               }
 
-              console.log('Processing payments:', {
-                paymentCount: payments.length,
-                totalPaid: totalPaid,
-                payments: payments.map((p: any) => ({
-                  method: p.paymentMethod,
-                  amount: p.amount,
-                  reference: p.reference
-                }))
-              });
+              console.log('Converted payments:', payments);
 
-              // Calculate expected payment amount (after trade-in discount if applicable)
-              const expectedAmount = tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount;
-              
-              // Validate totalPaid to ensure it matches the expected amount
-              const validatedTotalPaid = totalPaid || expectedAmount;
-              
-              // Validate that totalPaid matches expectedAmount (with tolerance for rounding)
-              if (Math.abs(validatedTotalPaid - expectedAmount) > 1) {
-                console.warn('⚠️ Payment amount mismatch:', {
-                  totalPaid: validatedTotalPaid,
-                  expectedAmount: expectedAmount,
-                  finalAmount: finalAmount,
-                  tradeInDiscount: tradeInDiscount,
-                  difference: Math.abs(validatedTotalPaid - expectedAmount)
-                });
-              }
+              // Calculate expected payment amount
+              const expectedAmount = finalAmount;
 
               // Prepare sale data for database with multiple payments
               const saleData = {
@@ -2628,14 +2807,12 @@ const POSPageOptimized: React.FC = () => {
           {/* Product Search Section - Fixed height to prevent layout shift */}
           <div className="flex-1 min-h-0 relative h-full">
             {!dataLoaded && products.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur rounded-lg shadow-lg z-10">
-                <div className="text-center p-12">
-                  <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-                  <h3 className="text-xl font-semibold text-gray-800 mb-2">Loading Products...</h3>
-                  <p className="text-gray-600">Please wait while we fetch your inventory</p>
-                  <p className="text-sm text-gray-500 mt-2">First load may take a few seconds</p>
-                </div>
-              </div>
+              <ProductGridSkeleton 
+                itemCount={8} 
+                columns={4}
+                showSearchBar={true}
+                showCategories={true}
+              />
             ) : null}
             
             <ProductSearchSection
@@ -2680,6 +2857,7 @@ const POSPageOptimized: React.FC = () => {
             onUpdateCartItemQuantity={updateCartItemQuantity}
             onRemoveCartItem={removeCartItem}
             onUpdateCartItemTags={updateCartItemTags}
+            onIMEISelect={handleCartItemIMEISelect}
             onApplyDiscount={(_type, value) => {
               // Calculate the actual discount amount based on type
               const discountAmount = _type === 'percentage' 
@@ -3045,7 +3223,11 @@ const POSPageOptimized: React.FC = () => {
 
       {/* Trade-In Calculator Modal */}
       {showTradeInCalculator && (
-        <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div></div>}>
+        <React.Suspense fallback={
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <LoadingSpinner size="sm" color="orange" />
+          </div>
+        }>
           <TradeInCalculator
             isOpen={showTradeInCalculator}
             onClose={() => setShowTradeInCalculator(false)}
@@ -3081,6 +3263,180 @@ const POSPageOptimized: React.FC = () => {
           isOpen={showPaymentTracking}
           onClose={() => setShowPaymentTracking(false)}
         />
+      )}
+
+      {/* POS Sale Summary Modal */}
+      {showPOSSummaryModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="bg-blue-600 p-8">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-lg">
+                  <ShoppingCart className="w-10 h-10 text-blue-600" />
+                </div>
+                <button
+                  onClick={() => setShowPOSSummaryModal(false)}
+                  className="w-9 h-9 flex items-center justify-center bg-white/20 hover:bg-white/30 text-white rounded-full transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <h2 className="text-3xl font-bold text-white mb-2">
+                Complete Sale
+              </h2>
+              <p className="text-blue-100">Review your sale details before processing payment</p>
+            </div>
+
+            {/* Summary Content - Scrollable */}
+            <div className="p-8 overflow-y-auto flex-1">
+              <div className="space-y-6">
+                {/* Customer Information */}
+                {selectedCustomer && (
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <User className="w-5 h-5 text-blue-600" />
+                      Customer Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Customer Name</p>
+                        <p className="font-semibold text-gray-900">{selectedCustomer.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Contact</p>
+                        <p className="font-semibold text-gray-900">{selectedCustomer.phone || selectedCustomer.email || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Items Summary */}
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Package className="w-5 h-5 text-purple-600" />
+                    Sale Items
+                  </h3>
+                  
+                  <div className="space-y-3 mb-4">
+                    {cartItems.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{item.productName}</p>
+                          <p className="text-sm text-gray-500">{item.variantName} • SKU: {item.sku}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold text-gray-900">Qty: {item.quantity}</p>
+                          <p className="text-sm text-gray-600">{format.money(item.unitPrice)} each</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+                    <div className="text-center">
+                      <p className="text-sm text-gray-500 mb-1">Total Items</p>
+                      <p className="text-2xl font-bold text-gray-900">{cartItems.length}</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-gray-500 mb-1">Total Quantity</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {cartItems.reduce((sum, item) => sum + item.quantity, 0)}
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm text-gray-500 mb-1">Subtotal</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {format.money(totalAmount)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="bg-blue-50 rounded-lg p-6 border-2 border-blue-200">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-blue-600" />
+                    Payment Summary
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-700">Subtotal</span>
+                      <span className="font-semibold text-gray-900">{format.money(totalAmount)}</span>
+                    </div>
+                    {discountAmount > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Discount</span>
+                        <span className="font-semibold text-red-600">-{format.money(discountAmount)}</span>
+                      </div>
+                    )}
+                    {tradeInDiscount > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Trade-In Credit</span>
+                        <span className="font-semibold text-green-600">-{format.money(tradeInDiscount)}</span>
+                      </div>
+                    )}
+                    {taxAmount > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Tax</span>
+                        <span className="font-semibold text-gray-900">{format.money(taxAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-3 border-t border-blue-200">
+                      <span className="text-lg font-semibold text-gray-900">Total Amount</span>
+                      <span className="text-2xl font-bold text-blue-600">
+                        {format.money(tradeInDiscount > 0 ? finalAmount - tradeInDiscount : finalAmount)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Information */}
+                {(selectedCustomer || cartItems.some(item => item.notes)) && (
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Information</h3>
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm text-gray-500">Sale Date</p>
+                        <p className="font-semibold text-gray-900">{new Date().toLocaleDateString('en-US', { 
+                          weekday: 'long', 
+                          year: 'numeric', 
+                          month: 'long', 
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}</p>
+                      </div>
+                      {currentUser && (
+                        <div>
+                          <p className="text-sm text-gray-500">Cashier</p>
+                          <p className="text-gray-900">{currentUser.fullName || currentUser.email}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="bg-gray-50 px-8 py-6 flex gap-4 border-t border-gray-200">
+              <button
+                onClick={() => setShowPOSSummaryModal(false)}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSaleSummary}
+                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-2"
+              >
+                <CheckCircle className="w-5 h-5" />
+                Proceed to Payment
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* New Payments Popup Modal */}
@@ -4004,6 +4360,41 @@ const POSPageOptimized: React.FC = () => {
           items: currentReceipt?.items || [],
         }}
       />
+
+      {/* Variant Selection Modal for IMEI/Cart Updates */}
+      {showVariantSelectionModal && selectedProductForVariants && (
+        <VariantSelectionModal
+          isOpen={showVariantSelectionModal}
+          onClose={() => {
+            setShowVariantSelectionModal(false);
+            setSelectedProductForVariants(null);
+            setCartItemForIMEIUpdate(null);
+          }}
+          product={selectedProductForVariants}
+          onSelectVariant={(product, variant, quantity) => {
+            // Handle IMEI variant selection for cart item update
+            if (cartItemForIMEIUpdate) {
+              // Update the cart item with selected IMEI variants
+              setCartItems(prev => prev.map(item =>
+                item.id === cartItemForIMEIUpdate.id
+                  ? {
+                      ...item,
+                      selectedSerialNumbers: variant && variant.attributes?.imei ? [variant] : [],
+                      selectedIMEIVariants: variant && variant.attributes?.imei ? [variant] : []
+                    }
+                  : item
+              ));
+
+              toast.success('IMEI/Serial number selected successfully');
+              console.log('✅ Updated cart item with IMEI variant:', variant);
+            }
+
+            setShowVariantSelectionModal(false);
+            setSelectedProductForVariants(null);
+            setCartItemForIMEIUpdate(null);
+          }}
+        />
+      )}
 
     </div>
   );

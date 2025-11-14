@@ -33,6 +33,7 @@ interface POSCartSectionProps {
   onUpdateCartItemQuantity: (itemId: string, quantity: number) => void;
   onRemoveCartItem: (itemId: string) => void;
   onUpdateCartItemTags?: (itemId: string, tags: string[]) => void;
+  onIMEISelect?: (item: CartItem) => void; // Callback to handle IMEI selection for cart items
   onApplyDiscount: (discountType: 'percentage' | 'fixed', value: number) => void;
   onProcessPayment: () => void;
   onShowInstallmentModal?: () => void;
@@ -59,6 +60,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   onUpdateCartItemQuantity,
   onRemoveCartItem,
   onUpdateCartItemTags,
+  onIMEISelect,
   onApplyDiscount,
   onProcessPayment,
   onShowInstallmentModal,
@@ -92,8 +94,8 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
           </div>
         </div>
 
-        {/* Customer Search Section */}
-        <div className="mb-6">
+        {/* Customer Search Section - Fixed */}
+        <div className="flex-shrink-0 mb-6">
           {selectedCustomer ? (
             <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200 hover:border-blue-300 hover:shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-2">
               <div className="flex items-center justify-between">
@@ -183,7 +185,8 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        {/* Cart Items - Scrollable */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2" style={{ minHeight: 0 }}>
           {cartItems.length === 0 ? (
             <div className="text-center py-12">
               <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -211,6 +214,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                     onQuantityChange={(quantity) => onUpdateCartItemQuantity(item.id, quantity)}
                     onRemove={() => onRemoveCartItem(item.id)}
                     onTagsChange={onUpdateCartItemTags ? (tags) => onUpdateCartItemTags(item.id, tags) : undefined}
+                    onIMEISelect={onIMEISelect}
                     variant="compact"
                   />
                 ))}
@@ -221,33 +225,31 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
 
         {/* Cart Summary */}
         {cartItems.length > 0 && (
-          <div className="flex-shrink-0 border-t-2 border-gray-300 pt-4 space-y-3">
-            <div className="bg-gradient-to-br from-gray-50 to-blue-50 border-2 border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
+          <div className="flex-shrink-0 border-t border-gray-200 pt-4 space-y-3">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
               {/* Quantity */}
-              <div className="flex justify-between items-center pb-2 border-b border-gray-300">
-                <span className="text-base font-bold text-gray-900">Quantity:</span>
-                <span className="text-lg font-extrabold text-gray-900">{totalItems}</span>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-sm font-medium text-gray-600">Quantity:</span>
+                <span className="text-sm font-semibold text-gray-900">{totalItems}</span>
               </div>
               
               {/* Subtotal with item count */}
-              <div className="flex justify-between items-center pb-2 border-b border-gray-300">
-                <span className="text-base font-bold text-gray-900">Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'}):</span>
-                <span className="text-lg font-extrabold text-gray-900">TZS {totalAmount.toLocaleString()}</span>
+              <div className="flex justify-between items-center py-2 border-t border-gray-100">
+                <span className="text-sm font-medium text-gray-600">Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'}):</span>
+                <span className="text-sm font-semibold text-gray-900">TZS {totalAmount.toLocaleString()}</span>
               </div>
               
               {/* Discount Section */}
-              <div className="space-y-2">
+              <div className="py-1">
                 {discountAmount > 0 ? (
-                  <div className="flex items-center justify-between p-3 bg-green-100 border-2 border-green-300 rounded-lg shadow-sm">
+                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                     <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-green-200 rounded-lg">
-                        <Percent className="w-5 h-5 text-green-700" />
-                      </div>
+                      <Percent className="w-4 h-4 text-green-600" />
                       <div>
-                        <div className="text-sm font-extrabold text-green-900">
-                          Discount Applied {discountPercentage > 0 && `(${discountPercentage}%)`}
+                        <div className="text-sm font-medium text-green-900">
+                          Discount {discountPercentage > 0 && `(${discountPercentage}%)`}
                         </div>
-                        <div className="text-sm font-bold text-green-700">-TZS {discountAmount.toLocaleString()}</div>
+                        <div className="text-sm font-semibold text-green-700">-TZS {discountAmount.toLocaleString()}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
@@ -256,20 +258,20 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                           playClickSound();
                           onShowDiscountModal();
                         }}
-                        className="p-2 text-green-700 hover:text-green-800 hover:bg-green-200 rounded-lg transition-colors"
+                        className="p-1.5 text-green-700 hover:bg-green-100 rounded-lg transition-colors"
                         title="Edit Discount"
                       >
-                        <Edit3 className="w-5 h-5" />
+                        <Edit3 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => {
                           playDeleteSound();
                           onClearDiscount();
                         }}
-                        className="p-2 text-red-600 hover:text-red-700 hover:bg-red-100 rounded-lg transition-colors"
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Remove Discount"
                       >
-                        <XCircle className="w-5 h-5" />
+                        <XCircle className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -279,37 +281,35 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                       playClickSound();
                       onShowDiscountModal();
                     }}
-                    className="w-full flex items-center justify-center gap-2 p-4 border-3 border-dashed border-purple-300 rounded-xl text-purple-700 hover:border-purple-500 hover:text-purple-800 hover:bg-purple-100 transition-all duration-200 group shadow-sm bg-purple-50"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
                   >
-                    <div className="p-1.5 bg-purple-200 group-hover:bg-purple-300 rounded-lg transition-colors">
-                      <Percent className="w-5 h-5" />
-                    </div>
-                    <span className="text-base font-extrabold">Add Discount</span>
+                    <Percent className="w-4 h-4" />
+                    <span className="text-sm font-medium">Add Discount</span>
                   </button>
                 )}
               </div>
 
               {/* Tax/VAT Line - Only show if tax is enabled */}
               {isTaxEnabled && (
-                <div className="flex justify-between items-center pb-2 border-b border-gray-300">
-                  <span className="text-base font-bold text-gray-900">Tax (VAT {taxRate}%):</span>
-                  <span className="text-lg font-extrabold text-gray-900">TZS {taxAmount.toLocaleString()}</span>
+                <div className="flex justify-between items-center py-2 border-t border-gray-100">
+                  <span className="text-sm font-medium text-gray-600">Tax (VAT {taxRate}%):</span>
+                  <span className="text-sm font-semibold text-gray-900">TZS {taxAmount.toLocaleString()}</span>
                 </div>
               )}
               
               {/* Total */}
-              <div className="flex justify-between items-center bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-lg p-3 shadow-md">
-                <span className="text-xl font-extrabold text-gray-900">Total:</span>
-                <span className="text-2xl font-black text-green-600">TZS {finalAmount.toLocaleString()}</span>
+              <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+                <span className="text-base font-semibold text-gray-900">Total:</span>
+                <span className="text-lg font-bold text-green-600">TZS {finalAmount.toLocaleString()}</span>
               </div>
             </div>
 
             {/* Customer Selection Warning */}
             {!selectedCustomer && (
-              <div className="p-4 bg-gradient-to-r from-amber-100 to-orange-100 border-3 border-amber-400 rounded-xl shadow-md">
-                <div className="flex items-center gap-3 text-base text-amber-900">
-                  <div className="w-3 h-3 bg-amber-600 rounded-full animate-pulse"></div>
-                  <span className="font-extrabold">Please select a customer to proceed</span>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2 text-sm text-amber-900">
+                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                  <span className="font-medium">Please select a customer to proceed</span>
                 </div>
               </div>
             )}

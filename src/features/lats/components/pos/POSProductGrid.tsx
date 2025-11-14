@@ -1,7 +1,6 @@
 import React, { memo, useEffect, useState } from 'react';
 import VariantProductCard from './VariantProductCard';
 import { RealTimeStockService } from '../../lib/realTimeStock';
-import { useGeneralSettingsContext } from '../../../../context/GeneralSettingsContext';
 
 interface POSProductGridProps {
   products: any[];
@@ -20,42 +19,58 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
   onPageChange,
   isLoading = false
 }) => {
-  // Get products per row setting from context
-  const { productsPerRow } = useGeneralSettingsContext();
-  
   // Real-time stock data for all products (BATCH FETCH to avoid N+1 queries)
   const [realTimeStockData, setRealTimeStockData] = useState<Map<string, number>>(new Map());
 
-  // Batch fetch stock data for all products when products change
+  // 🚀 OPTIMIZED: Batch fetch stock data with debouncing and progress feedback
   useEffect(() => {
+    let isMounted = true;
     const fetchAllStockData = async () => {
       if (!products || products.length === 0) return;
-      
+
       try {
         const productIds = products.map(p => p.id);
-        
-        // Batch fetch stock for ALL products at once
+
+        // Skip if already fetching or no products to fetch
+        if (productIds.length === 0) return;
+
+        if (import.meta.env.MODE === 'development') {
+          console.log(`🔄 [POSProductGrid] Starting optimized stock fetch for ${productIds.length} products...`);
+        }
+
+        // Batch fetch stock for ALL products at once (optimized)
         const stockService = RealTimeStockService.getInstance();
         const stockLevels = await stockService.getStockLevels(productIds);
-        
-        // Convert to Map for easy lookup
+
+        if (!isMounted) return; // Component unmounted
+
+        // Convert to Map for O(1) lookup performance
         const stockMap = new Map<string, number>();
         Object.entries(stockLevels).forEach(([productId, levels]) => {
           const totalStock = levels.reduce((sum, level) => sum + level.quantity, 0);
           stockMap.set(productId, totalStock);
         });
-        
+
         setRealTimeStockData(stockMap);
-        
+
         if (import.meta.env.MODE === 'development') {
-          console.log(`✅ [POSProductGrid] Batch fetched stock for ${productIds.length} products in ONE query`);
+          console.log(`✅ [POSProductGrid] Optimized stock fetch completed in ONE query for ${productIds.length} products`);
         }
       } catch (error) {
-        console.error('❌ [POSProductGrid] Error fetching batch stock:', error);
+        if (isMounted) {
+          console.error('❌ [POSProductGrid] Error in optimized stock fetch:', error);
+          // Set empty map to prevent infinite loading states
+          setRealTimeStockData(new Map());
+        }
       }
     };
 
     fetchAllStockData();
+
+    // Cleanup function to prevent state updates on unmounted component
+    return () => {
+      isMounted = false;
+    };
   }, [products]);
 
   const handleAddToCart = (product: any, variant?: any, quantity: number = 1) => {
@@ -69,7 +84,7 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
           <div 
             style={{
               display: 'grid',
-              gridTemplateColumns: `repeat(${productsPerRow}, 1fr)`,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
               gap: 'clamp(1rem, 2vw, 1.5rem)',
               gridAutoRows: '1fr'
             }}
@@ -101,13 +116,13 @@ const POSProductGrid: React.FC<POSProductGridProps> = memo(({
 
   return (
     <div className="flex-1 overflow-y-auto">
-      {/* Products Grid - Controlled by products per row setting */}
+      {/* Products Grid - Responsive auto-fill layout */}
       <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
         <div 
           className="pos-product-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${productsPerRow}, 1fr)`,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
             gap: 'clamp(1rem, 2vw, 1.5rem)',
             gridAutoRows: '1fr'
           }}

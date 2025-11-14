@@ -29,3 +29,8 @@ export { SalesChart } from './SalesChart';
 export { PaymentMethodsChart } from './PaymentMethodsChart';
 export { SalesByCategoryChart } from './SalesByCategoryChart';
 export { ProfitMarginChart } from './ProfitMarginChart';
+
+// Enhanced AI-powered widgets
+export { AIInsightsWidget } from './AIInsightsWidget';
+export { PredictiveAnalyticsWidget } from './PredictiveAnalyticsWidget';
+export { AlertSystemWidget } from './AlertSystemWidget';

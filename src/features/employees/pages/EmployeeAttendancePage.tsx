@@ -11,6 +11,7 @@ import { toast } from 'react-hot-toast';
 import { mainOffice } from '../config/officeConfig';
 import { employeeService } from '../../../services/employeeService';
 import { useAttendanceSettings } from '../../../hooks/useAttendanceSettings';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface AttendanceRecord {
   id: string;

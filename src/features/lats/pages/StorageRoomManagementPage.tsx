@@ -22,6 +22,7 @@ import { storeShelfApi, StoreShelf, CreateStoreShelfData } from '../../../featur
 import StorageRoomModal from '../components/inventory-management/StorageRoomModal';
 import ShelfModal from '../components/inventory-management/ShelfModal';
 import { BackButton } from '../../shared/components/ui/BackButton';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface StoreLocation {
   id: string;
@@ -31,6 +32,7 @@ interface StoreLocation {
 
 const StorageRoomManagementPage: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [storageRooms, setStorageRooms] = useState<StorageRoom[]>([]);
   const [storeLocations, setStoreLocations] = useState<StoreLocation[]>([]);
   const [filteredRooms, setFilteredRooms] = useState<StorageRoom[]>([]);
@@ -47,6 +49,7 @@ const StorageRoomManagementPage: React.FC = () => {
   const [showShelfDetails, setShowShelfDetails] = useState(false);
   const [shelfSearchQuery, setShelfSearchQuery] = useState('');
   const [preSelectedRow, setPreSelectedRow] = useState<string | undefined>(undefined);
+  const [selectedLetter, setSelectedLetter] = useState<string>('');
   const [stats, setStats] = useState({
     total: 0,
     active: 0,
@@ -63,20 +66,45 @@ const StorageRoomManagementPage: React.FC = () => {
     filterRooms();
   }, [storageRooms, searchQuery, selectedLocation]);
 
+  // 🚀 OPTIMIZED: Batch load all data in parallel with progress tracking
   const loadData = async () => {
+    const jobId = startLoading('Loading storage rooms...');
     try {
       setLoading(true);
+
+      if (import.meta.env.MODE === 'development') {
+        console.log('🔄 [StorageRoomManagement] Starting optimized batch data load...');
+      }
+
+      // Batch load all data in parallel (3 concurrent requests)
       const [roomsData, locationsData, statsData] = await Promise.all([
-        storageRoomApi.getAll(),
-        storeLocationApi.getAll(),
-        storageRoomApi.getStats()
+        storageRoomApi.getAll().catch(err => {
+          console.error('❌ Failed to load rooms:', err);
+          return [];
+        }),
+        storeLocationApi.getAll().catch(err => {
+          console.error('❌ Failed to load locations:', err);
+          return [];
+        }),
+        storageRoomApi.getStats().catch(err => {
+          console.error('❌ Failed to load stats:', err);
+          return { total: 0, active: 0, secure: 0, totalShelves: 0, activeShelves: 0 };
+        })
       ]);
-      
-      setStorageRooms(roomsData);
-      setStoreLocations(locationsData);
-      setStats(statsData);
+
+      // Update state in batch to prevent multiple re-renders
+      setStorageRooms(roomsData || []);
+      setStoreLocations(locationsData || []);
+      setStats(statsData || { total: 0, active: 0, secure: 0, totalShelves: 0, activeShelves: 0 });
+
+      completeLoading(jobId);
+
+      if (import.meta.env.MODE === 'development') {
+        console.log(`✅ [StorageRoomManagement] Optimized batch load completed: ${roomsData?.length || 0} rooms, ${locationsData?.length || 0} locations`);
+      }
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('❌ Error in optimized batch load:', error);
+      failLoading(jobId, 'Failed to load storage rooms');
       toast.error('Failed to load storage room data');
     } finally {
       setLoading(false);
@@ -273,6 +301,22 @@ const StorageRoomManagementPage: React.FC = () => {
       shelf.code.toLowerCase().includes(shelfSearchQuery.toLowerCase()) ||
       (shelf.name && shelf.name.toLowerCase().includes(shelfSearchQuery.toLowerCase()))
     );
+
+  // Build available letter filters from current shelves
+  const getAvailableLetters = () => {
+    const letters = new Set<string>();
+    filteredShelves.forEach((shelf) => {
+      const upper = shelf.code?.toUpperCase() || '';
+      for (let i = 0; i < upper.length; i++) {
+        const ch = upper[i];
+        if (ch >= 'A' && ch <= 'Z') {
+          letters.add(ch);
+          break;
+        }
+      }
+    });
+    return Array.from(letters).sort();
+  };
 
   // Group shelves by row - extract row letter from full code (e.g., "01A1" → "A")
   const groupedShelves = filteredShelves.reduce((groups, shelf) => {
@@ -603,107 +647,118 @@ const StorageRoomManagementPage: React.FC = () => {
                               </div>
               ) : (
                 <div className="space-y-4">
-                  {Object.entries(groupedShelves)
-                    .sort(([rowA], [rowB]) => {
-                      // Sort: "Other" goes last, otherwise alphabetical
-                      if (rowA === 'Other') return 1;
-                      if (rowB === 'Other') return -1;
-                      return rowA.localeCompare(rowB);
-                    })
-                    .map(([row, shelves]) => (
-                    <div key={row}>
-                      {/* Simple Row Header */}
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white font-bold">
-                          {row}
-                        </div>
-                        <h4 className="font-semibold text-gray-900">Row {row}</h4>
-                        <span className="text-sm text-gray-500">• {shelves.length} shelf{shelves.length !== 1 ? 'es' : ''}</span>
-                      </div>
-                      
-                      {/* Simple Shelf Cards */}
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                        {shelves
-                          .sort((a, b) => {
-                            // Extract column numbers from codes for sorting (e.g., "01A2" → 2)
-                            const aMatch = a.code.match(/([A-Z])(\d+)$/);
-                            const bMatch = b.code.match(/([A-Z])(\d+)$/);
-                            const aCol = aMatch ? parseInt(aMatch[2]) : a.column_number || 0;
-                            const bCol = bMatch ? parseInt(bMatch[2]) : b.column_number || 0;
-                            return aCol - bCol;
-                          })
-                          .map((shelf) => {
-                            const fullCode = (() => {
-                              const roomCode = selectedRoomForShelves?.code || '';
-                              if (roomCode && !shelf.code.startsWith(roomCode)) {
-                                return `${roomCode}${shelf.code}`;
-                              }
-                              return shelf.code;
-                            })();
-                            
-                            return (
-                              <div
-                                key={shelf.id}
-                                className="bg-white border-2 border-gray-200 rounded-lg p-3 hover:border-purple-400 hover:shadow-md transition-all group"
-                              >
-                                <div className="space-y-2">
-                                  {/* Shelf Code */}
-                                  <div className="flex items-center justify-between">
-                                    <div className="font-mono font-bold text-sm text-gray-900">
-                                      {fullCode}
-                                    </div>
-                                    <div className={`w-2 h-2 rounded-full ${
-                                      shelf.is_active ? 'bg-green-500' : 'bg-red-500'
-                                    }`}></div>
-                                  </div>
-                                  
-                                  {/* Type Badge - only if not standard */}
-                                  {shelf.shelf_type && shelf.shelf_type !== 'standard' && (
-                                    <div className={`inline-block px-2 py-0.5 text-[10px] rounded-full font-medium ${
-                                      shelf.shelf_type === 'refrigerated' ? 'bg-blue-100 text-blue-700' :
-                                      shelf.shelf_type === 'display' ? 'bg-purple-100 text-purple-700' :
-                                      'bg-gray-100 text-gray-700'
-                                    }`}>
-                                      {shelf.shelf_type}
-                                    </div>
-                                  )}
-                                  
-                                  {/* Actions */}
-                                  <div className="flex gap-1 pt-1">
-                                    <button
-                                      onClick={() => handleEditShelf(shelf)}
-                                      className="flex-1 px-2 py-1 rounded text-[10px] font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                                      title="Edit"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteShelf(shelf)}
-                                      className="flex-1 px-2 py-1 rounded text-[10px] font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
-                                      title="Delete"
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                </div>
+                  {/* Letter filter for a unified picker-like UI */}
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => setSelectedLetter('')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        selectedLetter === ''
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {getAvailableLetters().map((letter) => (
+                      <button
+                        key={letter}
+                        onClick={() => setSelectedLetter(selectedLetter === letter ? '' : letter)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          selectedLetter === letter
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        {letter}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Shelves grid - unified visual style */}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+                    {filteredShelves
+                      .filter((shelf) =>
+                        selectedLetter
+                          ? (shelf.code?.toUpperCase() || '').includes(selectedLetter)
+                          : true
+                      )
+                      .sort((a, b) => (a.code || '').localeCompare(b.code || ''))
+                      .map((shelf) => {
+                        const roomCode = selectedRoomForShelves?.code || '';
+                        const fullCode = roomCode && !shelf.code.startsWith(roomCode)
+                          ? `${roomCode}${shelf.code}`
+                          : shelf.code;
+                        const letter = (shelf.code.toUpperCase().match(/[A-Z]/)?.[0]) || '';
+                        const getLetterColor = (ltr: string) => {
+                          const colors: Record<string, string> = {
+                            A: 'bg-blue-500',
+                            B: 'bg-green-500',
+                            C: 'bg-purple-500',
+                            D: 'bg-orange-500',
+                            E: 'bg-red-500',
+                            F: 'bg-teal-500',
+                            G: 'bg-pink-500',
+                            H: 'bg-indigo-500',
+                            I: 'bg-emerald-500',
+                            J: 'bg-cyan-500',
+                            K: 'bg-lime-500',
+                            L: 'bg-amber-500',
+                            M: 'bg-rose-500',
+                            N: 'bg-violet-500',
+                            O: 'bg-sky-500',
+                            P: 'bg-fuchsia-500',
+                            Q: 'bg-slate-500',
+                            R: 'bg-zinc-500',
+                            S: 'bg-stone-500',
+                            T: 'bg-neutral-500',
+                            U: 'bg-yellow-500',
+                            V: 'bg-orange-600',
+                            W: 'bg-red-600',
+                            X: 'bg-pink-600',
+                            Y: 'bg-purple-600',
+                            Z: 'bg-indigo-600'
+                          };
+                          return colors[ltr] || 'bg-gray-500';
+                        };
+                        const bgColor = getLetterColor(letter);
+
+                        return (
+                          <div
+                            key={shelf.id}
+                            className="bg-white border-2 border-gray-200 rounded-lg p-3 hover:border-purple-400 hover:shadow-md transition-all"
+                          >
+                            <button
+                              onClick={() => handleEditShelf(shelf)}
+                              className={`w-full py-3 px-2 rounded-lg border-2 font-bold text-center text-white text-sm ${bgColor} border-transparent hover:border-white transition-all`}
+                              title="Edit shelf"
+                            >
+                              {fullCode}
+                            </button>
+                            <div className="flex items-center justify-between mt-2">
+                              <span className={`inline-block w-2 h-2 rounded-full ${shelf.is_active ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleEditShelf(shelf)}
+                                  className="px-2 py-1 rounded text-[10px] font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                                  title="Edit"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteShelf(shelf)}
+                                  className="px-2 py-1 rounded text-[10px] font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
+                                  title="Delete"
+                                >
+                                  Delete
+                                </button>
                               </div>
-                            );
-                          })}
-                        
-                        {/* Quick Add Shelf Button */}
-                        <button
-                          onClick={() => handleQuickAddShelf(row)}
-                          className="bg-purple-50 border-2 border-dashed border-purple-300 rounded-lg p-3 hover:border-purple-500 hover:bg-purple-100 transition-all flex flex-col items-center justify-center gap-1 min-h-[80px]"
-                          title={`Quick add next shelf to Row ${row}`}
-                        >
-                          <Plus className="w-8 h-8 text-purple-600" />
-                          <span className="text-xs font-bold text-purple-700">Quick Add</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
                 </div>
-                )}
+              )}
             </div>
           </div>
         </div>

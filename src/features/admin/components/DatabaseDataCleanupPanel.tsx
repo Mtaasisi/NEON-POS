@@ -16,7 +16,26 @@ import {
   Lock,
   ChevronDown,
   ChevronRight,
-  Minus
+  Minus,
+  ShoppingCart,
+  Users,
+  Package,
+  FileText,
+  Settings,
+  Wrench,
+  TrendingUp,
+  Mail,
+  DollarSign,
+  Truck,
+  GitBranch,
+  Box,
+  BarChart3,
+  Tag,
+  Gift,
+  Archive,
+  Store,
+  Layers,
+  HelpCircle
 } from 'lucide-react';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
@@ -266,6 +285,31 @@ export const DatabaseDataCleanupPanel: React.FC = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [selectAll, setSelectAll] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [showTableSelector, setShowTableSelector] = useState(false);
+
+  // Get category icon and color
+  const getCategoryIcon = (categoryName: string): { icon: any; color: string } => {
+    const icons: { [key: string]: { icon: any; color: string } } = {
+      'Sales & Transactions': { icon: ShoppingCart, color: 'text-orange-600' },
+      'Customers': { icon: Users, color: 'text-purple-600' },
+      'Inventory & Products': { icon: Package, color: 'text-green-600' },
+      'Purchase Orders & Suppliers': { icon: FileText, color: 'text-blue-600' },
+      'Devices & Repairs': { icon: Wrench, color: 'text-red-600' },
+      'Trade-Ins': { icon: TrendingUp, color: 'text-teal-600' },
+      'Employees & Attendance': { icon: Users, color: 'text-indigo-600' },
+      'Communications': { icon: Mail, color: 'text-pink-600' },
+      'Finance & Expenses': { icon: DollarSign, color: 'text-emerald-600' },
+      'Shipping & Logistics': { icon: Truck, color: 'text-cyan-600' },
+      'Branches & Transfers': { icon: GitBranch, color: 'text-violet-600' },
+      'Spare Parts': { icon: Box, color: 'text-amber-600' },
+      'System & Audit Logs': { icon: Settings, color: 'text-gray-600' },
+      'Sales & Marketing': { icon: BarChart3, color: 'text-rose-600' },
+      'Returns & Gift Cards': { icon: Gift, color: 'text-yellow-600' },
+      'Backup Tables': { icon: Archive, color: 'text-slate-600' },
+      'Other': { icon: Layers, color: 'text-gray-500' }
+    };
+    return icons[categoryName] || { icon: Database, color: 'text-gray-600' };
+  };
 
   // Scan database to get all tables and their row counts
   const scanDatabase = async () => {
@@ -392,6 +436,17 @@ export const DatabaseDataCleanupPanel: React.FC = () => {
       }
       return newSet;
     });
+  };
+
+  // Expand all categories
+  const expandAllCategories = () => {
+    const allCategoryNames = groupedTables.map(cat => cat.name);
+    setExpandedCategories(new Set(allCategoryNames));
+  };
+
+  // Collapse all categories
+  const collapseAllCategories = () => {
+    setExpandedCategories(new Set());
   };
 
   // Delete selected tables' data
@@ -549,9 +604,27 @@ export const DatabaseDataCleanupPanel: React.FC = () => {
             <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
               <Trash2 className="w-5 h-5 text-red-600" />
             </div>
+            <div className="flex items-center gap-2">
             <div>
               <h3 className="text-xl font-semibold text-gray-800">Database Data Cleanup</h3>
               <p className="text-sm text-gray-600">Select tables to remove data from</p>
+              </div>
+              <div className="group relative">
+                <HelpCircle className="h-5 w-5 text-gray-400 hover:text-gray-600 cursor-help" />
+                <div className="invisible group-hover:visible absolute left-0 top-8 z-50 w-80 p-4 bg-gray-900 text-white text-xs rounded-lg shadow-xl">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="font-semibold text-red-400 mb-1">⚠️ Warning</p>
+                      <p>This permanently deletes data from selected tables. Cannot be undone. Make backups first!</p>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-blue-400 mb-1">🔗 Foreign Keys</p>
+                      <p>Delete child tables first if you get constraint errors. Example: delete purchase_order_payments before finance_accounts.</p>
+                    </div>
+                  </div>
+                  <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
+              </div>
             </div>
           </div>
           <GlassButton
@@ -563,34 +636,6 @@ export const DatabaseDataCleanupPanel: React.FC = () => {
             <RefreshCw className={`w-4 h-4 ${scanning ? 'animate-spin' : ''}`} />
             {scanning ? 'Scanning...' : 'Refresh Scan'}
           </GlassButton>
-        </div>
-
-        {/* Warning Banner */}
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="font-semibold text-red-900 mb-1">⚠️ Warning: Irreversible Action</h4>
-            <p className="text-sm text-red-700">
-              This action will permanently delete data from the selected tables. This cannot be undone.
-              Please ensure you have a backup before proceeding.
-            </p>
-          </div>
-        </div>
-
-        {/* Foreign Key Info Banner */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
-          <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-          <div>
-            <h4 className="font-semibold text-blue-900 mb-1">ℹ️ Foreign Key Constraints</h4>
-            <p className="text-sm text-blue-700">
-              Some tables have relationships with other tables. If deletion fails due to foreign key constraints, 
-              you need to delete dependent (child) tables first, or use SQL with CASCADE option.
-            </p>
-            <p className="text-sm text-blue-700 mt-2">
-              <strong>Example:</strong> Delete <code className="bg-blue-100 px-1 rounded">purchase_order_payments</code> before 
-              <code className="bg-blue-100 px-1 rounded ml-1">finance_accounts</code>
-            </p>
-          </div>
         </div>
 
         {/* Statistics */}
@@ -613,24 +658,85 @@ export const DatabaseDataCleanupPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* Search and Filter */}
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="flex-1 relative">
-            <Search className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search tables..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+        {/* Table Selector - Collapsible */}
+        <div className="border border-indigo-200 rounded-lg bg-white mb-6">
+          <button
+            onClick={() => setShowTableSelector(!showTableSelector)}
+            disabled={loading || scanning}
+            className="w-full flex items-center justify-between p-3 text-left hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <div className="flex items-center gap-2 flex-wrap">
+              <Database className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+              <span className="text-sm font-medium text-gray-700">
+                Select Tables to Clean
+              </span>
+              {!showTableSelector && tables.length > 0 && (
+                <>
+                  <span className="text-xs text-gray-500">
+                    ({groupedTables.length} groups)
+                  </span>
+                  {selectedTables.length > 0 && selectedTables.length < tables.length && (
+                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+                      {selectedTables.length}/{tables.length} tables
+                    </span>
+                  )}
+                  {selectedTables.length === tables.length && tables.length > 0 && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                      All tables selected
+                    </span>
+                  )}
+                  {selectedTables.length === 0 && (
+                    <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                      No tables selected
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <ChevronDown 
+                className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${
+                  showTableSelector ? 'transform rotate-180' : ''
+                }`}
             />
           </div>
+          </button>
+          
+          {showTableSelector && (
+            <div className="border-t border-indigo-200 animate-in slide-in-from-top-2 duration-200">
+              <div className="p-3">
+                {loading ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>
+                    <span className="ml-3 text-sm text-gray-600">Loading tables...</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Search and Controls */}
+                    <div className="space-y-3 mb-3 pb-3 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-gray-700">
+                          {selectedTables.length} of {tables.length} tables selected
+                        </span>
           <div className="flex gap-2">
+                          <button
+                            onClick={expandAllCategories}
+                            className="text-xs text-indigo-600 hover:text-indigo-700 font-medium px-2 py-1 hover:bg-indigo-50 rounded transition-colors"
+                          >
+                            Expand All
+                          </button>
+                          <button
+                            onClick={collapseAllCategories}
+                            className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 hover:bg-gray-100 rounded transition-colors"
+                          >
+                            Collapse All
+                          </button>
+                          <span className="border-l border-gray-300 mx-1"></span>
             <button
               onClick={handleSelectAll}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                            className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
                 selectAll
-                  ? 'bg-indigo-600 text-white'
+                                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -639,104 +745,135 @@ export const DatabaseDataCleanupPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* Tables by Category */}
-        {loading ? (
-          <div className="text-center py-12">
-            <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
-            <p className="text-gray-600">Loading database tables...</p>
+                      {/* Compact Search Bar */}
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="Search tables..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 focus:bg-white transition-colors"
+                        />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                            title="Clear search"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
           </div>
-        ) : groupedTables.length === 0 ? (
-          <div className="text-center py-12">
-            <Database className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600">No tables found</p>
+                    </div>
+
+                    {/* Tables by Category */}
+                    {groupedTables.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <Database className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No tables found</p>
           </div>
         ) : (
-          <div className="space-y-4">
+                      <div className="max-h-96 overflow-y-auto pr-2 custom-scrollbar space-y-3">
             {groupedTables.map((category) => {
               const isExpanded = expandedCategories.has(category.name);
               const categoryTables = category.tables;
               const allChecked = categoryTables.every(t => t.checked);
               const someChecked = categoryTables.some(t => t.checked) && !allChecked;
+              const categoryIcon = getCategoryIcon(category.name);
+              const IconComponent = categoryIcon.icon;
+              const selectedCount = categoryTables.filter(t => t.checked).length;
 
               return (
                 <div key={category.name} className="border border-gray-200 rounded-lg overflow-hidden">
                   {/* Category Header */}
-                  <div className="bg-gray-50 p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
+                  <div className="bg-gradient-to-r from-gray-50 to-white">
+                    <div className="p-3 flex items-center justify-between">
                       <button
                         onClick={() => toggleCategoryExpansion(category.name)}
-                        className="p-1 hover:bg-gray-200 rounded"
+                        className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
                       >
-                        {isExpanded ? (
-                          <ChevronDown className="w-5 h-5 text-gray-600" />
-                        ) : (
-                          <ChevronRight className="w-5 h-5 text-gray-600" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => toggleCategory(category.name)}
-                        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                          allChecked
-                            ? 'bg-indigo-600 border-indigo-600'
-                            : someChecked
-                            ? 'bg-indigo-200 border-indigo-600'
-                            : 'border-gray-300 hover:border-indigo-600'
+                        <ChevronDown 
+                          className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${
+                            isExpanded ? 'transform rotate-180' : ''
                         }`}
-                      >
-                        {allChecked && <Check className="w-4 h-4 text-white" />}
-                        {someChecked && <Minus className="w-4 h-4 text-indigo-600" />}
-                      </button>
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-800">{category.name}</h4>
-                        <p className="text-sm text-gray-600">{category.description}</p>
+                        />
+                        <IconComponent className={`h-4 w-4 ${categoryIcon.color}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="font-semibold text-sm text-gray-800">{category.name}</h4>
+                            <span className="text-xs text-gray-500">
+                              ({categoryTables.length} table{categoryTables.length !== 1 ? 's' : ''})
+                            </span>
+                            {selectedCount > 0 && (
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                allChecked 
+                                  ? 'bg-indigo-100 text-indigo-700' 
+                                  : 'bg-orange-100 text-orange-700'
+                              }`}>
+                                {selectedCount}/{categoryTables.length}
+                              </span>
+                            )}
                       </div>
+                          <p className="text-xs text-gray-600 mt-0.5">{category.description}</p>
                     </div>
-                    <div className="flex items-center gap-4">
+                      </button>
+                      <div className="flex items-center gap-3 ml-2 flex-shrink-0">
                       <div className="text-right">
-                        <div className="text-sm font-medium text-gray-900">
-                          {categoryTables.length} table{categoryTables.length !== 1 ? 's' : ''}
-                        </div>
-                        <div className="text-xs text-gray-600">
+                          <div className="text-xs font-medium text-gray-600">
                           {category.totalRows.toLocaleString()} rows
                         </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={allChecked}
+                          ref={(el) => {
+                            if (el) el.indeterminate = someChecked;
+                          }}
+                          onChange={() => toggleCategory(category.name)}
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
+                          title={allChecked ? 'Deselect all in category' : 'Select all in category'}
+                        />
                       </div>
                     </div>
                   </div>
 
                   {/* Category Tables */}
                   {isExpanded && (
-                    <div className="divide-y divide-gray-200">
+                    <div className="border-t border-gray-200 bg-white animate-in slide-in-from-top-2 duration-200">
+                      <div className="p-2 space-y-1">
                       {categoryTables.map((table) => (
-                        <div
+                          <label
                           key={table.table_name}
-                          className={`p-4 flex items-center justify-between hover:bg-gray-50 transition-colors ${
-                            table.checked ? 'bg-indigo-50' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 flex-1">
-                            <button
-                              onClick={() => toggleTable(table.table_name)}
-                              className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                            className={`flex items-center justify-between py-2 px-3 rounded-md cursor-pointer transition-colors group ${
                                 table.checked
-                                  ? 'bg-indigo-600 border-indigo-600'
-                                  : 'border-gray-300 hover:border-indigo-600'
-                              }`}
-                            >
-                              {table.checked && <Check className="w-4 h-4 text-white" />}
-                            </button>
-                            <div className="flex-1">
-                              <div className="font-mono text-sm text-gray-900">{table.table_name}</div>
+                                ? 'bg-indigo-50 hover:bg-indigo-100' 
+                                : 'hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <input
+                                type="checkbox"
+                                checked={table.checked}
+                                onChange={() => toggleTable(table.table_name)}
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer flex-shrink-0"
+                              />
+                              <span className="font-mono text-sm text-gray-700 group-hover:text-gray-900 truncate">
+                                {table.table_name}
+                              </span>
                             </div>
+                            <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                              <span className={`text-xs font-medium px-2 py-1 rounded ${
+                                table.row_count > 0 
+                                  ? 'bg-gray-100 text-gray-700' 
+                                  : 'bg-green-100 text-green-700'
+                              }`}>
+                                {table.row_count.toLocaleString()} row{table.row_count !== 1 ? 's' : ''}
+                              </span>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-right">
-                              <div className="text-sm font-medium text-gray-900">
-                                {table.row_count.toLocaleString()} rows
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -744,10 +881,16 @@ export const DatabaseDataCleanupPanel: React.FC = () => {
             })}
           </div>
         )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Delete Button */}
         {selectedTables.length > 0 && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="pt-6 border-t border-gray-200">
             <GlassButton
               onClick={() => setShowConfirmDialog(true)}
               disabled={deleting}

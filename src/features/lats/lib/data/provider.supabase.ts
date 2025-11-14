@@ -6,19 +6,199 @@ import { getActiveSuppliers, getAllSuppliers } from '@/lib/supplierApi';
 import { PurchaseOrderService } from '@/features/lats/services/purchaseOrderService';
 import { latsEventBus } from './eventBus';
 
-// 🔒 BRANCH ISOLATION SETTINGS
-// Toggle these to enable/disable branch isolation for different modules
-const ISOLATION_CONFIG = {
-  ENABLE_PURCHASE_ORDER_ISOLATION: true,  // Purchase orders isolation
-  ENABLE_PRODUCT_ISOLATION: true,         // Products & inventory isolation
-  ENABLE_SALES_ISOLATION: true,           // Sales & transactions isolation
-  ENABLE_DEVICE_ISOLATION: true,          // Devices & repairs isolation
-  ENABLE_PAYMENT_ISOLATION: true,         // Payment records isolation
-  ENABLE_TECHNICIAN_ISOLATION: true       // Technicians/Users isolation (NEW)
-};
+// 🔒 BRANCH ISOLATION - DATABASE-DRIVEN
+// Isolation settings are now read from the database per branch
+// Configure these in Admin Settings > Store Management
 
 // Helper to get current branch ID
 const getCurrentBranchId = () => localStorage.getItem('current_branch_id');
+
+// Cache for branch settings to avoid repeated database queries
+let branchSettingsCache: {
+  branchId: string;
+  settings: any;
+  timestamp: number;
+} | null = null;
+
+const CACHE_DURATION = 60000; // 1 minute cache
+
+/**
+ * Get branch isolation settings from database
+ * Returns the branch's isolation mode and sharing preferences
+ */
+const getBranchSettings = async (branchId: string | null) => {
+  if (!branchId) {
+    return {
+      data_isolation_mode: 'shared',
+      share_products: true,
+      share_customers: true,
+      share_inventory: true,
+      share_suppliers: true,
+      share_categories: true,
+      share_employees: true,
+      share_sales: true,
+      share_purchase_orders: true,
+      share_devices: true,
+      share_payments: true,
+      share_appointments: true,
+      share_reminders: true,
+      share_expenses: true,
+      share_trade_ins: true,
+      share_special_orders: true,
+      share_attendance: true,
+      share_loyalty_points: true
+    };
+  }
+
+  // Check cache first
+  const now = Date.now();
+  if (branchSettingsCache && 
+      branchSettingsCache.branchId === branchId && 
+      (now - branchSettingsCache.timestamp) < CACHE_DURATION) {
+    return branchSettingsCache.settings;
+  }
+
+  // Fetch from database
+  try {
+    const { data, error } = await supabase
+      .from('store_locations')
+      .select(`
+        data_isolation_mode, 
+        share_products, 
+        share_customers, 
+        share_inventory, 
+        share_suppliers, 
+        share_categories, 
+        share_employees,
+        share_sales,
+        share_purchase_orders,
+        share_devices,
+        share_payments,
+        share_appointments,
+        share_reminders,
+        share_expenses,
+        share_trade_ins,
+        share_special_orders,
+        share_attendance,
+        share_loyalty_points
+      `)
+      .eq('id', branchId)
+      .single();
+
+    if (error) {
+      console.error('❌ Error fetching branch settings:', error);
+      // Fallback to safe defaults (all isolated)
+      return {
+        data_isolation_mode: 'isolated',
+        share_products: false,
+        share_customers: false,
+        share_inventory: false,
+        share_suppliers: false,
+        share_categories: false,
+        share_employees: false,
+        share_sales: false,
+        share_purchase_orders: false,
+        share_devices: false,
+        share_payments: false,
+        share_appointments: false,
+        share_reminders: false,
+        share_expenses: false,
+        share_trade_ins: false,
+        share_special_orders: false,
+        share_attendance: false,
+        share_loyalty_points: false
+      };
+    }
+
+    // Cache the result
+    branchSettingsCache = {
+      branchId,
+      settings: data,
+      timestamp: now
+    };
+
+    return data;
+  } catch (error) {
+    console.error('❌ Exception fetching branch settings:', error);
+    return {
+      data_isolation_mode: 'isolated',
+      share_products: false,
+      share_customers: false,
+      share_inventory: false,
+      share_suppliers: false,
+      share_categories: false,
+      share_employees: false,
+      share_sales: false,
+      share_purchase_orders: false,
+      share_devices: false,
+      share_payments: false,
+      share_appointments: false,
+      share_reminders: false,
+      share_expenses: false,
+      share_trade_ins: false,
+      share_special_orders: false,
+      share_attendance: false,
+      share_loyalty_points: false
+    };
+  }
+};
+
+/**
+ * Check if isolation should be applied for a specific entity type
+ * @param entityType - The type of entity to check
+ * @param branchSettings - The branch settings from database
+ * @returns true if isolation should be applied (filter by branch_id)
+ */
+const shouldApplyIsolation = (
+  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 
+               'purchase_orders' | 'sales' | 'devices' | 'payments' | 'appointments' | 'reminders' |
+               'expenses' | 'trade_ins' | 'special_orders' | 'attendance' | 'loyalty_points',
+  branchSettings: any
+): boolean => {
+  const mode = branchSettings.data_isolation_mode;
+
+  // Shared mode - no isolation
+  if (mode === 'shared') {
+    return false;
+  }
+
+  // Isolated mode - always isolate
+  if (mode === 'isolated') {
+    return true;
+  }
+
+  // Hybrid mode - check specific flags
+  if (mode === 'hybrid') {
+    const shareMapping: Record<string, boolean> = {
+      // Core data
+      'products': branchSettings.share_products ?? false,
+      'inventory': branchSettings.share_inventory ?? false,
+      'customers': branchSettings.share_customers ?? false,
+      'suppliers': branchSettings.share_suppliers ?? false,
+      'categories': branchSettings.share_categories ?? false,
+      'employees': branchSettings.share_employees ?? false,
+      
+      // Business operations
+      'purchase_orders': branchSettings.share_purchase_orders ?? false,
+      'sales': branchSettings.share_sales ?? false,
+      'devices': branchSettings.share_devices ?? false,
+      'payments': branchSettings.share_payments ?? false,
+      'appointments': branchSettings.share_appointments ?? false,
+      'reminders': branchSettings.share_reminders ?? false,
+      'expenses': branchSettings.share_expenses ?? false,
+      'trade_ins': branchSettings.share_trade_ins ?? false,
+      'special_orders': branchSettings.share_special_orders ?? false,
+      'attendance': branchSettings.share_attendance ?? false,
+      'loyalty_points': branchSettings.share_loyalty_points ?? false
+    };
+
+    // If shared flag is true, don't apply isolation
+    return !shareMapping[entityType];
+  }
+
+  // Default to isolated for safety
+  return true;
+};
 
 const supabaseProvider = {
   // Query data from a table
@@ -940,6 +1120,7 @@ const supabaseProvider = {
       
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       // Fetch purchase orders without nested select (Neon doesn't support this)
       let query = supabase
@@ -947,8 +1128,8 @@ const supabaseProvider = {
         .select('*')
         .order('created_at', { ascending: false});
       
-      // 🔒 COMPLETE ISOLATION: Only show purchase orders from current branch
-      if (ISOLATION_CONFIG.ENABLE_PURCHASE_ORDER_ISOLATION && currentBranchId) {
+      // 🔒 Apply isolation based on database settings
+      if (shouldApplyIsolation('purchase_orders', branchSettings) && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -966,10 +1147,45 @@ const supabaseProvider = {
       if (poIds.length > 0) {
         const { data: items, error: itemsError } = await supabase
           .from('lats_purchase_order_items')
-          .select('purchase_order_id, id, quantity_ordered')
+          .select('purchase_order_id, id, product_id, variant_id, quantity_ordered, unit_cost, quantity_received')
           .in('purchase_order_id', poIds);
         
         if (!itemsError && items) {
+          // Fetch product and variant data for all items
+          const productIds = [...new Set(items.map((item: any) => item.product_id).filter(Boolean))];
+          const variantIds = [...new Set(items.map((item: any) => item.variant_id).filter(Boolean))];
+          
+          const productsMap = new Map();
+          const variantsMap = new Map();
+          
+          // Fetch products
+          if (productIds.length > 0) {
+            const { data: products } = await supabase
+              .from('lats_products')
+              .select('id, name, sku')
+              .in('id', productIds);
+            
+            if (products) {
+              products.forEach((product: any) => {
+                productsMap.set(product.id, product);
+              });
+            }
+          }
+          
+          // Fetch variants
+          if (variantIds.length > 0) {
+            const { data: variants } = await supabase
+              .from('lats_product_variants')
+              .select('id, variant_name, sku')
+              .in('id', variantIds);
+            
+            if (variants) {
+              variants.forEach((variant: any) => {
+                variantsMap.set(variant.id, variant);
+              });
+            }
+          }
+          
           // Group items by purchase order and calculate data
           items.forEach((item: any) => {
             const poId = item.purchase_order_id;
@@ -978,10 +1194,40 @@ const supabaseProvider = {
             existing.totalQuantity += (item.quantity_ordered || 0);
             existing.items.push({
               id: item.id,
-              quantity: item.quantity_ordered || 0
+              productId: item.product_id,
+              variantId: item.variant_id,
+              quantity: item.quantity_ordered || 0,
+              costPrice: parseFloat(item.unit_cost) || 0,
+              totalPrice: (item.quantity_ordered || 0) * (parseFloat(item.unit_cost) || 0),
+              receivedQuantity: item.quantity_received || 0,
+              product: productsMap.get(item.product_id),
+              variant: variantsMap.get(item.variant_id)
             });
             itemsDataMap.set(poId, existing);
           });
+        }
+      }
+      
+      // Fetch payment counts and totals for all purchase orders (completed payments only)
+      const paymentsDataMap = new Map<string, { count: number; total: number }>();
+      if (poIds.length > 0) {
+        const { data: payments, error: paymentsError } = await supabase
+          .from('purchase_order_payments')
+          .select('purchase_order_id, amount, status')
+          .in('purchase_order_id', poIds);
+        
+        if (!paymentsError && payments) {
+          payments.forEach((p: any) => {
+            if (p.status && p.status !== 'completed') return;
+            const poId = p.purchase_order_id;
+            const amount = typeof p.amount === 'string' ? parseFloat(p.amount) || 0 : (p.amount || 0);
+            const existing = paymentsDataMap.get(poId) || { count: 0, total: 0 };
+            existing.count += 1;
+            existing.total += amount;
+            paymentsDataMap.set(poId, existing);
+          });
+        } else if (paymentsError) {
+          console.warn('⚠️ [getPurchaseOrders] Error fetching payments for counts:', paymentsError);
         }
       }
       
@@ -1007,12 +1253,16 @@ const supabaseProvider = {
       // Map snake_case to camelCase for each purchase order
       const mappedOrders = (purchaseOrders || []).map((po: any) => {
         const itemsData = itemsDataMap.get(po.id) || { count: 0, totalQuantity: 0, items: [] };
+        const paymentsData = paymentsDataMap.get(po.id) || { count: 0, total: 0 };
         
         // Parse numeric values properly
         const totalAmount = typeof po.total_amount === 'string' ? parseFloat(po.total_amount) || 0 : (po.total_amount || 0);
         const totalPaid = typeof po.total_paid === 'string' ? parseFloat(po.total_paid) || 0 : (po.total_paid || 0);
         const exchangeRate = typeof po.exchange_rate === 'string' ? parseFloat(po.exchange_rate) || undefined : po.exchange_rate;
         const totalAmountBaseCurrency = typeof po.total_amount_base_currency === 'string' ? parseFloat(po.total_amount_base_currency) || undefined : po.total_amount_base_currency;
+        
+        // Use DB total_paid if present, otherwise fallback to sum of completed payments
+        const finalTotalPaid = totalPaid > 0 ? totalPaid : (paymentsData.total || 0);
         
         // Get supplier from separate fetch
         const supplier = po.supplier_id ? suppliersMap.get(po.supplier_id) : undefined;
@@ -1033,16 +1283,14 @@ const supabaseProvider = {
           createdBy: po.created_by,
           paymentStatus: po.payment_status,
           paymentTerms: po.payment_terms,
-          totalPaid: totalPaid,
+          totalPaid: finalTotalPaid,
+          paymentsCount: paymentsData.count,
           exchangeRate: exchangeRate,
           exchangeRateSource: po.exchange_rate_source,
           totalAmountBaseCurrency: totalAmountBaseCurrency,
           supplier: supplier,
-          // Create items array with real quantities from database
-          items: itemsData.items.map((item: any) => ({
-            id: item.id,
-            quantity: item.quantity
-          }))
+          // Create items array with full product and variant data
+          items: itemsData.items || []
         };
         
         // Debug each mapped order
@@ -1227,6 +1475,7 @@ const supabaseProvider = {
       
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       // Create the purchase order - with currency and exchange rate tracking
       const { data: purchaseOrder, error: poError } = await supabase
@@ -1247,7 +1496,7 @@ const supabaseProvider = {
           order_date: data.orderDate || new Date().toISOString(),
           expected_delivery_date: data.expectedDelivery || null,
           created_by: data.createdBy || null,
-          branch_id: ISOLATION_CONFIG.ENABLE_PURCHASE_ORDER_ISOLATION ? currentBranchId : null // 🔒 Add branch isolation
+          branch_id: shouldApplyIsolation('purchase_orders', branchSettings) ? currentBranchId : null // 🔒 Add branch isolation based on database settings
         })
         .select()
         .single();
@@ -1730,6 +1979,7 @@ const supabaseProvider = {
       
       // Get current branch for filtering
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       // Build query
       let query = supabase
@@ -1756,10 +2006,9 @@ const supabaseProvider = {
         .order('created_at', { ascending: false })
         .limit(500); // Limit to recent 500 sales for performance
       
-      // Apply branch filter if branch ID exists
-      if (ISOLATION_CONFIG.ENABLE_SALES_ISOLATION && currentBranchId) {
+      // Apply branch filter based on database settings
+      if (shouldApplyIsolation('sales', branchSettings) && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
-      } else {
       }
       
       const { data: sales, error } = await query;
@@ -1855,14 +2104,15 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       let query = supabase
         .from('devices')
         .select('*')
         .order('created_at', { ascending: false });
       
-      // 🔒 COMPLETE ISOLATION: Only show devices from current branch
-      if (ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION && currentBranchId) {
+      // 🔒 Apply isolation based on database settings
+      if (shouldApplyIsolation('devices', branchSettings) && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -1906,10 +2156,11 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       const deviceData = {
         ...data,
-        branch_id: ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
+        branch_id: shouldApplyIsolation('devices', branchSettings) ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
       };
       
       const { data: device, error } = await supabase
@@ -1977,14 +2228,15 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       let query = supabase
         .from('repair_parts')
         .select('*')
         .eq('device_id', deviceId);
       
-      // 🔒 Optional: Also filter repair parts by branch
-      if (ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION && currentBranchId) {
+      // 🔒 Apply isolation based on database settings
+      if (shouldApplyIsolation('devices', branchSettings) && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -2021,8 +2273,9 @@ const supabaseProvider = {
         query = query.eq('device_id', filters.device_id);
       }
       
-      // 🔒 COMPLETE ISOLATION: Only show payments from current branch
-      if (ISOLATION_CONFIG.ENABLE_PAYMENT_ISOLATION && currentBranchId) {
+      // 🔒 Apply isolation based on database settings
+      const branchSettings = await getBranchSettings(currentBranchId);
+      if (shouldApplyIsolation('payments', branchSettings) && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -2045,10 +2298,11 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       const paymentData = {
         ...data,
-        branch_id: ISOLATION_CONFIG.ENABLE_PAYMENT_ISOLATION ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
+        branch_id: shouldApplyIsolation('payments', branchSettings) ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
       };
       
       const { data: payment, error } = await supabase
@@ -2074,13 +2328,14 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       let baseQuery = supabase.from('devices');
       
       // Build queries with optional branch filtering
       const buildQuery = (statusFilter?: string) => {
         let q = baseQuery.select('id', { count: 'exact' });
-        if (ISOLATION_CONFIG.ENABLE_DEVICE_ISOLATION && currentBranchId) {
+        if (shouldApplyIsolation('devices', branchSettings) && currentBranchId) {
           q = q.eq('branch_id', currentBranchId);
         }
         if (statusFilter) {
@@ -2124,6 +2379,7 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       let query = supabase
         .from('users')
@@ -2132,8 +2388,8 @@ const supabaseProvider = {
         .eq('is_active', true)
         .order('full_name');
       
-      // 🔒 COMPLETE ISOLATION: Only show technicians from current branch
-      if (ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION && currentBranchId) {
+      // 🔒 Apply isolation based on database settings
+      if (shouldApplyIsolation('employees', branchSettings) && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -2156,6 +2412,7 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       let query = supabase
         .from('users')
@@ -2168,8 +2425,8 @@ const supabaseProvider = {
         query = query.eq('role', filters.role);
       }
       
-      // 🔒 COMPLETE ISOLATION: Only show users from current branch
-      if (ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION && currentBranchId) {
+      // 🔒 Apply isolation based on database settings
+      if (shouldApplyIsolation('employees', branchSettings) && currentBranchId) {
         query = query.eq('branch_id', currentBranchId);
       }
       
@@ -2192,10 +2449,11 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       const userData = {
         ...data,
-        branch_id: ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
+        branch_id: shouldApplyIsolation('employees', branchSettings) ? (currentBranchId || '00000000-0000-0000-0000-000000000001') : null
       };
       
       const { data: user, error } = await supabase
@@ -2264,11 +2522,12 @@ const supabaseProvider = {
     try {
       // 🔒 Get current branch for isolation
       const currentBranchId = getCurrentBranchId();
+      const branchSettings = await getBranchSettings(currentBranchId);
       
       let baseQuery = supabase.from('users').select('id, role', { count: 'exact' }).eq('is_active', true);
       
-      // Apply branch filter if isolation is enabled
-      if (ISOLATION_CONFIG.ENABLE_TECHNICIAN_ISOLATION && currentBranchId) {
+      // Apply branch filter based on database settings
+      if (shouldApplyIsolation('employees', branchSettings) && currentBranchId) {
         baseQuery = baseQuery.eq('branch_id', currentBranchId);
       }
       

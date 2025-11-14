@@ -9,6 +9,9 @@ import { useTheme } from '../context/ThemeContext';
 import AddCustomerModal from '../features/customers/components/forms/AddCustomerModal';
 import TopBar from '../features/shared/components/TopBar';
 import GlobalSearchShortcut from '../features/shared/components/GlobalSearchShortcut';
+import GlobalPurchaseOrderShortcut from '../features/shared/components/GlobalPurchaseOrderShortcut';
+import GlobalKeyboardShortcutsHelp from '../features/shared/components/GlobalKeyboardShortcutsHelp';
+import { ErrorBoundary } from '../features/shared/components/ErrorBoundary';
 
 import ActivityCounter from '../features/shared/components/ui/ActivityCounter';
 import {
@@ -594,10 +597,17 @@ const AppLayout: React.FC = () => {
           {/* User Profile & Logout */}
           <div className={`${isNavCollapsed ? 'p-2' : 'p-4'} ${isDark ? 'border-slate-700/50' : 'border-white/20'} border-t relative`} ref={userMenuRef}>
             <div className={`
-              flex items-center gap-3 p-2 rounded-lg
+              flex items-center gap-3 p-2 
+              ${showUserMenu && !isNavCollapsed ? 'rounded-b-lg' : 'rounded-lg'}
               ${isDark ? 'bg-gradient-to-br from-slate-800 to-slate-900' : 'bg-gradient-to-br from-gray-100 to-gray-50'}
               backdrop-blur-sm mb-4 
               ${isNavCollapsed ? 'justify-center' : ''}
+              transition-all duration-300
+              ${showUserMenu && !isNavCollapsed 
+                ? 'shadow-lg ring-2 ' + (isDark ? 'ring-indigo-500/30 ring-t-0' : 'ring-indigo-500/20 ring-t-0')
+                : ''
+              }
+              cursor-pointer
             `}>
               <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg">
                 <User size={20} strokeWidth={1.5} />
@@ -649,112 +659,7 @@ const AppLayout: React.FC = () => {
                     {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
                       <Users size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
                     )}
-                    <User size={14} className={isDark ? 'text-gray-500' : 'text-gray-400'} strokeWidth={1.5} />
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Minimized Hover Preview for Collapsed Sidebar */}
-            {isHoveringUserMenu && !showUserMenu && isNavCollapsed && (
-              <div 
-                className={`
-                  absolute bottom-full left-full ml-2 mb-2
-                  ${isDark 
-                    ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' 
-                    : 'bg-gradient-to-br from-white/95 to-gray-50/95'
-                  }
-                  backdrop-blur-xl rounded-lg shadow-xl border
-                  ${isDark ? 'border-slate-700/50' : 'border-white/20'}
-                  overflow-hidden
-                  animate-in fade-in duration-150
-                  px-3 py-2 flex gap-2
-                `}
-                style={{ zIndex: 9999 }}
-                onMouseEnter={() => setIsHoveringUserMenu(true)}
-                onMouseLeave={() => setIsHoveringUserMenu(false)}
-              >
-                <Settings size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
-                {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
-                  <Users size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
-                )}
-                <User size={14} className={isDark ? 'text-gray-400' : 'text-gray-500'} strokeWidth={1.5} />
-              </div>
-            )}
-
-            {/* Compact Dropdown for Collapsed Sidebar */}
-            {showUserMenu && isNavCollapsed && (
-              <div 
-                className={`
-                  absolute bottom-full left-full ml-2 mb-2
-                  ${isDark 
-                    ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' 
-                    : 'bg-gradient-to-br from-white/95 to-gray-50/95'
-                  }
-                  backdrop-blur-xl rounded-xl shadow-2xl border
-                  ${isDark ? 'border-slate-700/50' : 'border-white/20'}
-                  overflow-hidden
-                  animate-in slide-in-from-left-2 fade-in duration-200
-                  w-48
-                `}
-                style={{ zIndex: 9999 }}
-              >
-                <div className="py-2 px-2">
-                  <button
-                    onClick={() => {
-                      navigate('/admin-settings');
-                      setShowUserMenu(false);
-                    }}
-                    className={`
-                      w-full px-3 py-2 text-left text-sm rounded-lg
-                      ${isDark 
-                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
-                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
-                      }
-                      transition-all duration-200 flex items-center gap-3
-                    `}
-                  >
-                    <Settings size={16} strokeWidth={1.5} />
-                    <span>Settings</span>
-                  </button>
-
-                  {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
-                    <button
-                      onClick={() => {
-                        navigate('/users');
-                        setShowUserMenu(false);
-                      }}
-                      className={`
-                        w-full px-3 py-2 text-left text-sm rounded-lg
-                        ${isDark 
-                          ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
-                          : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
-                        }
-                        transition-all duration-200 flex items-center gap-3
-                      `}
-                    >
-                      <Users size={16} strokeWidth={1.5} />
-                      <span>Users</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      alert(`Name: ${currentUser.name}\nRole: ${currentUser.role}\nEmail: ${currentUser.email || 'N/A'}\nID: ${currentUser.id}`);
-                      setShowUserMenu(false);
-                    }}
-                    className={`
-                      w-full px-3 py-2 text-left text-sm rounded-lg
-                      ${isDark 
-                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
-                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
-                      }
-                      transition-all duration-200 flex items-center gap-3
-                    `}
-                  >
-                    <User size={16} strokeWidth={1.5} />
-                    <span>Info</span>
-                  </button>
                 </div>
               </div>
             )}
@@ -763,62 +668,37 @@ const AppLayout: React.FC = () => {
             {showUserMenu && !isNavCollapsed && (
               <div 
                 className={`
-                  absolute bottom-full left-0 right-0 mb-2 mx-4
+                  absolute bottom-full left-0 right-0 mb-[-1rem] mx-4
                   ${isDark 
-                    ? 'bg-gradient-to-br from-slate-800/95 to-slate-900/95' 
-                    : 'bg-gradient-to-br from-white/95 to-gray-50/95'
+                    ? 'bg-gradient-to-br from-slate-800 to-slate-900' 
+                    : 'bg-gradient-to-br from-gray-100 to-gray-50'
                   }
-                  backdrop-blur-xl rounded-xl shadow-2xl border
-                  ${isDark ? 'border-slate-700/50' : 'border-white/20'}
+                  backdrop-blur-sm rounded-t-lg
                   overflow-hidden
-                  animate-in slide-in-from-bottom-2 fade-in duration-200
+                  animate-in slide-in-from-bottom-2 fade-in duration-300
+                  origin-bottom
+                  ring-2 ring-b-0 ${isDark ? 'ring-indigo-500/30' : 'ring-indigo-500/20'}
+                  shadow-lg
                 `}
-                style={{ zIndex: 9999 }}
+                style={{ 
+                  zIndex: 9999,
+                  transformOrigin: 'bottom center'
+                }}
               >
-                {/* Header with gradient background */}
-                <div className={`
-                  p-4 
-                  ${isDark 
-                    ? 'bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border-b border-slate-700/50' 
-                    : 'bg-gradient-to-br from-indigo-50 to-purple-50 border-b border-gray-200/50'
-                  }
-                `}>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg">
-                      <User size={16} strokeWidth={1.5} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                        {currentUser.name}
-                      </p>
-                      <p className={`text-xs truncate ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-                        {currentUser.email || 'No email'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className={`
-                    mt-2 px-2 py-1 rounded-md inline-block text-xs font-medium capitalize
-                    ${isDark 
-                      ? 'bg-slate-800/50 text-indigo-400' 
-                      : 'bg-white/50 text-indigo-600'
-                    }
-                  `}>
-                    {currentUser.role.replace('-', ' ')}
-                  </div>
-                </div>
-
                 {/* Menu Items */}
-                <div className="py-2 px-2">
+                <div className="p-2">
+                  {/* Unified Settings - Routes based on user role */}
                   <button
                     onClick={() => {
-                      navigate('/settings');
+                      // Admin users go to admin settings, regular users go to user settings
+                      navigate(currentUser?.role === 'admin' ? '/admin-settings' : '/settings');
                       setShowUserMenu(false);
                     }}
                     className={`
                       w-full px-3 py-2.5 text-left text-sm rounded-lg
                       ${isDark 
-                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
-                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                        ? 'text-gray-300 hover:bg-slate-700/70 hover:text-white' 
+                        : 'text-gray-700 hover:bg-white/70 hover:text-gray-900'
                       }
                       transition-all duration-200 flex items-center gap-3
                       group
@@ -826,41 +706,13 @@ const AppLayout: React.FC = () => {
                   >
                     <div className={`
                       p-1.5 rounded-md
-                      ${isDark ? 'bg-slate-700/50 group-hover:bg-indigo-600' : 'bg-gray-100 group-hover:bg-indigo-600'}
-                      transition-colors duration-200
+                      ${isDark ? 'bg-slate-700/50 group-hover:bg-indigo-600' : 'bg-gray-200/50 group-hover:bg-indigo-600'}
+                      transition-all duration-200
                     `}>
-                      <Settings size={14} className="group-hover:text-white" strokeWidth={1.5} />
+                      <Settings size={16} className="group-hover:text-white" strokeWidth={2} />
                     </div>
                     <span className="font-medium">Settings</span>
                   </button>
-                  
-                  {/* Admin Settings - Admin Only */}
-                  {currentUser?.role === 'admin' && (
-                    <button
-                      onClick={() => {
-                        navigate('/admin-settings');
-                        setShowUserMenu(false);
-                      }}
-                      className={`
-                        w-full px-3 py-2.5 text-left text-sm rounded-lg mt-1
-                        ${isDark 
-                          ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
-                          : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
-                        }
-                        transition-all duration-200 flex items-center gap-3
-                        group
-                      `}
-                    >
-                      <div className={`
-                        p-1.5 rounded-md
-                        ${isDark ? 'bg-slate-700/50 group-hover:bg-red-600' : 'bg-gray-100 group-hover:bg-red-600'}
-                        transition-colors duration-200
-                      `}>
-                        <Shield size={14} className="group-hover:text-white" strokeWidth={1.5} />
-                      </div>
-                      <span className="font-medium">Admin Settings</span>
-                    </button>
-                  )}
                   
 
                   {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('manage_users') || currentUser.role === 'admin') && (
@@ -872,8 +724,8 @@ const AppLayout: React.FC = () => {
                       className={`
                         w-full px-3 py-2.5 text-left text-sm rounded-lg
                         ${isDark 
-                          ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
-                          : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
+                          ? 'text-gray-300 hover:bg-slate-700/70 hover:text-white' 
+                          : 'text-gray-700 hover:bg-white/70 hover:text-gray-900'
                         }
                         transition-all duration-200 flex items-center gap-3
                         group
@@ -881,39 +733,14 @@ const AppLayout: React.FC = () => {
                     >
                       <div className={`
                         p-1.5 rounded-md
-                        ${isDark ? 'bg-slate-700/50 group-hover:bg-purple-600' : 'bg-gray-100 group-hover:bg-purple-600'}
-                        transition-colors duration-200
+                        ${isDark ? 'bg-slate-700/50 group-hover:bg-purple-600' : 'bg-gray-200/50 group-hover:bg-purple-600'}
+                        transition-all duration-200
                       `}>
-                        <Users size={14} className="group-hover:text-white" strokeWidth={1.5} />
+                        <Users size={16} className="group-hover:text-white" strokeWidth={2} />
                       </div>
                       <span className="font-medium">User Management</span>
                     </button>
                   )}
-
-                  <button
-                    onClick={() => {
-                      alert(`Name: ${currentUser.name}\nRole: ${currentUser.role}\nEmail: ${currentUser.email || 'N/A'}\nID: ${currentUser.id}`);
-                      setShowUserMenu(false);
-                    }}
-                    className={`
-                      w-full px-3 py-2.5 text-left text-sm rounded-lg
-                      ${isDark 
-                        ? 'text-gray-300 hover:bg-slate-700/50 hover:text-white' 
-                        : 'text-gray-700 hover:bg-gray-100/80 hover:text-gray-900'
-                      }
-                      transition-all duration-200 flex items-center gap-3
-                      group
-                    `}
-                  >
-                    <div className={`
-                      p-1.5 rounded-md
-                      ${isDark ? 'bg-slate-700/50 group-hover:bg-blue-600' : 'bg-gray-100 group-hover:bg-blue-600'}
-                      transition-colors duration-200
-                    `}>
-                      <User size={14} className="group-hover:text-white" strokeWidth={1.5} />
-                    </div>
-                    <span className="font-medium">Account Info</span>
-                  </button>
                 </div>
               </div>
             )}
@@ -934,8 +761,11 @@ const AppLayout: React.FC = () => {
       </div>
       
       {/* Main Content */}
-      <main className={`transition-all duration-500 min-h-screen relative z-10 pt-0 pb-8 ${isNavCollapsed ? 'md:ml-[5.5rem]' : 'md:ml-72'}`}>
-        <Outlet />
+      <main className={`transition-all duration-500 min-h-screen relative z-10 pt-[140px] pb-8 ${isNavCollapsed ? 'md:ml-[5.5rem]' : 'md:ml-72'}`}>
+        {/* Error Boundary wraps only the content area, not sidebar/topbar */}
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
 
         {/* Only show modals for users with permissions */}
         {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('create_customers') || currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
@@ -947,8 +777,10 @@ const AppLayout: React.FC = () => {
           </>
         )}
         
-        {/* Global Search Shortcut */}
+        {/* Global Keyboard Shortcuts */}
         <GlobalSearchShortcut />
+        <GlobalPurchaseOrderShortcut />
+        <GlobalKeyboardShortcutsHelp />
 
       </main>
     </div>

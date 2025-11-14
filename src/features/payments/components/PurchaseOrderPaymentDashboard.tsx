@@ -4,7 +4,7 @@ import {
   Calendar, Filter, Search, Download, Eye, Plus,
   AlertCircle, CheckCircle2, Clock, XCircle, TrendingUp,
   RefreshCw, X, Package, Truck, Users, BarChart3,
-  ArrowUpRight, ArrowDownRight, Minus, AlertTriangle
+  ArrowUpRight, ArrowDownRight, Minus, AlertTriangle, RotateCcw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
@@ -16,8 +16,8 @@ import { financeAccountService, FinanceAccount } from '../../../lib/financeAccou
 
 interface PurchaseOrder {
   id: string;
-  order_number: string;
-  orderNumber: string; // Mapped from order_number
+  po_number: string;
+  poNumber: string; // Mapped from po_number
   supplier_id: string;
   supplierId: string; // Mapped from supplier_id
   supplier?: {
@@ -27,8 +27,11 @@ interface PurchaseOrder {
   };
   status: string;
   currency: string;
+  exchange_rate?: number;
   total_amount: number;
   totalAmount: number; // Mapped from total_amount
+  total_amount_base_currency?: number;
+  totalAmountBaseCurrency?: number; // Mapped from total_amount_base_currency (TZS)
   total_paid?: number;
   totalPaid?: number; // Mapped from total_paid
   payment_status?: 'unpaid' | 'partial' | 'paid';
@@ -73,6 +76,13 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
   const [currencyFilter, setCurrencyFilter] = useState('all');
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [reversingOrderId, setReversingOrderId] = useState<string | null>(null);
+
+  const toSafeNumber = (value: any): number => {
+    if (value === null || value === undefined || value === '') return 0;
+    const num = typeof value === 'string' ? parseFloat(value) : Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
 
   // Format currency
   const formatMoney = (amount: number) => {
@@ -99,29 +109,57 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
     }
   };
 
-  // Calculate summary statistics
+  // Calculate summary statistics - USE BASE CURRENCY (TZS) FOR ALL CALCULATIONS
   const summaryStats = React.useMemo(() => {
     const totalOrders = purchaseOrders.length;
     const unpaidOrders = purchaseOrders.filter(order => {
-      const remaining = order.totalAmount - (order.totalPaid || 0);
+      const totalTZS = toSafeNumber(order.totalAmountBaseCurrency) || toSafeNumber(order.totalAmount);
+      const paidTZS = toSafeNumber(order.totalPaid);
+      const remaining = totalTZS - paidTZS;
       return remaining > 0 && order.paymentStatus !== 'paid';
     }).length;
     const partialOrders = purchaseOrders.filter(order => {
-      const remaining = order.totalAmount - (order.totalPaid || 0);
+      const totalTZS = toSafeNumber(order.totalAmountBaseCurrency) || toSafeNumber(order.totalAmount);
+      const paidTZS = toSafeNumber(order.totalPaid);
+      const remaining = totalTZS - paidTZS;
       return remaining > 0 && order.paymentStatus === 'partial';
     }).length;
     const paidOrders = purchaseOrders.filter(order => {
-      const remaining = order.totalAmount - (order.totalPaid || 0);
+      const totalTZS = toSafeNumber(order.totalAmountBaseCurrency) || toSafeNumber(order.totalAmount);
+      const paidTZS = toSafeNumber(order.totalPaid);
+      const remaining = totalTZS - paidTZS;
       return remaining <= 0;
     }).length;
     const overpaidOrders = purchaseOrders.filter(order => {
-      const remaining = order.totalAmount - (order.totalPaid || 0);
+      const totalTZS = toSafeNumber(order.totalAmountBaseCurrency) || toSafeNumber(order.totalAmount);
+      const paidTZS = toSafeNumber(order.totalPaid);
+      const remaining = totalTZS - paidTZS;
       return remaining < 0;
     }).length;
     
-    const totalAmount = purchaseOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-    const totalPaid = purchaseOrders.reduce((sum, order) => sum + (order.totalPaid || 0), 0);
+    // Use base currency (TZS) for all amount calculations
+    const totalAmount = purchaseOrders.reduce((sum, order) => {
+      const totalTZS = toSafeNumber(order.totalAmountBaseCurrency) || toSafeNumber(order.totalAmount);
+      return sum + totalTZS;
+    }, 0);
+    const totalPaid = purchaseOrders.reduce((sum, order) => {
+      return sum + toSafeNumber(order.totalPaid);
+    }, 0);
     const totalOutstanding = Math.max(0, totalAmount - totalPaid);
+    
+    console.log('📊 Summary Stats Calculated:', {
+      totalOrders,
+      totalAmount,
+      totalPaid,
+      totalOutstanding,
+      unpaidOrders,
+      overpaidOrders,
+      sampleOrder: purchaseOrders[0] ? {
+        poNumber: purchaseOrders[0].poNumber,
+        totalAmountBaseCurrency: purchaseOrders[0].totalAmountBaseCurrency,
+        totalPaid: purchaseOrders[0].totalPaid
+      } : null
+    });
     
     return {
       totalOrders,
@@ -140,11 +178,12 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
     try {
       setIsLoading(true);
       
+      // Cast NUMERIC types to FLOAT to ensure proper number handling
       const { data: ordersData, error: ordersError } = await supabase
         .from('lats_purchase_orders')
         .select(`
           id,
-          order_number,
+          po_number,
           supplier_id,
           status,
           currency,
@@ -160,6 +199,16 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
         `)
         .order('created_at', { ascending: false })
         .limit(50);
+      
+      console.log('🔍 Raw data from database:', ordersData?.slice(0, 3).map(o => ({
+        po_number: o.po_number,
+        total_amount: o.total_amount,
+        total_amount_type: typeof o.total_amount,
+        total_amount_base_currency: o.total_amount_base_currency,
+        base_type: typeof o.total_amount_base_currency,
+        total_paid: o.total_paid,
+        paid_type: typeof o.total_paid
+      })));
 
       if (ordersError) {
         console.error('Error fetching purchase orders:', ordersError);
@@ -189,20 +238,38 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
         }
       }
 
-      // Combine orders with supplier data
-      const ordersWithSuppliers = ordersData.map(order => ({
-        ...order,
-        orderNumber: order.order_number,
-        supplierId: order.supplier_id,
-        supplier: suppliersData.find(s => s.id === order.supplier_id),
-        totalAmount: order.total_amount,
-        totalPaid: order.total_paid || 0,
-        paymentStatus: order.payment_status,
-        expectedDelivery: order.expected_delivery,
-        createdAt: order.created_at,
-        updatedAt: order.updated_at
-      }));
+      // Combine orders with supplier data - ENSURE NUMERIC TYPES
+      const ordersWithSuppliers = ordersData.map(order => {
+        const totalAmount = toSafeNumber(order.total_amount);
+        const totalAmountBase = toSafeNumber(order.total_amount_base_currency);
+        const totalPaid = toSafeNumber(order.total_paid);
+        const exchangeRate = toSafeNumber(order.exchange_rate) || 1;
+        
+        return {
+          ...order,
+          poNumber: order.po_number,
+          supplierId: order.supplier_id,
+          supplier: suppliersData.find(s => s.id === order.supplier_id),
+          totalAmount: totalAmount,
+          totalAmountBaseCurrency: totalAmountBase || totalAmount,
+          totalPaid: totalPaid,
+          exchange_rate: exchangeRate,
+          exchangeRate: exchangeRate,
+          paymentStatus: order.payment_status,
+          expectedDelivery: order.expected_delivery,
+          createdAt: order.created_at,
+          updatedAt: order.updated_at
+        };
+      });
 
+      console.log('✅ Loaded purchase orders with currency data:', ordersWithSuppliers.map(o => ({
+        poNumber: o.poNumber,
+        currency: o.currency,
+        totalAmount: o.totalAmount,
+        totalAmountBaseCurrency: o.totalAmountBaseCurrency,
+        totalPaid: o.totalPaid
+      })));
+      
       setPurchaseOrders(ordersWithSuppliers);
     } catch (error) {
       console.error('Error fetching purchase orders:', error);
@@ -328,7 +395,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
 
   // Filter purchase orders
   const filteredOrders = purchaseOrders.filter(order => {
-    const matchesSearch = order.orderNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const matchesSearch = order.poNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          order.supplier?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || order.paymentStatus === statusFilter;
     const matchesCurrency = currencyFilter === 'all' || order.currency === currencyFilter;
@@ -337,30 +404,63 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
 
   // Handle make payment
   const handleMakePayment = (order: PurchaseOrder) => {
+    const totalAmountOriginal = toSafeNumber(order.totalAmount ?? order.total_amount);
+    const totalAmountBase = toSafeNumber(order.totalAmountBaseCurrency ?? order.total_amount_base_currency ?? totalAmountOriginal);
+    const totalPaidTZS = toSafeNumber(order.totalPaid ?? order.total_paid);
+    const exchangeRate = toSafeNumber(order.exchangeRate ?? order.exchange_rate ?? 1) || 1;
+    const isForeignCurrency = Boolean(order.currency && order.currency !== 'TZS' && exchangeRate > 0);
+
     // Validate order has an amount to pay
-    const totalAmount = order.totalAmount || 0;
-    const totalPaid = order.totalPaid || 0;
-    const remainingAmount = totalAmount - totalPaid;
-    
-    if (totalAmount === 0) {
+    if (totalAmountBase <= 0 && totalAmountOriginal <= 0) {
       toast.error('Cannot make payment: Purchase order has no total amount');
       return;
     }
-    
-    if (remainingAmount <= 0) {
-      toast.error(`Purchase order is fully paid. Total: ${totalAmount.toLocaleString()}, Paid: ${totalPaid.toLocaleString()}`);
+
+    const remainingBase = totalAmountBase - totalPaidTZS;
+    const remainingOriginal = isForeignCurrency
+      ? totalAmountOriginal - (totalPaidTZS / exchangeRate)
+      : remainingBase;
+
+    if (remainingBase <= 0 || remainingOriginal <= 0) {
+      const totalLabel = isForeignCurrency
+        ? `${order.currency} ${totalAmountOriginal.toLocaleString()}`
+        : formatMoney(totalAmountBase);
+      const paidLabel = formatMoney(totalPaidTZS);
+      toast.error(`Purchase order is fully paid. Total: ${totalLabel}, Paid: ${paidLabel}`);
       return;
     }
-    
+
     console.log('💳 Opening payment modal for order:', {
-      orderNumber: order.orderNumber,
-      totalAmount,
-      totalPaid,
-      remainingAmount
+      poNumber: order.poNumber,
+      currency: order.currency,
+      totalAmountOriginal,
+      totalAmountBase,
+      totalPaidTZS,
+      remainingBase,
+      remainingOriginal,
+      exchangeRate
     });
-    
+
     setSelectedOrder(order);
     setShowPaymentModal(true);
+  };
+
+  const getModalAmount = (order: PurchaseOrder | null) => {
+    if (!order) return 0;
+
+    const totalAmountOriginal = toSafeNumber(order.totalAmount ?? order.total_amount);
+    const totalAmountBase = toSafeNumber(order.totalAmountBaseCurrency ?? order.total_amount_base_currency ?? totalAmountOriginal);
+    const totalPaidTZS = toSafeNumber(order.totalPaid ?? order.total_paid);
+    const exchangeRate = toSafeNumber(order.exchangeRate ?? order.exchange_rate ?? 1) || 1;
+
+    if (order.currency && order.currency !== 'TZS' && exchangeRate > 0) {
+      const paidInOriginal = totalPaidTZS / exchangeRate;
+      const remainingOriginal = totalAmountOriginal - paidInOriginal;
+      return Math.max(0, remainingOriginal);
+    }
+
+    const remainingBase = totalAmountBase - totalPaidTZS;
+    return Math.max(0, remainingBase);
   };
 
   // Handle payment completion from PaymentsPopupModal
@@ -387,7 +487,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
             currency: payment.currency,
             paymentMethod: payment.paymentMethod,
             paymentMethodId: payment.paymentMethodId,
-            reference: payment.reference || `PO-${selectedOrder.orderNumber}`,
+            reference: payment.reference || `${selectedOrder.poNumber}`,
             notes: payment.notes || `Payment via ${payment.paymentMethod}`,
             createdBy: user?.id || ''
           });
@@ -420,6 +520,53 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
     } catch (error: any) {
       console.error('Error processing payment:', error);
       toast.error(error.message || 'Failed to process payment');
+    }
+  };
+
+  // Handle reversing the most recent payment
+  const handleUndoLastPayment = async (order: PurchaseOrder) => {
+    if (!order) {
+      toast.error('No purchase order selected');
+      return;
+    }
+
+    if (reversingOrderId && reversingOrderId !== order.id) {
+      toast.error('Please wait for the current reversal to finish');
+      return;
+    }
+
+    const confirmUndo = window.confirm(`Undo the most recent payment recorded for ${order.poNumber}?`);
+    if (!confirmUndo) {
+      return;
+    }
+
+    try {
+      setReversingOrderId(order.id);
+
+      const { purchaseOrderPaymentService } = await import('../../lats/lib/purchaseOrderPaymentService');
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const result = await purchaseOrderPaymentService.reverseLatestPayment(order.id, user?.id || null);
+
+      if (!result.success) {
+        toast.error(result.message || 'Failed to reverse payment');
+        return;
+      }
+
+      const reversedAmountRaw = result.data?.amount_reversed ?? result.data?.reversed_amount ?? 0;
+      const reversedAmount = typeof reversedAmountRaw === 'number' ? reversedAmountRaw : Number(reversedAmountRaw) || 0;
+      toast.success(`Payment reversal complete for ${order.poNumber}: ${formatMoney(reversedAmount)} restored.`);
+
+      await Promise.all([
+        fetchPurchaseOrders(),
+        fetchRecentPayments(),
+        fetchPaymentAccounts()
+      ]);
+    } catch (error: any) {
+      console.error('Error reversing payment:', error);
+      toast.error(error?.message || 'Failed to reverse payment');
+    } finally {
+      setReversingOrderId(null);
     }
   };
 
@@ -568,8 +715,14 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
       {/* Purchase Orders */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredOrders.map((order) => {
-          const remainingAmount = order.totalAmount - (order.totalPaid || 0);
-          const paymentProgress = Math.min(((order.totalPaid || 0) / order.totalAmount) * 100, 100);
+          // Use base currency (TZS) for calculations to avoid currency mismatch
+          const totalAmountTZS = toSafeNumber(order.totalAmountBaseCurrency) || toSafeNumber(order.totalAmount);
+          const totalPaidTZS = toSafeNumber(order.totalPaid);
+          const remainingAmount = totalAmountTZS - totalPaidTZS;
+          const paymentProgress = totalAmountTZS > 0 ? Math.min((totalPaidTZS / totalAmountTZS) * 100, 100) : 0;
+          
+          // Check if this is a foreign currency PO
+          const isForeignCurrency = order.currency && order.currency !== 'TZS';
           
           return (
             <GlassCard key={order.id} className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -580,7 +733,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                     <ShoppingCart className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">PO-{order.orderNumber}</h3>
+                    <h3 className="font-semibold text-gray-900">{order.poNumber}</h3>
                     <p className="text-sm text-gray-600 flex items-center gap-1">
                       <Building className="w-3 h-3" />
                       {order.supplier?.name || 'Unknown Supplier'}
@@ -589,22 +742,35 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(order.paymentStatus || 'unpaid', remainingAmount)}`}>
-                    {remainingAmount < 0 ? 'overpaid' : (order.paymentStatus || 'unpaid')}
+                    {order.paymentStatus || 'unpaid'}
                   </span>
-                  {remainingAmount > 0 ? (
-                    <button
-                      onClick={() => handleMakePayment(order)}
-                      className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors text-xs font-medium"
-                    >
-                      <Plus size={12} />
-                      Pay
-                    </button>
-                  ) : (
-                    <div className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-500 rounded-lg text-xs font-medium cursor-not-allowed">
-                      <CheckCircle2 size={12} />
-                      {remainingAmount < 0 ? 'Overpaid' : 'Fully Paid'}
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {remainingAmount > 0 ? (
+                      <button
+                        onClick={() => handleMakePayment(order)}
+                        disabled={reversingOrderId === order.id}
+                        className="flex items-center gap-1 px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-green-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs font-medium"
+                      >
+                        <Plus size={12} />
+                        Pay
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-500 rounded-lg text-xs font-medium cursor-not-allowed">
+                        <CheckCircle2 size={12} />
+                        {order.paymentStatus === 'overpaid' ? 'Overpaid' : 'Fully Paid'}
+                      </div>
+                    )}
+                    {totalPaidTZS > 0 && (
+                      <button
+                        onClick={() => handleUndoLastPayment(order)}
+                        disabled={reversingOrderId === order.id}
+                        className="flex items-center gap-1 px-3 py-1 bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs font-medium"
+                      >
+                        <RotateCcw size={12} className={reversingOrderId === order.id ? 'animate-spin' : ''} />
+                        {reversingOrderId === order.id ? 'Undoing...' : 'Undo'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -614,7 +780,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                   <span className="text-gray-600">Payment Progress</span>
                   <div className="flex items-center gap-1">
                     <span className="font-medium">{Math.round(paymentProgress)}%</span>
-                    {remainingAmount < 0 && (
+                    {order.paymentStatus === 'overpaid' && (
                       <span className="text-xs text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
                         Overpaid
                       </span>
@@ -624,7 +790,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
                     className={`h-2 rounded-full transition-all duration-300 ${
-                      remainingAmount < 0 
+                      order.paymentStatus === 'overpaid' 
                         ? 'bg-gradient-to-r from-orange-400 to-orange-600' 
                         : paymentProgress === 100 
                           ? 'bg-gradient-to-r from-green-400 to-green-600'
@@ -640,7 +806,12 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Total Amount</span>
                   <div className="text-right">
-                    <span className="font-semibold text-gray-900">{formatMoney(order.totalAmount)}</span>
+                    <span className="font-semibold text-gray-900">{formatMoney(totalAmountTZS)}</span>
+                    {isForeignCurrency && order.totalAmount && (
+                      <div className="text-xs text-gray-500">
+                        ({order.currency} {order.totalAmount.toLocaleString()})
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-between items-center">
@@ -648,7 +819,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                   <div className="text-right">
                     <span className="font-medium text-green-600 flex items-center gap-1">
                       <ArrowUpRight className="w-3 h-3" />
-                      {formatMoney(order.totalPaid || 0)}
+                      {formatMoney(totalPaidTZS)}
                     </span>
                   </div>
                 </div>
@@ -667,7 +838,7 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
                       ) : (
                         <ArrowDownRight className="w-3 h-3" />
                       )}
-                      {remainingAmount < 0 ? formatMoney(Math.abs(remainingAmount)) : formatMoney(remainingAmount)}
+                      {formatMoney(Math.abs(remainingAmount))}
                     </span>
                   </div>
                 </div>
@@ -744,13 +915,15 @@ const PurchaseOrderPaymentDashboard: React.FC<PurchaseOrderPaymentDashboardProps
       <PaymentsPopupModal
         isOpen={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
-        amount={selectedOrder ? (selectedOrder.totalAmount - (selectedOrder.totalPaid || 0)) : 0}
-        customerId={selectedOrder?.supplier_id}
+        amount={getModalAmount(selectedOrder)}
+        customerId={selectedOrder?.supplierId || selectedOrder?.supplier_id}
         customerName={selectedOrder?.supplier?.name || 'Supplier'}
-        description={`Payment for Purchase Order PO-${selectedOrder?.orderNumber}`}
+        description={`Payment for Purchase Order ${selectedOrder?.poNumber}`}
         onPaymentComplete={handlePaymentComplete}
         title="Purchase Order Payment"
         paymentType="cash_out"
+        currency={selectedOrder?.currency}
+        exchangeRate={toSafeNumber(selectedOrder?.exchangeRate ?? selectedOrder?.exchange_rate ?? 1) || 1}
       />
     </div>
   );

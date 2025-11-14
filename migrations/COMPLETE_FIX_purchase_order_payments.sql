@@ -179,6 +179,161 @@ $$;
 -- Add function comment
 COMMENT ON FUNCTION process_purchase_order_payment IS 'Atomically processes a purchase order payment, updates PO status, and adjusts account balance. Fixed version with explicit type casting.';
 
+-- Create batch payment processing function for better performance
+CREATE OR REPLACE FUNCTION process_purchase_order_payments_batch(
+  payment_data JSON[]
+)
+RETURNS JSON
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  payment_record JSON;
+  v_payment_id UUID;
+  v_po_id UUID;
+  v_account_id UUID;
+  v_amount DECIMAL;
+  v_currency VARCHAR;
+  v_payment_method VARCHAR;
+  v_payment_method_id UUID;
+  v_user_id UUID;
+  v_reference TEXT;
+  v_notes TEXT;
+  v_po_total DECIMAL;
+  v_po_paid DECIMAL;
+  v_new_paid DECIMAL;
+  v_payment_status VARCHAR;
+  v_result JSON[];
+  v_single_result JSON;
+BEGIN
+  v_result := ARRAY[]::JSON[];
+
+  -- Process each payment in the batch
+  FOREACH payment_record IN ARRAY payment_data LOOP
+    -- Extract payment data from JSON
+    v_po_id := (payment_record->>'purchase_order_id')::UUID;
+    v_account_id := (payment_record->>'payment_account_id')::UUID;
+    v_amount := (payment_record->>'amount')::DECIMAL;
+    v_currency := COALESCE(payment_record->>'currency', 'TZS');
+    v_payment_method := payment_record->>'payment_method';
+    v_payment_method_id := (payment_record->>'payment_method_id')::UUID;
+    v_user_id := COALESCE((payment_record->>'user_id')::UUID, '00000000-0000-0000-0000-000000000001'::UUID);
+    v_reference := payment_record->>'reference';
+    v_notes := payment_record->>'notes';
+
+    -- Validate currency is not a UUID
+    IF v_currency ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+      v_single_result := json_build_object(
+        'success', false,
+        'message', 'Invalid currency parameter: appears to be a UUID instead of currency code',
+        'payment_data', payment_record
+      );
+      v_result := array_append(v_result, v_single_result);
+      CONTINUE;
+    END IF;
+
+    -- Get current purchase order details
+    SELECT total_amount, COALESCE(total_paid, 0)
+    INTO v_po_total, v_po_paid
+    FROM lats_purchase_orders
+    WHERE id = v_po_id;
+
+    -- Check if purchase order exists
+    IF NOT FOUND THEN
+      v_single_result := json_build_object(
+        'success', false,
+        'message', 'Purchase order not found',
+        'payment_data', payment_record
+      );
+      v_result := array_append(v_result, v_single_result);
+      CONTINUE;
+    END IF;
+
+    -- Check if this payment would exceed the total amount
+    v_new_paid := v_po_paid + v_amount;
+
+    IF v_new_paid > v_po_total + 1 THEN  -- Allow 1 unit tolerance for rounding
+      v_single_result := json_build_object(
+        'success', false,
+        'message', format('Payment amount (%s) exceeds remaining balance', v_amount),
+        'payment_data', payment_record
+      );
+      v_result := array_append(v_result, v_single_result);
+      CONTINUE;
+    END IF;
+
+    -- Determine payment status
+    IF v_new_paid >= v_po_total THEN
+      v_payment_status := 'paid';
+    ELSIF v_new_paid > 0 THEN
+      v_payment_status := 'partial';
+    ELSE
+      v_payment_status := 'unpaid';
+    END IF;
+
+    -- Create payment record
+    INSERT INTO purchase_order_payments (
+      id, purchase_order_id, payment_account_id, amount, currency,
+      payment_method, payment_method_id, reference, notes,
+      status, payment_date, created_by, created_at, updated_at
+    ) VALUES (
+      gen_random_uuid(),
+      v_po_id, v_account_id, v_amount, v_currency::VARCHAR,
+      v_payment_method::VARCHAR, v_payment_method_id, v_reference, v_notes,
+      'completed', NOW(), v_user_id, NOW(), NOW()
+    )
+    RETURNING id INTO v_payment_id;
+
+    -- Update purchase order payment status and total paid
+    UPDATE lats_purchase_orders
+    SET
+      total_paid = v_new_paid,
+      payment_status = v_payment_status,
+      updated_at = NOW()
+    WHERE id = v_po_id;
+
+    -- Update finance account balance (deduct payment)
+    UPDATE finance_accounts
+    SET
+      balance = balance - v_amount,
+      updated_at = NOW()
+    WHERE id = v_account_id;
+
+    -- Add successful result
+    v_single_result := json_build_object(
+      'success', true,
+      'message', 'Payment processed successfully',
+      'data', json_build_object(
+        'payment_id', v_payment_id,
+        'amount_paid', v_amount,
+        'total_paid', v_new_paid,
+        'payment_status', v_payment_status,
+        'remaining', v_po_total - v_new_paid
+      ),
+      'payment_data', payment_record
+    );
+    v_result := array_append(v_result, v_single_result);
+  END LOOP;
+
+  RETURN json_build_object(
+    'success', true,
+    'message', 'Batch payment processing completed',
+    'results', v_result
+  );
+
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE WARNING 'Batch payment processing error: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+    RETURN json_build_object(
+      'success', false,
+      'message', SQLERRM,
+      'error_code', SQLSTATE
+    );
+END;
+$$;
+
+-- Add comment for batch function
+COMMENT ON FUNCTION process_purchase_order_payments_batch IS 'Processes multiple purchase order payments in a single transaction for improved performance';
+
 -- Verify the table structure
 SELECT 
   column_name, 

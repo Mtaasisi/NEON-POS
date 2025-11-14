@@ -70,6 +70,19 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
   const [showSupplierForm, setShowSupplierForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Block body scroll when modal is open
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
 
   // Get unique countries from suppliers
   const countries = useMemo(() => {
@@ -77,7 +90,7 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
     return Array.from(countrySet).sort();
   }, [suppliers]);
 
-  // Filter and sort suppliers
+  // Filter and sort suppliers (with "Lin" always pinned at the top)
   const filteredSuppliers = useMemo(() => {
     let filtered = suppliers.filter(supplier => {
       // Filter by search query
@@ -103,8 +116,16 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
       return true;
     });
 
-    // Sort suppliers
+    // Sort suppliers with "Lin" always at the top
     filtered.sort((a, b) => {
+      // Always pin "Lin" to the top
+      const aIsLin = a.name?.toLowerCase() === 'lin';
+      const bIsLin = b.name?.toLowerCase() === 'lin';
+      
+      if (aIsLin && !bIsLin) return -1;
+      if (!aIsLin && bIsLin) return 1;
+      
+      // For other suppliers, use normal sorting
       switch (sortBy) {
         case 'name':
           return (a.name || '').localeCompare(b.name || '');
@@ -296,15 +317,30 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
           <div className="p-4 sm:p-6">
           {filteredSuppliers.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {filteredSuppliers.map((supplier) => (
+              {filteredSuppliers.map((supplier) => {
+                const isLinSupplier = supplier.name?.toLowerCase() === 'lin';
+                return (
                 <div
                   key={supplier.id}
-                  className="p-4 border border-gray-200 rounded-xl hover:shadow-lg hover:border-orange-300 transition-all duration-200 bg-white"
+                  className={`p-4 rounded-xl hover:shadow-xl transition-all duration-300 ${
+                    isLinSupplier 
+                      ? 'bg-gradient-to-br from-orange-50 via-amber-50 to-orange-50 border-2 border-orange-200 shadow-lg'
+                      : 'border border-gray-200 hover:border-orange-300 bg-white'
+                  }`}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl flex items-center justify-center text-white font-bold text-lg">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg relative ${
+                        isLinSupplier 
+                          ? 'bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600'
+                          : 'bg-gradient-to-br from-orange-500 to-amber-600'
+                      }`}>
                         {supplier.name.charAt(0).toUpperCase()}
+                        {isLinSupplier && (
+                          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center bg-gradient-to-r from-green-400 to-emerald-500">
+                            <Truck className="w-3 h-3 text-white" />
+                          </div>
+                        )}
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-900 text-lg">{supplier.name}</h3>
@@ -314,8 +350,31 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                         {supplier.contactPerson && (
                           <p className="text-sm text-gray-600">{supplier.contactPerson}</p>
                         )}
+                        {supplier.phone && (
+                          <div className="text-sm text-gray-600 flex items-center gap-2 mt-1">
+                            <Phone className="w-3 h-3" />
+                            {supplier.phone}
+                          </div>
+                        )}
+                        {isLinSupplier && (supplier.country || supplier.preferred_currency) && (
+                          <div className="flex items-center gap-2 mt-2">
+                            {supplier.country && (
+                              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r from-orange-100 to-amber-100 text-orange-700 border border-orange-200">
+                                {supplier.country}
+                              </span>
+                            )}
+                            {(supplier.preferred_currency || supplier.currency) && (
+                              <span className="flex items-center gap-1 text-xs text-gray-600 bg-white px-2 py-1 rounded-full border border-gray-200" title={`Currency set by supplier: ${supplier.preferred_currency || supplier.currency}`}>
+                                <Coins className="w-3 h-3" />
+                                {supplier.preferred_currency || supplier.currency}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      {!isLinSupplier && (
                     <div className="flex flex-col items-end gap-2">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getSupplierBadgeColor(supplier)}`}>
                         {getSupplierBadgeText(supplier)}
@@ -327,6 +386,29 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                             {Number(supplier.rating).toFixed(1)}
                           </span>
                         </div>
+                          )}
+                        </div>
+                      )}
+                      {isLinSupplier && (
+                        <>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewingSupplier(supplier);
+                              setShowDetailsModal(true);
+                            }}
+                            className="p-2 text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-all duration-200" 
+                            title="View supplier details"
+                          >
+                            <User className="w-5 h-5" />
+                          </button>
+                          <button 
+                            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all duration-200"
+                            title="Remove from favorites"
+                          >
+                            <XCircle className="w-5 h-5" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -381,7 +463,12 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                     {supplier.totalSpent && (
                       <div className="col-span-2">
                         <div className="text-xs text-gray-500">Total Spent</div>
-                        <div className="font-semibold text-green-600">{formatMoney(supplier.totalSpent, { code: 'TZS', name: 'Tanzanian Shilling', symbol: 'TZS', flag: '🇹🇿' })}</div>
+                        <div className="font-semibold text-green-600">{formatMoney(supplier.totalSpent, { 
+                          code: supplier.preferred_currency || supplier.currency || 'TZS', 
+                          name: supplier.preferred_currency || supplier.currency || 'TZS', 
+                          symbol: supplier.preferred_currency || supplier.currency || 'TZS', 
+                          flag: getCountryFlag(supplier.country) 
+                        })}</div>
                       </div>
                     )}
                     {supplier.lastOrderDate && (
@@ -459,7 +546,8 @@ const SupplierSelectionModal: React.FC<SupplierSelectionModalProps> = ({
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 sm:py-12">

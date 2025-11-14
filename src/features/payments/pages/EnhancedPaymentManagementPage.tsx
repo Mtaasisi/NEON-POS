@@ -13,14 +13,13 @@ import {
   Calendar, ChevronLeft, ChevronRight, CheckSquare, Square, MoreHorizontal,
   AlertTriangle, CheckCircle, Clock, XCircle, TrendingUp, TrendingDown, Eye,
   History, Copy, Printer, Share, Edit, Trash2, ArrowDownRight, X, User, Mail,
-  Phone, Hash, DollarSign, Building2, FileText, CalendarDays, Banknote, LayoutDashboard,
+  Phone, Hash, DollarSign, Building2, FileText, CalendarDays, Banknote,
   Wallet, Repeat
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import Modal from '../../shared/components/ui/Modal';
 import ConfirmationDialog from '../../shared/components/ui/ConfirmationDialog';
-import PaymentTrackingDashboard from '../components/PaymentTrackingDashboard';
 import PurchaseOrderPaymentDashboard from '../components/PurchaseOrderPaymentDashboard';
 import PaymentAccountManagement from '../components/PaymentAccountManagement';
 import ExpenseManagement from '../components/ExpenseManagement';
@@ -30,10 +29,11 @@ import type { PaymentTransaction as PaymentHistoryTransaction } from '../../lats
 import { paymentTrackingService } from '../../../lib/paymentTrackingService';
 import type { PaymentTransaction as ComprehensivePaymentTransaction } from '../../../lib/paymentTrackingService';
 import { format } from '../../lats/lib/format';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const EnhancedPaymentManagementPage: React.FC = () => {
   const { currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState<'tracking' | 'providers' | 'purchase-orders' | 'history' | 'expenses' | 'recurring'>('tracking');
+  const [activeTab, setActiveTab] = useState<'providers' | 'purchase-orders' | 'history' | 'expenses' | 'recurring'>('providers');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Error handling
@@ -462,17 +462,6 @@ Reference: ${transaction.reference || 'N/A'}`;
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
                 <button
-                  onClick={() => setActiveTab('tracking')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-                    activeTab === 'tracking'
-                      ? 'border-blue-500 text-blue-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  <LayoutDashboard size={16} />
-                  Overview
-                </button>
-                <button
                   onClick={() => setActiveTab('providers')}
                   className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
                     activeTab === 'providers'
@@ -533,23 +522,6 @@ Reference: ${transaction.reference || 'N/A'}`;
 
           {/* Tab Content */}
           <div>
-            {activeTab === 'tracking' && (
-              <PaymentTrackingDashboard
-                key={refreshTrigger} // Force re-render when refreshTrigger changes
-                onViewDetails={(payment) => {
-                  console.log('View payment details:', payment);
-                }}
-                onRefund={(payment) => {
-                  console.log('Refund payment:', payment);
-                }}
-                onExport={() => {
-                  console.log('Export data');
-                }}
-                onNavigateToTab={(tab) => {
-                  setActiveTab(tab as 'tracking' | 'providers' | 'purchase-orders' | 'history');
-                }}
-              />
-            )}
             {activeTab === 'providers' && (
               <PaymentAccountManagement />
             )}
@@ -560,7 +532,6 @@ Reference: ${transaction.reference || 'N/A'}`;
                 }}
                 onMakePayment={(purchaseOrder) => {
                   console.log('Make payment for purchase order:', purchaseOrder);
-                  // Trigger refresh of Overview tab data when payment is made
                   handleDataRefresh();
                 }}
                 onExport={() => {

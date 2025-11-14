@@ -1,7 +1,12 @@
 import { supabase } from './supabaseClient';
+import { getAccountBalanceBeforeStorage, validateBalanceBeforeTransaction } from './financeAccountService';
 import { toast } from 'react-hot-toast';
 import { emitSaleCompleted, emitStockUpdate } from '../features/lats/lib/data/eventBus';
-import { isSessionValid, clearAuthState } from './authUtils';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isValidUuid = (value: unknown): value is string =>
+  typeof value === 'string' && UUID_REGEX.test(value);
 
 export interface SaleItem {
   id: string;
@@ -584,12 +589,10 @@ class SaleProcessingService {
       // Create sale items - matching exact database structure
       const saleItems = saleData.items.map(item => {
         // Validate UUIDs
-        const isValidUUID = (uuid: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uuid);
-        
-        if (!isValidUUID(item.productId)) {
+        if (!isValidUuid(item.productId)) {
           console.error('❌ Invalid product_id UUID:', item.productId);
         }
-        if (!isValidUUID(item.variantId)) {
+        if (!isValidUuid(item.variantId)) {
           console.error('❌ Invalid variant_id UUID:', item.variantId);
         }
         
@@ -681,19 +684,32 @@ class SaleProcessingService {
           if (p.accountId) {
             try {
               console.log('💰 Updating finance account:', p.accountId);
-              const { data: acct, error: faErr } = await supabase
-                .from('finance_accounts')
-                .select('balance')
-                .eq('id', p.accountId)
-                .single();
-              
-              if (faErr) {
-                console.warn('⚠️ Failed to fetch finance account:', faErr.message);
+
+              // Use balance before storage/update with utility function
+              const { balance: originalBalance, accountData: acct, isValid } = await getAccountBalanceBeforeStorage(p.accountId);
+
+              if (!isValid || !acct) {
+                console.warn('⚠️ Failed to fetch finance account balance before storage');
                 continue; // Skip this payment's account updates
               }
-              
-              if (acct && typeof acct.balance === 'number') {
-                const newBalance = acct.balance + p.amount;
+
+              if (typeof originalBalance === 'number') {
+                // Example: Log or use the original balance before modification
+                console.log(`Account ${p.accountId} original balance before transaction: ${originalBalance}`);
+
+                // Validate balance before transaction
+                const validation = validateBalanceBeforeTransaction(originalBalance, p.amount, p.amount > 0 ? 'payment' : 'expense');
+
+                // You can use originalBalance here for any calculations or logic before the update
+                // For example: validation, logging, notifications, etc.
+                if (!validation.isValid && validation.warning) {
+                  console.warn(`⚠️ ${validation.warning}`);
+                }
+
+                // Note: For sales/payments received, we add to balance (income)
+                // For expenses/payments made, we subtract from balance (outcome)
+                // But we ensure balance never goes negative
+                const newBalance = validation.newBalance;
                 const { error: updErr } = await supabase
                   .from('finance_accounts')
                   .update({ balance: newBalance, updated_at: new Date().toISOString() })
@@ -880,6 +896,11 @@ class SaleProcessingService {
         // Use system if auth fails
         userId = 'system';
       }
+
+      const normalizedUserId = isValidUuid(userId) ? userId : null;
+      if (!normalizedUserId && userId !== 'system') {
+        console.warn('⚠️ Invalid user ID for stock movement logging, defaulting to null:', userId);
+      }
       
       // First, get current quantities for all variants
       const variantIds = items.map(item => item.variantId);
@@ -940,7 +961,7 @@ class SaleProcessingService {
           reason: 'Sale',
           reference: `Sale ${item.sku}`,
           notes: `Sold ${item.quantity} units of ${item.productName} (${item.variantName})`,
-          created_by: userId
+          created_by: normalizedUserId
         };
       });
 

@@ -44,12 +44,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { financeAccountService } from '../../../lib/financeAccountService';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { TableSkeleton } from '../../../components/ui/SkeletonLoaders';
 
 const InstallmentsPage: React.FC = () => {
   const { currentUser } = useAuth();
   const { customers } = useCustomers();
   const { currentBranch } = useBranch();
   const successModal = useSuccessModal();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   const [plans, setPlans] = useState<InstallmentPlan[]>([]);
   const [stats, setStats] = useState<InstallmentsStats | null>(null);
@@ -74,6 +77,7 @@ const InstallmentsPage: React.FC = () => {
       return;
     }
 
+    const jobId = startLoading('Loading installment plans...');
     setIsLoading(true);
     try {
       console.log('Fetching installment plans for branch:', currentBranch.id);
@@ -84,13 +88,15 @@ const InstallmentsPage: React.FC = () => {
       const fetchedStats = await installmentService.getStatistics(currentBranch.id);
       console.log('Fetched stats:', fetchedStats);
       setStats(fetchedStats);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error fetching installment plans:', error);
+      failLoading(jobId, 'Failed to load installment plans');
       toast.error('Failed to load installment plans');
     } finally {
       setIsLoading(false);
     }
-  }, [currentBranch?.id]);
+  }, [currentBranch?.id, startLoading, completeLoading, failLoading]);
 
   // Fetch payment accounts
   const fetchPaymentAccounts = useCallback(async () => {
@@ -178,11 +184,8 @@ const InstallmentsPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading installment plans...</p>
-        </div>
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <TableSkeleton />
       </div>
     );
   }

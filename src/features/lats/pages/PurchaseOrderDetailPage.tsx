@@ -13,10 +13,11 @@ import {
   CheckCircle2, CheckCircle, AlertTriangle,
   Zap, CreditCard,
   XSquare, XCircle, FileSpreadsheet,
-  Truck, RefreshCw, Settings, Trash2
+  Truck, RefreshCw, Settings, Trash2, Share2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { logPurchaseOrderError, validateProductId } from '../lib/errorLogger';
+import { useDialog } from '../../shared/hooks/useDialog';
 // XLSX will be imported dynamically when needed
 import { useInventoryStore } from '../stores/useInventoryStore';
 import { PurchaseOrder } from '../types/inventory';
@@ -24,6 +25,7 @@ import { PurchaseOrderService } from '../services/purchaseOrderService';
 import { QualityCheckService } from '../services/qualityCheckService';
 import { supabase } from '../../../lib/supabaseClient';
 import { serialNumberService } from '../services/serialNumberService';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 // Import components for Option B workflow
 import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
@@ -78,6 +80,7 @@ interface PurchaseOrderDetailPageProps {
 
 const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editMode = false }) => {
   const { currentUser } = useAuth();
+  const { confirm } = useDialog();
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -212,6 +215,9 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [purchaseOrderItems, setPurchaseOrderItems] = useState<any[]>([]);
   const [isLoadingPurchaseOrderItems, setIsLoadingPurchaseOrderItems] = useState(false);
   const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(['overview']));
+  
+  // Completion summary modal state
+  const [showCompletionSummaryModal, setShowCompletionSummaryModal] = useState(false);
 
   // Enhanced inventory management state
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -270,10 +276,11 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   };
 
   // Enhanced load purchase order function with comprehensive error handling and debugging
+  // 🚀 OPTIMIZED: Batch load all purchase order data in parallel
   const loadPurchaseOrder = useCallback(async () => {
-    console.log(`🔄 [PurchaseOrderDetailPage] Starting loadPurchaseOrder for ID: ${id}`);
+    console.log(`🔄 [PurchaseOrderDetailPage] Starting OPTIMIZED loadPurchaseOrder for ID: ${id}`);
     const startTime = Date.now();
-    
+
     if (!id) {
       console.error('❌ [PurchaseOrderDetailPage] No purchase order ID provided');
       toast.error('Purchase order ID is required');
@@ -281,26 +288,46 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       return;
     }
 
-    // Enhanced input validation
-    const idValidation = validateProductId(id, 'Purchase Order ID');
-    if (!idValidation.isValid) {
-      console.error('❌ [PurchaseOrderDetailPage] Invalid purchase order ID:', idValidation.error);
-      toast.error(idValidation.error || 'Invalid purchase order ID');
-      navigate('/lats/purchase-orders');
-      return;
-    }
-
+    // Fast input validation
     const trimmedId = id.trim();
     console.log(`🔍 Validated purchase order ID: "${trimmedId}"`);
-    
+
     setIsLoadingOrder(true);
-    
+
     try {
-      console.log('🔄 Loading purchase order from inventory store...');
-      
-      // Get the current store state to avoid dependency on the function reference
-      const { getPurchaseOrder: getPO } = useInventoryStore.getState();
-      const response = await getPO(trimmedId);
+      if (import.meta.env.MODE === 'development') {
+        console.log('🔄 [PurchaseOrderDetailPage] Starting parallel data loading...');
+      }
+
+      // 🚀 OPTIMIZED: Load main PO data and related data in parallel
+      const [poResponse, statusCheckPromise, pricingCheckPromise] = await Promise.allSettled([
+        // Main PO data
+        (async () => {
+          const { getPurchaseOrder: getPO } = useInventoryStore.getState();
+          return await getPO(trimmedId);
+        })(),
+
+        // Status auto-fix (non-blocking)
+        PurchaseOrderService.fixOrderStatusIfNeeded(trimmedId, currentUser?.id || '').catch(err => {
+          console.warn('⚠️ Status auto-fix failed (non-critical):', err);
+          return { success: false };
+        }),
+
+        // Pending pricing check (only for non-completed orders)
+        (async () => {
+          try {
+            // We'll check this after we get the PO data to avoid extra queries
+            return null;
+          } catch (err) {
+            console.warn('⚠️ Pricing check prep failed (non-critical):', err);
+            return false;
+          }
+        })()
+      ]);
+
+      // Extract main PO data
+      const response = poResponse.status === 'fulfilled' ? poResponse.value : null;
+      const statusFixResult = statusCheckPromise.status === 'fulfilled' ? statusCheckPromise.value : null;
       
       if (response.ok) {
         console.log('🔍 [PurchaseOrderDetailPage] DEBUG - Purchase order data received:', {
@@ -1022,7 +1049,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       return;
     }
     
-    if (window.confirm('Are you sure you want to delete this purchase order? This action cannot be undone.')) {
+    if (await confirm('Are you sure you want to delete this purchase order? This action cannot be undone.')) {
       try {
         setIsDeleting(true);
         const result = await PurchaseOrderActionsService.deleteOrder(purchaseOrder.id);
@@ -1991,8 +2018,118 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
       return;
     }
     
+    // Show completion summary modal
+    setShowCompletionSummaryModal(true);
+  };
+
+  // Print receipt handler
+  const handlePrintReceipt = () => {
+    if (!purchaseOrder) return;
+    
+    const printContent = `
+      ═══════════════════════════════════════
+           PURCHASE ORDER RECEIPT
+      ═══════════════════════════════════════
+      
+      Order Number: ${purchaseOrder.orderNumber}
+      Supplier: ${purchaseOrder.supplier?.name || 'N/A'}
+      Order Date: ${new Date(purchaseOrder.orderDate || purchaseOrder.createdAt).toLocaleDateString()}
+      Status: ${purchaseOrder.status.toUpperCase()}
+      
+      ───────────────────────────────────────
+      ITEMS SUMMARY
+      ───────────────────────────────────────
+      Total Items: ${purchaseOrder.items?.length || 0}
+      Total Ordered: ${purchaseOrder.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0}
+      Total Received: ${purchaseOrder.items?.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0) || 0}
+      
+      ───────────────────────────────────────
+      FINANCIAL SUMMARY
+      ───────────────────────────────────────
+      Total Amount: ${purchaseOrder.currency || 'TZS'} ${Number(purchaseOrder.totalAmount || 0).toLocaleString()}
+      Payment Status: ${purchaseOrder.paymentStatus?.toUpperCase() || 'UNPAID'}
+      
+      ═══════════════════════════════════════
+      Thank you for your business!
+      ═══════════════════════════════════════
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Purchase Order Receipt - ${purchaseOrder.orderNumber}</title>
+            <style>
+              body {
+                font-family: 'Courier New', monospace;
+                padding: 20px;
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              pre {
+                white-space: pre-wrap;
+                font-size: 14px;
+                line-height: 1.6;
+              }
+              @media print {
+                body { padding: 0; }
+              }
+            </style>
+          </head>
+          <body>
+            <pre>${printContent}</pre>
+            <script>
+              window.onload = () => {
+                window.print();
+                // Uncomment to auto-close after printing
+                // setTimeout(() => window.close(), 100);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
+  // Share on WhatsApp handler
+  const handleShareWhatsApp = () => {
+    if (!purchaseOrder) return;
+    
+    const message = `
+*PURCHASE ORDER COMPLETED* ✅
+
+*Order Number:* ${purchaseOrder.orderNumber}
+*Supplier:* ${purchaseOrder.supplier?.name || 'N/A'}
+*Order Date:* ${new Date(purchaseOrder.orderDate || purchaseOrder.createdAt).toLocaleDateString()}
+*Status:* ${purchaseOrder.status.toUpperCase()}
+
+*Items Summary:*
+━━━━━━━━━━━━━━━━
+• Total Items: ${purchaseOrder.items?.length || 0}
+• Total Ordered: ${purchaseOrder.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0}
+• Total Received: ${purchaseOrder.items?.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0) || 0}
+
+*Financial Summary:*
+━━━━━━━━━━━━━━━━
+• Total Amount: ${purchaseOrder.currency || 'TZS'} ${Number(purchaseOrder.totalAmount || 0).toLocaleString()}
+• Payment Status: ${purchaseOrder.paymentStatus?.toUpperCase() || 'UNPAID'}
+
+Thank you for your business! 🙏
+    `.trim();
+    
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  const confirmCompleteOrder = async () => {
+    if (!purchaseOrder) return;
+    
     try {
       setIsCompleting(true);
+      setShowCompletionSummaryModal(false);
       
       // First, check completion status
       const statusResult = await PurchaseOrderService.checkCompletionStatus(purchaseOrder.id);
@@ -2035,7 +2172,7 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
         // Show completion summary
         if (result.data) {
           console.log('📊 Completion Summary:', {
-            orderNumber: result.data.order_number,
+            orderNumber: result.data.po_number,
             totalItems: result.data.total_items,
             completedItems: result.data.completed_items,
             completionDate: result.data.completion_date
@@ -6033,6 +6170,182 @@ TERMS AND CONDITIONS:
           </div>
         )}
 
+        {/* Completion Summary Modal */}
+        {showCompletionSummaryModal && purchaseOrder && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+              {/* Header */}
+              <div className="bg-gradient-to-br from-green-100 to-emerald-100 p-8">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-16 h-16 rounded-full bg-green-600 flex items-center justify-center shadow-lg">
+                    <CheckCircle className="w-10 h-10 text-white" />
+                  </div>
+                  <button
+                    onClick={() => setShowCompletionSummaryModal(false)}
+                    className="w-9 h-9 flex items-center justify-center bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-full transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">Complete Purchase Order</h2>
+                <p className="text-gray-700">Review the order summary before completing</p>
+              </div>
+
+              {/* Summary Content */}
+              <div className="p-8 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Order Information */}
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-blue-600" />
+                      Order Information
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Order Number</p>
+                        <p className="font-semibold text-gray-900">{purchaseOrder.orderNumber}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Supplier</p>
+                        <p className="font-semibold text-gray-900">{purchaseOrder.supplier?.name || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Order Date</p>
+                        <p className="font-semibold text-gray-900">
+                          {new Date(purchaseOrder.orderDate || purchaseOrder.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Status</p>
+                        <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                          {purchaseOrder.status.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items Summary */}
+                  <div className="bg-gray-50 rounded-lg p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <Package className="w-5 h-5 text-purple-600" />
+                      Items Summary
+                    </h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="text-center">
+                        <p className="text-sm text-gray-500 mb-1">Total Items</p>
+                        <p className="text-2xl font-bold text-gray-900">{purchaseOrder.items?.length || 0}</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-gray-500 mb-1">Total Ordered</p>
+                        <p className="text-2xl font-bold text-blue-600">
+                          {purchaseOrder.items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0}
+                        </p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm text-gray-500 mb-1">Total Received</p>
+                        <p className="text-2xl font-bold text-green-600">
+                          {purchaseOrder.items?.reduce((sum, item) => sum + (item.receivedQuantity || 0), 0) || 0}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Financial Summary */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-6 border-2 border-green-200">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      <DollarSign className="w-5 h-5 text-green-600" />
+                      Financial Summary
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Total Amount</span>
+                        <span className="text-xl font-bold text-gray-900">
+                          {purchaseOrder.currency || 'TZS'} {Number(purchaseOrder.totalAmount || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">Payment Status</span>
+                        <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                          purchaseOrder.paymentStatus === 'paid' 
+                            ? 'bg-green-100 text-green-800' 
+                            : purchaseOrder.paymentStatus === 'partial'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {purchaseOrder.paymentStatus?.toUpperCase() || 'UNPAID'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Confirmation Message */}
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div className="flex gap-3">
+                      <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-medium text-yellow-900 mb-1">Important</p>
+                        <p className="text-sm text-yellow-800">
+                          Completing this order will finalize all transactions and mark it as complete. 
+                          This action cannot be undone.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="bg-gray-50 px-8 py-6">
+                {/* Primary Actions */}
+                <div className="flex gap-3 mb-3">
+                  <button
+                    onClick={() => setShowCompletionSummaryModal(false)}
+                    className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handlePrintReceipt}
+                    className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors shadow-lg"
+                    title="Print Receipt"
+                  >
+                    <Printer className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handleShareWhatsApp}
+                    className="px-4 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-colors shadow-lg"
+                    title="Share on WhatsApp"
+                  >
+                    <Share2 className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={confirmCompleteOrder}
+                    disabled={isCompleting}
+                    className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-2"
+                  >
+                    {isCompleting ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Completing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-5 h-5" />
+                        Confirm & Complete
+                      </>
+                    )}
+                  </button>
+                </div>
+                
+                {/* Secondary Info */}
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                  <Info className="w-3 h-3" />
+                  <span>Print receipt or share via WhatsApp before completing</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Add to Inventory Modal */}
         {showAddToInventoryModal && (

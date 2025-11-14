@@ -49,8 +49,7 @@ import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../context/AuthContext';
 import { rbacManager } from '../lib/rbac';
 import { useBusinessInfo } from '../../../hooks/useBusinessInfo';
-
-
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface Sale {
   id: string;
@@ -441,22 +440,40 @@ const SalesReportsPage: React.FC = () => {
         );
       }
 
-      // Fetch sale items count separately for each sale
+      // 🚀 OPTIMIZED: Batch fetch all sale items in ONE query instead of N+1 queries
       if (salesResult.data && salesResult.data.length > 0) {
-        const salesWithItems = await Promise.all(
-          salesResult.data.map(async (sale) => {
-            const { data: items, error: itemsError } = await supabase
-              .from('lats_sale_items')
-              .select('id, quantity, total_price, cost_price')
-              .eq('sale_id', sale.id);
-            
-            return {
-              ...sale,
-              lats_sale_items: items || []
-            };
-          })
-        );
-        salesResult.data = salesWithItems;
+        if (import.meta.env.MODE === 'development') {
+          console.log(`🔄 [SalesReports] Starting optimized batch item loading for ${salesResult.data.length} sales...`);
+        }
+
+        const saleIds = salesResult.data.map(sale => sale.id);
+
+        // Single batch query for ALL sale items
+        const { data: allItems, error: itemsError } = await supabase
+          .from('lats_sale_items')
+          .select('id, sale_id, quantity, total_price, cost_price')
+          .in('sale_id', saleIds);
+
+        if (itemsError) {
+          console.error('❌ Error fetching sale items batch:', itemsError);
+        } else {
+          // Group items by sale_id for efficient lookup
+          const itemsBySaleId = (allItems || []).reduce((acc, item) => {
+            if (!acc[item.sale_id]) acc[item.sale_id] = [];
+            acc[item.sale_id].push(item);
+            return acc;
+          }, {} as Record<string, any[]>);
+
+          // Attach items to sales
+          salesResult.data = salesResult.data.map(sale => ({
+            ...sale,
+            lats_sale_items: itemsBySaleId[sale.id] || []
+          }));
+
+          if (import.meta.env.MODE === 'development') {
+            console.log(`✅ [SalesReports] Optimized batch loading completed: ${allItems?.length || 0} items loaded in ONE query`);
+          }
+        }
       }
 
       if (salesResult.error) {

@@ -32,6 +32,7 @@ import SupplierDetailModal from '../components/SupplierDetailModal';
 import SupplierImportExportToolbar from '../components/SupplierImportExportToolbar';
 import EnhancedAddSupplierModal from '../components/EnhancedAddSupplierModal';
 import { extractProductCategories, getCategoryColor } from '../../../utils/supplierUtils';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface EnhancedSupplierManagementPageProps {
   embedded?: boolean; // When true, hides the main header (for use in tabs)
@@ -40,6 +41,7 @@ interface EnhancedSupplierManagementPageProps {
 const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPageProps> = ({ embedded = false }) => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
 
   // Data state
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -80,6 +82,7 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
   }, [suppliers, searchQuery, selectedCountry, selectedCategory, selectedTag, selectedPriority, minRating]);
 
   const loadAllData = async () => {
+    const jobId = startLoading('Loading suppliers...');
     try {
       setLoading(true);
       const [
@@ -101,8 +104,10 @@ const EnhancedSupplierManagementPage: React.FC<EnhancedSupplierManagementPagePro
       setTags(tagsData);
       setExpiringContracts(expiringContractsData);
       setExpiringDocuments(expiringDocsData);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error loading data:', error);
+      failLoading(jobId, 'Failed to load suppliers');
       toast.error('Failed to load suppliers');
     } finally {
       setLoading(false);

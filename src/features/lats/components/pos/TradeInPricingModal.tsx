@@ -3,6 +3,7 @@ import { DollarSign, X, AlertCircle, TrendingUp, Calculator, Package, Plus, Tras
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../../lib/supabaseClient';
 import type { TradeInTransaction } from '../../types/tradeIn';
+import { useDialog } from '../../../shared/hooks/useDialog';
 
 interface AdditionalCost {
   id: string;
@@ -46,6 +47,7 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
   onConfirm,
   isLoading = false
 }) => {
+  const { confirm: confirmDialog } = useDialog();
   const [pricingData, setPricingData] = useState<PricingData>({
     cost_price: transaction.final_trade_in_value || 0,
     additional_costs: [],
@@ -189,10 +191,10 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
     }
 
     if (pricingData.selling_price < pricingData.total_cost) {
-      const confirm = window.confirm(
+      const confirmed = await confirmDialog(
         `Warning: Selling price (${formatPrice(pricingData.selling_price)} TZS) is below total cost (${formatPrice(pricingData.total_cost)} TZS). Continue anyway?`
       );
-      if (!confirm) return;
+      if (!confirmed) return;
     }
 
     try {

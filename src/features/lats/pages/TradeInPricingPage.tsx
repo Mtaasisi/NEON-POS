@@ -14,8 +14,10 @@ import {
   deleteTradeInPrice,
 } from '../lib/tradeInApi';
 import { format } from '../lib/format';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 export const TradeInPricingPage: React.FC = () => {
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [prices, setPrices] = useState<TradeInPrice[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -25,11 +27,14 @@ export const TradeInPricingPage: React.FC = () => {
 
   // Load prices
   const loadPrices = async () => {
+    const jobId = startLoading('Loading trade-in prices...');
     setLoading(true);
     const result = await getTradeInPrices({ is_active: showActiveOnly });
     if (result.success && result.data) {
       setPrices(result.data);
+      completeLoading(jobId);
     } else {
+      failLoading(jobId, 'Failed to load prices');
       toast.error(result.error || 'Failed to load prices');
     }
     setLoading(false);

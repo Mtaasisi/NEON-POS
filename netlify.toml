@@ -1,6 +1,6 @@
 [build]
-  command = "npm run build:prod && mkdir -p dist-deploy/lats && cp -r dist/* dist-deploy/lats/ && cp public/_redirects dist-deploy/_redirects"
-  publish = "dist-deploy"
+  command = "npm run build:prod"
+  publish = "dist"
 
 [build.environment]
   NODE_VERSION = "18"
@@ -11,55 +11,18 @@
 [context.production.environment]
   NODE_ENV = "production"
   VITE_APP_ENV = "production"
-  VITE_BASE_PATH = "/lats/"
 
 # Deploy preview environment (use development database)
 [context.deploy-preview.environment]
   NODE_ENV = "development"
   VITE_APP_ENV = "development"
-  VITE_BASE_PATH = "/lats/"
 
 # Branch deploys (use development database)
 [context.branch-deploy.environment]
   NODE_ENV = "development"
   VITE_APP_ENV = "development"
-  VITE_BASE_PATH = "/lats/"
 
-# Headers for proper MIME types on static assets in /lats/ subdirectory
-[[headers]]
-  for = "/lats/assets/*.js"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/lats/assets/*.mjs"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/lats/assets/*.css"
-  [headers.values]
-    Content-Type = "text/css; charset=utf-8"
-    Cache-Control = "public, max-age=31536000, immutable"
-
-[[headers]]
-  for = "/lats/*.js"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-
-[[headers]]
-  for = "/lats/*.mjs"
-  [headers.values]
-    Content-Type = "application/javascript; charset=utf-8"
-
-[[headers]]
-  for = "/lats/*.css"
-  [headers.values]
-    Content-Type = "text/css; charset=utf-8"
-
-# Also keep root level headers for backward compatibility
+# Headers for proper MIME types on static assets
 [[headers]]
   for = "/assets/*.js"
   [headers.values]

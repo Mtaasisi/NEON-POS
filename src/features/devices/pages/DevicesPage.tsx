@@ -33,10 +33,12 @@ import {
 import { toast } from 'react-hot-toast';
 import { updateDeviceInDb } from '../../../lib/deviceApi';
 import { supabase } from '../../../lib/supabaseClient';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const DevicesPage: React.FC = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   
   // Safely access devices context with error handling for HMR

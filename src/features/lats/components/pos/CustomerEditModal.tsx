@@ -5,6 +5,7 @@ import { Customer } from '../../../customers/types';
 import { updateCustomerInDb } from '../../../../lib/customerApi/core';
 import CustomerSearchDropdown from '../../../shared/components/CustomerSearchDropdown';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
+import { useDialog } from '../../../shared/hooks/useDialog';
 
 interface CustomerEditModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
   customer,
   onCustomerUpdated
 }) => {
+  const { confirm } = useDialog();
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -170,9 +172,9 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
     }
   };
 
-  const handleClose = () => {
+  const handleClose = async () => {
     if (hasChanges) {
-      const confirmClose = window.confirm('You have unsaved changes. Are you sure you want to close?');
+      const confirmClose = await confirm('You have unsaved changes. Are you sure you want to close?');
       if (!confirmClose) return;
     }
     onClose();

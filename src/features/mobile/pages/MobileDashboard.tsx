@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { DashboardSkeleton } from '../../../components/ui/SkeletonLoaders';
 import { ChevronRight, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Package, Clock, RefreshCw, Users, AlertCircle, BarChart3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../../lib/supabase';
@@ -352,12 +354,34 @@ const MobileDashboard: React.FC = () => {
           <h1 className="text-[32px] font-bold text-black tracking-tight">Home</h1>
         </div>
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex-1 flex items-center justify-center min-h-[400px]">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-3"></div>
-              <p className="text-gray-500 text-[15px]">Loading dashboard...</p>
+        {/* Loading State - Skeleton */}
+        {isLoading && products.length === 0 && (
+          <div className="px-4 animate-pulse space-y-4">
+            {/* Stats Cards Skeleton */}
+            <div className="grid grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="bg-white rounded-2xl p-4 border border-gray-100">
+                  <div className="h-4 w-16 bg-gray-200 rounded mb-2"></div>
+                  <div className="h-8 w-20 bg-gray-200 rounded mb-1"></div>
+                  <div className="h-3 w-12 bg-gray-200 rounded"></div>
+                </div>
+              ))}
+            </div>
+            
+            {/* Chart Skeleton */}
+            <div className="bg-white rounded-2xl p-4 border border-gray-100">
+              <div className="h-5 w-32 bg-gray-200 rounded mb-4"></div>
+              <div className="h-48 bg-gray-200 rounded"></div>
+            </div>
+            
+            {/* Quick Actions Skeleton */}
+            <div className="grid grid-cols-4 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex flex-col items-center gap-2">
+                  <div className="w-14 h-14 bg-gray-200 rounded-2xl"></div>
+                  <div className="h-3 w-12 bg-gray-200 rounded"></div>
+                </div>
+              ))}
             </div>
           </div>
         )}

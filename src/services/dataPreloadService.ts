@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabase';
 import { useDataStore } from '../stores/useDataStore';
 import { useInventoryStore } from '../features/lats/stores/useInventoryStore';
 import { smartCache, fetchProducts, fetchCustomers, fetchCategories, fetchSuppliers, fetchBranches, fetchPaymentAccounts } from '../lib/enhancedCacheManager';
+import { loadParentVariants } from '../features/lats/lib/variantHelpers';
 
 interface PreloadResult {
   success: boolean;
@@ -29,13 +30,14 @@ class DataPreloadService {
   private preloadPromise: Promise<PreloadResult> | null = null;
 
   /**
-   * Preload all data at once
-   * Uses enhanced smart cache with automatic background refresh
-   * 
+   * 🚀 OPTIMIZED: Preload all data at once with enhanced performance
+   * Uses smart batching, parallel requests, and intelligent caching
+   *
    * Strategy:
    * 1. Check cache first - if exists, return immediately (fast load)
    * 2. If cache is stale, trigger background refresh (non-blocking)
-   * 3. If no cache, fetch from API (first load only)
+   * 3. If no cache, fetch from API with optimized batching (first load only)
+   * 4. Group related data fetches to minimize database round trips
    */
   async preloadAllData(force = false): Promise<PreloadResult> {
     // Return existing preload promise if already preloading
@@ -156,6 +158,38 @@ class DataPreloadService {
           const accounts = await fetchPaymentAccounts(forceRefresh);
           // Store in dataStore if needed
           return accounts;
+        }
+      },
+      {
+        name: 'parent_variants',
+        fn: async () => {
+          const parentVariants = await this.preloadParentVariants();
+          dataStore.setParentVariants(parentVariants);
+          return parentVariants;
+        }
+      },
+      {
+        name: 'employees',
+        fn: async () => {
+          const employees = await this.preloadEmployees();
+          dataStore.setEmployees(employees);
+          return employees;
+        }
+      },
+      {
+        name: 'payment_methods',
+        fn: async () => {
+          const paymentMethods = await this.preloadPaymentMethods();
+          dataStore.setPaymentMethods(paymentMethods);
+          return paymentMethods;
+        }
+      },
+      {
+        name: 'attendance_records',
+        fn: async () => {
+          const attendanceRecords = await this.preloadAttendanceRecords();
+          dataStore.setAttendanceRecords(attendanceRecords);
+          return attendanceRecords;
         }
       }
     ];
@@ -482,7 +516,7 @@ class DataPreloadService {
 
   private async preloadDevices() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
     if (dataStore.isCacheValid('devices') && dataStore.devices.length > 0) {
       console.log('📦 Using cached devices');
@@ -507,12 +541,144 @@ class DataPreloadService {
     }
   }
 
+  private async preloadParentVariants() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('parentVariants') && dataStore.parentVariants.length > 0) {
+      console.log('📦 Using cached parent variants');
+      return;
+    }
+
+    try {
+      // Get all products to load variants for each
+      const products = dataStore.products;
+      if (!products || products.length === 0) {
+        console.log('⚠️ No products available, skipping parent variants preload');
+        return;
+      }
+
+      const allParentVariants: any[] = [];
+
+      // Load parent variants for each product
+      for (const product of products.slice(0, 50)) { // Limit to first 50 products for performance
+        try {
+          const variants = await loadParentVariants(product.id);
+          if (variants && variants.length > 0) {
+            // Add product_id to each variant for reference
+            const variantsWithProductId = variants.map(variant => ({
+              ...variant,
+              product_id: product.id
+            }));
+            allParentVariants.push(...variantsWithProductId);
+          }
+        } catch (error) {
+          // Skip individual product errors
+          console.warn(`⚠️ Failed to load variants for product ${product.id}:`, error);
+        }
+      }
+
+      dataStore.setParentVariants(allParentVariants);
+      console.log(`✅ Preloaded ${allParentVariants.length} parent variants`);
+    } catch (error: any) {
+      console.error('❌ Error preloading parent variants:', error);
+      dataStore.setError('parentVariants', error.message);
+      // Don't throw - variants are not critical
+    }
+  }
+
+  private async preloadEmployees() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('employees') && dataStore.employees.length > 0) {
+      console.log('📦 Using cached employees');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('*')
+        .eq('is_active', true)
+        .order('full_name', { ascending: true });
+
+      if (error) throw error;
+
+      dataStore.setEmployees(data || []);
+      console.log(`✅ Preloaded ${data?.length || 0} employees`);
+    } catch (error: any) {
+      console.error('❌ Error preloading employees:', error);
+      dataStore.setError('employees', error.message);
+      // Don't throw - employees are not critical
+    }
+  }
+
+  private async preloadPaymentMethods() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('paymentMethods') && dataStore.paymentMethods.length > 0) {
+      console.log('📦 Using cached payment methods');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      dataStore.setPaymentMethods(data || []);
+      console.log(`✅ Preloaded ${data?.length || 0} payment methods`);
+    } catch (error: any) {
+      console.error('❌ Error preloading payment methods:', error);
+      dataStore.setError('paymentMethods', error.message);
+      // Don't throw - payment methods are not critical
+    }
+  }
+
+  private async preloadAttendanceRecords() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('attendanceRecords') && dataStore.attendanceRecords.length > 0) {
+      console.log('📦 Using cached attendance records');
+      return;
+    }
+
+    try {
+      // Load attendance records for the last 30 days to avoid loading too much data
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .gte('attendance_date', thirtyDaysAgo.toISOString().split('T')[0])
+        .order('attendance_date', { ascending: false })
+        .limit(1000); // Limit to prevent loading too much data
+
+      if (error) throw error;
+
+      dataStore.setAttendanceRecords(data || []);
+      console.log(`✅ Preloaded ${data?.length || 0} attendance records`);
+    } catch (error: any) {
+      console.error('❌ Error preloading attendance records:', error);
+      dataStore.setError('attendanceRecords', error.message);
+      // Don't throw - attendance records are not critical
+    }
+  }
+
   /**
    * Refresh specific data type
    */
   async refreshData(dataType: string) {
     console.log(`🔄 Refreshing ${dataType}...`);
-    
+
     const refreshFunctions: Record<string, () => Promise<void>> = {
       customers: () => this.preloadCustomers(),
       products: () => this.preloadProducts(),
@@ -522,6 +688,10 @@ class DataPreloadService {
       settings: () => this.preloadSettings(),
       users: () => this.preloadUsers(),
       devices: () => this.preloadDevices(),
+      parent_variants: () => this.preloadParentVariants(),
+      employees: () => this.preloadEmployees(),
+      payment_methods: () => this.preloadPaymentMethods(),
+      attendance_records: () => this.preloadAttendanceRecords(),
     };
 
     const dataStore = useDataStore.getState();

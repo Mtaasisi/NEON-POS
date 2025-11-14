@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWeekend, isSameDay } from 'date-fns';
 import { supabase } from '../../../lib/supabaseClient';
 import toast from 'react-hot-toast';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface Employee {
   id: string;

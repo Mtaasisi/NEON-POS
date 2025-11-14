@@ -1,169 +1,132 @@
-import { useState, useEffect, useCallback } from 'react';
-import { financeAccountService, FinanceAccount } from '../lib/financeAccountService';
-import { toast } from 'react-hot-toast';
+import { useState, useEffect, useRef } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { PaymentMethod } from '../stores/useDataStore';
+import { usePaymentMethodsData } from '../stores/useDataStore';
 
-// Finance accounts are now used directly as payment methods
-export type PaymentMethod = FinanceAccount;
+// Cache for payment methods data to prevent unnecessary refetches
+const paymentMethodsDataCache = new Map<string, {
+  data: PaymentMethod[];
+  timestamp: number;
+}>();
 
-export const usePaymentMethods = () => {
+// Cache timeout (5 minutes)
+const CACHE_TIMEOUT = 5 * 60 * 1000;
+
+interface UsePaymentMethodsOptions {
+  autoFetch?: boolean;
+  cacheKey?: string;
+  activeOnly?: boolean;
+}
+
+interface UsePaymentMethodsReturn {
+  paymentMethods: PaymentMethod[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+}
+
+export function usePaymentMethods(options: UsePaymentMethodsOptions = {}): UsePaymentMethodsReturn {
+  const { autoFetch = true, cacheKey = 'default', activeOnly = true } = options;
+
+  const preloadedPaymentMethods = usePaymentMethodsData();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch all payment methods (finance accounts with is_payment_method = true)
-  const fetchPaymentMethods = useCallback(async () => {
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const fetchPaymentMethods = async (forceRefresh = false) => {
+    if (!isMountedRef.current) return;
+
+    const cacheKeyWithType = `${cacheKey}_${activeOnly ? 'active' : 'all'}`;
+
+    // Check preloaded data first (unless force refresh)
+    if (!forceRefresh && preloadedPaymentMethods.length > 0) {
+      let filteredMethods = preloadedPaymentMethods;
+      if (activeOnly) {
+        filteredMethods = preloadedPaymentMethods.filter(method => method.is_active !== false);
+      }
+      console.log(`✅ Using preloaded payment methods: ${filteredMethods.length} methods`);
+      setPaymentMethods(filteredMethods);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    // Check cache first (unless force refresh)
+    if (!forceRefresh) {
+      const cached = paymentMethodsDataCache.get(cacheKeyWithType);
+      if (cached && Date.now() - cached.timestamp < CACHE_TIMEOUT) {
+        setPaymentMethods(cached.data);
+        setLoading(false);
+        setError(null);
+        return;
+      }
+    }
+
+    // Fetch from API
     try {
       setLoading(true);
       setError(null);
-      const methods = await financeAccountService.getPaymentMethods();
-      setPaymentMethods(methods);
-      console.log('✅ Payment methods loaded:', methods.length);
-    } catch (err) {
-      setError('Failed to fetch payment methods');
-      console.error('Error fetching payment methods:', err);
-      // Set empty array to prevent crashes
-      setPaymentMethods([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
-  // Get payment methods by type
-  const getPaymentMethodsByType = useCallback(async (type: FinanceAccount['type']) => {
-    try {
-      return await financeAccountService.getFinanceAccountsByType(type);
-    } catch (err) {
-      console.error('Error fetching payment methods by type:', err);
-      return [];
-    }
-  }, []);
+      const { data, error } = await supabase
+        .from('payment_methods')
+        .select('*')
+        .order('name', { ascending: true });
 
-  // Get payment method by ID
-  const getPaymentMethodById = useCallback(async (id: string) => {
-    try {
-      return await financeAccountService.getFinanceAccountById(id);
-    } catch (err) {
-      console.error('Error fetching payment method by ID:', err);
-      return null;
-    }
-  }, []);
+      if (error) throw error;
 
-
-
-  // Get Finance-specific payment methods (bank, savings, investment)
-  const getFinancePaymentMethods = useCallback(async () => {
-    try {
-      return await financeAccountService.getFinancePaymentMethods();
-    } catch (err) {
-      console.error('Error fetching finance payment methods:', err);
-      return [];
-    }
-  }, []);
-
-  // Get default payment method
-  const getDefaultPaymentMethod = useCallback(async () => {
-    try {
-      return await financeAccountService.getDefaultPaymentMethod();
-    } catch (err) {
-      console.error('Error fetching default payment method:', err);
-      return null;
-    }
-  }, []);
-
-  // Create new payment method (finance account)
-  const createPaymentMethod = useCallback(async (paymentMethod: Omit<FinanceAccount, 'id' | 'created_at' | 'updated_at'>) => {
-    try {
-      const newMethod = await financeAccountService.createFinanceAccount(paymentMethod);
-      if (newMethod) {
-        // Refresh the payment methods list
-        await fetchPaymentMethods();
-        toast.success('Payment method created successfully');
-        return newMethod;
-      } else {
-        toast.error('Failed to create payment method');
-        return null;
+      // Filter if needed
+      let filteredData = data || [];
+      if (activeOnly) {
+        filteredData = filteredData.filter(method => method.is_active !== false);
       }
-    } catch (err) {
-      console.error('Error creating payment method:', err);
-      toast.error('Failed to create payment method');
-      return null;
-    }
-  }, [fetchPaymentMethods]);
 
-  // Update payment method
-  const updatePaymentMethod = useCallback(async (id: string, updates: Partial<FinanceAccount>) => {
-    try {
-      const updatedMethod = await financeAccountService.updateFinanceAccount(id, updates);
-      if (updatedMethod) {
-        // Refresh the payment methods list
-        await fetchPaymentMethods();
-        toast.success('Payment method updated successfully');
-        return updatedMethod;
-      } else {
-        toast.error('Failed to update payment method');
-        return null;
+      // Update cache
+      paymentMethodsDataCache.set(cacheKeyWithType, {
+        data: filteredData,
+        timestamp: Date.now()
+      });
+
+      if (isMountedRef.current) {
+        setPaymentMethods(filteredData);
+        setLoading(false);
+        setError(null);
       }
-    } catch (err) {
-      console.error('Error updating payment method:', err);
-      toast.error('Failed to update payment method');
-      return null;
-    }
-  }, [fetchPaymentMethods]);
 
-  // Delete payment method
-  const deletePaymentMethod = useCallback(async (id: string) => {
-    try {
-      const success = await financeAccountService.deleteFinanceAccount(id);
-      if (success) {
-        // Refresh the payment methods list
-        await fetchPaymentMethods();
-        toast.success('Payment method deleted successfully');
-        return true;
-      } else {
-        toast.error('Failed to delete payment method');
-        return false;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch payment methods';
+
+      if (isMountedRef.current) {
+        console.error('❌ Error fetching payment methods:', errorMessage);
+        setError(errorMessage);
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('Error deleting payment method:', err);
-      toast.error('Failed to delete payment method');
-      return false;
     }
-  }, [fetchPaymentMethods]);
+  };
 
-  // Get payment method stats
-  const getPaymentMethodStats = useCallback(async () => {
-    try {
-      return await financeAccountService.getFinanceAccountStats();
-    } catch (err) {
-      console.error('Error fetching payment method stats:', err);
-      return {
-        total: 0,
-        byType: {},
-        active: 0,
-        totalBalance: 0,
-        paymentMethods: 0
-      };
-    }
-  }, []);
+  const refetch = async () => {
+    await fetchPaymentMethods(true);
+  };
 
-  // Initialize payment methods on mount
+  // Auto-fetch on mount if enabled
   useEffect(() => {
-    fetchPaymentMethods();
-  }, [fetchPaymentMethods]);
+    if (autoFetch) {
+      fetchPaymentMethods();
+    }
+  }, [autoFetch, cacheKey, activeOnly]);
 
   return {
     paymentMethods,
     loading,
     error,
-    fetchPaymentMethods,
-    getPaymentMethodsByType,
-    getPaymentMethodById,
-
-    getFinancePaymentMethods,
-    getDefaultPaymentMethod,
-    createPaymentMethod,
-    updatePaymentMethod,
-    deletePaymentMethod,
-    getPaymentMethodStats
+    refetch
   };
-}; 
+}

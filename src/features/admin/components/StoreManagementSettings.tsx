@@ -19,7 +19,19 @@ import {
   Warehouse,
   Factory,
   FolderTree,
-  UserCircle
+  UserCircle,
+  Receipt,
+  FileText,
+  Smartphone,
+  CreditCard,
+  Calendar,
+  Bell,
+  DollarSign,
+  Repeat,
+  ClipboardList,
+  UserCheck,
+  Award,
+  Star
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -43,13 +55,26 @@ interface Store {
   // Data Isolation & Sharing
   data_isolation_mode: 'shared' | 'isolated' | 'hybrid';
   
-  // What data is shared vs isolated
+  // What data is shared vs isolated - Core Data
   share_products: boolean;
   share_customers: boolean;
   share_inventory: boolean;
   share_suppliers: boolean;
   share_categories: boolean;
   share_employees: boolean;
+  
+  // Additional Isolation Options - Business Operations
+  share_sales: boolean;
+  share_purchase_orders: boolean;
+  share_devices: boolean;
+  share_payments: boolean;
+  share_appointments: boolean;
+  share_reminders: boolean;
+  share_expenses: boolean;
+  share_trade_ins: boolean;
+  share_special_orders: boolean;
+  share_attendance: boolean;
+  share_loyalty_points: boolean;
   
   // Transfer & Sync Options
   allow_stock_transfer: boolean;
@@ -97,6 +122,19 @@ const StoreManagementSettings: React.FC = () => {
     share_suppliers: false,
     share_categories: false,
     share_employees: false,
+    
+    // Additional isolation defaults
+    share_sales: false,
+    share_purchase_orders: false,
+    share_devices: false,
+    share_payments: false,
+    share_appointments: false,
+    share_reminders: false,
+    share_expenses: false,
+    share_trade_ins: false,
+    share_special_orders: false,
+    share_attendance: false,
+    share_loyalty_points: false,
     
     // Transfer Options
     allow_stock_transfer: true,
@@ -193,22 +231,102 @@ const StoreManagementSettings: React.FC = () => {
   }, []);
 
   const handleDeleteStore = async (storeId: string) => {
-    if (!confirm('Are you sure you want to delete this store? This action cannot be undone.')) {
-      return;
-    }
-
     try {
+      // First, check if the store can be deleted
+      const { data: checkResult, error: checkError } = await supabase
+        .rpc('can_delete_store_location', { store_id: storeId });
+
+      if (checkError) {
+        console.error('Error checking store deletion:', checkError);
+        // If function doesn't exist, proceed with caution
+      }
+
+      // If we got results, check if deletion is allowed
+      if (checkResult && checkResult.length > 0) {
+        const check = checkResult[0];
+        
+        if (!check.can_delete) {
+          toast.error(check.reason, { duration: 6000 });
+          
+          // Show detailed warning
+          const details = [];
+          if (check.product_count > 0) details.push(`${check.product_count} products`);
+          if (check.variant_count > 0) details.push(`${check.variant_count} variants`);
+          if (check.customer_count > 0) details.push(`${check.customer_count} customers`);
+          if (check.employee_count > 0) details.push(`${check.employee_count} employees`);
+          
+          if (details.length > 0) {
+            alert(
+              `Cannot delete this store.\n\n` +
+              `The store contains:\n` +
+              details.map(d => `• ${d}`).join('\n') +
+              `\n\nPlease transfer or delete these items first.`
+            );
+          }
+          return;
+        }
+      }
+
+      // Confirm deletion
+      if (!confirm('Are you sure you want to delete this store? This action cannot be undone.')) {
+        return;
+      }
+
+      // Attempt deletion
       const { error } = await supabase
         .from('store_locations')
         .delete()
         .eq('id', storeId);
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's a foreign key constraint error
+        if (error.code === '23503') {
+          toast.error(
+            'Cannot delete store: It contains products, customers, or other data. ' +
+            'Please delete or transfer all data first.',
+            { duration: 6000 }
+          );
+        } else {
+          throw error;
+        }
+        return;
+      }
+
       toast.success('Store deleted successfully');
       loadStores();
     } catch (error: any) {
       console.error('Error deleting store:', error);
       toast.error(error.message || 'Failed to delete store');
+    }
+  };
+
+  const handleSetAsMain = async (storeId: string, storeName: string) => {
+    if (!confirm(`Are you sure you want to set "${storeName}" as the main branch?`)) {
+      return;
+    }
+
+    try {
+      // First, unset all other main branches
+      const { error: unsetError } = await supabase
+        .from('store_locations')
+        .update({ is_main: false })
+        .eq('is_main', true);
+
+      if (unsetError) throw unsetError;
+
+      // Then set this store as main
+      const { error: setError } = await supabase
+        .from('store_locations')
+        .update({ is_main: true })
+        .eq('id', storeId);
+
+      if (setError) throw setError;
+
+      toast.success(`${storeName} is now the main branch`);
+      loadStores();
+    } catch (error: any) {
+      console.error('Error setting main branch:', error);
+      toast.error(error.message || 'Failed to set main branch');
     }
   };
 
@@ -521,15 +639,29 @@ const StoreManagementSettings: React.FC = () => {
               Configure what data this branch shares with other branches. Toggle each feature individually.
             </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { key: 'share_products', label: 'Products & Catalog', Icon: Box, description: 'Share product catalog' },
-                { key: 'share_customers', label: 'Customers', Icon: Users, description: 'Share customer database' },
-                { key: 'share_inventory', label: 'Inventory', Icon: Warehouse, description: 'Share inventory tracking' },
-                { key: 'share_suppliers', label: 'Suppliers', Icon: Factory, description: 'Share supplier contacts' },
-                { key: 'share_categories', label: 'Categories', Icon: FolderTree, description: 'Share product categories' },
-                { key: 'share_employees', label: 'Employees', Icon: UserCircle, description: 'Share employee lists' }
-              ].map(({ key, label, Icon, description }) => (
+                // Core Data
+                { key: 'share_products', label: 'Products & Catalog', Icon: Box, description: 'Share product catalog', category: 'Core' },
+                { key: 'share_customers', label: 'Customers', Icon: Users, description: 'Share customer database', category: 'Core' },
+                { key: 'share_inventory', label: 'Inventory', Icon: Warehouse, description: 'Share inventory tracking', category: 'Core' },
+                { key: 'share_suppliers', label: 'Suppliers', Icon: Factory, description: 'Share supplier contacts', category: 'Core' },
+                { key: 'share_categories', label: 'Categories', Icon: FolderTree, description: 'Share product categories', category: 'Core' },
+                { key: 'share_employees', label: 'Employees', Icon: UserCircle, description: 'Share employee lists', category: 'Core' },
+                
+                // Business Operations
+                { key: 'share_sales', label: 'Sales Records', Icon: Receipt, description: 'Share sales transactions', category: 'Operations' },
+                { key: 'share_purchase_orders', label: 'Purchase Orders', Icon: FileText, description: 'Share purchase orders', category: 'Operations' },
+                { key: 'share_devices', label: 'Devices & Repairs', Icon: Smartphone, description: 'Share device repair records', category: 'Operations' },
+                { key: 'share_payments', label: 'Payments', Icon: CreditCard, description: 'Share payment records', category: 'Operations' },
+                { key: 'share_appointments', label: 'Appointments', Icon: Calendar, description: 'Share customer appointments', category: 'Operations' },
+                { key: 'share_reminders', label: 'Reminders', Icon: Bell, description: 'Share task reminders', category: 'Operations' },
+                { key: 'share_expenses', label: 'Expenses', Icon: DollarSign, description: 'Share expense records', category: 'Operations' },
+                { key: 'share_trade_ins', label: 'Trade-Ins', Icon: Repeat, description: 'Share device trade-ins', category: 'Operations' },
+                { key: 'share_special_orders', label: 'Special Orders', Icon: ClipboardList, description: 'Share custom orders', category: 'Operations' },
+                { key: 'share_attendance', label: 'Attendance', Icon: UserCheck, description: 'Share employee attendance', category: 'Operations' },
+                { key: 'share_loyalty_points', label: 'Loyalty Program', Icon: Award, description: 'Share loyalty points', category: 'Operations' }
+              ].map(({ key, label, Icon, description, category }) => (
                 <div key={key} className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
                   <div className="flex items-center gap-3 flex-1">
                     <Icon className="w-5 h-5 text-gray-600" />
@@ -862,9 +994,20 @@ const StoreManagementSettings: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex gap-2 ml-4">
+                    {!store.is_main && (
+                      <button
+                        onClick={() => handleSetAsMain(store.id!, store.name)}
+                        className="flex items-center gap-1 px-3 py-2 text-yellow-600 hover:bg-yellow-50 rounded-lg transition-colors border border-yellow-200"
+                        title="Set as main branch"
+                      >
+                        <Star className="w-4 h-4" />
+                        <span className="text-xs font-medium">Set as Main</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => setEditingStore(store)}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit store"
                     >
                       <Edit className="w-5 h-5" />
                     </button>
@@ -872,6 +1015,7 @@ const StoreManagementSettings: React.FC = () => {
                       <button
                         onClick={() => handleDeleteStore(store.id!)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete store"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>

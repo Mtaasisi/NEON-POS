@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { Search, Package, QrCode, X, MoreHorizontal, Grid, List } from 'lucide-react';
+import { Search, Package, QrCode, X, MoreHorizontal, Grid, List, DollarSign } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantProductCard from './VariantProductCard';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../../../context/AuthContext';
 import { rbacManager, type UserRole } from '../../lib/rbac';
-import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 import { RealTimeStockService } from '../../lib/realTimeStock';
 import { useGeneralSettingsContext } from '../../../../context/GeneralSettingsContext';
@@ -100,8 +98,6 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   totalPages,
   productsPerPage
 }) => {
-  // Get products per row setting from context
-  const { productsPerRow } = useGeneralSettingsContext();
   const { currentUser } = useAuth();
   const userRole = currentUser?.role as UserRole;
   const canAddProducts = rbacManager.can(userRole, 'products', 'create');
@@ -120,14 +116,296 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   const [searchSuggestions, setSearchSuggestions] = useState<Product[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   
-  // Categories popup state
-  const [showCategoriesPopup, setShowCategoriesPopup] = useState(false);
+  // Categories expanded state
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   
   // View mode state (grid or list)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
-  // Body scroll lock for categories popup
-  useBodyScrollLock(showCategoriesPopup);
+
+  // Category colors mapping - Comprehensive color scheme for all categories
+  const getCategoryColor = (category: string, isSelected: boolean) => {
+    const colors: Record<string, { bg: string; text: string; border: string; selected: string }> = {
+      // Mobile Devices
+      'Android Phones': { 
+        bg: 'bg-green-50', 
+        text: 'text-green-700', 
+        border: 'border-green-200',
+        selected: 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border-green-700'
+      },
+      'Android Tablets': { 
+        bg: 'bg-blue-50', 
+        text: 'text-blue-700', 
+        border: 'border-blue-200',
+        selected: 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700'
+      },
+      'iPhones': { 
+        bg: 'bg-slate-50', 
+        text: 'text-slate-700', 
+        border: 'border-slate-200',
+        selected: 'bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white border-slate-700'
+      },
+      'iPhone': { 
+        bg: 'bg-slate-50', 
+        text: 'text-slate-700', 
+        border: 'border-slate-200',
+        selected: 'bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white border-slate-700'
+      },
+      'iPad': { 
+        bg: 'bg-sky-50', 
+        text: 'text-sky-700', 
+        border: 'border-sky-200',
+        selected: 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white border-sky-700'
+      },
+      'iPads': { 
+        bg: 'bg-sky-50', 
+        text: 'text-sky-700', 
+        border: 'border-sky-200',
+        selected: 'bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-600 hover:to-sky-700 text-white border-sky-700'
+      },
+      'iOS Devices': { 
+        bg: 'bg-slate-50', 
+        text: 'text-slate-700', 
+        border: 'border-slate-200',
+        selected: 'bg-gradient-to-r from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white border-slate-700'
+      },
+      'Smart Watches': { 
+        bg: 'bg-pink-50', 
+        text: 'text-pink-700', 
+        border: 'border-pink-200',
+        selected: 'bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white border-pink-700'
+      },
+      'Smartwatches': { 
+        bg: 'bg-pink-50', 
+        text: 'text-pink-700', 
+        border: 'border-pink-200',
+        selected: 'bg-gradient-to-r from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white border-pink-700'
+      },
+      
+      // Computers & Laptops
+      'Laptops': { 
+        bg: 'bg-indigo-50', 
+        text: 'text-indigo-700', 
+        border: 'border-indigo-200',
+        selected: 'bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white border-indigo-700'
+      },
+      'Laptop': { 
+        bg: 'bg-indigo-50', 
+        text: 'text-indigo-700', 
+        border: 'border-indigo-200',
+        selected: 'bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white border-indigo-700'
+      },
+      'Computers': { 
+        bg: 'bg-emerald-50', 
+        text: 'text-emerald-700', 
+        border: 'border-emerald-200',
+        selected: 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white border-emerald-700'
+      },
+      'Computer': { 
+        bg: 'bg-emerald-50', 
+        text: 'text-emerald-700', 
+        border: 'border-emerald-200',
+        selected: 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white border-emerald-700'
+      },
+      'Computer Parts': { 
+        bg: 'bg-teal-50', 
+        text: 'text-teal-700', 
+        border: 'border-teal-200',
+        selected: 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white border-teal-700'
+      },
+      'Monitors': { 
+        bg: 'bg-lime-50', 
+        text: 'text-lime-700', 
+        border: 'border-lime-200',
+        selected: 'bg-gradient-to-r from-lime-500 to-lime-600 hover:from-lime-600 hover:to-lime-700 text-white border-lime-700'
+      },
+      'Monitor': { 
+        bg: 'bg-lime-50', 
+        text: 'text-lime-700', 
+        border: 'border-lime-200',
+        selected: 'bg-gradient-to-r from-lime-500 to-lime-600 hover:from-lime-600 hover:to-lime-700 text-white border-lime-700'
+      },
+      
+      // Audio
+      'Soundbars': { 
+        bg: 'bg-rose-50', 
+        text: 'text-rose-700', 
+        border: 'border-rose-200',
+        selected: 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white border-rose-700'
+      },
+      'Soundbar': { 
+        bg: 'bg-rose-50', 
+        text: 'text-rose-700', 
+        border: 'border-rose-200',
+        selected: 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700 text-white border-rose-700'
+      },
+      'Bluetooth Speakers': { 
+        bg: 'bg-amber-50', 
+        text: 'text-amber-700', 
+        border: 'border-amber-200',
+        selected: 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-amber-700'
+      },
+      'Bluetooth Speaker': { 
+        bg: 'bg-amber-50', 
+        text: 'text-amber-700', 
+        border: 'border-amber-200',
+        selected: 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-amber-700'
+      },
+      'Audio & Sound': { 
+        bg: 'bg-fuchsia-50', 
+        text: 'text-fuchsia-700', 
+        border: 'border-fuchsia-200',
+        selected: 'bg-gradient-to-r from-fuchsia-500 to-fuchsia-600 hover:from-fuchsia-600 hover:to-fuchsia-700 text-white border-fuchsia-700'
+      },
+      'Audio Accessories': { 
+        bg: 'bg-violet-50', 
+        text: 'text-violet-700', 
+        border: 'border-violet-200',
+        selected: 'bg-gradient-to-r from-violet-500 to-violet-600 hover:from-violet-600 hover:to-violet-700 text-white border-violet-700'
+      },
+      'Headphones': { 
+        bg: 'bg-orange-50', 
+        text: 'text-orange-700', 
+        border: 'border-orange-200',
+        selected: 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border-orange-700'
+      },
+      'Headphone': { 
+        bg: 'bg-orange-50', 
+        text: 'text-orange-700', 
+        border: 'border-orange-200',
+        selected: 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border-orange-700'
+      },
+      'Speakers': { 
+        bg: 'bg-amber-50', 
+        text: 'text-amber-700', 
+        border: 'border-amber-200',
+        selected: 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-amber-700'
+      },
+      
+      // Accessories
+      'Accessories': { 
+        bg: 'bg-purple-50', 
+        text: 'text-purple-700', 
+        border: 'border-purple-200',
+        selected: 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-purple-700'
+      },
+      'Accessory': { 
+        bg: 'bg-purple-50', 
+        text: 'text-purple-700', 
+        border: 'border-purple-200',
+        selected: 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white border-purple-700'
+      },
+      'Chargers': { 
+        bg: 'bg-yellow-50', 
+        text: 'text-yellow-700', 
+        border: 'border-yellow-200',
+        selected: 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border-yellow-700'
+      },
+      'Charger': { 
+        bg: 'bg-yellow-50', 
+        text: 'text-yellow-700', 
+        border: 'border-yellow-200',
+        selected: 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border-yellow-700'
+      },
+      'Cases & Covers': { 
+        bg: 'bg-teal-50', 
+        text: 'text-teal-700', 
+        border: 'border-teal-200',
+        selected: 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white border-teal-700'
+      },
+      'Cases': { 
+        bg: 'bg-teal-50', 
+        text: 'text-teal-700', 
+        border: 'border-teal-200',
+        selected: 'bg-gradient-to-r from-teal-500 to-teal-600 hover:from-teal-600 hover:to-teal-700 text-white border-teal-700'
+      },
+      'Screen Protectors': { 
+        bg: 'bg-cyan-50', 
+        text: 'text-cyan-700', 
+        border: 'border-cyan-200',
+        selected: 'bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white border-cyan-700'
+      },
+      'Screen Protector': { 
+        bg: 'bg-cyan-50', 
+        text: 'text-cyan-700', 
+        border: 'border-cyan-200',
+        selected: 'bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white border-cyan-700'
+      },
+      'Cables': { 
+        bg: 'bg-zinc-50', 
+        text: 'text-zinc-700', 
+        border: 'border-zinc-200',
+        selected: 'bg-gradient-to-r from-zinc-500 to-zinc-600 hover:from-zinc-600 hover:to-zinc-700 text-white border-zinc-700'
+      },
+      'Cable': { 
+        bg: 'bg-zinc-50', 
+        text: 'text-zinc-700', 
+        border: 'border-zinc-200',
+        selected: 'bg-gradient-to-r from-zinc-500 to-zinc-600 hover:from-zinc-600 hover:to-zinc-700 text-white border-zinc-700'
+      },
+      
+      // Repair & Parts
+      'Spare Parts': { 
+        bg: 'bg-stone-50', 
+        text: 'text-stone-700', 
+        border: 'border-stone-200',
+        selected: 'bg-gradient-to-r from-stone-500 to-stone-600 hover:from-stone-600 hover:to-stone-700 text-white border-stone-700'
+      },
+      'Repair Parts': { 
+        bg: 'bg-red-50', 
+        text: 'text-red-700', 
+        border: 'border-red-200',
+        selected: 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-red-700'
+      },
+      'LCD Screens': { 
+        bg: 'bg-blue-50', 
+        text: 'text-blue-700', 
+        border: 'border-blue-200',
+        selected: 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700'
+      },
+      'LCD Screen': { 
+        bg: 'bg-blue-50', 
+        text: 'text-blue-700', 
+        border: 'border-blue-200',
+        selected: 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700'
+      },
+      'MacBook LCD Screens': { 
+        bg: 'bg-indigo-50', 
+        text: 'text-indigo-700', 
+        border: 'border-indigo-200',
+        selected: 'bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white border-indigo-700'
+      },
+      
+      // General
+      'Electronics': { 
+        bg: 'bg-blue-50', 
+        text: 'text-blue-700', 
+        border: 'border-blue-200',
+        selected: 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700'
+      },
+      'Electronic': { 
+        bg: 'bg-blue-50', 
+        text: 'text-blue-700', 
+        border: 'border-blue-200',
+        selected: 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700'
+      },
+      'Uncategorized': { 
+        bg: 'bg-gray-50', 
+        text: 'text-gray-700', 
+        border: 'border-gray-200',
+        selected: 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white border-gray-700'
+      },
+    };
+
+    // Default color for any category not in the mapping
+    const defaultColor = {
+      bg: 'bg-gradient-to-br from-blue-50 to-indigo-50',
+      text: 'text-blue-700',
+      border: 'border-blue-200',
+      selected: 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700'
+    };
+
+    return colors[category] || defaultColor;
+  };
 
   // Real-time stock data for all products (BATCH FETCH to avoid N+1 queries)
   const [realTimeStockData, setRealTimeStockData] = useState<Map<string, number>>(new Map());
@@ -298,180 +576,31 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
         {/* Fixed Search Section */}
         <div className="flex-shrink-0 mb-4">
           {/* Main Search and Quick Filters */}
-          <div className="bg-white/70 backdrop-blur-xl rounded-xl border border-white/30 shadow-lg p-4 mb-4">
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                  <input
-                    type="text"
-                    placeholder={`${t('common.search')} ${t('common.products').toLowerCase()}...`}
-                    value={searchQuery}
-                    onChange={handleSearchInputChange}
-                    onKeyPress={handleSearchInputKeyPress}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white/80"
-                  />
-                </div>
-              </div>
-              
-            </div>
-
-            {/* Advanced Filters Row */}
-            <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as any)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-white/80 text-sm"
-              >
-                <option value="sales">Best Selling</option>
-                <option value="name">Name</option>
-                <option value="price">Price</option>
-                <option value="stock">Stock</option>
-              </select>
-              
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-                }}
-                className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                {sortOrder === 'asc' ? '↑' : '↓'}
-              </button>
-
-              <div className="flex gap-2">
+          <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 shadow-md p-4 mb-4">
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-blue-500 w-5 h-5" />
                 <input
-                  type="number"
-                  placeholder={`Min ${t('common.price')}`}
-                  value={priceRange.min}
-                  onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-white/80 text-sm w-24"
+                  type="text"
+                  placeholder={`${t('common.search')} ${t('common.products').toLowerCase()}...`}
+                  value={searchQuery}
+                  onChange={handleSearchInputChange}
+                  onKeyPress={handleSearchInputKeyPress}
+                  className="w-full min-h-[52px] pl-12 pr-24 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white transition-all text-sm font-medium placeholder:text-gray-400 shadow-sm hover:shadow-md"
                 />
-                <input
-                  type="number"
-                  placeholder={`Max ${t('common.price')}`}
-                  value={priceRange.max}
-                  onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/50 bg-white/80 text-sm w-24"
-                />
-              </div>
-
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setSearchQuery('');
-                  setSelectedCategory('');
-                  setSelectedBrand('');
-                  setPriceRange({ min: '', max: '' });
-                  setStockFilter('all');
-                }}
-                className="px-3 py-2 text-sm bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Clear
-              </button>
-
-              {/* Filter Section */}
-              <div className="flex gap-2">
-                {/* Category Filter Buttons */}
-                <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setSelectedCategory('');
-                    }}
-                    className={`px-3 py-2 text-sm transition-colors ${
-                      selectedCategory === '' 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    All
-                  </button>
-                  {categories.slice(0, 3).map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => {
-                        playClickSound();
-                        setSelectedCategory(category);
-                      }}
-                      className={`px-3 py-2 text-sm transition-colors ${
-                        selectedCategory === category 
-                          ? 'bg-green-600 text-white' 
-                          : 'bg-white text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                  {categories.length > 3 && (
-                    <button
-                      onClick={() => {
-                        playClickSound();
-                        setShowCategoriesPopup(true);
-                      }}
-                      className="px-3 py-2 text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors border-l border-gray-300"
-                      title="Show all categories"
-                    >
-                      <MoreHorizontal className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Stock Filter Buttons */}
-                <div className="flex border border-gray-300 rounded-lg overflow-hidden">
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setStockFilter('all');
-                    }}
-                    className={`px-3 py-1.5 text-sm transition-colors ${
-                      stockFilter === 'all' 
-                        ? 'bg-blue-600 text-white' 
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    All
-                  </button>
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setStockFilter('in-stock');
-                    }}
-                    className={`px-3 py-1.5 text-sm transition-colors ${
-                      stockFilter === 'in-stock' 
-                        ? 'bg-green-600 text-white' 
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    In Stock
-                  </button>
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setStockFilter('low-stock');
-                    }}
-                    className={`px-3 py-1.5 text-sm transition-colors ${
-                      stockFilter === 'low-stock' 
-                        ? 'bg-orange-600 text-white' 
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                  >
-                    Low Stock
-                  </button>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+                
+                {/* Action buttons inside search bar */}
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
                   {canAddProducts && (
                     <button
                       onClick={() => {
                         playClickSound();
                         onAddExternalProduct();
                       }}
-                      className="px-3 py-1.5 text-sm bg-green-600 text-white hover:bg-green-700 transition-colors"
+                      className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 shadow-sm hover:shadow-md"
                       title="Add Product"
                     >
-                      <Package className="w-4 h-4" />
+                      <Package className="w-5 h-5" />
                     </button>
                   )}
                   <button
@@ -481,44 +610,213 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                         handleUnifiedSearch(searchQuery.trim());
                       }
                     }}
-                    className="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                    title="Scan"
+                    className="p-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 shadow-sm hover:shadow-md"
+                    title="Scan Barcode"
                   >
-                    <QrCode className="w-4 h-4" />
+                    <QrCode className="w-5 h-5" />
                   </button>
                 </div>
+              </div>
+            </div>
 
-                {/* View Toggle Buttons */}
-                <div className="flex border border-gray-300 rounded-lg overflow-hidden ml-auto">
+            {/* Advanced Filters Row */}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Sort with integrated order */}
+              <div className="flex rounded-lg overflow-hidden shadow-sm border border-gray-300">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="min-h-[44px] px-4 py-2.5 focus:outline-none focus:ring-0 bg-gradient-to-br from-gray-50 to-gray-100 text-sm font-medium border-none hover:from-gray-100 hover:to-gray-200 transition-all cursor-pointer"
+                >
+                  <option value="sales">🔥 Best Selling</option>
+                  <option value="name">🔤 Name</option>
+                  <option value="price">💰 Price</option>
+                  <option value="stock">📦 Stock</option>
+                </select>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+                  }}
+                  className="min-h-[44px] min-w-[44px] flex items-center justify-center px-3 py-2 text-lg font-bold bg-gradient-to-br from-gray-50 to-gray-100 border-l border-gray-300 text-gray-700 hover:from-gray-100 hover:to-gray-200 transition-all"
+                  title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+                >
+                  {sortOrder === 'asc' ? '↑' : '↓'}
+                </button>
+              </div>
+
+              {/* Price Range - Only show if being used */}
+              {(priceRange.min || priceRange.max) && (
+                <div className="flex rounded-lg overflow-hidden shadow-sm border border-blue-300 bg-gradient-to-br from-blue-50 to-blue-100">
+                  <div className="flex items-center px-2 text-blue-700">
+                    <DollarSign className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={priceRange.min}
+                    onChange={(e) => setPriceRange({ ...priceRange, min: e.target.value })}
+                    className="min-h-[44px] px-3 py-2.5 focus:outline-none focus:ring-0 bg-transparent text-sm font-medium text-blue-900 w-20 border-none placeholder:text-blue-400"
+                  />
+                  <div className="flex items-center px-1 text-blue-700 font-bold">—</div>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={priceRange.max}
+                    onChange={(e) => setPriceRange({ ...priceRange, max: e.target.value })}
+                    className="min-h-[44px] px-3 py-2.5 focus:outline-none focus:ring-0 bg-transparent text-sm font-medium text-blue-900 w-20 border-none placeholder:text-blue-400"
+                  />
                   <button
                     onClick={() => {
                       playClickSound();
-                      setViewMode('grid');
+                      setPriceRange({ min: '', max: '' });
                     }}
-                    className={`px-3 py-1.5 text-sm transition-colors ${
-                      viewMode === 'grid'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                    title="Grid View"
+                    className="min-h-[44px] px-3 py-2 text-blue-600 hover:text-red-600 hover:bg-red-50 transition-all border-l border-blue-300"
+                    title="Clear price filter"
                   >
-                    <Grid className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      setViewMode('list');
-                    }}
-                    className={`px-3 py-1.5 text-sm transition-colors ${
-                      viewMode === 'list'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-600 hover:bg-gray-50'
-                    }`}
-                    title="List View"
-                  >
-                    <List className="w-4 h-4" />
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
+              )}
+
+              {/* Category Filter Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setSelectedCategory('');
+                  }}
+                  className={`min-h-[44px] px-4 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-300 border shadow-sm ${
+                    selectedCategory === '' 
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700 shadow-md' 
+                      : 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-700 border-gray-300 hover:shadow-md hover:scale-105'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {selectedCategory === '' && <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>}
+                    All Products
+                  </span>
+                </button>
+                {(categoriesExpanded ? categories : categories.slice(0, 3)).map((category) => {
+                  const colorScheme = getCategoryColor(category, selectedCategory === category);
+                  const isSelected = selectedCategory === category;
+                  
+                  return (
+                    <button
+                      key={category}
+                      onClick={() => {
+                        playClickSound();
+                        setSelectedCategory(category);
+                      }}
+                      className={`min-h-[44px] px-4 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-300 border shadow-sm hover:scale-105 ${
+                        isSelected 
+                          ? colorScheme.selected + ' shadow-md' 
+                          : `${colorScheme.bg} ${colorScheme.text} ${colorScheme.border} hover:shadow-md`
+                      }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {isSelected && <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>}
+                        {category}
+                      </span>
+                    </button>
+                  );
+                })}
+                {categories.length > 3 && (
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      setCategoriesExpanded(!categoriesExpanded);
+                    }}
+                    className="min-h-[44px] min-w-[44px] flex items-center justify-center px-3 py-2 text-sm bg-gradient-to-br from-gray-50 to-gray-100 text-gray-700 border border-gray-300 hover:bg-gradient-to-br hover:from-gray-100 hover:to-gray-200 hover:shadow-md hover:scale-105 transition-all duration-300 rounded-lg shadow-sm"
+                    title={categoriesExpanded ? "Show less" : "Show all categories"}
+                  >
+                    {categoriesExpanded ? <X className="w-5 h-5" /> : <MoreHorizontal className="w-5 h-5" />}
+                  </button>
+                )}
+              </div>
+
+              {/* Stock Filter Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setStockFilter('all');
+                  }}
+                  className={`min-h-[44px] px-4 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-300 border shadow-sm hover:scale-105 ${
+                    stockFilter === 'all' 
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white border-blue-700 shadow-md' 
+                      : 'bg-gradient-to-br from-blue-50 to-blue-100 text-blue-700 border-blue-200 hover:shadow-md'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {stockFilter === 'all' && <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>}
+                    All Stock
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setStockFilter('in-stock');
+                  }}
+                  className={`min-h-[44px] px-4 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-300 border shadow-sm hover:scale-105 ${
+                    stockFilter === 'in-stock' 
+                      ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white border-green-700 shadow-md' 
+                      : 'bg-gradient-to-br from-green-50 to-green-100 text-green-700 border-green-200 hover:shadow-md'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {stockFilter === 'in-stock' && <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>}
+                    In Stock
+                  </span>
+                </button>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setStockFilter('low-stock');
+                  }}
+                  className={`min-h-[44px] px-4 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-lg transition-all duration-300 border shadow-sm hover:scale-105 ${
+                    stockFilter === 'low-stock' 
+                      ? 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white border-orange-700 shadow-md' 
+                      : 'bg-gradient-to-br from-orange-50 to-orange-100 text-orange-700 border-orange-200 hover:shadow-md'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {stockFilter === 'low-stock' && <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>}
+                    Low Stock
+                  </span>
+                </button>
+              </div>
+
+              {/* View Toggle Buttons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setViewMode('grid');
+                  }}
+                  className={`min-h-[44px] min-w-[44px] flex items-center justify-center px-3 sm:px-4 py-2 sm:py-3 text-sm transition-all duration-300 rounded-lg border shadow-sm hover:scale-105 ${
+                    viewMode === 'grid'
+                      ? 'bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-800 hover:to-gray-900 text-white border-gray-900 shadow-md'
+                      : 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-700 border-gray-300 hover:shadow-md'
+                  }`}
+                  title="Grid View"
+                >
+                  <Grid className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    setViewMode('list');
+                  }}
+                  className={`min-h-[44px] min-w-[44px] flex items-center justify-center px-3 sm:px-4 py-2 sm:py-3 text-sm transition-all duration-300 rounded-lg border shadow-sm hover:scale-105 ${
+                    viewMode === 'list'
+                      ? 'bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-800 hover:to-gray-900 text-white border-gray-900 shadow-md'
+                      : 'bg-gradient-to-br from-gray-50 to-gray-100 text-gray-700 border-gray-300 hover:shadow-md'
+                  }`}
+                  title="List View"
+                >
+                  <List className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
@@ -526,14 +824,14 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
 
 
         {/* Products Grid/List - Scrollable */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden pos-products-scroll" style={{ minHeight: 0 }}>
+        <div className="flex-1 overflow-y-auto overflow-x-hidden pos-products-scroll pr-2" style={{ minHeight: 0 }}>
           {displayProducts.length > 0 ? (
             viewMode === 'grid' ? (
-              <div className="w-full max-w-full mx-auto px-3 sm:px-4 md:px-6 pb-6">
+              <div className="w-full max-w-full pb-6">
                 <div 
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: `repeat(${productsPerRow}, 1fr)`,
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))',
                     gap: 'clamp(1rem, 2vw, 1.5rem)',
                     gridAutoRows: '1fr'
                   }}
@@ -548,9 +846,17 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                     />
                   ))}
                 </div>
+                
+                {/* Product Count - Inside scroll area */}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-500 text-center">
+                    Showing {displayProducts.length} of {sortedProducts.length} products
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="space-y-3 pb-4">
+              <div className="pb-6">
+                <div className="space-y-3 mb-6">
                 {displayProducts.map((product) => {
                   // Normalize variants data - handle both database formats
                   const normalizedVariants = product.variants?.map((v: any) => ({
@@ -718,6 +1024,14 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
                     </div>
                   );
                 })}
+                </div>
+                
+                {/* Product Count - Inside scroll area */}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <div className="text-sm text-gray-500 text-center">
+                    Showing {displayProducts.length} of {sortedProducts.length} products
+                  </div>
+                </div>
               </div>
             )
           ) : (
@@ -730,97 +1044,7 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
             </div>
           )}
         </div>
-
-        {/* Product Count Display */}
-        <div className="flex-shrink-0 mt-4 pt-4 border-t border-gray-200">
-          <div className="text-sm text-gray-500 text-center">
-            Showing {displayProducts.length} of {sortedProducts.length} products
-          </div>
-        </div>
       </GlassCard>
-
-      {/* Categories Popup Modal */}
-      {showCategoriesPopup && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Select Category</h2>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setShowCategoriesPopup(false);
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
-            </div>
-
-            {/* Categories Grid */}
-            <div className="p-6 overflow-y-auto max-h-[calc(80vh-120px)]">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                {/* All Categories Button */}
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    setSelectedCategory('');
-                    setShowCategoriesPopup(false);
-                  }}
-                  className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
-                    selectedCategory === ''
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white hover:border-gray-300 text-gray-700'
-                  }`}
-                >
-                  <div className="text-center">
-                    <div className="text-sm font-medium">All Categories</div>
-                  </div>
-                </button>
-
-                {/* Individual Category Buttons */}
-                {categories.map((category) => (
-                  <button
-                    key={category}
-                    onClick={() => {
-                      playClickSound();
-                      setSelectedCategory(category);
-                      setShowCategoriesPopup(false);
-                    }}
-                    className={`p-4 rounded-lg border-2 transition-all hover:shadow-md ${
-                      selectedCategory === category
-                        ? 'border-green-500 bg-green-50 text-green-700'
-                        : 'border-gray-200 bg-white hover:border-gray-300 text-gray-700'
-                    }`}
-                  >
-                    <div className="text-center">
-                      <div className="text-sm font-medium truncate" title={category}>
-                        {category}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
-              <div className="text-sm text-gray-500">
-                {categories.length} categories available
-              </div>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setShowCategoriesPopup(false);
-                }}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

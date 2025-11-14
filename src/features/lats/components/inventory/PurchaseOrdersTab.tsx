@@ -3,6 +3,8 @@ import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import CircularProgress from '../../../../components/ui/CircularProgress';
 import ModernLoadingOverlay from '../../../../components/ui/ModernLoadingOverlay';
+import { useLoadingJob } from '../../../../hooks/useLoadingJob';
+import { TableSkeleton } from '../../../../components/ui/SkeletonLoaders';
 import { 
   ShoppingCart, Plus, CheckCircle, FileText, Send, Truck, Eye,
   Package, Search, RefreshCw, AlertCircle, Edit, Trash2, 
@@ -1306,7 +1308,7 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
                 value={pageSize}
                 onChange={(e) => {
                   setPageSize(Number(e.target.value));
-                  setCurrentPage(1);
+                  setDisplayCount(Number(e.target.value));
                 }}
                 className="bg-white border border-gray-200 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500"
               >
@@ -1363,10 +1365,12 @@ const PurchaseOrdersTab: React.FC<PurchaseOrdersTabProps> = ({
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">
                   {formatCurrency(filteredOrders.reduce((sum, order) => {
-                    return sum + (order.totalAmount || 0);
+                    // Use totalAmountBaseCurrency for accurate multi-currency calculation
+                    const amount = order.totalAmountBaseCurrency || order.totalAmount || 0;
+                    return sum + amount;
                   }, 0), 'TZS')}
                 </div>
-                <div className="text-sm text-gray-600">Total Value</div>
+                <div className="text-sm text-gray-600">Total Value (TZS)</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">

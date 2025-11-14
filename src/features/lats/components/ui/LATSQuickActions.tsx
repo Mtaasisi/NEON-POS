@@ -63,6 +63,15 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'inventory'
   },
   {
+    id: 'create-purchase-order',
+    name: 'Create Purchase Order',
+    description: 'Create new purchase order',
+    icon: ShoppingCart,
+    path: '/lats/purchase-order/create',
+    color: 'from-orange-500 to-orange-600',
+    category: 'inventory'
+  },
+  {
     id: 'stock-transfers',
     name: 'Stock Transfers',
     description: 'Transfer inventory between branches',

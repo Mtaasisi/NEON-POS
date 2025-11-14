@@ -82,18 +82,23 @@ export class PurchaseOrderActionsService {
    */
   static async cancelOrder(orderId: string): Promise<ActionResult> {
     try {
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from('lats_purchase_orders')
         .update({ 
-          status: 'sent', // Keep as sent since we don't have cancelled in simplified system
+          status: 'cancelled',
           updated_at: new Date().toISOString()
         })
         .eq('id', orderId)
-        .eq('status', 'sent');
+        .in('status', ['sent', 'confirmed', 'shipped'])
+        .select('id, status');
 
       if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return { success: false, message: 'Only sent, confirmed, or shipped orders can be cancelled.' };
+      }
       
-      return { success: true, message: 'Order marked as not received' };
+      return { success: true, message: 'Order cancelled successfully' };
     } catch (error) {
       console.error('Error cancelling order:', error);
       return { success: false, message: 'Failed to cancel order' };
@@ -116,12 +121,12 @@ export class PurchaseOrderActionsService {
 
       // Generate unique order number to avoid conflicts
       const timestamp = Date.now();
-      const uniqueOrderNumber = `${originalOrder.order_number}-COPY-${timestamp}`;
+      const uniqueOrderNumber = `${originalOrder.po_number}-COPY-${timestamp}`;
 
       // Create duplicate order
       const duplicateOrder = {
         ...originalOrder,
-        order_number: uniqueOrderNumber,
+        po_number: uniqueOrderNumber,
         status: 'sent',
         payment_status: 'unpaid',
         total_paid: 0,
@@ -167,7 +172,7 @@ export class PurchaseOrderActionsService {
       console.log('✅ Order duplicated successfully:', {
         originalOrderId: orderId,
         newOrderId: newOrder.id,
-        newOrderNumber: newOrder.order_number,
+        newOrderNumber: newOrder.po_number,
         itemsDuplicated: originalItems?.length || 0
       });
 

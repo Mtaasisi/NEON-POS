@@ -5,6 +5,7 @@ import { supabase } from '../../../../lib/supabaseClient';
 import { saveActionOffline } from '../../../../lib/offlineSync';
 import { User } from '../../../../types';
 import { AlertTriangle } from 'lucide-react';
+import { useDialog } from '../../../shared/hooks/useDialog';
 
 interface Technician {
   id: string;
@@ -21,6 +22,7 @@ interface AssignTechnicianFormProps {
 // Remove mockTechnicians array
 
 const AssignTechnicianForm: React.FC<AssignTechnicianFormProps> = ({ deviceId, currentTechId, currentUser }) => {
+  const { confirm } = useDialog();
   const [selectedTechId, setSelectedTechId] = useState(currentTechId || '');
   const [remark, setRemark] = useState('');
   const [technicians, setTechnicians] = useState<Technician[]>([]);
@@ -51,7 +53,7 @@ const AssignTechnicianForm: React.FC<AssignTechnicianFormProps> = ({ deviceId, c
   };
   
   const handleMarkFailed = async () => {
-    if (window.confirm("Are you sure you want to mark this device as failed to repair? This action cannot be undone.")) {
+    if (await confirm("Are you sure you want to mark this device as failed to repair? This action cannot be undone.")) {
       try {
         if (navigator.onLine) {
           // First add a remark about the failure

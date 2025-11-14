@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Phone, Lock, Eye, EyeOff, ShoppingBag } from 'lucide-react';
 import { useCustomerAuthLogic } from '../hooks/useCustomerAuth';
 import toast from 'react-hot-toast';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useCustomerAuthLogic();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -21,13 +23,17 @@ const LoginPage: React.FC = () => {
       return;
     }
 
+    const jobId = startLoading('Signing in...');
+
     try {
       setLoading(true);
       await login(phone, password);
       toast.success('Login successful!');
+      completeLoading(jobId);
       navigate('/customer-portal/dashboard');
     } catch (error: any) {
       toast.error(error.message || 'Login failed');
+      failLoading(jobId, 'Login failed');
     } finally {
       setLoading(false);
     }

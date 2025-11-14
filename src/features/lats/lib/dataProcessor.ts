@@ -56,179 +56,111 @@ function replacePlaceholderImages(images: string[]): string[] {
 }
 
 /**
+ * ⚡ SUPER FAST: Batch process product field transformations
  * Process and clean up product data to prevent issues
  */
 export function processProductData(products: Product[]): Product[] {
-  if (!Array.isArray(products)) {
+  if (!Array.isArray(products) || products.length === 0) {
     return [];
   }
 
+  const startTime = performance.now();
 
-  
-  return products.map((product, index) => {
+  // ⚡ BATCH PROCESSING: Transform all products in a single pass
+  const processedProducts = products.map((product) => {
+    if (!product || typeof product !== 'object') {
+      return product; // Skip invalid products
+    }
+
     const processedProduct = { ...product };
-    
-    // console.log removed
 
-    // Transform database field names to interface field names
-    if (processedProduct.category_id !== undefined) {
-      processedProduct.categoryId = processedProduct.category_id;
-      delete processedProduct.category_id;
+    // ⚡ BATCH FIELD TRANSFORMATIONS: Use destructuring and assignment for speed
+    const {
+      category_id,
+      supplier_id,
+      brand_id,
+      branch_id,
+      is_shared,
+      is_active,
+      storage_room_id,
+      shelf_id,
+      shelf_name,
+      shelf_code,
+      selling_price,
+      cost_price,
+      stock_quantity,
+      min_stock_level,
+      created_at,
+      updated_at,
+      ...rest
+    } = processedProduct;
+
+    // ⚡ SINGLE OBJECT CREATION: Transform all fields at once
+    const transformedProduct = {
+      ...rest,
+      // Transform database field names to interface field names
+      ...(category_id !== undefined && { categoryId: category_id }),
+      ...(supplier_id !== undefined && { supplierId: supplier_id }),
+      ...(brand_id !== undefined && { brandId: brand_id }),
+      ...(branch_id !== undefined && { branchId: branch_id }),
+      ...(is_active !== undefined && { isActive: is_active }),
+      // Storage location fields
+      ...(storage_room_id !== undefined && { storageRoomId: storage_room_id }),
+      ...(shelf_id !== undefined && { shelfId: shelf_id }),
+      ...(shelf_name !== undefined && { shelfName: shelf_name }),
+      ...(shelf_code !== undefined && { shelfCode: shelf_code }),
+      // Price fields - prioritize selling_price
+      ...(selling_price !== undefined && { price: selling_price }),
+      ...(cost_price !== undefined && { costPrice: cost_price }),
+      ...(stock_quantity !== undefined && { stockQuantity: stock_quantity }),
+      ...(min_stock_level !== undefined && { minStockLevel: min_stock_level }),
+      // Timestamp fields
+      ...(created_at !== undefined && { createdAt: created_at }),
+      ...(updated_at !== undefined && { updatedAt: updated_at }),
+    };
+
+    // ⚡ FAST IMAGE PROCESSING: Process images only when needed
+    if (transformedProduct.images && Array.isArray(transformedProduct.images)) {
+      transformedProduct.images = replacePlaceholderImages(processProductImages(transformedProduct.images));
     }
 
-    if (processedProduct.supplier_id !== undefined) {
-      processedProduct.supplierId = processedProduct.supplier_id;
-      delete processedProduct.supplier_id;
-    }
+    // Process variants if they exist (optimized)
+    if (transformedProduct.variants && Array.isArray(transformedProduct.variants)) {
+      transformedProduct.variants = transformedProduct.variants.map((variant: any) => {
+        if (!variant || typeof variant !== 'object') return variant;
 
-    if (processedProduct.brand_id !== undefined) {
-      processedProduct.brandId = processedProduct.brand_id;
-      delete processedProduct.brand_id;
-    }
+        const {
+          product_id,
+          variant_name,
+          selling_price: variantSellingPrice,
+          cost_price: variantCostPrice,
+          ...variantRest
+        } = variant;
 
-    // Transform branch and sharing fields
-    if (processedProduct.branch_id !== undefined) {
-      processedProduct.branchId = processedProduct.branch_id;
-      delete processedProduct.branch_id;
-    }
-
-    // is_shared column removed - no longer needed
-    if (processedProduct.is_shared !== undefined) {
-      delete processedProduct.is_shared;
-    }
-
-    if (processedProduct.is_active !== undefined) {
-      processedProduct.isActive = processedProduct.is_active;
-      delete processedProduct.is_active;
-    }
-
-    // Transform storage location fields
-    if (processedProduct.storage_room_id !== undefined) {
-      processedProduct.storageRoomId = processedProduct.storage_room_id;
-      delete processedProduct.storage_room_id;
-    }
-
-    if (processedProduct.shelf_id !== undefined) {
-      processedProduct.shelfId = processedProduct.shelf_id;
-      delete processedProduct.shelf_id;
-    }
-
-    if (processedProduct.shelf_name !== undefined) {
-      processedProduct.shelfName = processedProduct.shelf_name;
-      delete processedProduct.shelf_name;
-    }
-
-    if (processedProduct.shelf_code !== undefined) {
-      processedProduct.shelfCode = processedProduct.shelf_code;
-      delete processedProduct.shelf_code;
-    }
-
-    // Transform price fields - prioritize selling_price
-    if (processedProduct.selling_price !== undefined) {
-      processedProduct.price = processedProduct.selling_price;
-    }
-
-    if (processedProduct.cost_price !== undefined) {
-      processedProduct.costPrice = processedProduct.cost_price;
-      delete processedProduct.cost_price;
-    }
-
-    if (processedProduct.stock_quantity !== undefined) {
-      processedProduct.stockQuantity = processedProduct.stock_quantity;
-      delete processedProduct.stock_quantity;
-    }
-
-    if (processedProduct.min_stock_level !== undefined) {
-      processedProduct.minStockLevel = processedProduct.min_stock_level;
-      delete processedProduct.min_stock_level;
-    }
-
-    if (processedProduct.created_at !== undefined) {
-      processedProduct.createdAt = processedProduct.created_at;
-      delete processedProduct.created_at;
-    }
-
-    if (processedProduct.updated_at !== undefined) {
-      processedProduct.updatedAt = processedProduct.updated_at;
-      delete processedProduct.updated_at;
-    }
-
-    // Clean up image data and replace placeholder images
-    if (processedProduct.images && Array.isArray(processedProduct.images)) {
-      processedProduct.images = replacePlaceholderImages(processProductImages(processedProduct.images));
-    }
-
-    // Clean up individual image fields
-    if (processedProduct.image_url) {
-      processedProduct.image_url = emergencyUrlCleanup(processedProduct.image_url);
-    }
-
-    if (processedProduct.thumbnail_url) {
-      processedProduct.thumbnail_url = emergencyUrlCleanup(processedProduct.thumbnail_url);
-    }
-
-    // Clean up any other image-related fields
-    if (processedProduct.primary_image) {
-      processedProduct.primary_image = cleanupImageData(processedProduct.primary_image);
-    }
-
-    // Process variants if they exist
-    if (processedProduct.variants && Array.isArray(processedProduct.variants)) {
-      processedProduct.variants = processedProduct.variants.map((variant: any) => {
-        const processedVariant = { ...variant };
-        
-        // Transform variant field names
-        if (processedVariant.product_id !== undefined) {
-          processedVariant.productId = processedVariant.product_id;
-          delete processedVariant.product_id;
-        }
-        
-        if (processedVariant.variant_name !== undefined) {
-          processedVariant.name = processedVariant.variant_name;
-          // ✅ Keep variant_name for compatibility - don't delete it
-          // delete processedVariant.variant_name;
-        }
-        
-        // Use selling_price
-        if (processedVariant.selling_price !== undefined) {
-          const priceValue = processedVariant.selling_price;
-          processedVariant.price = priceValue;
-          processedVariant.sellingPrice = priceValue;
-          delete processedVariant.selling_price;
-        }
-        
-        if (processedVariant.cost_price !== undefined) {
-          processedVariant.costPrice = processedVariant.cost_price;
-          delete processedVariant.cost_price;
-        }
-        
-        if (processedVariant.min_quantity !== undefined) {
-          processedVariant.minQuantity = processedVariant.min_quantity;
-          processedVariant.minStockLevel = processedVariant.min_quantity; // Also set minStockLevel for compatibility
-          delete processedVariant.min_quantity;
-        }
-        
-        if (processedVariant.quantity !== undefined) {
-          processedVariant.stockQuantity = processedVariant.quantity;
-          // Keep quantity as well for compatibility
-        }
-        
-        if (processedVariant.created_at !== undefined) {
-          processedVariant.createdAt = processedVariant.created_at;
-          delete processedVariant.created_at;
-        }
-        
-        if (processedVariant.updated_at !== undefined) {
-          processedVariant.updatedAt = processedVariant.updated_at;
-          delete processedVariant.updated_at;
-        }
-        
-        return processedVariant;
+        return {
+          ...variantRest,
+          // Transform variant field names
+          ...(product_id !== undefined && { productId: product_id }),
+          ...(variant_name !== undefined && { name: variant_name }),
+          // Price transformations
+          ...(variantSellingPrice !== undefined && {
+            price: variantSellingPrice,
+            sellingPrice: variantSellingPrice
+          }),
+          ...(variantCostPrice !== undefined && { costPrice: variantCostPrice }),
+        };
       });
     }
 
-    return processedProduct;
+    return transformedProduct;
   });
+
+  const processingTime = performance.now() - startTime;
+  if (processingTime > 50) { // Log only if processing takes more than 50ms
+    console.log(`⚡ Processed ${products.length} products in ${processingTime.toFixed(2)}ms`);
+  }
+
+  return processedProducts;
 }
 
 /**

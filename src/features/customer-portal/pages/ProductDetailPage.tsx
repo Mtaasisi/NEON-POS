@@ -16,10 +16,12 @@ import {
 import { CustomerProduct } from '../types';
 import toast from 'react-hot-toast';
 import customerPortalService from '../services/customerPortalService';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const ProductDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   const [product, setProduct] = useState<CustomerProduct | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +39,8 @@ const ProductDetailPage: React.FC = () => {
   }, [id]);
 
   const loadProductDetail = async () => {
+    const jobId = startLoading('Loading product...');
+    
     try {
       setLoading(true);
       
@@ -46,6 +50,7 @@ const ProductDetailPage: React.FC = () => {
       if (!productData) {
         toast.error('Product not found');
         setLoading(false);
+        failLoading(jobId, 'Product not found');
         return;
       }
 
@@ -59,9 +64,11 @@ const ProductDetailPage: React.FC = () => {
         }
       }
 
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error loading product:', error);
       toast.error('Failed to load product details');
+      failLoading(jobId, 'Failed to load product');
     } finally {
       setLoading(false);
     }

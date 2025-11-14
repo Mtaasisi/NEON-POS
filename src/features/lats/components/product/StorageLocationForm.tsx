@@ -3,6 +3,7 @@ import { MapPin, LayoutGrid, Building, Package, X, Check, Search, Filter } from 
 import { storageRoomApi, StorageRoom } from '../../../settings/utils/storageRoomApi';
 import { storeShelfApi, StoreShelf } from '../../../settings/utils/storeShelfApi';
 import { storeLocationApi } from '../../../settings/utils/storeLocationApi';
+import { useStorageLocationPicker } from '../storage/StorageLocationPickerProvider';
 
 interface StorageLocationFormProps {
   formData: {
@@ -18,6 +19,7 @@ const StorageLocationForm: React.FC<StorageLocationFormProps> = ({
   setFormData,
   currentErrors
 }) => {
+  const { open: openStoragePicker } = useStorageLocationPicker();
   const [storageRooms, setStorageRooms] = useState<StorageRoom[]>([]);
   const [allShelves, setAllShelves] = useState<Record<string, StoreShelf[]>>({});
   const [loading, setLoading] = useState(false);
@@ -261,7 +263,20 @@ const StorageLocationForm: React.FC<StorageLocationFormProps> = ({
         </label>
         <button
           type="button"
-          onClick={() => setShowModal(true)}
+          onClick={async () => {
+            try {
+              const result = await openStoragePicker();
+              if (result) {
+                setFormData((prev: any) => ({
+                  ...prev,
+                  storageRoomId: result.roomId,
+                  shelfId: result.shelfId
+                }));
+              }
+            } catch (error) {
+              console.error('Error opening global storage picker:', error);
+            }
+          }}
           disabled={loading || storageRooms.length === 0}
           className={`relative w-full py-3 pl-10 pr-4 bg-white border-2 rounded text-left ${
             currentErrors.storageRoomId || currentErrors.shelfId

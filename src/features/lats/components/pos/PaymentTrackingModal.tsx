@@ -13,6 +13,7 @@ import {
   SoldItem
 } from '../../../../lib/paymentTrackingService';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
+import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
 
 interface PaymentTrackingModalProps {
   isOpen: boolean;
@@ -926,10 +927,7 @@ const PaymentTrackingModal: React.FC<PaymentTrackingModalProps> = ({ isOpen, onC
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading payment data...</p>
-            </div>
+            <LoadingSpinner size="sm" color="purple" />
           </div>
         )}
 

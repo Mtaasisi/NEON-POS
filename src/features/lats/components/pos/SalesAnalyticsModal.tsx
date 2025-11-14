@@ -4,6 +4,7 @@ import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { salesAnalyticsService, SalesAnalyticsData } from '../../lib/salesAnalyticsService';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
+import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
 
 interface SalesAnalyticsModalProps {
   isOpen: boolean;
@@ -132,10 +133,7 @@ const SalesAnalyticsModal: React.FC<SalesAnalyticsModalProps> = ({ isOpen, onClo
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading sales analytics...</p>
-            </div>
+            <LoadingSpinner size="sm" color="green" />
           </div>
         )}
 

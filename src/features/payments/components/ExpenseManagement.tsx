@@ -72,6 +72,7 @@ const ExpenseManagement: React.FC = () => {
   const [paymentAccounts, setPaymentAccounts] = useState<FinanceAccount[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingStep, setLoadingStep] = useState<string>('Initializing...');
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -272,11 +273,66 @@ const ExpenseManagement: React.FC = () => {
     }
   }, [addDebugLog]);
 
+  // 🚀 OPTIMIZED: Load all initial data in parallel for better performance
   useEffect(() => {
-    addDebugLog('info', 'LIFECYCLE', 'Component mounted, initializing data fetch');
-    fetchExpenses();
-    fetchPaymentAccounts();
-    fetchExpenseCategories();
+    addDebugLog('info', 'LIFECYCLE', 'Component mounted, initializing optimized parallel data fetch');
+
+    const loadInitialData = async () => {
+      if (import.meta.env.MODE === 'development') {
+        console.log('🔄 [ExpenseManagement] Starting optimized parallel data loading...');
+      }
+
+      const startTime = performance.now();
+
+      try {
+        setLoadingStep('Loading expense data...');
+
+        // Load all data in parallel (3 concurrent requests)
+        const [expensesResult, accountsResult, categoriesResult] = await Promise.allSettled([
+          fetchExpenses().then(() => {
+            setLoadingStep('Expenses loaded...');
+          }).catch(err => {
+            console.error('❌ Failed to load expenses:', err);
+            addDebugLog('error', 'PARALLEL_LOAD', 'Expenses load failed', err);
+          }),
+          fetchPaymentAccounts().then(() => {
+            setLoadingStep('Payment accounts loaded...');
+          }).catch(err => {
+            console.error('❌ Failed to load payment accounts:', err);
+            addDebugLog('error', 'PARALLEL_LOAD', 'Payment accounts load failed', err);
+          }),
+          fetchExpenseCategories().then(() => {
+            setLoadingStep('Categories loaded...');
+          }).catch(err => {
+            console.error('❌ Failed to load expense categories:', err);
+            addDebugLog('error', 'PARALLEL_LOAD', 'Expense categories load failed', err);
+          })
+        ]);
+
+        setLoadingStep('Finalizing...');
+
+        const duration = performance.now() - startTime;
+        addDebugLog('success', 'PARALLEL_LOAD', `All data loaded in parallel (${duration.toFixed(2)}ms)`, {
+          expensesSuccess: expensesResult.status === 'fulfilled',
+          accountsSuccess: accountsResult.status === 'fulfilled',
+          categoriesSuccess: categoriesResult.status === 'fulfilled'
+        });
+
+        if (import.meta.env.MODE === 'development') {
+          console.log(`✅ [ExpenseManagement] Optimized parallel loading completed in ${duration.toFixed(2)}ms`);
+        }
+
+        setLoadingStep('Complete!');
+        setTimeout(() => setIsLoading(false), 500); // Brief delay for better UX
+      } catch (error) {
+        addDebugLog('error', 'PARALLEL_LOAD', 'Parallel data loading failed', error);
+        console.error('❌ [ExpenseManagement] Parallel loading error:', error);
+        setIsLoading(false);
+        setLoadingStep('');
+      }
+    };
+
+    loadInitialData();
   }, [fetchExpenses, fetchPaymentAccounts, fetchExpenseCategories, addDebugLog]);
 
   // Handle form input change
@@ -552,9 +608,12 @@ const ExpenseManagement: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <span className="ml-3 text-gray-600">Loading expenses...</span>
+      <div className="flex flex-col items-center justify-center py-12">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <span className="text-gray-600">{loadingStep}</span>
+        </div>
+        <div className="text-sm text-gray-500">Please wait while we load your expense data...</div>
       </div>
     );
   }

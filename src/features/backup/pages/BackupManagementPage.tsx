@@ -27,6 +27,7 @@ import {
   AutomaticBackupConfig,
   SqlBackupResult
 } from '../../../lib/backupApi';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface BackupManagementPageProps {}
 

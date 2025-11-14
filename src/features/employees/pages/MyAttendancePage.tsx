@@ -14,6 +14,7 @@ import { employeeService } from '../../../services/employeeService';
 import { supabase } from '../../../lib/supabaseClient';
 import { useAttendanceSettings } from '../../../hooks/useAttendanceSettings';
 import { mainOffice } from '../config/officeConfig';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface Employee {
   id: string;

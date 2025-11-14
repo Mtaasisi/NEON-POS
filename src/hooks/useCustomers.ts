@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { fetchAllCustomers, fetchAllCustomersSimple, clearRequestCache, checkNetworkStatus, getConnectionQuality } from '../lib/customerApi/core';
 import { Customer } from '../lib/customerApi/types';
 import { retryWithBackoff, isNetworkError } from '../utils/networkErrorHandler';
+import { useDataStore } from '../stores/useDataStore';
 
 // Cache for customer data to prevent unnecessary refetches
 const customerDataCache = new Map<string, {
@@ -34,7 +35,8 @@ interface UseCustomersReturn {
 
 export function useCustomers(options: UseCustomersOptions = {}): UseCustomersReturn {
   const { autoFetch = true, simple = false, cacheKey = 'default' } = options;
-  
+
+  const dataStore = useDataStore();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +45,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
     quality: 'unknown',
     message: 'Checking connection...'
   });
-  
+
   const isMountedRef = useRef(true);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -93,8 +95,22 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
     if (!isMountedRef.current) return;
 
     const cacheKeyWithType = `${cacheKey}_${simple ? 'simple' : 'full'}`;
-    
-    
+
+    // Check preloaded data first (unless force refresh)
+    if (!forceRefresh && dataStore.customers.length > 0) {
+      console.log('✅ Using preloaded customers data');
+      setCustomers(dataStore.customers);
+      setLoading(false);
+      setError(null);
+
+      // Also cache it locally to prevent future API calls
+      customerDataCache.set(cacheKeyWithType, {
+        data: dataStore.customers,
+        timestamp: Date.now()
+      });
+      return;
+    }
+
     // Check cache first (unless force refresh)
     if (!forceRefresh) {
       const cached = customerDataCache.get(cacheKeyWithType);
@@ -104,7 +120,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
         setError(null);
         return;
       }
-      
+
       // Check if there's already a request in progress
       if (cached?.promise) {
         setLoading(true);

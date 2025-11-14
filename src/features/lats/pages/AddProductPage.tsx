@@ -23,11 +23,14 @@ import { productCacheService } from '../../../lib/productCacheService';
 // Extracted components
 import ProductInformationForm from '../components/product/ProductInformationForm';
 import ProductVariantsSection from '../components/product/ProductVariantsSection';
+import StorageLocationForm from '../components/product/StorageLocationForm';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 import SuccessModal from '../../../components/ui/SuccessModal';
+import { useDialog } from '../../shared/hooks/useDialog';
 import ProductModal from '../components/product/ProductModal';
 import { Product } from '../types/inventory';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 // Import ProductVariant type
 interface ProductVariant {
@@ -66,6 +69,7 @@ const productFormSchema = z.object({
 
 const AddProductPageOptimized: React.FC = () => {
   const navigate = useNavigate();
+  const { confirm } = useDialog();
   const { currentBranch } = useBranch();
   const { loadProducts } = useInventoryStore();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -87,7 +91,9 @@ const AddProductPageOptimized: React.FC = () => {
     description: '',
     specification: '',
     metadata: {},
-    variants: []
+    variants: [],
+    storageRoomId: '',
+    shelfId: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -239,6 +245,69 @@ const AddProductPageOptimized: React.FC = () => {
       console.error('Failed to clear draft:', error);
     }
   }, [DRAFT_KEY]);
+
+  // Load duplicate product data from sessionStorage
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isDuplicate = urlParams.get('duplicate') === 'true';
+    
+    if (isDuplicate) {
+      try {
+        const duplicateDataStr = sessionStorage.getItem('duplicateProductData');
+        if (duplicateDataStr) {
+          const duplicateData = JSON.parse(duplicateDataStr);
+          
+          // Generate new SKU for the product
+          const newProductSku = generateAutoSKU();
+          
+          // Pre-fill form with duplicate data
+          setFormData({
+            name: duplicateData.name || '',
+            sku: newProductSku,
+            categoryId: duplicateData.categoryId || duplicateData.category_id || '',
+            condition: duplicateData.condition || 'new',
+            description: duplicateData.description || '',
+            specification: duplicateData.specification || '',
+            metadata: duplicateData.metadata || {},
+            variants: []
+          });
+          
+          // Generate new SKUs for variants
+          if (duplicateData.variants && duplicateData.variants.length > 0) {
+            const duplicatedVariants = duplicateData.variants.map((v: any, index: number) => {
+              // Merge pricing info into attributes if they exist
+              const variantAttributes = {
+                ...(v.attributes || {}),
+                ...(v.costPrice && { costPrice: v.costPrice }),
+                ...(v.sellingPrice && { sellingPrice: v.sellingPrice }),
+                ...(v.cost_price && { costPrice: v.cost_price }),
+                ...(v.selling_price && { sellingPrice: v.selling_price })
+              };
+              
+              return {
+                name: v.name || `Variant ${index + 1}`,
+                sku: `${newProductSku}-V${(index + 1).toString().padStart(2, '0')}`,
+                specification: v.specification || '',
+                attributes: variantAttributes
+              };
+            });
+            
+            setVariants(duplicatedVariants);
+            setUseVariants(true);
+            setShowVariants(true);
+          }
+          
+          // Clear the sessionStorage
+          sessionStorage.removeItem('duplicateProductData');
+          
+          toast.success('Product data loaded for duplication with new SKUs', { duration: 3000 });
+        }
+      } catch (error) {
+        console.error('Failed to load duplicate product data:', error);
+        toast.error('Failed to load duplicate product data');
+      }
+    }
+  }, []);
 
   // Load data on component mount
   useEffect(() => {
@@ -499,6 +568,8 @@ const AddProductPageOptimized: React.FC = () => {
         sku: finalSku,
         category_id: formData.categoryId || null,
         branch_id: validatedBranchId,
+        storage_room_id: (formData as any).storageRoomId || null,
+        shelf_id: (formData as any).shelfId || null,
 
         // Set prices and stock to 0 - variants will handle these
         cost_price: 0,
@@ -804,19 +875,19 @@ const AddProductPageOptimized: React.FC = () => {
           {
             label: 'Duplicate',
             onClick: () => {
-              // Keep all the current form data but generate new SKU
+              // Keep all the current form data but generate new SKUs
               const newSku = generateAutoSKU();
               setFormData(prev => ({
                 ...prev,
                 sku: newSku,
                 name: `${prev.name} (Copy)`,
               }));
-              // Keep variants but clear their SKUs
-              setVariants(prev => prev.map(v => ({
+              // Keep variants but regenerate their SKUs with new base SKU
+              setVariants(prev => prev.map((v, index) => ({
                 ...v,
-                sku: ''
+                sku: `${newSku}-V${(index + 1).toString().padStart(2, '0')}`
               })));
-              toast.success('Product duplicated! Adjust details and save.');
+              toast.success('Product duplicated with new SKUs! Adjust details and save.', { duration: 3000 });
             },
             variant: 'secondary'
           },
@@ -1004,6 +1075,15 @@ const AddProductPageOptimized: React.FC = () => {
             setDraggedVariantIndex={setDraggedVariantIndex}
             onVariantSpecificationsClick={handleVariantSpecificationsClick}
             baseSku={formData.sku}
+          />
+        </div>
+        
+        {/* Storage Location */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <StorageLocationForm
+            formData={formData}
+            setFormData={setFormData}
+            currentErrors={currentErrors}
           />
         </div>
 
@@ -1586,8 +1666,8 @@ const AddProductPageOptimized: React.FC = () => {
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm('Clear all specifications?')) {
+                          onClick={async () => {
+                            if (await confirm('Clear all specifications?')) {
                               setFormData(prev => ({ ...prev, specification: '' }));
                               toast.success('All specifications cleared');
                             }

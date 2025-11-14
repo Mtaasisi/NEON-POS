@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, Package, Tag, Minus, Plus, Edit, X } from 'lucide-react';
+import { Trash2, Package, Tag, Minus, Plus, Edit, X, AlertTriangle } from 'lucide-react';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import GlassBadge from '../../../shared/components/ui/GlassBadge';
@@ -9,6 +9,8 @@ import { SafeImage } from '../../../../components/SafeImage';
 import { ProductImage } from '../../../../lib/robustImageService';
 import { getSpecificationIcon, getSpecificationTooltip, formatSpecificationValue } from '../../lib/specificationUtils';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import { supabase } from '../../../../lib/supabaseClient';
+import { toast } from 'react-hot-toast';
 
 interface VariantCartItemProps {
   item: CartItem;
@@ -16,6 +18,7 @@ interface VariantCartItemProps {
   onRemove: () => void;
   onVariantChange?: (variantId: string) => void;
   onTagsChange?: (tags: string[]) => void;
+  onIMEISelect?: (item: CartItem) => void; // Callback to handle IMEI selection
   availableVariants?: Array<{
     id: string;
     name: string;
@@ -50,6 +53,7 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   onRemove,
   onVariantChange,
   onTagsChange,
+  onIMEISelect,
   availableVariants = [],
   showStockInfo = true,
   variant = 'default',
@@ -60,6 +64,8 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   const [showVariantSelector, setShowVariantSelector] = useState(false);
   const [showTagInput, setShowTagInput] = useState(false);
   const [newTag, setNewTag] = useState('');
+  const [requiresIMEI, setRequiresIMEI] = useState(false);
+  const [checkingIMEI, setCheckingIMEI] = useState(false);
   const { playClickSound, playDeleteSound } = usePOSClickSounds();
 
   // Calculate totals
@@ -74,6 +80,75 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   };
 
   const stockStatus = getStockStatus();
+
+  // Check if this item requires IMEI selection
+  React.useEffect(() => {
+    const checkIMEIRequirement = async () => {
+      if (item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0) {
+        setRequiresIMEI(false);
+        return;
+      }
+
+      setCheckingIMEI(true);
+      try {
+        // First check if this specific variant has IMEI children
+        let hasIMEIChildren = false;
+
+        if (item.variantId && item.variantId !== 'default') {
+          // Check if this variant has IMEI child variants
+          const { count } = await supabase
+            .from('lats_product_variants')
+            .select('id', { count: 'exact', head: true })
+            .eq('parent_variant_id', item.variantId)
+            .eq('variant_type', 'imei_child')
+            .eq('is_active', true)
+            .gt('quantity', 0);
+
+          hasIMEIChildren = (count || 0) > 0;
+
+          if (hasIMEIChildren) {
+            // Variant has IMEI children, requires IMEI selection
+            setRequiresIMEI(true);
+            setCheckingIMEI(false);
+            return;
+          } else {
+            // Check if this variant itself is an IMEI variant
+            const { data: variant } = await supabase
+              .from('lats_product_variants')
+              .select('variant_attributes')
+              .eq('id', item.variantId)
+              .eq('is_active', true)
+              .single();
+
+            // If it's an IMEI variant OR has no IMEI children and is not IMEI, no selection needed
+            setRequiresIMEI(false);
+            setCheckingIMEI(false);
+            return;
+          }
+        }
+
+        // No specific variant selected (default variant) - check product level
+        const { data: imeiVariants } = await supabase
+          .from('lats_product_variants')
+          .select('id')
+          .eq('product_id', item.productId)
+          .not("variant_attributes->>'imei'", 'is', null)
+          .eq('is_active', true)
+          .gt('quantity', 0)
+          .limit(1);
+
+        setRequiresIMEI(imeiVariants && imeiVariants.length > 0);
+
+      } catch (error) {
+        console.error('Error checking IMEI requirement:', error);
+        setRequiresIMEI(false);
+      } finally {
+        setCheckingIMEI(false);
+      }
+    };
+
+    checkIMEIRequirement();
+  }, [item.productId, item.variantId, item.selectedSerialNumbers]);
 
   // Get stock status badge
   const getStockStatusBadge = () => {
@@ -193,6 +268,23 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                     <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                     <span>IMEI: {item.selectedSerialNumbers.map((sn: any) => sn.imei || sn.serial_number).join(', ')}</span>
                   </div>
+                ) : requiresIMEI ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <GlassBadge variant="warning" size="sm" className="text-xs">
+                      <AlertTriangle className="w-3 h-3 mr-1" />
+                      IMEI Required
+                    </GlassBadge>
+                    {onIMEISelect && (
+                      <GlassButton
+                        onClick={() => onIMEISelect(item)}
+                        variant="primary"
+                        size="sm"
+                        className="text-xs px-2 py-1"
+                      >
+                        Select IMEI
+                      </GlassButton>
+                    )}
+                  </div>
                 ) : null}
                 {/* Stock Info */}
                 <div className="text-xs text-gray-500 mt-1">
@@ -299,12 +391,29 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
               </div>
             )}
             {/* IMEI Selection Status */}
-            {item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0 && (
+            {item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0 ? (
               <div className="flex items-center gap-1 text-xs text-green-600 mt-1 font-medium">
                 <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                 <span>IMEI: {item.selectedSerialNumbers.map((sn: any) => sn.imei || sn.serial_number).join(', ')}</span>
               </div>
-            )}
+            ) : requiresIMEI ? (
+              <div className="flex items-center gap-2 mt-2">
+                <GlassBadge variant="warning" size="sm">
+                  <AlertTriangle className="w-3 h-3 mr-1" />
+                  IMEI Required
+                </GlassBadge>
+                {onIMEISelect && (
+                  <GlassButton
+                    onClick={() => onIMEISelect(item)}
+                    variant="primary"
+                    size="sm"
+                    className="text-xs px-3 py-1"
+                  >
+                    Select IMEI
+                  </GlassButton>
+                )}
+              </div>
+            ) : null}
             {/* Show specifications if available */}
             {item.attributes && Object.keys(item.attributes).length > 0 && (
               <div className="mt-3">

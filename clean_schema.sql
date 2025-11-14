@@ -7500,8 +7500,11 @@ BEGIN
     -- These decrease the balance (expenses reduce account balance)
     new_balance := current_balance - NEW.amount;
   ELSIF NEW.transaction_type = 'adjustment' THEN
-    -- Adjustments can go either way based on the sign
-    new_balance := NEW.amount;
+    -- Adjustments can go either way based on the sign (positive adds, negative subtracts)
+    new_balance := current_balance + NEW.amount;
+  ELSIF NEW.transaction_type = 'reversal' THEN
+    -- Reversals are already handled by manual balance updates, don't change balance again
+    new_balance := current_balance;
   ELSE
     -- Default: no change
     new_balance := current_balance;

@@ -397,7 +397,8 @@ export const usePurchaseOrderStore = create<PurchaseOrderState>()(
 
       // Cart management
       addToCart: (product: Product, variant: any, quantity: number = 1) => {
-        const costPrice = variant.costPrice || product.price * 0.7;
+        // Use nullish coalescing to properly handle 0 values and avoid price becoming 1
+        const costPrice = variant.costPrice ?? (product.price ? product.price * 0.7 : 1);
         
         set(state => {
           const existingItem = state.cartItems.find(item => 

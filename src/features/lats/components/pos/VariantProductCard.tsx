@@ -25,7 +25,7 @@ import VariantSelectionModal from './VariantSelectionModal';
 interface VariantProductCardProps {
   product: ProductSearchResult;
   onAddToCart?: (product: ProductSearchResult, variant: ProductSearchVariant, quantity: number) => void;
-  onViewDetails?: (product: ProductSearchResult) => void;
+  onViewDetails?: (product: ProductSearchResult, variant?: ProductSearchVariant) => void;
   onView?: (product: ProductSearchResult) => void;
   onEdit?: (product: ProductSearchResult) => void;
   onDelete?: (product: ProductSearchResult) => void;
@@ -41,6 +41,9 @@ interface VariantProductCardProps {
   actionText?: string;
   allowOutOfStockSelection?: boolean; // For purchase orders where we want to allow selecting out-of-stock products
   realTimeStockData?: Map<string, number>; // Pre-fetched stock data to avoid N+1 queries
+  currencyCode?: string; // Currency code to display (e.g., 'CNY', 'USD', 'TZS')
+  currencySymbol?: string; // Currency symbol to display (e.g., '¥', '$', 'TSh')
+  disableVariantModal?: boolean; // If true, always use onViewDetails instead of showing variant modal
 }
 
 const VariantProductCard: React.FC<VariantProductCardProps> = ({
@@ -61,7 +64,10 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
   primaryColor = 'blue',
   actionText = 'Add to Cart',
   allowOutOfStockSelection = false,
-  realTimeStockData
+  realTimeStockData,
+  currencyCode = 'TZS',
+  currencySymbol = 'TSh',
+  disableVariantModal = false
 }) => {
   // Add error state for React refresh issues
   const [hasError, setHasError] = useState(false);
@@ -206,7 +212,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
     }
   };
 
-  // Get price display - show only the cheapest price
+  // Get price display - show only the cheapest price with comma separators
   const getPriceDisplay = () => {
     if (!product.variants || product.variants.length === 0) {
       return 'No variants';
@@ -222,8 +228,8 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
       return 'No price set';
     }
 
-    // Return only the cheapest price
-    return `$${prices[0].toFixed(2)}`;
+    // Return only the cheapest price with comma formatting
+    return prices[0].toLocaleString();
   };
 
   // Fetch real-time stock data (only used if no pre-fetched data provided)
@@ -279,12 +285,6 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
       return;
     }
     
-    // If onViewDetails is provided (like in purchase orders), use that instead
-    if (onViewDetails) {
-      onViewDetails(product);
-      return;
-    }
-    
     // For purchase orders, allow out-of-stock products; for POS, block only if ALL variants are out of stock
     const allVariantsOutOfStock = product.variants?.every(v => (v.quantity ?? 0) <= 0) ?? true;
     if (!allowOutOfStockSelection && allVariantsOutOfStock) {
@@ -295,7 +295,13 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
     const hasMultipleVariants = product.variants && product.variants.length > 1;
     const hasSingleVariant = product.variants && product.variants.length === 1;
     
-    // ✅ ENHANCED: Check for parent variants with better detection
+    // ✅ If disableVariantModal is true, always use onViewDetails instead
+    if (disableVariantModal && onViewDetails) {
+      onViewDetails(product);
+      return;
+    }
+    
+    // ✅ ENHANCED: Always check for multiple variants first, even for purchase orders
     if (hasMultipleVariants) {
       setIsVariantModalOpen(true);
       return;
@@ -332,6 +338,12 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
       }
     }
     
+    // Single non-parent variant: Check if onViewDetails is provided (purchase orders)
+    if (onViewDetails) {
+      onViewDetails(product);
+      return;
+    }
+    
     // Single non-parent variant: Add directly to cart
     if (primaryVariant && (primaryVariant.quantity ?? 0) > 0) {
       if (onAddToCart) {
@@ -345,6 +357,16 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
 
   // Handle variant selection from modal
   const handleVariantSelect = (selectedProduct: any, selectedVariant: any, quantity: number) => {
+    // If onViewDetails is provided (like in purchase orders), call it with the selected variant
+    if (onViewDetails) {
+      // Store the selected variant for the product detail modal
+      setSelectedVariant(selectedVariant);
+      // Pass the variant to onViewDetails
+      onViewDetails(selectedProduct, selectedVariant);
+      return;
+    }
+    
+    // Otherwise, add to cart directly (POS mode)
     if (onAddToCart) {
       onAddToCart(selectedProduct, selectedVariant, quantity);
     }
@@ -439,8 +461,8 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
             {/* Price - Single line, at bottom */}
             <div className="mt-auto pt-2 border-t border-gray-100">
               {showPrices && (
-                <div className={`font-bold text-lg truncate ${hasNoVariants && !allowOutOfStockSelection ? 'text-gray-500' : theme.priceColor}`} title={getPriceDisplay()}>
-                  {getPriceDisplay()}
+                <div className={`font-bold text-lg truncate ${hasNoVariants && !allowOutOfStockSelection ? 'text-gray-500' : theme.priceColor}`} title={`${currencySymbol} ${getPriceDisplay()}`}>
+                  {currencySymbol} {getPriceDisplay()}
                 </div>
               )}
             </div>
@@ -531,7 +553,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   className={`relative w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 rounded-xl flex items-center justify-center text-lg font-bold ${theme.iconColor} cursor-pointer hover:opacity-90 transition-opacity`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsProductInfoOpen(true);
+                    setIsImagePopupOpen(true);
                   }}
                 >
                   <SimpleImageDisplay
@@ -558,7 +580,7 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
                   {product.name}
                 </div>
                 <div className="text-lg sm:text-xl md:text-2xl text-gray-700 mt-0.5 sm:mt-1 font-bold">
-                  TSh {getPriceDisplay().replace('$', '').replace('.00', '').replace('.0', '')}
+                  {currencySymbol} {getPriceDisplay()}
                 </div>
               </div>
             </div>
@@ -716,13 +738,16 @@ const VariantProductCard: React.FC<VariantProductCardProps> = ({
         </div>
       </div>
 
-      {/* Variant Selection Modal */}
-      <VariantSelectionModal
-        isOpen={isVariantModalOpen}
-        onClose={() => setIsVariantModalOpen(false)}
-        product={product}
-        onSelectVariant={handleVariantSelect}
-      />
+      {/* Variant Selection Modal - Only render when open */}
+      {isVariantModalOpen && (
+        <VariantSelectionModal
+          isOpen={isVariantModalOpen}
+          onClose={() => setIsVariantModalOpen(false)}
+          product={product}
+          onSelectVariant={handleVariantSelect}
+          isPurchaseOrderMode={allowOutOfStockSelection}
+        />
+      )}
     </>
   );
 };

@@ -82,31 +82,79 @@ export interface UpdateSupplierData {
   is_active?: boolean;
 }
 
-// Get all active suppliers (excluding trade-in customers)
-export const getActiveSuppliers = async (): Promise<Supplier[]> => {
+// Get all active suppliers (excluding trade-in customers) with statistics
+export const getActiveSuppliers = async (): Promise<any[]> => {
   try {
-    const { data, error } = await supabase
+    console.log('🔍 Fetching suppliers with statistics from database...');
+    
+    // First, get all suppliers
+    const { data: suppliersData, error: suppliersError } = await supabase
       .from('lats_suppliers')
       .select('*')
       .order('name');
 
-    if (error) {
-      console.error('❌ Error fetching suppliers:', error);
-      throw new Error(`Failed to fetch suppliers: ${error.message}`);
+    if (suppliersError) {
+      console.error('❌ Error fetching suppliers:', suppliersError);
+      throw new Error(`Failed to fetch suppliers: ${suppliersError.message}`);
     }
 
+    console.log(`📊 Total suppliers in database: ${suppliersData?.length || 0}`);
+    
     // Filter active suppliers and exclude trade-in customers
-    const activeSuppliers = (data || []).filter(s => 
+    const activeSuppliers = (suppliersData || []).filter(s => 
       s.is_active !== false && s.is_trade_in_customer !== true
     );
     
-    const count = activeSuppliers.length;
+    const inactiveCount = (suppliersData || []).length - activeSuppliers.length;
     
-    if (count === 0) {
-      console.warn('⚠️ WARNING: No active suppliers found! Check if suppliers table is empty or all suppliers are inactive.');
+    console.log(`✅ Active suppliers: ${activeSuppliers.length}`);
+    if (inactiveCount > 0) {
+      console.log(`⚠️  Inactive/Trade-in suppliers filtered out: ${inactiveCount}`);
+    }
+    
+    // Fetch purchase order statistics for each supplier
+    const { data: ordersData, error: ordersError } = await supabase
+      .from('lats_purchase_orders')
+      .select('supplier_id, total_amount, order_date, status');
+    
+    if (ordersError) {
+      console.warn('⚠️ Could not fetch order statistics:', ordersError);
     }
 
-    return activeSuppliers;
+    // Calculate statistics for each supplier
+    const suppliersWithStats = activeSuppliers.map(supplier => {
+      const supplierOrders = (ordersData || []).filter(order => order.supplier_id === supplier.id);
+      
+      const ordersCount = supplierOrders.length;
+      // Explicitly convert total_amount to number to avoid string concatenation
+      const totalSpent = supplierOrders.reduce((sum, order) => {
+        const amount = parseFloat(order.total_amount) || 0;
+        return sum + amount;
+      }, 0);
+      const lastOrderDate = supplierOrders.length > 0
+        ? supplierOrders
+            .map(o => new Date(o.order_date))
+            .sort((a, b) => b.getTime() - a.getTime())[0]
+            .toISOString()
+        : undefined;
+
+      return {
+        ...supplier,
+        ordersCount,
+        totalSpent,
+        lastOrderDate
+      };
+    });
+
+    console.log(`📈 Suppliers with statistics: ${suppliersWithStats.length}`);
+    console.log(`📦 Total orders found: ${ordersData?.length || 0}`);
+    
+    if (suppliersWithStats.length === 0) {
+      console.warn('⚠️ WARNING: No active suppliers found! Check if suppliers table is empty or all suppliers are inactive.');
+      console.warn('🔧 TIP: Run this SQL to check: SELECT name, is_active, is_trade_in_customer FROM lats_suppliers;');
+    }
+
+    return suppliersWithStats;
   } catch (error) {
     console.error('❌ Error in getActiveSuppliers:', error);
     throw error;

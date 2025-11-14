@@ -8,16 +8,32 @@ export default defineConfig(({ command, mode }) => {
   
   // Log the loaded environment variable for debugging
   console.log('🔍 VITE_DATABASE_URL from env:', env.VITE_DATABASE_URL?.substring(0, 50) + '...');
+  const devServerPort = Number(env.VITE_DEV_SERVER_PORT || env.PORT || 5173);
+  const devServerHost = env.VITE_DEV_SERVER_HOST || '0.0.0.0';
+
+  const hmrOptions: Record<string, any> = {
+    protocol: env.VITE_DEV_HMR_PROTOCOL || 'ws',
+    timeout: 30000, // 30 second timeout for HMR
+    overlay: false, // Disable error overlay to prevent WebSocket issues
+  };
+
+  if (env.VITE_DEV_HMR_HOST) {
+    hmrOptions.host = env.VITE_DEV_HMR_HOST;
+  }
+
+  if (env.VITE_DEV_HMR_PORT) {
+    hmrOptions.port = Number(env.VITE_DEV_HMR_PORT);
+  }
+
+  if (env.VITE_DEV_HMR_CLIENT_PORT) {
+    hmrOptions.clientPort = Number(env.VITE_DEV_HMR_CLIENT_PORT);
+  }
+
   const server = {
-    port: 5173,
-    host: 'localhost',
+    port: devServerPort,
+    host: devServerHost,
     strictPort: true, // Don't try other ports if 5173 is busy
-    hmr: {
-      host: 'localhost',
-      protocol: 'ws',
-      timeout: 30000, // 30 second timeout for HMR
-      overlay: false, // Disable error overlay to prevent WebSocket issues
-    },
+    hmr: hmrOptions,
     watch: {
       usePolling: true,
       interval: 1000,
@@ -68,8 +84,8 @@ export default defineConfig(({ command, mode }) => {
   return {
     // Use relative path for Capacitor, absolute for web deployments
     // If deployed to a subdirectory, set VITE_BASE_PATH environment variable
-    // Set to '/lats/' for production deployment to subdirectory
-    base: process.env.CAPACITOR_BUILD === 'true' ? './' : (command === 'serve' ? '/' : (env.VITE_BASE_PATH || '/lats/')),
+    // Default to root path for normal deployments
+    base: process.env.CAPACITOR_BUILD === 'true' ? './' : (command === 'serve' ? '/' : (env.VITE_BASE_PATH || '/')),
     plugins: [
       react({
         jsxRuntime: 'automatic'

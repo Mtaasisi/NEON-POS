@@ -120,7 +120,7 @@ const TransactionReversalModal: React.FC<TransactionReversalModalProps> = ({
         .from('account_transactions')
         .insert({
           account_id: transaction.account_id,
-          transaction_type: 'adjustment', // Use adjustment type for reversals
+          transaction_type: 'reversal', // Use reversal type for reversals (doesn't trigger balance updates)
           amount: reversalAmount,
           balance_before: currentBalance,
           balance_after: newBalance,

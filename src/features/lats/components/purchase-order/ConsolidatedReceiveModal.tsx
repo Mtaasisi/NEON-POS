@@ -21,6 +21,19 @@ export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> =
 }) => {
   const [receiveType, setReceiveType] = useState<ReceiveType>('full');
   const [includeQualityCheck, setIncludeQualityCheck] = useState(false);
+
+  // Block body scroll when modal is open
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
   
   if (!isOpen) return null;
   
@@ -60,12 +73,19 @@ export const ConsolidatedReceiveModal: React.FC<ConsolidatedReceiveModalProps> =
           <X className="w-5 h-5" />
         </button>
 
-        {/* Icon Header */}
-        <div className="p-8 bg-gradient-to-br from-green-50 to-emerald-50 text-center">
-          <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Package className="w-8 h-8 text-white" />
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg">
+              <Package className="w-8 h-8 text-white" />
+            </div>
+            
+            {/* Text */}
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">Receive Purchase Order</h3>
+            </div>
           </div>
-          <h3 className="text-2xl font-bold text-gray-900">Receive Purchase Order</h3>
         </div>
         
         {/* Content */}

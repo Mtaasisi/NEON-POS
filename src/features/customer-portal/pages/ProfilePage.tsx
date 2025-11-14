@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import customerPortalService from '../services/customerPortalService';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface CustomerProfile {
   name: string;
@@ -28,6 +29,7 @@ interface CustomerProfile {
 
 const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
@@ -38,6 +40,8 @@ const ProfilePage: React.FC = () => {
   }, []);
 
   const loadProfile = async () => {
+    const jobId = startLoading('Loading profile...');
+    
     try {
       setLoading(true);
       const customerId = localStorage.getItem('customer_id');
@@ -61,9 +65,11 @@ const ProfilePage: React.FC = () => {
 
       setProfile(profileData);
       setEditedProfile(profileData);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error loading profile:', error);
       toast.error('Failed to load profile');
+      failLoading(jobId, 'Failed to load profile');
     } finally {
       setLoading(false);
     }
@@ -71,6 +77,8 @@ const ProfilePage: React.FC = () => {
 
   const handleSaveProfile = async () => {
     if (!editedProfile) return;
+
+    const jobId = startLoading('Saving profile...');
 
     try {
       const customerId = localStorage.getItem('customer_id');
@@ -87,9 +95,11 @@ const ProfilePage: React.FC = () => {
       setProfile(editedProfile);
       setIsEditing(false);
       toast.success('Profile updated successfully');
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error updating profile:', error);
       toast.error('Failed to update profile');
+      failLoading(jobId, 'Failed to save profile');
     }
   };
 

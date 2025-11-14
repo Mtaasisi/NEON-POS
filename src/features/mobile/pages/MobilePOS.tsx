@@ -19,6 +19,7 @@ import { useMobileBranch } from '../hooks/useMobileBranch';
 import { supabase } from '../../../lib/supabaseClient';
 import { useResponsiveSizes, useScreenInfo } from '../../../hooks/useResponsiveSize';
 import { ResponsiveMobileWrapper } from '../components/ResponsiveMobileWrapper';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface CartItem {
   id: string;

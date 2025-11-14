@@ -8,6 +8,7 @@ import {
 import { toast } from 'react-hot-toast';
 import AppointmentModal from '../../customers/components/forms/AppointmentModal';
 import { createAppointment, fetchAllAppointments, updateAppointment, deleteAppointment, getAppointmentStats } from '../../../lib/customerApi/appointments';
+import { useDialog } from '../../shared/hooks/useDialog';
 
 interface AppointmentManagementTabProps {
   isActive: boolean;
@@ -42,6 +43,7 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
   showCreateModal,
   setShowCreateModal
 }) => {
+  const { confirm } = useDialog();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
@@ -187,7 +189,7 @@ const AppointmentManagementTab: React.FC<AppointmentManagementTabProps> = ({
   };
 
   const handleDeleteAppointment = async (appointmentId: string) => {
-    if (window.confirm('Are you sure you want to delete this appointment?')) {
+    if (await confirm('Are you sure you want to delete this appointment?')) {
       try {
         console.log(`🗑️ Deleting appointment ${appointmentId}`);
         await deleteAppointment(appointmentId);

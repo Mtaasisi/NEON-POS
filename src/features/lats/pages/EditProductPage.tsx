@@ -27,6 +27,7 @@ import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
 import ProductModal from '../components/product/ProductModal';
 import { Product } from '../types/inventory';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 // Import ProductVariant type
 interface ProductVariant {

@@ -18,10 +18,25 @@ async function createPO() {
   const browser = await puppeteer.launch({
     headless: false,
     defaultViewport: { width: 1920, height: 1080 },
-    args: ['--start-maximized']
+    args: ['--start-maximized', '--disable-extensions', '--disable-plugins', '--disable-default-apps', '--disable-background-timer-throttling', '--disable-renderer-backgrounding']]
   });
   
   const page = await browser.newPage();
+    
+    // Suppress extension context errors
+    page.on('console', msg => {
+      const text = msg.text();
+      if (msg.type() === 'error' &&
+          (text.includes('Extension context invalidated') ||
+           text.includes('chrome-extension://') ||
+           text.includes('moz-extension://'))) {
+        // Silently ignore extension-related errors
+        return;
+      }
+      if (msg.type() === 'error') {
+        console.warn('Browser error:', text.substring(0, 100));
+      }
+    });
   
   try {
     // Login

@@ -29,6 +29,8 @@ import {
   type UpdateUserData as ApiUpdateUserData
 } from '../../../lib/userApi';
 import { bulkAssignUserToBranches, getUserBranchAssignments } from '../../../lib/userBranchApi';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { TableSkeleton } from '../../../components/ui/SkeletonLoaders';
 
 interface User {
   id: string;
@@ -60,6 +62,7 @@ interface Role {
 const UserManagementPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   // State management
   const [users, setUsers] = useState<User[]>([]);
@@ -83,6 +86,7 @@ const UserManagementPage: React.FC = () => {
   }, []);
 
   const loadUsers = async () => {
+    const jobId = startLoading('Loading users...');
     setIsLoading(true);
     try {
       const dbUsers = await fetchAllUsers();
@@ -158,8 +162,10 @@ const UserManagementPage: React.FC = () => {
       ];
 
       setRoles(rolesData);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error loading users:', error);
+      failLoading(jobId, 'Failed to load users');
       toast.error('Failed to load users');
     } finally {
       setIsLoading(false);
@@ -484,10 +490,7 @@ const UserManagementPage: React.FC = () => {
   if (isLoading) {
     return (
       <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-gray-600">Loading users...</span>
-        </div>
+        <TableSkeleton />
       </div>
     );
   }

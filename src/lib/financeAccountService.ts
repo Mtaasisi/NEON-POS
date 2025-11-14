@@ -414,4 +414,69 @@ class FinanceAccountService {
   }
 }
 
+// Utility function to get account balance before any storage/update operations
+export async function getAccountBalanceBeforeStorage(accountId: string): Promise<{
+  balance: number;
+  accountData: FinanceAccount | null;
+  isValid: boolean;
+}> {
+  try {
+    const { data: account, error } = await supabase
+      .from('finance_accounts')
+      .select('*')
+      .eq('id', accountId)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !account) {
+      console.error('Error fetching account balance before storage:', error);
+      return { balance: 0, accountData: null, isValid: false };
+    }
+
+    return {
+      balance: Number(account.balance) || 0,
+      accountData: account,
+      isValid: true
+    };
+  } catch (error) {
+    console.error('Exception fetching account balance before storage:', error);
+    return { balance: 0, accountData: null, isValid: false };
+  }
+}
+
+// Utility function to validate balance before transaction
+export function validateBalanceBeforeTransaction(
+  currentBalance: number,
+  transactionAmount: number,
+  transactionType: 'payment' | 'expense' | 'transfer' = 'payment'
+): {
+  isValid: boolean;
+  newBalance: number;
+  warning?: string;
+} {
+  const absAmount = Math.abs(transactionAmount);
+
+  // For payments received (positive amounts), no validation needed
+  if (transactionAmount > 0) {
+    return {
+      isValid: true,
+      newBalance: Math.max(0, currentBalance + transactionAmount)
+    };
+  }
+
+  // For payments made (negative amounts), check if sufficient balance
+  if (absAmount > currentBalance) {
+    return {
+      isValid: false,
+      newBalance: 0, // Will be set to 0 to prevent negative
+      warning: `Transaction amount (${absAmount}) exceeds available balance (${currentBalance}). Balance will be set to 0.`
+    };
+  }
+
+  return {
+    isValid: true,
+    newBalance: Math.max(0, currentBalance - absAmount)
+  };
+}
+
 export const financeAccountService = new FinanceAccountService(); 

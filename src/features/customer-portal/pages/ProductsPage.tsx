@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MobileLayout from '../components/MobileLayout';
 import ProductCard from '../components/ProductCard';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { ProductGridSkeleton } from '../../../components/ui/SkeletonLoaders';
 import { 
   Search, 
   SlidersHorizontal, 
@@ -17,6 +19,7 @@ import customerPortalService from '../services/customerPortalService';
 
 const ProductsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   // State
   const [products, setProducts] = useState<CustomerProduct[]>([]);
@@ -42,6 +45,8 @@ const ProductsPage: React.FC = () => {
   }, []);
 
   const loadProducts = async (isRetry = false) => {
+    const jobId = startLoading('Loading products...');
+    
     try {
       console.log('🛒 ProductsPage: Loading products...', isRetry ? `(Retry ${retryCount + 1})` : '');
       setLoading(true);
@@ -55,6 +60,7 @@ const ProductsPage: React.FC = () => {
       if (productsData.length === 0) {
         console.warn('⚠️  ProductsPage: No products returned - checking database connection...');
         setError('no_products');
+        failLoading(jobId, 'No products found');
       } else {
         setProducts(productsData);
         setError(null);
@@ -67,11 +73,13 @@ const ProductsPage: React.FC = () => {
         setBrands(uniqueBrands);
 
         console.log(`📊 Categories: ${uniqueCategories.length}, Brands: ${uniqueBrands.length}`);
+        completeLoading(jobId);
       }
 
     } catch (error) {
       console.error('❌ ProductsPage: Error loading products:', error);
       setError('fetch_failed');
+      failLoading(jobId, 'Failed to load products');
       
       // Show user-friendly error
       toast.error('Failed to load products. Please check your connection.', {

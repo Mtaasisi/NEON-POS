@@ -3,6 +3,7 @@ import { X, Clock, User, Package, Trash2, Download, AlertCircle } from 'lucide-r
 import { draftService, POSDraft } from '../../lib/draftService';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../../features/shared/components/ui/GlassButton';
+import { useDialog } from '../../../shared/hooks/useDialog';
 
 interface DraftManagementModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ const DraftManagementModal: React.FC<DraftManagementModalProps> = ({
   onLoadDraft,
   currentDraftId
 }) => {
+  const { confirm } = useDialog();
   const [drafts, setDrafts] = useState<POSDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDraft, setSelectedDraft] = useState<POSDraft | null>(null);
@@ -50,8 +52,8 @@ const DraftManagementModal: React.FC<DraftManagementModalProps> = ({
     }
   };
 
-  const handleDeleteDraft = (draftId: string) => {
-    if (window.confirm('Are you sure you want to delete this draft?')) {
+  const handleDeleteDraft = async (draftId: string) => {
+    if (await confirm('Are you sure you want to delete this draft?')) {
       const success = draftService.deleteDraft(draftId);
       if (success) {
         loadDrafts();
@@ -217,8 +219,8 @@ const DraftManagementModal: React.FC<DraftManagementModalProps> = ({
             <div className="flex items-center justify-between text-sm text-gray-500">
               <span>{drafts.length} draft{drafts.length !== 1 ? 's' : ''} saved</span>
               <button
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to delete all drafts?')) {
+                onClick={async () => {
+                  if (await confirm('Are you sure you want to delete all drafts?')) {
                     draftService.clearAllDrafts();
                     loadDrafts();
                   }

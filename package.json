@@ -11,6 +11,8 @@
     "backend:start": "cd server && npm start",
     "dev:all": "concurrently \"npm run backend\" \"npm run dev\"",
     "dev:full": "concurrently \"npm run api\" \"npm run dev\"",
+    "server-starter": "node scripts/server-starter.mjs",
+    "dev:auto": "concurrently \"npm run server-starter\" \"npm run dev\" --names \"starter,frontend\" --prefix name",
     "postbuild": "node fix-build-mime-types.mjs",
     "build": "tsc && vite build --mode development && node fix-build-mime-types.mjs",
     "build:prod": "tsc && vite build --mode production && node fix-build-mime-types.mjs",

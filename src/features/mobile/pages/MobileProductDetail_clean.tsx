@@ -23,6 +23,7 @@ import {
   getVariantSourceBadge
 } from '../../lats/lib/variantUtils';
 import { parseSpecification, formatSpecificationValue } from '../../lats/lib/specificationUtils';
+import { useDialog } from '../../shared/hooks/useDialog';
 
 interface Product {
   id: string;
@@ -47,6 +48,7 @@ interface Product {
 const MobileProductDetail: React.FC = () => {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
+  const { confirm } = useDialog();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -167,7 +169,7 @@ const MobileProductDetail: React.FC = () => {
   // Handlers
   const handleDelete = async () => {
     if (!product) return;
-    if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) return;
+    if (!await confirm(`Are you sure you want to delete "${product.name}"?`)) return;
 
     try {
       const { error } = await supabase.from('lats_products').delete().eq('id', product.id);

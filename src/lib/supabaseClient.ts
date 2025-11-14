@@ -416,24 +416,81 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         return -1;
       };
       
+      // Helper function to extract columns, removing nested relations first
+      const extractColumns = (columnsStr: string): string[] => {
+        let working = columnsStr;
+        
+        // First, remove all nested relations (alias:table(...))
+        // Use the same findMatchingParen logic to handle nested parens correctly
+        const nestedPattern = /(\w+):(\w+)\s*\(/g;
+        let match;
+        
+        // Keep removing nested relations until there are none left
+        let maxIterations = 10; // Prevent infinite loops
+        while (maxIterations-- > 0 && (match = nestedPattern.exec(working)) !== null) {
+          const openParenIdx = match.index + match[0].length - 1;
+          const closeParenIdx = findMatchingParen(working, openParenIdx);
+          
+          if (closeParenIdx !== -1) {
+            // Remove this nested relation
+            const fullMatch = working.substring(match.index, closeParenIdx + 1);
+            working = working.replace(fullMatch, '');
+            // Reset regex after modification
+            nestedPattern.lastIndex = 0;
+          } else {
+            // Skip if we can't find matching paren
+            nestedPattern.lastIndex = match.index + 1;
+          }
+        }
+        
+        // Now split by comma and extract clean column names
+        const columns = working.split(',')
+          .map(c => c.trim())
+          .filter(c => {
+            // Only keep simple column names
+            return c && c.length > 0 && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(c);
+          });
+        
+        return columns;
+      };
+      
       // Extract base fields and relationships using regex
       const relationships: Array<{ alias: string; table: string; foreignKey: string; columns: string[] }> = [];
       let workingFields = fields;
       
       // Pattern 1: alias:table!foreign_key(columns) - explicit foreign key
-      const explicitPattern = /(\w+):(\w+)!(\w+)\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/g;
+      // Use a simpler regex to find the start, then use findMatchingParen for proper nesting
+      const explicitPattern = /(\w+):(\w+)!(\w+)\s*\(/g;
       let match;
       
       while ((match = explicitPattern.exec(workingFields)) !== null) {
-        const [fullMatch, alias, table, foreignKey, columnsStr] = match;
+        const [startMatch, alias, table, foreignKeyOrJoinType] = match;
+        const openParenIdx = match.index + startMatch.length - 1;
+        const closeParenIdx = findMatchingParen(workingFields, openParenIdx);
+        
+        if (closeParenIdx === -1) {
+          console.warn(`⚠️ [Explicit FK] Could not find matching parenthesis for: ${startMatch}`);
+          explicitPattern.lastIndex = 0;
+          continue;
+        }
+        
+        const fullMatch = workingFields.substring(match.index, closeParenIdx + 1);
+        const columnsStr = workingFields.substring(openParenIdx + 1, closeParenIdx);
+        
+        // Check if the "foreignKey" is actually a JOIN type modifier (inner, left, right)
+        const joinTypes = ['inner', 'left', 'right', 'outer', 'full'];
+        let foreignKey;
+        if (joinTypes.includes(foreignKeyOrJoinType.toLowerCase())) {
+          // It's a JOIN type, infer the foreign key from alias
+          foreignKey = `${alias}_id`;
+          console.log(`🔗 [JOIN Type] Detected ${foreignKeyOrJoinType.toUpperCase()} JOIN, inferring FK: ${foreignKey}`);
+        } else {
+          // It's an actual foreign key
+          foreignKey = foreignKeyOrJoinType;
+        }
         
         // Extract only top-level column names (ignore nested relationships)
-        const columns = columnsStr.split(',')
-          .map(c => c.trim())
-          .filter(c => {
-            // Only keep simple column names, skip nested relationships and empty/undefined values
-            return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
-          });
+        const columns = extractColumns(columnsStr);
         
         console.log(`🔑 [Explicit FK] Alias: ${alias}, Table: ${table}, FK: ${foreignKey}, Columns: ${columns.join(', ')}`);
         relationships.push({ alias, table, foreignKey, columns });
@@ -445,16 +502,29 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       }
       
       // Pattern 2: alias:table(columns) - inferred foreign key
-      const inferredPattern = /(\w+):(\w+)\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/g;
+      // Use a simpler regex to find the start, then use findMatchingParen for proper nesting
+      const inferredPattern = /(\w+):(\w+)\s*\(/g;
       
       while ((match = inferredPattern.exec(workingFields)) !== null) {
-        const [fullMatch, alias, table, columnsStr] = match;
+        const [startMatch, alias, table] = match;
         
         // Skip if already processed as explicit relationship
         if (relationships.some(r => r.alias === alias && r.table === table)) {
           inferredPattern.lastIndex = 0;
           continue;
         }
+        
+        const openParenIdx = match.index + startMatch.length - 1;
+        const closeParenIdx = findMatchingParen(workingFields, openParenIdx);
+        
+        if (closeParenIdx === -1) {
+          console.warn(`⚠️ [Inferred FK] Could not find matching parenthesis for: ${startMatch}`);
+          inferredPattern.lastIndex = 0;
+          continue;
+        }
+        
+        const fullMatch = workingFields.substring(match.index, closeParenIdx + 1);
+        const columnsStr = workingFields.substring(openParenIdx + 1, closeParenIdx);
         
         // Infer foreign key
         let foreignKey = `${alias}_id`;
@@ -479,11 +549,7 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         }
         
         // Extract columns
-        const columns = columnsStr.split(',')
-          .map(c => c.trim())
-          .filter(c => {
-            return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
-          });
+        const columns = extractColumns(columnsStr);
         
         console.log(`🔑 [Inferred FK] Alias: ${alias}, Table: ${table}, FK: ${foreignKey}, Columns: ${columns.join(', ')}`);
         relationships.push({ alias, table, foreignKey, columns });
@@ -495,16 +561,29 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       }
       
       // Pattern 3: table_name (columns) - simple syntax with inferred foreign key
-      const simplePattern = /(\w+)\s*\(([^)]*)\)/g;
+      // Use a simpler regex to find the start, then use findMatchingParen for proper nesting
+      const simplePattern = /(\w+)\s*\(/g;
       
       while ((match = simplePattern.exec(workingFields)) !== null) {
-        const [fullMatch, tableName, columnsStr] = match;
+        const [startMatch, tableName] = match;
         
         // Skip if already processed
         if (relationships.some(r => r.alias === tableName)) {
           simplePattern.lastIndex = 0;
           continue;
         }
+        
+        const openParenIdx = match.index + startMatch.length - 1;
+        const closeParenIdx = findMatchingParen(workingFields, openParenIdx);
+        
+        if (closeParenIdx === -1) {
+          console.warn(`⚠️ [Simple Syntax] Could not find matching parenthesis for: ${startMatch}`);
+          simplePattern.lastIndex = 0;
+          continue;
+        }
+        
+        const fullMatch = workingFields.substring(match.index, closeParenIdx + 1);
+        const columnsStr = workingFields.substring(openParenIdx + 1, closeParenIdx);
         
         const alias = tableName;
         const table = tableName;
@@ -517,11 +596,7 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         }
         
         // Extract columns
-        const columns = columnsStr.split(',')
-          .map(c => c.trim())
-          .filter(c => {
-            return c && c.length > 0 && !c.includes(':') && !c.includes('(') && c !== 'undefined';
-          });
+        const columns = extractColumns(columnsStr);
         
         console.log(`🔑 [Simple Syntax] Table: ${table}, Inferred FK: ${foreignKey}`);
         relationships.push({ alias, table, foreignKey, columns });
@@ -537,6 +612,7 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         .replace(/,\s*,/g, ',')
         .replace(/,\s*$/,'')
         .replace(/^\s*,/, '')
+        .replace(/[()]/g, '') // Remove any stray parentheses
         .trim();
       
       // Build JOIN clauses with additional validation
@@ -550,8 +626,15 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       // Build SELECT fields
       if (workingFields && workingFields !== '*' && workingFields.length > 0) {
         // Prefix base table fields with table name
-        const baseFieldsList = workingFields.split(',').map(f => f.trim()).filter(f => f);
-        this.selectFields = baseFieldsList.map(f => f === '*' ? `${this.tableName}.*` : `${this.tableName}.${f} as ${f}`).join(', ');
+        const baseFieldsList = workingFields.split(',')
+          .map(f => f.trim())
+          .filter(f => f && f.length > 0 && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(f)); // Only valid column names
+        
+        if (baseFieldsList.length > 0) {
+          this.selectFields = baseFieldsList.map(f => f === '*' ? `${this.tableName}.*` : `${this.tableName}.${f} as ${f}`).join(', ');
+        } else {
+          this.selectFields = `${this.tableName}.*`;
+        }
       } else {
         this.selectFields = `${this.tableName}.*`;
       }

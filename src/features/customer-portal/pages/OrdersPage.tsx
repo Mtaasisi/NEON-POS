@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MobileLayout from '../components/MobileLayout';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { TableSkeleton } from '../../../components/ui/SkeletonLoaders';
 import {
   Package,
   Clock,
@@ -17,6 +19,7 @@ import customerPortalService from '../services/customerPortalService';
 
 const OrdersPage: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'pending' | 'completed' | 'cancelled'>('all');
@@ -26,6 +29,8 @@ const OrdersPage: React.FC = () => {
   }, []);
 
   const loadOrders = async () => {
+    const jobId = startLoading('Loading orders...');
+    
     try {
       setLoading(true);
       
@@ -33,13 +38,16 @@ const OrdersPage: React.FC = () => {
       if (customerId) {
         const customerOrders = await customerPortalService.getCustomerOrders(customerId);
         setOrders(customerOrders);
+        completeLoading(jobId);
       } else {
         // Mock data for guest users
         setOrders([]);
+        completeLoading(jobId);
       }
     } catch (error) {
       console.error('Error loading orders:', error);
       toast.error('Failed to load orders');
+      failLoading(jobId, 'Failed to load orders');
     } finally {
       setLoading(false);
     }

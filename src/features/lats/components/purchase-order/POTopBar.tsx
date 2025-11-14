@@ -1,8 +1,8 @@
 // POTopBar component - Purchase Order Top Bar (equivalent to POSTopBar but for purchase orders)
 import React from 'react';
-import {
+import { 
   ShoppingBag, FileText, Plus, Package, RefreshCw, CheckCircle, 
-  Trash2, DollarSign, Truck, Coins, Building
+  Trash2, DollarSign, Truck, Coins, Building, Save
 } from 'lucide-react';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { formatMoney, Currency } from '../../lib/purchaseOrderUtils';
@@ -14,11 +14,13 @@ interface POTopBarProps {
   productsCount: number;
   suppliersCount: number;
   onCreatePurchaseOrder: () => void;
+  onSaveAsDraft?: () => void;
   onClearCart: () => void;
   onAddSupplier?: () => void;
   onAddProduct?: () => void;
   onViewPurchaseOrders?: () => void;
   isCreatingPO: boolean;
+  isSavingDraft?: boolean;
   hasSelectedSupplier: boolean;
 }
 
@@ -29,16 +31,18 @@ const POTopBar: React.FC<POTopBarProps> = ({
   productsCount,
   suppliersCount,
   onCreatePurchaseOrder,
+  onSaveAsDraft,
   onClearCart,
   onAddSupplier,
   onAddProduct,
   onViewPurchaseOrders,
   isCreatingPO,
+  isSavingDraft = false,
   hasSelectedSupplier
 }) => {
 
   return (
-    <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 shadow-xl border-b-4 border-orange-300">
+    <div className="fixed left-[var(--app-sidebar-offset,0px)] right-0 top-[var(--app-topbar-height,0px)] z-10 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 shadow-xl border-b-4 border-orange-300">
       <div className="px-4 sm:px-6 py-4">
 
 
@@ -94,10 +98,24 @@ const POTopBar: React.FC<POTopBarProps> = ({
               </GlassButton>
             )}
 
+            {/* Save as Draft */}
+            {onSaveAsDraft && cartItemsCount > 0 && (
+              <GlassButton
+                onClick={onSaveAsDraft}
+                disabled={!hasSelectedSupplier || isSavingDraft || isCreatingPO}
+                variant="outline"
+                className="bg-blue-500/20 hover:bg-blue-500/30 text-white border-blue-300/50 hover:border-blue-300/70 disabled:opacity-50 disabled:cursor-not-allowed"
+                icon={isSavingDraft ? <RefreshCw size={18} className="animate-spin" /> : <Save size={18} />}
+              >
+                <span className="hidden sm:inline">{isSavingDraft ? 'Saving...' : 'Save Draft'}</span>
+                <span className="sm:hidden">Draft</span>
+              </GlassButton>
+            )}
+
             {/* Create Purchase Order */}
             <GlassButton
               onClick={onCreatePurchaseOrder}
-              disabled={!hasSelectedSupplier || cartItemsCount === 0 || isCreatingPO}
+              disabled={!hasSelectedSupplier || cartItemsCount === 0 || isCreatingPO || isSavingDraft}
               className="bg-white text-orange-600 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed font-bold"
               icon={isCreatingPO ? <RefreshCw size={18} className="animate-spin" /> : <CheckCircle size={18} />}
             >

@@ -8,7 +8,6 @@ import { Clock, User, Smartphone, Wrench, Calendar, AlarmClock, CheckSquare, Mes
 import { useAuth } from '../../../context/AuthContext';
 import { useCustomers } from '../../../context/CustomersContext';
 import { useDevices } from '../../../context/DevicesContext';
-import QuickStatusUpdate from './QuickStatusUpdate';
 import DeviceRepairDetailModal from './DeviceRepairDetailModal';
 import { updateDeviceInDb } from '../../../lib/deviceApi';
 import { toast } from 'react-hot-toast';
@@ -69,8 +68,7 @@ const DeviceCard: React.FC<DeviceCardProps> = React.memo(({
     // Silently handle - context may not be available during HMR
   }
   
-  // Add state for technician quick actions
-  const [showQuickStatusUpdate, setShowQuickStatusUpdate] = useState(false);
+  // Add state for edit modal
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [editingDevice, setEditingDevice] = useState<Partial<Device>>({});
@@ -251,11 +249,6 @@ const DeviceCard: React.FC<DeviceCardProps> = React.memo(({
     localStorage.setItem(`devicecard_opened_${device.id}`, '1');
     setOpened(true);
     setShowDetailModal(true);
-  };
-
-  const handleStatusUpdate = (newStatus: DeviceStatus) => {
-    // This will be handled by the QuickStatusUpdate component
-    console.log('Status update:', newStatus);
   };
 
   const handleSaveDevice = async () => {
@@ -720,32 +713,12 @@ const DeviceCard: React.FC<DeviceCardProps> = React.memo(({
               </div>
               <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Actions</span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowQuickStatusUpdate(true);
-                }}
-                className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-all duration-200 text-sm font-medium"
-              >
-                <MessageSquare size={16} />
-                Update
-              </button>
-            </div>
           </div>
         )}
       </div>
 
 
-      {/* Quick Status Update Modal */}
-      <QuickStatusUpdate
-        device={device}
-        isOpen={showQuickStatusUpdate}
-        onClose={() => setShowQuickStatusUpdate(false)}
-        onStatusUpdate={handleStatusUpdate}
-      />
-
-      {/* Edit Device Modal */}
+{/* Edit Device Modal */}
       {showEditModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">

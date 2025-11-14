@@ -29,6 +29,7 @@ import { saveActionOffline } from '../../../lib/offlineSync';
 
 import geminiService from '../../../services/geminiService';
 import offlineAIService from '../../../services/offlineAIService';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const COMMON_MODELS = {
   'Apple': ['iPhone 15', 'iPhone 14', 'iPhone 13', 'iPhone 12', 'iPhone 11', 'iPhone X', 'iPhone 8', 'iPhone 7', 'iPhone 6'],

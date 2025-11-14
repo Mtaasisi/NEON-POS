@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, User, Building, Phone, Mail, MapPin, DollarSign, Star, 
-  FileText, MessageCircle, Award, Calendar, Globe, Briefcase, CreditCard, Package, ChevronDown, Edit, Trash2
+  FileText, MessageCircle, Award, Calendar, Globe, Briefcase, CreditCard, Package, ChevronDown, Edit, Trash2, Plus, ShoppingCart
 } from 'lucide-react';
 import { extractProductCategories, getCategoryColor } from '../../../utils/supplierUtils';
 import GlassCard from '../../shared/components/ui/GlassCard';
@@ -37,6 +38,7 @@ const SupplierDetailModal: React.FC<SupplierDetailModalProps> = ({
   onUpdate,
   onEdit
 }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [isScrolled, setIsScrolled] = useState(false);
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -65,6 +67,13 @@ const SupplierDetailModal: React.FC<SupplierDetailModalProps> = ({
     } else {
       toast.error('Edit functionality not available');
     }
+  };
+
+  const handleCreatePO = () => {
+    // Navigate to PO create page with supplier pre-selected
+    navigate(`/lats/purchase-order/create?supplierId=${supplier.id}`);
+    toast.success(`Creating purchase order for ${supplier.name}`);
+    onClose();
   };
 
   // Detect scroll for shadow effect
@@ -163,6 +172,23 @@ const SupplierDetailModal: React.FC<SupplierDetailModalProps> = ({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Create PO Button */}
+            <button
+              onClick={handleCreatePO}
+              className="p-2.5 bg-orange-500/90 hover:bg-orange-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 hidden sm:flex items-center gap-2"
+              title="Create purchase order with this supplier"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-sm font-medium">Create PO</span>
+            </button>
+            {/* Create PO Button (Mobile - Icon only) */}
+            <button
+              onClick={handleCreatePO}
+              className="p-2.5 bg-orange-500/90 hover:bg-orange-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 flex sm:hidden"
+              title="Create purchase order"
+            >
+              <ShoppingCart className="w-5 h-5" />
+            </button>
             {/* Edit Button */}
             <button
               onClick={handleEdit}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ChevronDown, ChevronUp, Package, Smartphone } from 'lucide-react';
+import { X, ChevronDown, ChevronUp, Package, Smartphone, AlertCircle } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { format } from '../../lats/lib/format';
 import toast from 'react-hot-toast';
@@ -21,13 +21,16 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
   const [childVariants, setChildVariants] = useState<{ [key: string]: any[] }>({});
   const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set());
 
-  // Reset state when modal closes
+  // ⚡ SUPER OPTIMIZED: Use global cache preloaded with all products
   useEffect(() => {
     if (!isOpen) {
       setExpandedParents(new Set());
       setChildVariants({});
       setLoadingChildren(new Set());
     } else {
+      // Load from global cache immediately
+      loadFromGlobalCache();
+      
       // Auto-expand if single parent variant
       if (product?.variants?.length === 1) {
         const variant = product.variants[0];
@@ -35,6 +38,76 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
       }
     }
   }, [isOpen, product]);
+
+  // ⚡ Load from global cache - INSTANT!
+  const loadFromGlobalCache = async () => {
+    if (!product?.variants) return;
+
+    try {
+      console.log("⚡ Mobile: Loading from global cache...");
+      
+      // Import the global cache service
+      const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+      
+      // If cache not ready, fallback to local query
+      if (!childVariantsCacheService.isCacheValid()) {
+        console.warn("⚠️ Mobile: Global cache not ready, using fallback");
+        await loadLocalFallback();
+        return;
+      }
+
+      // Load from cache - INSTANT!
+      const variantIds = product.variants.map((v: any) => v.id);
+      const childrenByParent: { [key: string]: any[] } = {};
+
+      variantIds.forEach((variantId: string) => {
+        const cachedChildren = childVariantsCacheService.getChildVariants(variantId);
+        if (cachedChildren && cachedChildren.length > 0) {
+          childrenByParent[variantId] = cachedChildren;
+        }
+      });
+
+      setChildVariants(childrenByParent);
+      console.log(`✅ Mobile: Loaded from GLOBAL CACHE - ${Object.values(childrenByParent).flat().length} children`);
+    } catch (error) {
+      console.error('Mobile: Error loading from cache:', error);
+      await loadLocalFallback();
+    }
+  };
+
+  // Fallback: Query directly if cache not ready
+  const loadLocalFallback = async () => {
+    if (!product?.variants) return;
+
+    const variantIds = product.variants.map((v: any) => v.id);
+    if (variantIds.length === 0) return;
+
+    console.log("🔄 Mobile: Fallback query...");
+    
+    const { data, error } = await supabase
+      .from('lats_product_variants')
+      .select('*')
+      .in('parent_variant_id', variantIds)
+      .eq('variant_type', 'imei_child')
+      .eq('is_active', true)
+      .gt('quantity', 0)
+      .order('created_at', { ascending: false });
+
+    if (error || !data || data.length === 0) {
+      return;
+    }
+
+    const childrenByParent: { [key: string]: any[] } = {};
+    data.forEach(child => {
+      const parentId = child.parent_variant_id;
+      if (!childrenByParent[parentId]) {
+        childrenByParent[parentId] = [];
+      }
+      childrenByParent[parentId].push(child);
+    });
+
+    setChildVariants(childrenByParent);
+  };
 
   // Check if variant is a parent
   const isParentVariant = (variant: any): boolean => {
@@ -61,10 +134,16 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
     }
   };
 
-  // Load child variants for a parent
+  // ⚡ OPTIMIZED: Load child variants (now instant with preloaded data)
   const loadChildVariants = async (parentVariantId: string) => {
-    if (childVariants[parentVariantId]) return;
+    // ✅ Children already preloaded - instant!
+    if (childVariants[parentVariantId]) {
+      console.log(`⚡ Mobile: Using preloaded children (${childVariants[parentVariantId].length})`);
+      return;
+    }
 
+    // Fallback (shouldn't happen normally)
+    console.warn(`⚠️ Mobile: Fallback loading for ${parentVariantId}`);
     setLoadingChildren(prev => new Set(prev).add(parentVariantId));
 
     try {
@@ -134,7 +213,29 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
   if (!isOpen) return null;
 
   const variants = product?.variants || [];
-  const parentVariants = variants.filter((v: any) => !v.parent_variant_id);
+  let parentVariants = variants.filter((v: any) => {
+    if (v.parent_variant_id) return false; // Skip child variants
+    // Handle multiple quantity field names
+    const quantity = v.quantity ?? v.stockQuantity ?? v.stock_quantity ?? 0;
+    const isActive = v.is_active !== false && v.isActive !== false;
+    return quantity > 0 && isActive;
+  });
+  
+  // FALLBACK: If no variants pass the filter, show all active parent variants regardless of stock
+  if (parentVariants.length === 0 && variants.length > 0) {
+    console.warn('⚠️ Mobile: No variants with stock found, showing all active variants as fallback');
+    parentVariants = variants.filter((v: any) => {
+      if (v.parent_variant_id) return false;
+      const isActive = v.is_active !== false && v.isActive !== false;
+      return isActive;
+    });
+  }
+  
+  // ULTIMATE FALLBACK: If still no variants, show ALL parent variants
+  if (parentVariants.length === 0 && variants.length > 0) {
+    console.warn('⚠️ Mobile: No active variants found, showing ALL variants as fallback');
+    parentVariants = variants.filter((v: any) => !v.parent_variant_id);
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black bg-opacity-50" onClick={onClose}>

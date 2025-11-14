@@ -10,6 +10,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { extractProductCategories, getCategoryColor } from '../../../utils/supplierUtils';
 import { getCountryFlag } from '../../../utils/countryFlags';
+import { useDialog } from '../../shared/hooks/useDialog';
 
 interface SupplierListTabProps {
   isActive: boolean;
@@ -53,6 +54,7 @@ const SupplierListTab: React.FC<SupplierListTabProps> = ({
   setShowSupplierForm,
   setEditingSupplier
 }) => {
+  const { confirm } = useDialog();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const getAvatarColor = (index: number) => {
@@ -110,7 +112,7 @@ const SupplierListTab: React.FC<SupplierListTabProps> = ({
   };
 
   const handleDeleteSupplier = async (supplierId: string) => {
-    if (window.confirm('⚠️ PERMANENT DELETE: Are you sure you want to permanently delete this supplier from the database? This action CANNOT be undone!')) {
+    if (await confirm('⚠️ PERMANENT DELETE: Are you sure you want to permanently delete this supplier from the database? This action CANNOT be undone!')) {
       try {
         const { deleteSupplier: deleteSupplierApi } = await import('../../../lib/supplierApi');
         await deleteSupplierApi(supplierId);

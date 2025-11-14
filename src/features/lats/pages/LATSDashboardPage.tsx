@@ -6,6 +6,8 @@ import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { BackButton } from '../../../features/shared/components/ui/BackButton';
 import LATSQuickActions from '../components/ui/LATSQuickActions';
 import LATSBreadcrumb from '../components/ui/LATSBreadcrumb';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { DashboardSkeleton } from '../../../components/ui/SkeletonLoaders';
 
 import { PageErrorBoundary } from '../../../features/shared/components/PageErrorBoundary';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
@@ -55,7 +57,11 @@ const LATSDashboardPage: React.FC = () => {
         setIsLoading(true);
         
         try {
-          // Fetch real data from database
+          if (import.meta.env.MODE === 'development') {
+            console.log('🔄 [LATSDashboard] Starting optimized parallel dashboard data loading...');
+          }
+
+          // 🚀 OPTIMIZED: Fetch real data from database with error isolation
           const [
             todaySalesResult,
             todayOrdersResult,
@@ -63,38 +69,88 @@ const LATSDashboardPage: React.FC = () => {
             customersResult,
             lowStockResult,
             monthlyRevenueResult
-          ] = await Promise.all([
+          ] = await Promise.allSettled([
             // Today's sales
             supabase
               .from('lats_sales')
               .select('total_amount')
               .gte('created_at', new Date().toISOString().split('T')[0])
-              .eq('status', 'completed'),
-            
+              .eq('status', 'completed')
+              .then(result => {
+                if (import.meta.env.MODE === 'development') {
+                  console.log('✅ [LATSDashboard] Today\'s sales loaded');
+                }
+                return result;
+              })
+              .catch(err => {
+                console.error('❌ Failed to load today\'s sales:', err);
+                return { data: [], error: null };
+              }),
+
             // Today's orders
             supabase
               .from('lats_sales')
               .select('id')
-              .gte('created_at', new Date().toISOString().split('T')[0]),
-            
+              .gte('created_at', new Date().toISOString().split('T')[0])
+              .then(result => {
+                if (import.meta.env.MODE === 'development') {
+                  console.log('✅ [LATSDashboard] Today\'s orders loaded');
+                }
+                return result;
+              })
+              .catch(err => {
+                console.error('❌ Failed to load today\'s orders:', err);
+                return { data: [], error: null };
+              }),
+
             // Total products
             supabase
               .from('lats_products')
               .select('id, is_active')
-              .eq('is_active', true),
-            
+              .eq('is_active', true)
+              .then(result => {
+                if (import.meta.env.MODE === 'development') {
+                  console.log('✅ [LATSDashboard] Products loaded');
+                }
+                return result;
+              })
+              .catch(err => {
+                console.error('❌ Failed to load products:', err);
+                return { data: [], error: null };
+              }),
+
             // Active customers
             supabase
               .from('customers')
               .select('id')
-              .eq('is_active', true),
-            
+              .eq('is_active', true)
+              .then(result => {
+                if (import.meta.env.MODE === 'development') {
+                  console.log('✅ [LATSDashboard] Customers loaded');
+                }
+                return result;
+              })
+              .catch(err => {
+                console.error('❌ Failed to load customers:', err);
+                return { data: [], error: null };
+              }),
+
             // Low stock items
             supabase
               .from('lats_product_variants')
               .select('id, quantity, min_quantity')
-              .lte('quantity', 10),
-            
+              .lte('quantity', 10)
+              .then(result => {
+                if (import.meta.env.MODE === 'development') {
+                  console.log('✅ [LATSDashboard] Low stock items loaded');
+                }
+                return result;
+              })
+              .catch(err => {
+                console.error('❌ Failed to load low stock items:', err);
+                return { data: [], error: null };
+              }),
+
             // Monthly revenue
             supabase
               .from('lats_sales')
@@ -225,25 +281,9 @@ const LATSDashboardPage: React.FC = () => {
     );
   }
 
-  // Show loading state
+  // Show skeleton while loading
   if (isLoading) {
-    return (
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <BackButton to="/dashboard" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">LATS System Dashboard</h1>
-            <p className="text-gray-600 mt-1">Loading dashboard data...</p>
-          </div>
-        </div>
-        <GlassCard className="p-8">
-          <div className="flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Loading dashboard...</span>
-          </div>
-        </GlassCard>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

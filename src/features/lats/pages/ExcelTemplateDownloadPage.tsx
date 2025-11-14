@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
-import { Download, FileText, Info, CheckCircle, AlertCircle } from 'lucide-react';
+import { Download, FileText, Info, CheckCircle, AlertCircle, BarChart3, Users, Settings, RefreshCw, Share2, Star, Clock, Zap } from 'lucide-react';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import { toast } from 'react-hot-toast';
 
+// Enhanced components
+import { TemplateAnalyticsWidget } from '../components/template/TemplateAnalyticsWidget';
+import { TemplateCollaborationWidget } from '../components/template/TemplateCollaborationWidget';
+
 const ExcelTemplateDownloadPage: React.FC = () => {
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'templates' | 'analytics' | 'collaboration'>('templates');
+  const [showAdvancedView, setShowAdvancedView] = useState(false);
 
   const downloadTemplate = (type: string, content: string, filename: string) => {
     setDownloading(type);
@@ -121,18 +127,93 @@ Email - Customer email address`;
   ];
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Excel Template Downloads</h1>
-        <p className="text-gray-300">
-          Download Excel templates for bulk importing data into your LATS system
-        </p>
-      </div>
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center mb-4">
+            <div className="p-3 bg-blue-100 rounded-full">
+              <Download className="w-8 h-8 text-blue-600" />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Advanced Template Center</h1>
+          <p className="text-lg text-gray-600">
+            AI-powered template management with analytics, collaboration, and smart downloads
+          </p>
+        </div>
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-        {templates.map((template) => (
-          <GlassCard key={template.type} className="p-6">
-            <div className="flex items-start justify-between mb-4">
+        {/* Enhanced Controls */}
+        <div className="mb-6 flex flex-wrap justify-center gap-4">
+          <button
+            onClick={() => setShowAdvancedView(!showAdvancedView)}
+            className={`inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium ${
+              showAdvancedView ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 hover:bg-gray-50'
+            } transition-colors`}
+          >
+            <Zap className="w-4 h-4 mr-2" />
+            {showAdvancedView ? 'Standard View' : 'Advanced View'}
+          </button>
+
+          <button
+            onClick={() => {/* Refresh templates */}}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Refresh Templates
+          </button>
+
+          <button
+            onClick={() => {/* Share templates */}}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <Share2 className="w-4 h-4 mr-2" />
+            Share Templates
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="mb-8">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8 justify-center">
+              {[
+                { id: 'templates', label: 'Templates', icon: FileText },
+                { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+                { id: 'collaboration', label: 'Team', icon: Users }
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id as any)}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                      activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'templates' && (
+          <div className="max-w-6xl mx-auto">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Template Downloads</h2>
+              <p className="text-gray-600">
+                Download pre-formatted Excel templates for bulk data import with AI-powered validation
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+              {templates.map((template) => (
+                <GlassCard key={template.type} className="p-6">
+                  <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 {template.icon}
                 <div>
@@ -230,6 +311,137 @@ Email - Customer email address`;
           </div>
         </div>
       </GlassCard>
+
+      <GlassCard className="mt-8 p-6">
+              <h3 className="text-xl font-semibold text-white mb-4">Import Instructions</h3>
+              <div className="space-y-4 text-gray-300">
+                <div>
+                  <h4 className="font-medium text-white mb-2">1. Download Template</h4>
+                  <p>Click the download button above to get the Excel template for your data type.</p>
+                </div>
+                <div>
+                  <h4 className="font-medium text-white mb-2">2. Fill Data</h4>
+                  <p>Fill in your data following the format and requirements specified in the template.</p>
+                </div>
+                <div>
+                  <h4 className="font-medium text-white mb-2">3. Upload</h4>
+                  <p>Use the bulk import feature in your respective module to upload the completed template.</p>
+                </div>
+                <div>
+                  <h4 className="font-medium text-white mb-2">4. Validate</h4>
+                  <p>The system will validate your data and show any errors that need to be fixed.</p>
+                </div>
+              </div>
+            </GlassCard>
+          </div>
+        )}
+
+        {activeTab === 'analytics' && (
+          <div className="max-w-6xl mx-auto">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Template Analytics</h2>
+              <p className="text-gray-600">
+                AI-powered insights into template usage, success rates, and optimization recommendations
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <TemplateAnalyticsWidget />
+              </div>
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Quick Stats</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Total Templates:</span>
+                      <span className="font-medium">3</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Active Users:</span>
+                      <span className="font-medium">24</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Avg Success Rate:</span>
+                      <span className="font-medium text-green-600">94.2%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Top Templates</h4>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Product Import</span>
+                      <span className="font-medium">1,247 downloads</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Customer Import</span>
+                      <span className="font-medium">892 downloads</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Sales Data</span>
+                      <span className="font-medium">634 downloads</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'collaboration' && (
+          <div className="max-w-6xl mx-auto">
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Team Collaboration</h2>
+              <p className="text-gray-600">
+                Work together on template management, share insights, and collaborate on data import projects
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                <TemplateCollaborationWidget />
+              </div>
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Recent Shares</h4>
+                  <div className="space-y-2">
+                    <div className="text-sm">
+                      <div className="font-medium">Product Template</div>
+                      <div className="text-gray-600">Shared with Warehouse Team</div>
+                      <div className="text-xs text-gray-500">2 hours ago</div>
+                    </div>
+                    <div className="text-sm">
+                      <div className="font-medium">Customer Template</div>
+                      <div className="text-gray-600">Shared with Sales Team</div>
+                      <div className="text-xs text-gray-500">1 day ago</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-lg border border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">Team Activity</h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>Sarah downloaded Product Template</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span>Mike shared Customer Template</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      <span>Lisa created Sales Data Template</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

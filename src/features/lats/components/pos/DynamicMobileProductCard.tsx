@@ -28,7 +28,7 @@ import VariantSelectionModal from './VariantSelectionModal';
 interface DynamicMobileProductCardProps {
   product: ProductSearchResult;
   onAddToCart?: (product: ProductSearchResult, variant: ProductSearchVariant, quantity: number) => void;
-  onViewDetails?: (product: ProductSearchResult) => void;
+  onViewDetails?: (product: ProductSearchResult, variant?: ProductSearchVariant) => void;
   onView?: (product: ProductSearchResult) => void;
   onEdit?: (product: ProductSearchResult) => void;
   onDelete?: (product: ProductSearchResult) => void;
@@ -290,12 +290,6 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
       return;
     }
     
-    // If onViewDetails is provided (like in purchase orders), use that instead
-    if (onViewDetails) {
-      onViewDetails(product);
-      return;
-    }
-    
     // For purchase orders, allow out-of-stock products; for POS, block them
     if (!primaryVariant || (!allowOutOfStockSelection && primaryVariant.quantity <= 0)) {
       if (!allowOutOfStockSelection) {
@@ -307,7 +301,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
     const hasMultipleVariants = product.variants && product.variants.length > 1;
     const hasSingleVariant = product.variants && product.variants.length === 1;
     
-    // ✅ ENHANCED: Check for parent variants with better detection
+    // ✅ ENHANCED: Always check for multiple variants first, even for purchase orders
     if (hasMultipleVariants) {
       setIsVariantModalOpen(true);
       return;
@@ -344,6 +338,12 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
       }
     }
     
+    // Single non-parent variant: Check if onViewDetails is provided (purchase orders)
+    if (onViewDetails) {
+      onViewDetails(product);
+      return;
+    }
+    
     // Single non-parent variant: Add directly to cart
     if (onAddToCart) {
       onAddToCart(product, primaryVariant, 1);
@@ -352,6 +352,16 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
 
   // Handle variant selection from modal
   const handleVariantSelect = (selectedProduct: any, selectedVariant: any, quantity: number) => {
+    // If onViewDetails is provided (like in purchase orders), call it with the selected variant
+    if (onViewDetails) {
+      // Store the selected variant for the product detail modal
+      setSelectedVariant(selectedVariant);
+      // Pass the variant to onViewDetails
+      onViewDetails(selectedProduct, selectedVariant);
+      return;
+    }
+    
+    // Otherwise, add to cart directly (POS mode)
     if (onAddToCart) {
       onAddToCart(selectedProduct, selectedVariant, quantity);
     }
@@ -564,7 +574,7 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
                   className={`relative w-20 h-20 rounded-xl flex items-center justify-center text-lg font-bold ${theme.iconColor} cursor-pointer hover:opacity-90 transition-opacity`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setIsProductInfoOpen(true);
+                    setIsImagePopupOpen(true);
                   }}
                 >
                   <SimpleImageDisplay
@@ -749,13 +759,15 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
         </div>
       </div>
 
-      {/* Variant Selection Modal */}
-      <VariantSelectionModal
-        isOpen={isVariantModalOpen}
-        onClose={() => setIsVariantModalOpen(false)}
-        product={product}
-        onSelectVariant={handleVariantSelect}
-      />
+      {/* Variant Selection Modal - Only render when open */}
+      {isVariantModalOpen && (
+        <VariantSelectionModal
+          isOpen={isVariantModalOpen}
+          onClose={() => setIsVariantModalOpen(false)}
+          product={product}
+          onSelectVariant={handleVariantSelect}
+        />
+      )}
     </>
   );
 };

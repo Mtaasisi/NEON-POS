@@ -16,9 +16,10 @@ export interface SuccessModalProps {
   title?: string;
   message: string;
   actionButtons?: Array<{
-    label: string;
+    label: string | React.ReactNode;
     onClick: () => void;
-    variant?: 'primary' | 'secondary' | 'whatsapp';
+    variant?: 'primary' | 'secondary' | 'whatsapp' | 'success';
+    disabled?: boolean;
   }>;
   icon?: React.ReactNode; // Custom icon (default is CheckCircle)
   showCloseButton?: boolean;
@@ -190,16 +191,27 @@ const SuccessModal: React.FC<SuccessModalProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    button.onClick();
-                    onClose();
+                    if (!button.disabled) {
+                      button.onClick();
+                      onClose();
+                    }
                   }}
+                  disabled={button.disabled}
                   className={`
-                    w-full px-6 py-3.5 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl active:scale-[0.98] text-lg cursor-pointer
-                    ${button.variant === 'whatsapp'
+                    w-full px-6 py-3.5 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl active:scale-[0.98] text-lg
+                    ${button.disabled 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60' 
+                      : 'cursor-pointer'
+                    }
+                    ${!button.disabled && button.variant === 'whatsapp'
                       ? 'bg-green-600 hover:bg-green-700 active:bg-green-800 text-white'
-                      : button.variant === 'secondary'
+                      : !button.disabled && button.variant === 'success'
+                      ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 active:from-emerald-800 active:to-emerald-900 text-white'
+                      : !button.disabled && button.variant === 'secondary'
                       ? 'bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 active:from-gray-800 active:to-gray-900 text-white'
-                      : 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white'
+                      : !button.disabled
+                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 text-white'
+                      : ''
                     }
                   `}
                 >

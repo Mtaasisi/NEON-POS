@@ -15,6 +15,8 @@ import {
 } from '../../../lib/categoryApi';
 import { useOptimizedCategories } from '../../lats/hooks/useOptimizedCategories';
 import { useAuth } from '../../../context/AuthContext';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { useDialog } from '../../shared/hooks/useDialog';
 
 interface CategoryFormData {
   name: string;
@@ -25,6 +27,7 @@ interface CategoryFormData {
 const CategoryManagementPage: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { confirm } = useDialog();
   const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCategoryForm, setShowCategoryForm] = useState(false);
@@ -115,7 +118,7 @@ const CategoryManagementPage: React.FC = () => {
   };
 
   const handleDeleteCategory = async (category: Category) => {
-    if (window.confirm(`Are you sure you want to delete ${category.name}?`)) {
+    if (await confirm(`Are you sure you want to delete ${category.name}?`)) {
       try {
         await deleteCategory(category.id);
         toast.success('Category deleted successfully!');

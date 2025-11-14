@@ -20,6 +20,7 @@ import { storeShelfApi, StoreShelf } from '../../../settings/utils/storeShelfApi
 import { format } from '../../lib/format';
 import BrandInput from './BrandInput';
 import { hybridDeviceStorage, DeviceStorageItem } from '../../lib/hybridDeviceStorage';
+import { useStorageLocationPicker } from '../storage/StorageLocationPickerProvider';
 
 interface SparePartAddEditFormProps {
   sparePart?: SparePart | null;
@@ -105,6 +106,9 @@ const SparePartAddEditForm: React.FC<SparePartAddEditFormProps> = ({
   const [selectedDevices, setSelectedDevices] = useState<string[]>([]);
   const [savedDevices, setSavedDevices] = useState<DeviceStorageItem[]>([]);
   const [isLoadingDevices, setIsLoadingDevices] = useState(false);
+
+  // Global storage picker
+  const { open: openStoragePicker } = useStorageLocationPicker();
 
   // Device database for suggestions
   const deviceDatabase = [
@@ -1700,7 +1704,22 @@ const SparePartAddEditForm: React.FC<SparePartAddEditFormProps> = ({
                   </label>
                   <button
                     type="button"
-                    onClick={() => setShowStorageModal(true)}
+                    onClick={async () => {
+                      try {
+                        const result = await openStoragePicker();
+                        if (result) {
+                          setFormData(prev => ({
+                            ...prev,
+                            // Persist store location if available on room
+                            storeLocationId: result.room?.store_location_id || prev.storeLocationId,
+                            shelfId: result.shelfId,
+                            location: result.label
+                          }));
+                        }
+                      } catch (error) {
+                        console.error('Error opening storage location picker:', error);
+                      }
+                    }}
                     disabled={loadingLocations || storageRooms.length === 0}
                     className={`w-full py-4 pl-12 pr-4 bg-gradient-to-r from-white/50 to-white/30 backdrop-blur-md border-2 rounded-xl focus:outline-none transition-all duration-300 text-left shadow-sm hover:shadow-md ${
                       errors.storeLocationId || errors.shelfId

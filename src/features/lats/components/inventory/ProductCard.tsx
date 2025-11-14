@@ -1,5 +1,6 @@
 // ProductCard component for LATS module
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LATS_CLASSES } from '../../../tokens';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
@@ -61,6 +62,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   variant = 'default',
   className = ''
 }) => {
+  const navigate = useNavigate();
   // State for dynamically loaded images
   const [images, setImages] = useState<ProductImage[]>([]);
   const [imagesLoading, setImagesLoading] = useState(true);
@@ -163,7 +165,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   // Handle actions
   const handleEdit = () => {
-    window.location.href = `/lats/products/${product.id}/edit`;
+    navigate(`/lats/products/${product.id}/edit`);
   };
   const handleView = () => {
     // Product detail page removed - no action needed

@@ -33,11 +33,14 @@ import {
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { financeAccountService } from '../../../lib/financeAccountService';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { TableSkeleton } from '../../../components/ui/SkeletonLoaders';
 
 const SpecialOrdersPage: React.FC = () => {
   const { currentUser } = useAuth();
   const { customers } = useCustomers();
   const { currentBranch } = useBranch();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   const [orders, setOrders] = useState<SpecialOrder[]>([]);
   const [stats, setStats] = useState<SpecialOrdersStats | null>(null);
@@ -52,6 +55,7 @@ const SpecialOrdersPage: React.FC = () => {
 
   // Fetch orders and stats
   const fetchOrders = async () => {
+    const jobId = startLoading('Loading special orders...');
     setIsLoading(true);
     try {
       const fetchedOrders = await specialOrderService.getAllSpecialOrders(currentBranch?.id);
@@ -59,8 +63,10 @@ const SpecialOrdersPage: React.FC = () => {
       
       const fetchedStats = await specialOrderService.getStatistics(currentBranch?.id);
       setStats(fetchedStats);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error fetching special orders:', error);
+      failLoading(jobId, 'Failed to load special orders');
       toast.error('Failed to load special orders');
     } finally {
       setIsLoading(false);
@@ -147,11 +153,8 @@ const SpecialOrdersPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading special orders...</p>
-        </div>
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
+        <TableSkeleton />
       </div>
     );
   }

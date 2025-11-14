@@ -625,7 +625,7 @@ export class PurchaseOrderService {
       }
 
       const existingItemMap = new Map(existingItems.map(item => [item.id, item]));
-      const validItems: Array<{ id: string; receivedQuantity: number; maxQuantity: number }> = [];
+      const validItems: Array<{ id: string; receivedQuantity: number; alreadyReceived: number }> = [];
       const invalidItems: string[] = [];
 
       // Validate each received item
@@ -642,15 +642,19 @@ export class PurchaseOrderService {
           continue;
         }
 
-        if (item.receivedQuantity > existingItem.quantity) {
-          invalidItems.push(`Item ${item.id}: Received quantity (${item.receivedQuantity}) cannot exceed ordered quantity (${existingItem.quantity})`);
+        // Calculate remaining quantity that can be received
+        const alreadyReceived = existingItem.quantity_received || 0;
+        const remainingQuantity = existingItem.quantity_ordered - alreadyReceived;
+
+        if (item.receivedQuantity > remainingQuantity) {
+          invalidItems.push(`Item ${item.id}: Received quantity (${item.receivedQuantity}) cannot exceed remaining quantity (${remainingQuantity})`);
           continue;
         }
 
         validItems.push({
           id: item.id,
           receivedQuantity: item.receivedQuantity,
-          maxQuantity: existingItem.quantity
+          alreadyReceived: alreadyReceived
         });
       }
 
@@ -674,7 +678,7 @@ export class PurchaseOrderService {
         const { error: updateError } = await supabase
           .from('lats_purchase_order_items')
           .update({ 
-            quantity_received: item.receivedQuantity,
+            quantity_received: item.alreadyReceived + item.receivedQuantity,
             updated_at: new Date().toISOString()
           })
           .eq('id', item.id)
@@ -1297,6 +1301,288 @@ export class PurchaseOrderService {
     }
   }
 
+  // Enhanced partial receive functions with serial number support
+  static async partialReceive(
+    purchaseOrderId: string,
+    receivedItems: Array<{
+      item_id: string;
+      quantity: number;
+    }>,
+    userId: string,
+    receiveNotes?: string
+  ): Promise<{ success: boolean; message: string; summary?: any }> {
+    try {
+      console.log('📦 [PurchaseOrderService] Starting partialReceive:', {
+        purchaseOrderId,
+        receivedItems,
+        userId,
+        receiveNotes
+      });
+
+      // Convert received items to the format expected by the RPC
+      const receivedItemsJsonb = receivedItems.map(item => ({
+        item_id: item.item_id,
+        quantity: item.quantity
+      }));
+
+      console.log('📦 [PurchaseOrderService] Calling partial_purchase_order_receive RPC with:', {
+        purchase_order_id_param: purchaseOrderId,
+        received_items: receivedItemsJsonb,
+        user_id_param: userId,
+        receive_notes: receiveNotes || null
+      });
+
+      // Use the database RPC function for partial receive
+      const { data, error } = await supabase
+        .rpc('partial_purchase_order_receive', {
+          purchase_order_id_param: purchaseOrderId,
+          received_items: receivedItemsJsonb,
+          user_id_param: userId,
+          receive_notes: receiveNotes || null
+        });
+
+      console.log('📦 [PurchaseOrderService] RPC response:', { data, error });
+
+      if (error) {
+        console.error('❌ [PurchaseOrderService] Error in partialReceive:', error);
+        return { success: false, message: `Partial receive failed: ${error.message}` };
+      }
+
+      // The database function returns a JSON object
+      // Check if the function returned success: false
+      if (data && typeof data === 'object' && 'success' in data) {
+        if (!data.success) {
+          console.error('❌ [PurchaseOrderService] Function returned failure:', data);
+          return {
+            success: false,
+            message: data.message || 'Partial receive operation failed'
+          };
+        }
+      }
+
+      // Get receive summary
+      const summaryResult = await this.getReceiveSummary(purchaseOrderId);
+
+      // 🔥 EMIT EVENT: Notify inventory page to refresh
+      latsEventBus.emit('lats:purchase-order.received', {
+        purchaseOrderId,
+        userId,
+        notes: receiveNotes
+      });
+
+      console.log('✅ [PurchaseOrderService] Partial receive event emitted');
+
+      return {
+        success: true,
+        message: 'Partial receive completed successfully',
+        summary: summaryResult.success ? summaryResult.data : null
+      };
+    } catch (error) {
+      console.error('❌ [PurchaseOrderService] Error in partialReceive:', error);
+      return {
+        success: false,
+        message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      };
+    }
+  }
+
+  // Finalize receive - only update status and stock movements (inventory items already created)
+  static async finalizeReceive(
+    purchaseOrderId: string,
+    receivingQuantities: Map<string, number>,
+    userId: string,
+    isPartialReceive: boolean,
+    receiveNotes?: string
+  ): Promise<{ success: boolean; message: string; summary?: any }> {
+    try {
+      console.log('📦 [PurchaseOrderService] Starting finalizeReceive:', {
+        purchaseOrderId,
+        userId,
+        isPartialReceive,
+        receiveNotes
+      });
+
+      // Get current PO status and items
+      const { data: poData, error: poError } = await supabase
+        .from('lats_purchase_orders')
+        .select('id, status, po_number')
+        .eq('id', purchaseOrderId)
+        .single();
+
+      if (poError || !poData) {
+        console.error('❌ Error fetching PO:', poError);
+        return { success: false, message: 'Purchase order not found' };
+      }
+
+      // Get PO items to calculate totals
+      const { data: poItems, error: itemsError } = await supabase
+        .from('lats_purchase_order_items')
+        .select('id, quantity_ordered, quantity_received, product_id, variant_id, unit_cost, product:lats_products(name), variant:lats_product_variants(name, quantity)')
+        .eq('purchase_order_id', purchaseOrderId);
+
+      if (itemsError) {
+        console.error('❌ Error fetching PO items:', itemsError);
+        return { success: false, message: 'Failed to fetch purchase order items' };
+      }
+
+      // Calculate totals
+      let totalOrdered = 0;
+      let totalReceived = 0;
+      const allReceived = poItems.every(item => item.quantity_received >= item.quantity_ordered);
+
+      poItems.forEach(item => {
+        totalOrdered += item.quantity_ordered;
+        totalReceived += item.quantity_received || 0;
+      });
+
+      const newStatus = allReceived ? 'received' : 'partial_received';
+
+      console.log('📊 Finalize receive calculations:', {
+        totalOrdered,
+        totalReceived,
+        allReceived,
+        newStatus: isPartialReceive && !allReceived ? 'partial_received' : newStatus
+      });
+
+      // Begin transaction
+      const { error: txError } = await supabase.rpc('begin_transaction_if_not_exists');
+
+      try {
+        // Update PO status
+        const finalStatus = isPartialReceive && !allReceived ? 'partial_received' : newStatus;
+        const { error: statusError } = await supabase
+          .from('lats_purchase_orders')
+          .update({
+            status: finalStatus,
+            received_date: allReceived ? new Date().toISOString() : null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', purchaseOrderId);
+
+        if (statusError) {
+          throw statusError;
+        }
+
+        // Create stock movements and update variant quantities for newly available items
+        for (const item of poItems) {
+          const receivedQuantity = item.quantity_received || 0;
+          const previouslyReceived = receivedQuantity - (receivingQuantities.get(item.id) || 0);
+
+          if (receivedQuantity > previouslyReceived && item.variant_id) {
+            const quantityToAdd = receivedQuantity - previouslyReceived;
+
+            // Get current variant quantity
+            const { data: variant, error: variantError } = await supabase
+              .from('lats_product_variants')
+              .select('quantity')
+              .eq('id', item.variant_id)
+              .single();
+
+            if (variantError) {
+              console.warn(`Warning: Could not get variant quantity for ${item.variant_id}:`, variantError);
+              continue;
+            }
+
+            const currentQuantity = variant.quantity || 0;
+
+            // Update variant quantity
+            const { error: updateError } = await supabase
+              .from('lats_product_variants')
+              .update({
+                quantity: currentQuantity + quantityToAdd,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.variant_id);
+
+            if (updateError) {
+              console.warn(`Warning: Could not update variant quantity for ${item.variant_id}:`, updateError);
+              continue;
+            }
+
+            // Create stock movement record
+            const { error: movementError } = await supabase
+              .from('lats_stock_movements')
+              .insert({
+                product_id: item.product_id,
+                variant_id: item.variant_id,
+                movement_type: 'in',
+                quantity: quantityToAdd,
+                previous_quantity: currentQuantity,
+                new_quantity: currentQuantity + quantityToAdd,
+                reason: isPartialReceive ? 'Purchase Order Partial Receipt' : 'Purchase Order Receipt',
+                reference: `PO-${(poData as any).order_number || poData.po_number || purchaseOrderId}`,
+                notes: `Finalized receive: ${quantityToAdd} units${receiveNotes ? ` - ${receiveNotes}` : ''}`,
+                created_by: userId,
+                created_at: new Date().toISOString()
+              });
+
+            if (movementError) {
+              console.warn(`Warning: Could not create stock movement for ${item.variant_id}:`, movementError);
+            }
+          }
+        }
+
+        // Create audit log
+        const { error: auditError } = await supabase
+          .from('lats_purchase_order_audit_log')
+          .insert({
+            purchase_order_id: purchaseOrderId,
+            action: isPartialReceive ? 'Partial Receive Finalized' : 'Receive Finalized',
+            old_status: poData.status,
+            new_status: finalStatus,
+            user_id: userId,
+            notes: receiveNotes || `Finalized ${isPartialReceive ? 'partial' : 'complete'} receive`,
+            created_at: new Date().toISOString()
+          });
+
+        if (auditError) {
+          console.warn('Warning: Could not create audit log:', auditError);
+        }
+
+        // Commit transaction
+        const { error: commitError } = await supabase.rpc('commit_transaction_if_exists');
+        if (commitError) {
+          console.warn('Warning: Could not commit transaction:', commitError);
+        }
+
+        // Get receive summary
+        const summaryResult = await this.getReceiveSummary(purchaseOrderId);
+
+        // 🔥 EMIT EVENT: Notify inventory page to refresh
+        latsEventBus.emit('lats:purchase-order.received', {
+          purchaseOrderId,
+          userId,
+          notes: receiveNotes
+        });
+
+        console.log('✅ [PurchaseOrderService] Finalize receive completed successfully');
+
+        return {
+          success: true,
+          message: isPartialReceive && !allReceived
+            ? `Partial receive finalized! ${totalReceived}/${totalOrdered} items received.`
+            : 'Receive finalized successfully!',
+          summary: summaryResult.success ? summaryResult.data : null
+        };
+
+      } catch (error) {
+        // Rollback transaction
+        const { error: rollbackError } = await supabase.rpc('rollback_transaction_if_exists');
+        if (rollbackError) {
+          console.warn('Warning: Could not rollback transaction:', rollbackError);
+        }
+        throw error;
+      }
+
+    } catch (error) {
+      console.error('❌ [PurchaseOrderService] Error in finalizeReceive:', error);
+      return { 
+        success: false, 
+        message: `Unexpected error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      };
+    }
+  }
+
   static async processReturn(
     purchaseOrderId: string,
     itemId: string,
@@ -1651,22 +1937,32 @@ export class PurchaseOrderService {
 
           if (itemsWithoutIMEI.length > 0) {
             console.log(`⚠️ ${itemsWithoutIMEI.length} items without IMEI, using legacy inventory_items`);
-            await this.createLegacyInventoryItems(
-              purchaseOrderId,
-              orderItem,
-              itemsWithoutIMEI,
-              userId
-            );
+            try {
+              await this.createLegacyInventoryItems(
+                purchaseOrderId,
+                orderItem,
+                itemsWithoutIMEI,
+                userId
+              );
+            } catch (error) {
+              console.error(`❌ Failed to create legacy inventory items for items without IMEI:`, error);
+              throw error; // Re-throw to fail the entire operation
+            }
           }
         } else {
           // ⚠️ LEGACY SYSTEM: No IMEI, use old inventory_items approach
           console.log(`⚠️ Using legacy inventory_items for ${receivedItem.serialNumbers.length} items (no IMEI)`);
-          await this.createLegacyInventoryItems(
-            purchaseOrderId,
-            orderItem,
-            receivedItem.serialNumbers,
-            userId
-          );
+          try {
+            await this.createLegacyInventoryItems(
+              purchaseOrderId,
+              orderItem,
+              receivedItem.serialNumbers,
+              userId
+            );
+          } catch (error) {
+            console.error(`❌ Failed to create legacy inventory items:`, error);
+            throw error; // Re-throw to fail the entire operation
+          }
         }
 
         console.log(`✅ Processed ${receivedItem.serialNumbers.length} items for order item ${receivedItem.id}`);
@@ -1696,7 +1992,60 @@ export class PurchaseOrderService {
     userId: string
   ): Promise<void> {
     try {
-      const inventoryItems = serialNumbers.map(serial => ({
+      // Validate input serial numbers
+      if (!serialNumbers || serialNumbers.length === 0) {
+        console.log('No serial numbers to process');
+        return;
+      }
+
+      // Extract serial numbers for validation
+      const serialNumberValues = serialNumbers
+        .map(s => s.serial_number)
+        .filter(sn => sn && sn.trim() !== '');
+
+      if (serialNumberValues.length === 0) {
+        console.log('No valid serial numbers found');
+        return;
+      }
+
+      console.log(`🔍 Checking for existing serial numbers: ${serialNumberValues.join(', ')}`);
+
+      // Check for existing serial numbers to prevent duplicates
+      const { data: existingItems, error: checkError } = await supabase
+        .from('inventory_items')
+        .select('serial_number')
+        .in('serial_number', serialNumberValues);
+
+      if (checkError) {
+        console.error('Error checking existing serial numbers:', checkError);
+        throw checkError;
+      }
+
+      // Get set of existing serial numbers for fast lookup
+      const existingSerialNumbers = new Set(
+        (existingItems || []).map(item => item.serial_number).filter(Boolean)
+      );
+
+      console.log(`Found ${existingSerialNumbers.size} existing serial numbers`);
+
+      // Filter out serial numbers that already exist
+      const newSerialNumbers = serialNumbers.filter(serial => {
+        const exists = existingSerialNumbers.has(serial.serial_number);
+        if (exists) {
+          console.warn(`⚠️ Skipping duplicate serial number: ${serial.serial_number}`);
+        }
+        return !exists;
+      });
+
+      if (newSerialNumbers.length === 0) {
+        console.log('All serial numbers already exist, skipping insertion');
+        return;
+      }
+
+      console.log(`✅ Creating ${newSerialNumbers.length} new inventory items`);
+
+      // Create inventory items only for non-duplicate serial numbers
+      const inventoryItems = newSerialNumbers.map(serial => ({
         product_id: orderItem.product_id,
         variant_id: orderItem.variant_id,
         serial_number: serial.serial_number,
@@ -1727,9 +2076,20 @@ export class PurchaseOrderService {
 
       if (insertError) {
         console.error(`Error inserting legacy inventory items:`, insertError);
+        // If it's still a duplicate key error, log more details
+        if (insertError.code === '23505' && insertError.message?.includes('serial_number')) {
+          console.error('Duplicate serial number error details:', {
+            attemptedSerialNumbers: newSerialNumbers.map(s => s.serial_number),
+            existingSerialNumbers: Array.from(existingSerialNumbers)
+          });
+        }
+        throw insertError;
       }
+
+      console.log(`✅ Successfully created ${newSerialNumbers.length} legacy inventory items`);
     } catch (error) {
       console.error('Error creating legacy inventory items:', error);
+      throw error; // Re-throw to let caller handle it
     }
   }
 

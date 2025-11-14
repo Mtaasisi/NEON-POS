@@ -173,6 +173,8 @@ export interface PurchaseOrder {
   // Payment tracking fields
   totalPaid?: number; // Total amount paid for this purchase order
   paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'overpaid'; // Payment status
+  // Aggregated payments info (computed client-side)
+  paymentsCount?: number; // Number of recorded payments
   // Exchange rate tracking fields
   exchangeRate?: number; // Exchange rate from purchase currency to base currency
   baseCurrency?: string; // Base currency for the business (typically TZS)

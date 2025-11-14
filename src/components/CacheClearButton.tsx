@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useInventoryStore } from '../features/lats/stores/useInventoryStore';
+import { useDialog } from '../features/shared/hooks/useDialog';
 
 interface CacheClearButtonProps {
   variant?: 'icon' | 'button' | 'text';
@@ -14,12 +15,13 @@ const CacheClearButton: React.FC<CacheClearButtonProps> = ({
   className = '',
   showConfirmation = true 
 }) => {
+  const { confirm } = useDialog();
   const [isClearing, setIsClearing] = useState(false);
   const inventoryStore = useInventoryStore();
 
   const clearAllCaches = async () => {
     if (showConfirmation) {
-      const confirmed = window.confirm(
+      const confirmed = await confirm(
         '🧹 Clear all app caches?\n\nThis will reset all stored data and require fresh login. Continue?'
       );
       if (!confirmed) return;

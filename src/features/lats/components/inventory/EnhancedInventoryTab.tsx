@@ -4,6 +4,8 @@ import GlassButton from '../../../shared/components/ui/GlassButton';
 import SearchBar from '../../../shared/components/ui/SearchBar';
 import GlassSelect from '../../../shared/components/ui/GlassSelect';
 import CircularProgress from '../../../../components/ui/CircularProgress';
+import { useLoadingJob } from '../../../../hooks/useLoadingJob';
+import { ProductGridSkeleton } from '../../../../components/ui/SkeletonLoaders';
 import ModernLoadingOverlay from '../../../../components/ui/ModernLoadingOverlay';
 import VariantProductCard from '../pos/VariantProductCard';
 import { SafeImage } from '../../../../components/SafeImage';
@@ -14,7 +16,7 @@ import {
   Package, Grid, List, Star, CheckCircle, XCircle, 
   Download, Edit, Eye, Trash2, DollarSign, TrendingUp,
   AlertTriangle, Calculator, Printer, QrCode, X, MoreVertical, ArrowRightLeft, Copy, Columns,
-  CheckSquare, XSquare, Files
+  CheckSquare, XSquare, Files, ShoppingCart, Plus
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { validateProductsBatch } from '../../lib/productUtils';
@@ -243,23 +245,31 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   // Handler for duplicating a product
   const handleDuplicateProduct = async (product: any) => {
     try {
-      // Navigate to add product page with duplicate data
+      // Prepare duplicate data - SKUs will be generated on the AddProductPage
       const duplicateData = {
         ...product,
         name: `${product.name} (Copy)`,
-        id: undefined,
-        variants: product.variants?.map((v: any, index: number) => ({
+        id: undefined, // Remove ID so it creates a new product
+        sku: undefined, // Will be auto-generated
+        // Preserve variant data structure (SKUs will be regenerated)
+        variants: product.variants?.map((v: any) => ({
           ...v,
-          id: undefined,
-          sku: `${v.sku}-COPY-${Date.now()}-${index}`,
-          name: `${v.name || v.attributes?.color || 'Variant'} (Copy)`
+          id: undefined, // Remove variant ID
+          sku: undefined, // Will be auto-generated
+          name: v.name || v.variant_name || v.attributes?.color || 'Variant',
+          // Preserve all other variant properties
+          costPrice: v.costPrice || v.cost_price || 0,
+          sellingPrice: v.sellingPrice || v.selling_price || 0,
+          quantity: 0, // Reset quantity for duplicate
+          attributes: v.attributes || {},
+          specification: v.specification || ''
         }))
       };
       
       // Store in sessionStorage and navigate
       sessionStorage.setItem('duplicateProductData', JSON.stringify(duplicateData));
       navigate('/lats/add-product?duplicate=true');
-      toast.success('Opening duplicate product form...');
+      toast.success('Opening duplicate product form with new SKUs...', { duration: 2000 });
     } catch (error) {
       console.error('Failed to duplicate product:', error);
       toast.error('Failed to duplicate product');
@@ -500,6 +510,16 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
               <span className="text-gray-600">Featured</span>
             </label>
           </div>
+
+          {/* Create PO Quick Action */}
+          <button
+            onClick={() => navigate('/lats/purchase-order/create')}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg text-sm font-medium hover:from-orange-600 hover:to-orange-700 active:scale-95 transition-all shadow-md hover:shadow-lg ml-auto"
+            title="Create new purchase order"
+          >
+            <ShoppingCart size={16} />
+            <span className="hidden sm:inline">Create PO</span>
+          </button>
         </div>
       </div>
 

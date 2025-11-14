@@ -27,6 +27,19 @@ const ApprovalModal: React.FC<ApprovalModalProps> = ({
   const [notes, setNotes] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Block body scroll when modal is open
+  React.useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen || !purchaseOrder) return null;
 
   const handleSubmit = async () => {

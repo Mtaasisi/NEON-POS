@@ -12,16 +12,40 @@ const LOGIN_PASSWORD = '123456';
 async function testProductModalVariants() {
   console.log('\n🧪 Starting ProductModal Variants Test...\n');
   
-  const browser = await chromium.launch({ 
+  const browser = await chromium.launch({
     headless: false,
-    slowMo: 1000 // Slow down by 1 second
+    slowMo: 1000, // Slow down by 1 second
+    args: [
+      '--disable-extensions-except=/path/to/allowed/extensions',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-default-apps'
+    ]
   });
-  
+
   const context = await browser.newContext({
-    viewport: { width: 1920, height: 1080 }
+    viewport: { width: 1920, height: 1080 },
+    // Disable extensions in the context
+    permissions: [],
+    extraHTTPHeaders: {}
   });
   
   const page = await context.newPage();
+
+  // Suppress extension context errors
+  page.on('console', msg => {
+    const text = msg.text();
+    if (msg.type() === 'error' &&
+        (text.includes('Extension context invalidated') ||
+         text.includes('chrome-extension://') ||
+         text.includes('moz-extension://'))) {
+      // Silently ignore extension-related errors
+      return;
+    }
+    if (msg.type() === 'error') {
+      console.warn('Browser error:', text.substring(0, 100));
+    }
+  });
   
   try {
     // ============================================================================

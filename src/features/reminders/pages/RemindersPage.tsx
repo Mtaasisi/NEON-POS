@@ -32,6 +32,7 @@ import {
   Search
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const RemindersPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,6 +40,7 @@ const RemindersPage: React.FC = () => {
   const { customers } = useCustomers();
   const { devices } = useDevices();
   const { currentBranch } = useBranch();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +61,7 @@ const RemindersPage: React.FC = () => {
   }, [currentBranch]);
 
   const loadReminders = async () => {
+    const jobId = startLoading('Loading reminders...');
     try {
       setLoading(true);
       console.log('📝 [Reminders] Loading reminders for branch:', {
@@ -72,8 +75,10 @@ const RemindersPage: React.FC = () => {
         reminders: data
       });
       setReminders(data);
+      completeLoading(jobId);
     } catch (error) {
       console.error('❌ [Reminders] Error loading reminders:', error);
+      failLoading(jobId, 'Failed to load reminders');
       toast.error('Failed to load reminders');
     } finally {
       setLoading(false);

@@ -269,15 +269,9 @@ const PaymentAccountManagement: React.FC = () => {
       return;
     }
 
-    if (formData.type === 'mobile_money') {
-      if (!formData.bank_name) {
-        toast.error('Mobile money provider is required');
-        return;
-      }
-      if (!formData.account_number) {
-        toast.error('Phone number is required for mobile money accounts');
-        return;
-      }
+    if (formData.type === 'mobile_money' && !formData.bank_name) {
+      toast.error('Mobile money provider is required');
+      return;
     }
 
     // Prevent negative balance
@@ -612,6 +606,11 @@ const PaymentAccountManagement: React.FC = () => {
                         {account.type === 'credit_card' && <CreditCard className="w-3 h-3" />}
                         {account.type.replace('_', ' ')}
                       </p>
+                      {account.bank_name && (
+                        <p className="text-xs text-gray-600 font-medium mt-1">
+                          {account.bank_name}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-1.5">
@@ -657,6 +656,12 @@ const PaymentAccountManagement: React.FC = () => {
                   </p>
                   {account.currency !== 'TZS' && (
                     <p className="text-xs text-gray-500 mt-1">Currency: {account.currency}</p>
+                  )}
+                  {account.account_number && (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded inline-flex">
+                      <span className="font-medium">Account #:</span>
+                      <span className="font-mono">{account.account_number}</span>
+                    </div>
                   )}
                 </div>
               </div>
@@ -778,13 +783,18 @@ const PaymentAccountManagement: React.FC = () => {
               <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <div className="flex items-center gap-3">
                   <AccountThumbnail type={formData.type || 'cash'} size="sm" />
-                  <div>
+                  <div className="flex-1">
                     <div className="text-sm font-medium text-blue-900">
                       {formData.name || 'Account Name'}
                     </div>
                     <div className="text-xs text-blue-600 capitalize">
                       {(formData.type || 'cash').replace('_', ' ')}
                     </div>
+                    {formData.account_number && (
+                      <div className="text-xs text-blue-700 font-mono mt-0.5">
+                        #{formData.account_number}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -854,6 +864,19 @@ const PaymentAccountManagement: React.FC = () => {
                 <p className="text-xs text-gray-500 mt-1">Starting balance for this account (cannot be negative)</p>
               </div>
 
+              {/* General Account Number field (visible for all account types) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Account Number
+                </label>
+                <GlassInput
+                  value={formData.account_number || ''}
+                  onChange={(e) => handleInputChange('account_number', e.target.value)}
+                  placeholder="Enter account number"
+                />
+                <p className="text-xs text-gray-500 mt-1">Account number, reference ID, or identifier for this account</p>
+              </div>
+
               {/* Bank-specific fields */}
               {formData.type === 'bank' && (
                 <>
@@ -866,14 +889,6 @@ const PaymentAccountManagement: React.FC = () => {
                       onChange={(e) => handleInputChange('bank_name', e.target.value)}
                       placeholder="e.g., CRDB Bank, NMB Bank"
                       required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Account Number</label>
-                    <GlassInput
-                      value={formData.account_number || ''}
-                      onChange={(e) => handleInputChange('account_number', e.target.value)}
-                      placeholder="Bank account number"
                     />
                   </div>
                 </>
@@ -892,17 +907,7 @@ const PaymentAccountManagement: React.FC = () => {
                       placeholder="e.g., M-Pesa, Tigo Pesa, Airtel Money"
                       required
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone Number <span className="text-red-500">*</span>
-                    </label>
-                    <GlassInput
-                      value={formData.account_number || ''}
-                      onChange={(e) => handleInputChange('account_number', e.target.value)}
-                      placeholder="e.g., +255712345678"
-                      required
-                    />
+                    <p className="text-xs text-gray-500 mt-1">Use the Account Number field above for the phone number</p>
                   </div>
                 </>
               )}
@@ -917,18 +922,7 @@ const PaymentAccountManagement: React.FC = () => {
                       onChange={(e) => handleInputChange('bank_name', e.target.value)}
                       placeholder="e.g., Visa, Mastercard"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Last 4 Digits</label>
-                    <GlassInput
-                      value={formData.account_number || ''}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '').slice(0, 4);
-                        handleInputChange('account_number', value);
-                      }}
-                      placeholder="Last 4 digits of card"
-                      pattern="\d{0,4}"
-                    />
+                    <p className="text-xs text-gray-500 mt-1">Use the Account Number field above for card details</p>
                   </div>
                 </>
               )}

@@ -8,6 +8,7 @@ import GlassCard from '../components/ui/GlassCard';
 import GlassButton from '../components/ui/GlassButton';
 import { SimpleBackButton } from '../components/ui/SimpleBackButton';
 import ProductAdTemplate from '../components/ProductAdTemplate';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface ProductData {
   name: string;

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Database, CheckCircle } from 'lucide-react';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const DatabaseSetupPage: React.FC = () => {
   return (

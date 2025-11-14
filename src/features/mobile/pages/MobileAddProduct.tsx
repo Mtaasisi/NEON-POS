@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Minus } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import toast from 'react-hot-toast';
 import { getActiveCategories } from '../../../lib/categoryApi';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface Category {
   id: string;
@@ -13,6 +14,7 @@ interface Category {
 
 const MobileAddProduct: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
 
   // Form state
   const [productName, setProductName] = useState('');
@@ -77,6 +79,7 @@ const MobileAddProduct: React.FC = () => {
   const handleSubmit = async () => {
     if (!isValid()) return;
 
+    const jobId = startLoading('Adding product...');
     try {
       setIsLoading(true);
 
@@ -117,10 +120,12 @@ const MobileAddProduct: React.FC = () => {
 
       if (variantError) throw variantError;
 
+      completeLoading(jobId);
       toast.success(`${productName} added successfully!`);
       navigate(`/mobile/inventory/${product.id}`);
     } catch (error: any) {
       console.error('Error adding product:', error);
+      failLoading(jobId, 'Failed to add product');
       toast.error(error.message || 'Failed to add product');
     } finally {
       setIsLoading(false);

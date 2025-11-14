@@ -28,6 +28,8 @@ import {
 } from '../../lats/lib/variantUtils';
 import { parseSpecification, formatSpecificationValue } from '../../lats/lib/specificationUtils';
 import { useMobileBranch } from '../hooks/useMobileBranch';
+import { useDialog } from '../../shared/hooks/useDialog';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface Product {
   id: string;
@@ -52,7 +54,9 @@ interface Product {
 const MobileProductDetail: React.FC = () => {
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
+  const { confirm } = useDialog();
   const { currentBranch } = useMobileBranch();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
 
   const [product, setProduct] = useState<Product | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -194,6 +198,7 @@ const MobileProductDetail: React.FC = () => {
     const loadProduct = async () => {
       if (!productId) return;
 
+      const jobId = startLoading('Loading product...');
       setIsLoading(true);
       try {
         console.log('🔍 [MobileProductDetail] Loading product for branch:', currentBranch?.name);
@@ -246,8 +251,10 @@ const MobileProductDetail: React.FC = () => {
         };
         
         setProduct(transformedProduct);
+        completeLoading(jobId);
       } catch (error) {
         console.error('Error loading product:', error);
+        failLoading(jobId, 'Failed to load product');
         toast.error('Failed to load product');
       } finally {
         setIsLoading(false);
@@ -312,7 +319,7 @@ const MobileProductDetail: React.FC = () => {
   // Handlers
   const handleDelete = async () => {
     if (!product) return;
-    if (!window.confirm(`Are you sure you want to delete "${product.name}"?`)) return;
+    if (!await confirm(`Are you sure you want to delete "${product.name}"?`)) return;
 
     try {
       const { error } = await supabase.from('lats_products').delete().eq('id', product.id);

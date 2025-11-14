@@ -1,103 +1,67 @@
 #!/usr/bin/env node
-
-/**
- * Run Data Protection Migration
- * Installs all data protection and validation systems
- */
-
-import dotenv from 'dotenv';
+// Run the migration to remove order_number column
+import { config } from 'dotenv';
 import { Pool } from '@neondatabase/serverless';
 import { readFileSync } from 'fs';
 
-dotenv.config();
-
+config();
 const DATABASE_URL = process.env.VITE_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
-  console.error('❌ DATABASE_URL not found in .env file');
+  console.error('❌ DATABASE_URL not found');
   process.exit(1);
 }
 
 async function runMigration() {
-  console.log('🚀 Running Data Protection Migration\n');
-  
   const pool = new Pool({ connectionString: DATABASE_URL });
   
   try {
-    // Read the migration SQL file
-    const sql = readFileSync('migrations/prevent_future_data_issues.sql', 'utf8');
+    console.log('🚀 Running migration: Remove duplicate order_number column\n');
     
-    console.log('📄 Executing migration SQL...\n');
+    // Read the migration file
+    const migrationSQL = readFileSync('./migrations/remove_duplicate_order_number_column.sql', 'utf8');
     
     // Execute the migration
-    await pool.query(sql);
+    await pool.query(migrationSQL);
     
-    console.log('\n✅ Migration completed successfully!\n');
+    console.log('✅ Migration completed successfully!\n');
     
-    // Verify installation
-    console.log('🔍 Verifying installation...\n');
+    // Verify the result
+    console.log('🔍 Verifying migration...\n');
     
-    // Check if audit table exists
-    const { rows: auditTable } = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name = 'lats_data_audit_log'
-      ) as exists
+    const result = await pool.query(`
+      SELECT 
+        column_name, 
+        data_type, 
+        is_nullable,
+        column_default
+      FROM information_schema.columns
+      WHERE table_name = 'lats_purchase_orders'
+      AND column_name LIKE '%number%'
+      ORDER BY ordinal_position
     `);
     
-    console.log(`  Audit Log Table: ${auditTable[0].exists ? '✅' : '❌'}`);
-    
-    // Check if view exists
-    const { rows: qualityView } = await pool.query(`
-      SELECT EXISTS (
-        SELECT FROM information_schema.views 
-        WHERE table_schema = 'public' 
-        AND table_name = 'data_quality_issues'
-      ) as exists
-    `);
-    
-    console.log(`  Data Quality View: ${qualityView[0].exists ? '✅' : '❌'}`);
-    
-    // Check triggers
-    const { rows: triggers } = await pool.query(`
-      SELECT trigger_name 
-      FROM information_schema.triggers 
-      WHERE trigger_name IN (
-        'trigger_auto_convert_po_currency',
-        'trigger_validate_variant_prices',
-        'trigger_track_variant_source'
-      )
-      ORDER BY trigger_name
-    `);
-    
-    console.log('\n  Installed Triggers:');
-    triggers.forEach(t => {
-      console.log(`    ✅ ${t.trigger_name}`);
+    console.log('Columns with "number" in the name:');
+    result.rows.forEach(col => {
+      console.log(`  ✓ ${col.column_name} (${col.data_type}, ${col.is_nullable === 'NO' ? 'NOT NULL' : 'NULLABLE'})`);
     });
     
-    if (triggers.length < 3) {
-      console.log(`    ⚠️  Expected 3 triggers, found ${triggers.length}`);
+    if (result.rows.length === 1 && result.rows[0].column_name === 'po_number') {
+      console.log('\n✅ SUCCESS: Only po_number column remains!');
+      console.log('   The redundant order_number column has been removed.');
+    } else {
+      console.log('\n⚠️  WARNING: Unexpected column structure');
     }
     
-    console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('✅ Data Protection System is now ACTIVE!');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    
-    console.log('📋 Next Steps:');
-    console.log('  1. Run: node check-data-quality.mjs');
-    console.log('  2. Fix any existing issues found');
-    console.log('  3. Read: DATA_INTEGRITY_GUIDE.md');
-    console.log('  4. Train staff on new procedures\n');
+    console.log('\n🎉 All purchase orders will now consistently use po_number!');
     
   } catch (error) {
-    console.error('\n❌ Migration failed:', error.message);
-    console.error(error.stack);
+    console.error('❌ Migration failed:', error.message);
+    console.error('\nFull error:', error);
     process.exit(1);
   } finally {
     await pool.end();
   }
 }
 
-// Run the migration
-runMigration().catch(console.error);
+runMigration();

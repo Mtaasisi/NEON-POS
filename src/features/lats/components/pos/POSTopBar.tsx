@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../../context/AuthContext';
 import { rbacManager, type UserRole } from '../../lib/rbac';
@@ -80,6 +80,16 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
 }) => {
   const { currentUser, logout } = useAuth();
   const { playPaymentSound, playDeleteSound, playClickSound } = usePOSClickSounds();
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Update time every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, []);
 
   const handleProcessPayment = () => {
     playPaymentSound();
@@ -203,63 +213,31 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
 
   return (
     <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm border-b border-gray-200 shadow-sm">
-      <div className="px-3 py-2 sm:px-6 sm:py-4">
-        {/* Main Header */}
-        <div className="flex items-center justify-between mb-2 sm:mb-4">
-          <div>
+      <div className="px-4 sm:px-6 py-2.5 sm:py-3">
+        {/* Single Row Layout */}
+        <div className="flex items-center justify-between gap-4">
+          {/* Left: Title + Quick Actions */}
+          <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-2xl font-bold text-gray-900">Customer Care POS</h1>
+              <h1 className="text-base sm:text-xl font-bold text-gray-900">POS</h1>
               {isDailyClosed && (
-                <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 text-orange-700 rounded-lg text-xs font-medium">
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
                   <Lock size={12} />
-                  <span>Day Closed</span>
+                  <span className="hidden lg:inline">Closed</span>
                 </div>
               )}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-600">Desktop Point of Sale System</p>
           </div>
 
-          {/* Current Time & Date */}
-          <div className="text-right">
-            <div className="text-sm sm:text-lg font-semibold text-gray-900">
-              {new Date().toLocaleTimeString('en-TZ', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
-            </div>
-            <div className="text-xs sm:text-sm text-gray-600 hidden sm:block">
-              {new Date().toLocaleDateString('en-TZ', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
-            </div>
-            <div className="text-xs text-gray-600 sm:hidden">
-              {new Date().toLocaleDateString('en-TZ', { 
-                month: 'short', 
-                day: 'numeric' 
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Action Bar */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
-          {/* Left Section - Essential Actions */}
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-start">
-            {/* Essential Actions */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden md:flex items-center gap-2">
               <button
                 onClick={() => {
                   playClickSound();
                   onScanQrCode();
                 }}
-                className="flex items-center gap-1 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 bg-green-50 text-green-700 rounded-lg active:bg-green-100 transition-all duration-200 border border-green-200 shadow-sm touch-target"
+                className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
               >
-                <Scan size={16} className="sm:hidden" />
-                <Scan size={18} className="hidden sm:block" />
-                <span className="text-xs sm:text-sm font-medium">Scan</span>
+                <Scan size={18} />
+                <span className="text-sm font-medium">Scan</span>
               </button>
 
               {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('access_pos') || currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
@@ -268,86 +246,83 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                     playClickSound();
                     onAddCustomer();
                   }}
-                  className="flex items-center gap-1 sm:gap-3 px-2 sm:px-4 py-2 sm:py-3 bg-blue-50 text-blue-700 rounded-lg active:bg-blue-100 transition-all duration-200 border border-blue-200 shadow-sm touch-target"
+                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
                 >
-                  <Users size={16} className="sm:hidden" />
-                  <Users size={18} className="hidden sm:block" />
-                  <span className="text-xs sm:text-sm font-medium">Add Customer</span>
+                  <Users size={18} />
+                  <span className="text-sm font-medium">Customer</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Center Section - Today's Sales */}
-          <div className="flex items-center justify-center w-full sm:w-auto">
+          {/* Center: Time + Sales */}
+          <div className="hidden lg:flex items-center gap-3">
+            <div className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 min-h-[44px] flex items-center">
+              <div className="text-center">
+                <div className="text-sm font-semibold text-gray-900">
+                  {currentTime.toLocaleTimeString('en-TZ', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  })}
+                </div>
+                <div className="text-xs text-gray-600">
+                  {currentTime.toLocaleDateString('en-TZ', { 
+                    month: 'short', 
+                    day: 'numeric' 
+                  })}
+                </div>
+              </div>
+            </div>
+            
             <button
               onClick={() => {
                 playClickSound();
                 onViewSales();
               }}
-              className="flex items-center gap-3 px-4 py-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-all duration-200 border border-blue-200 shadow-sm hover:shadow-md min-h-[44px] min-w-[44px]"
+              className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
               title="View Sales Report"
             >
-              {/* Sales Info */}
+              <DollarSign size={18} />
               <span className="text-sm font-medium">{formatMoney(todaysSales)}</span>
             </button>
           </div>
 
-          {/* Right Section - All Actions */}
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto justify-between sm:justify-start">
-            {/* Mobile: Show only essential buttons */}
-            <div className="flex items-center gap-2 sm:hidden">
-              {/* Payment Processing - Show when cart has items */}
+          {/* Right: Action Buttons + System Controls */}
+          <div className="flex items-center gap-2">
+            {/* Cart Actions - Show when cart has items */}
               {cartItemsCount > 0 && (
+              <div className="flex items-center gap-2">
                 <button
                   onClick={handleProcessPayment}
-                  disabled={isProcessingPayment}
-                  className="flex items-center gap-1 px-3 py-2 bg-emerald-500 text-white rounded-lg active:bg-emerald-600 disabled:bg-gray-400 transition-all duration-200 font-semibold shadow-md touch-target"
+                  disabled={isProcessingPayment || !hasSelectedCustomer}
+                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-gray-400 disabled:to-gray-400 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                  title={!hasSelectedCustomer ? "Please select a customer first" : isProcessingPayment ? "Processing payment..." : "Process payment"}
                 >
-                  <CreditCard size={16} />
-                  <span className="text-xs font-medium">{isProcessingPayment ? 'Processing...' : 'Pay'}</span>
+                  <CreditCard size={18} />
+                  <span className="hidden md:inline text-sm font-medium">{isProcessingPayment ? 'Processing...' : 'Pay'}</span>
+                  <span className="md:hidden text-xs font-medium">{isProcessingPayment ? '...' : 'Pay'}</span>
                 </button>
-              )}
 
-              {/* Clear Cart - Show when cart has items */}
-              {cartItemsCount > 0 && (
                 <button
                   onClick={handleClearCart}
-                  className="flex items-center gap-1 px-2 py-2 bg-red-50 text-red-700 rounded-lg active:bg-red-100 transition-all duration-200 border border-red-200 shadow-sm touch-target"
+                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
                   title="Clear Cart"
                 >
-                  <Trash2 size={16} />
-                  <span className="text-xs font-medium">Clear</span>
+                  <Trash2 size={18} />
+                  <span className="hidden md:inline text-sm font-medium">Clear</span>
                 </button>
-              )}
+              </div>
+            )}
 
-              {/* Daily Close Button - Mobile - Show when available and day is not closed */}
-              {onCloseDay && canCloseDay && !isDailyClosed && (
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    onCloseDay();
-                  }}
-                  className="flex items-center gap-1 px-2 py-2 bg-red-500 text-white rounded-lg active:bg-red-600 transition-all duration-200 font-semibold shadow-md touch-target"
-                  title="Close Daily Sales"
-                >
-                  <Lock size={16} />
-                  <span className="text-xs font-medium">Close</span>
-                </button>
-              )}
-            </div>
-
-            {/* Desktop: Show all buttons */}
-            <div className="hidden sm:flex items-center gap-3">
-
-              {/* Payment Tracking Button - Show when available */}
+            {/* Primary Actions */}
+            <div className="hidden md:flex items-center gap-2">
               {onPaymentTracking && (
                 <button
                   onClick={() => {
                     playClickSound();
                     onPaymentTracking?.();
                   }}
-                  className="flex items-center gap-3 px-4 py-3 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-all duration-200 border border-emerald-200 shadow-sm hover:shadow-md min-h-[44px] min-w-[44px]"
+                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
                   title="Payment Tracking"
                 >
                   <FileText size={18} />
@@ -355,99 +330,66 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                 </button>
               )}
 
-
-
-              {/* Daily Close Button - Show when available and day is not closed */}
               {onCloseDay && canCloseDay && !isDailyClosed && (
                 <button
                   onClick={() => {
                     playClickSound();
                     onCloseDay();
                   }}
-                  className="flex items-center gap-3 px-4 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all duration-200 font-semibold shadow-md min-h-[44px] min-w-[44px]"
+                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
                   title="Close Daily Sales"
                 >
                   <Lock size={18} />
                   <span className="text-sm font-medium">Close Day</span>
                 </button>
               )}
-
-              {/* Payment Processing - Show when cart has items */}
-              {cartItemsCount > 0 && (
-                <button
-                  onClick={handleProcessPayment}
-                  disabled={isProcessingPayment || !hasSelectedCustomer}
-                  className="flex items-center gap-3 px-5 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:bg-gray-400 transition-all duration-200 font-semibold shadow-md min-h-[44px] min-w-[44px]"
-                  title={!hasSelectedCustomer ? "Please select a customer first" : isProcessingPayment ? "Processing payment..." : "Process payment"}
-                >
-                  <CreditCard size={18} />
-                  <span className="text-sm font-medium">{isProcessingPayment ? 'Processing...' : 'Pay'}</span>
-                </button>
-              )}
-
-              {/* Clear Cart - Show when cart has items */}
-              {cartItemsCount > 0 && (
-                <button
-                  onClick={handleClearCart}
-                  className="flex items-center gap-3 px-4 py-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-all duration-200 border border-red-200 shadow-sm min-h-[44px] min-w-[44px]"
-                  title="Clear Cart"
-                >
-                  <Trash2 size={18} />
-                  <span className="text-sm font-medium">Clear</span>
-                </button>
-              )}
             </div>
 
-            {/* System Actions */}
-            <div className="flex items-center gap-1 sm:gap-2">
-              {/* Exit to Dashboard Button */}
+            {/* Divider */}
+            <div className="hidden md:block h-8 w-px bg-gray-300 mx-1"></div>
+
+            {/* System Controls */}
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => {
                   playClickSound();
                   handleExitToDashboard();
                 }}
-                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 sm:py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 shadow-sm touch-target"
+                className="p-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] flex items-center justify-center"
                 title="Exit to Dashboard"
               >
-                <Home size={16} className="sm:hidden" />
-                <Home size={18} className="hidden sm:block" />
-                <span className="text-xs sm:text-sm font-medium hidden sm:inline">Exit</span>
+                <Home size={18} />
               </button>
 
-              {/* Settings - Show only for admin users */}
               {onSettings && currentUser?.role === 'admin' && (
                 <button
                   onClick={() => {
                     playClickSound();
                     onSettings();
                   }}
-                  className="p-2 sm:p-3 text-gray-600 active:text-gray-800 active:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm touch-target flex items-center justify-center"
+                  className="hidden md:flex p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center"
                   title="POS Settings"
                 >
-                  <Settings size={16} className="sm:hidden" />
-                  <Settings size={18} className="hidden sm:block" />
+                  <Settings size={18} />
                 </button>
               )}
 
-              {/* Refresh Data - Show when available */}
               {onRefreshData && (
                 <button
                   onClick={() => {
                     playClickSound();
                     onRefreshData();
                   }}
-                  className="p-2 sm:p-3 text-gray-600 active:text-gray-800 active:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm touch-target flex items-center justify-center"
+                  className="hidden md:flex p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center"
                   title="Refresh Data"
                 >
-                  <RefreshCw size={16} className="sm:hidden" />
-                  <RefreshCw size={18} className="hidden sm:block" />
+                  <RefreshCw size={18} />
                 </button>
               )}
 
-              {/* View Mode Toggle */}
               <button
                 onClick={toggleViewMode}
-                className={`p-2 sm:p-3 rounded-lg transition-all duration-200 active:scale-95 shadow-sm touch-target flex items-center justify-center ${
+                className={`hidden lg:flex p-2.5 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center ${
                   viewMode === 'mobile' 
                     ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' 
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -455,22 +397,15 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                 title={viewMode === 'mobile' ? "Switch to Desktop View" : "Switch to Mobile View"}
               >
                 {viewMode === 'mobile' ? (
-                  <>
-                    <Smartphone size={16} className="sm:hidden" />
-                    <Smartphone size={18} className="hidden sm:block" />
-                  </>
+                  <Smartphone size={18} />
                 ) : (
-                  <>
-                    <Monitor size={16} className="sm:hidden" />
-                    <Monitor size={18} className="hidden sm:block" />
-                  </>
+                  <Monitor size={18} />
                 )}
               </button>
 
-              {/* Fullscreen Toggle */}
               <button
                 onClick={toggleFullscreen}
-                className="hidden sm:flex p-3 text-neutral-600 hover:text-neutral-800 hover:bg-neutral-100 rounded-lg transition-all duration-200 shadow-soft min-h-[44px] min-w-[44px] items-center justify-center"
+                className="hidden lg:flex p-2.5 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px] items-center justify-center"
                 title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
               >
                 {isFullscreen ? (
@@ -480,7 +415,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                 )}
               </button>
             </div>
-
           </div>
         </div>
       </div>

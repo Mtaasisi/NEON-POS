@@ -5,11 +5,17 @@ import { useDevices } from '../../../context/DevicesContext';
 import { useCustomers } from '../../../context/CustomersContext';
 import SearchHome from '../components/SearchHome';
 import SearchResults from '../components/SearchResults';
+import EnhancedSearchResults from '../components/EnhancedSearchResults';
 import {
   Search,
   X,
   ArrowRight,
+  Settings,
+  Bookmark,
+  History,
+  Zap,
 } from 'lucide-react';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface SearchResult {
   id: string;
@@ -42,6 +48,9 @@ const GlobalSearchPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [useEnhancedSearch, setUseEnhancedSearch] = useState<boolean>(true);
+  const [savedSearches, setSavedSearches] = useState<any[]>([]);
+  const [searchHistory, setSearchHistory] = useState<any[]>([]);
 
   // Get search query from URL params
   useEffect(() => {
@@ -52,14 +61,32 @@ const GlobalSearchPage: React.FC = () => {
     }
   }, [location.search]);
 
-  // Load recent searches from localStorage
+  // Load recent searches, saved searches, and search history from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('recentSearches');
-    if (saved) {
+    const savedRecent = localStorage.getItem('recentSearches');
+    if (savedRecent) {
       try {
-        setRecentSearches(JSON.parse(saved));
+        setRecentSearches(JSON.parse(savedRecent));
       } catch (error) {
         console.error('Error loading recent searches:', error);
+      }
+    }
+
+    const savedSearchesData = localStorage.getItem('savedSearches');
+    if (savedSearchesData) {
+      try {
+        setSavedSearches(JSON.parse(savedSearchesData));
+      } catch (error) {
+        console.error('Error loading saved searches:', error);
+      }
+    }
+
+    const searchHistoryData = localStorage.getItem('searchHistory');
+    if (searchHistoryData) {
+      try {
+        setSearchHistory(JSON.parse(searchHistoryData));
+      } catch (error) {
+        console.error('Error loading search history:', error);
       }
     }
   }, []);
@@ -67,10 +94,32 @@ const GlobalSearchPage: React.FC = () => {
   // Save search to recent searches
   const saveSearch = (query: string) => {
     if (!query.trim()) return;
-    
+
     const updated = [query, ...recentSearches.filter(s => s !== query)].slice(0, 10);
     setRecentSearches(updated);
     localStorage.setItem('recentSearches', JSON.stringify(updated));
+  };
+
+  // Save to search history
+  const saveToHistory = (query: string, resultCount: number) => {
+    const historyEntry = {
+      id: Date.now().toString(),
+      query,
+      resultCount,
+      timestamp: new Date().toISOString(),
+      userId: currentUser?.id
+    };
+
+    const updated = [historyEntry, ...searchHistory.filter(h => h.query !== query)].slice(0, 50);
+    setSearchHistory(updated);
+    localStorage.setItem('searchHistory', JSON.stringify(updated));
+  };
+
+  // Load saved search
+  const loadSavedSearch = (savedSearch: any) => {
+    setSearchQuery(savedSearch.query);
+    // Could also load filters if they were saved
+    navigate(`/search?q=${encodeURIComponent(savedSearch.query)}`);
   };
 
   // Handle search submission
@@ -95,55 +144,96 @@ const GlobalSearchPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50/30 via-white/50 to-purple-50/30">
-      {/* Header */}
-      <div className="bg-white/40 backdrop-blur-2xl border-b border-white/20 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)] sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-5">
-          <div className="flex items-center gap-4">
+    <div className="min-h-screen bg-gray-50">
+      {/* Header - macOS style */}
+      <div className="bg-white/95 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
-              className="p-3 rounded-xl bg-white/50 hover:bg-white/70 transition-all duration-300 backdrop-blur-xl border border-white/30 shadow-[0_4px_16px_0_rgba(31,38,135,0.1)] hover:shadow-[0_8px_24px_0_rgba(31,38,135,0.15)]"
+              className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-all duration-150"
             >
-              <ArrowRight size={20} className="text-gray-700 rotate-180" />
+              <ArrowRight size={18} className="text-gray-700 rotate-180" />
             </button>
             
             <div className="flex-1 max-w-2xl">
               <form onSubmit={handleSearch} className="relative group">
-                <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={20} />
+                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                 <input
                   type="text"
-                  placeholder="Search..."
+                  placeholder="Search everything..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-14 pr-14 py-4 rounded-2xl bg-white/60 border border-white/30 focus:outline-none focus:bg-white/80 focus:border-blue-400/50 focus:shadow-[0_8px_32px_0_rgba(59,130,246,0.15)] backdrop-blur-xl text-gray-800 placeholder-gray-400 transition-all duration-300"
+                  className="w-full pl-11 pr-32 py-2.5 rounded-lg bg-gray-100 border border-gray-200/50 focus:outline-none focus:bg-white focus:border-blue-400/50 focus:shadow-sm text-gray-800 placeholder-gray-400 transition-all duration-150 text-sm"
                   autoFocus
                 />
-                {searchQuery && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
                   <button
                     type="button"
-                    onClick={clearSearch}
-                    className="absolute right-5 top-1/2 transform -translate-y-1/2 p-1.5 rounded-full bg-gray-100/80 hover:bg-gray-200/80 backdrop-blur-sm transition-all duration-200"
+                    onClick={() => setUseEnhancedSearch(!useEnhancedSearch)}
+                    className={`p-1 rounded transition-all duration-150 ${
+                      useEnhancedSearch ? 'text-blue-500 bg-blue-50' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                    title={useEnhancedSearch ? 'Enhanced Search On' : 'Basic Search Mode'}
                   >
-                    <X size={16} className="text-gray-500" />
+                    <Zap size={14} />
                   </button>
-                )}
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={clearSearch}
+                      className="p-1 rounded hover:bg-gray-200 transition-all duration-150"
+                    >
+                      <X size={14} className="text-gray-500" />
+                    </button>
+                  )}
+                </div>
               </form>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex items-center space-x-2">
+              {savedSearches.length > 0 && (
+                <div className="relative">
+                  <button
+                    onClick={() => {/* Toggle saved searches dropdown */}}
+                    className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-all duration-150"
+                    title="Saved Searches"
+                  >
+                    <Bookmark size={18} className="text-gray-700" />
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => {/* Open search settings */}}
+                className="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-all duration-150"
+                title="Search Settings"
+              >
+                <Settings size={18} className="text-gray-700" />
+              </button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6 py-6">
         {!searchQuery ? (
-          <SearchHome 
+          <SearchHome
             recentSearches={recentSearches}
             onSearch={setSearchQuery}
             onRemoveSearch={removeRecentSearch}
             userRole={currentUser.role}
           />
+        ) : useEnhancedSearch ? (
+          <EnhancedSearchResults
+            query={searchQuery}
+            onQueryChange={setSearchQuery}
+            userRole={currentUser.role}
+          />
         ) : (
-          <SearchResults 
+          <SearchResults
             query={searchQuery}
             filter={activeFilter}
             onFilterChange={setActiveFilter}

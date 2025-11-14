@@ -18,6 +18,8 @@ import { employeeService } from '../../../services/employeeService';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { useDialog } from '../../shared/hooks/useDialog';
 
 interface Employee {
   id: string;
@@ -61,8 +63,10 @@ const EmployeeManagementPage: React.FC = () => {
   const { currentUser } = useAuth();
   const { currentBranch } = useBranch();
   const navigate = useNavigate();
+  const { confirm } = useDialog();
   const [searchParams] = useSearchParams();
   const successModal = useSuccessModal();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   
   // State Management
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -108,6 +112,7 @@ const EmployeeManagementPage: React.FC = () => {
   };
 
   const loadData = async () => {
+    const jobId = startLoading('Loading employees...');
     setLoading(true);
     try {
       const employeesData = await employeeService.getAllEmployees();
@@ -115,8 +120,10 @@ const EmployeeManagementPage: React.FC = () => {
       
       const attendanceData = await employeeService.getAllAttendanceRecords();
       setAttendanceRecords(attendanceData);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Failed to load data:', error);
+      failLoading(jobId, 'Failed to load employees');
       toast.error('Failed to load employee data');
     } finally {
       setLoading(false);
@@ -220,7 +227,7 @@ const EmployeeManagementPage: React.FC = () => {
   };
 
   const handleDeleteEmployee = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this employee?')) {
+    if (await confirm('Are you sure you want to delete this employee?')) {
       try {
         const employee = employees.find(e => e.id === id);
         await employeeService.deleteEmployee(id);
@@ -266,13 +273,13 @@ const EmployeeManagementPage: React.FC = () => {
         handleExportSelected();
         break;
       case 'archive':
-        if (window.confirm(`Archive ${selectedEmployees.length} employees?`)) {
+        if (await confirm(`Archive ${selectedEmployees.length} employees?`)) {
           // Archive logic here
           toast.success('Employees archived');
         }
         break;
       case 'delete':
-        if (window.confirm(`Delete ${selectedEmployees.length} employees?`)) {
+        if (await confirm(`Delete ${selectedEmployees.length} employees?`)) {
           try {
             await Promise.all(selectedEmployees.map(id => employeeService.deleteEmployee(id)));
             toast.success('Employees deleted');

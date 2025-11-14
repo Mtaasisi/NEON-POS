@@ -1,1 +1,0 @@
-import{n as o}from"./ui-551a39a6.js";const s={success:s=>o.success(s),error:s=>o.error(s),info:s=>o(s,{icon:"ℹ️",style:{background:"#3B82F6",color:"#fff"}}),warning:s=>o(s,{icon:"⚠️",style:{background:"#F59E0B",color:"#fff"}}),loading:s=>o.loading(s),dismiss:s=>o.dismiss(s)};export{s as t};

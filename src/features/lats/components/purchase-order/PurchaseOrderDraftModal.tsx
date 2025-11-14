@@ -34,6 +34,19 @@ const PurchaseOrderDraftModal: React.FC<PurchaseOrderDraftModalProps> = ({
   const [newDraftName, setNewDraftName] = useState('');
   const [showSaveForm, setShowSaveForm] = useState(false);
 
+  // Block body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   // Load drafts from localStorage
   useEffect(() => {
     if (isOpen) {

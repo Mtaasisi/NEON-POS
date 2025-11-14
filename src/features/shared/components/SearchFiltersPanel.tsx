@@ -31,32 +31,32 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="bg-white/95 backdrop-blur-xl rounded-2xl p-6 border border-white/50 shadow-2xl">
+    <div className="bg-white rounded-xl p-4 border border-gray-200/50 shadow-sm">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Filter className="text-blue-600" size={20} />
-          <h3 className="text-lg font-semibold text-gray-800">Advanced Filters</h3>
+          <Filter className="text-blue-500" size={16} />
+          <h3 className="text-sm font-semibold text-gray-800">Advanced Filters</h3>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+          className="p-1 rounded-md hover:bg-gray-100 transition-colors"
         >
-          <X size={18} className="text-gray-500" />
+          <X size={16} className="text-gray-500" />
         </button>
       </div>
 
       {/* Filter Options */}
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* Status Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
             Status
           </label>
           <select
             value={filters.status || ''}
             onChange={(e) => setFilters({ ...filters, status: e.target.value || undefined })}
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
           >
             <option value="">All Statuses</option>
             <option value="active">Active</option>
@@ -68,8 +68,8 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
 
         {/* Location Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-            <MapPin size={14} />
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1">
+            <MapPin size={12} />
             Location
           </label>
           <input
@@ -77,14 +77,14 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
             value={filters.location || ''}
             onChange={(e) => setFilters({ ...filters, location: e.target.value || undefined })}
             placeholder="e.g., Dar es Salaam"
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
           />
         </div>
 
         {/* Category Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-            <Tag size={14} />
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1">
+            <Tag size={12} />
             Category
           </label>
           <input
@@ -92,17 +92,17 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
             value={filters.category || ''}
             onChange={(e) => setFilters({ ...filters, category: e.target.value || undefined })}
             placeholder="e.g., smartphones"
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
           />
         </div>
 
         {/* Price Range Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-            <DollarSign size={14} />
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1">
+            <DollarSign size={12} />
             Price Range (TZS)
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <input
               type="number"
               value={filters.price?.split('-')[0] || ''}
@@ -114,9 +114,9 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
                 });
               }}
               placeholder="Min"
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
             />
-            <span className="self-center text-gray-500">-</span>
+            <span className="self-center text-gray-400 text-xs">to</span>
             <input
               type="number"
               value={filters.price?.split('-')[1] || ''}
@@ -128,18 +128,18 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
                 });
               }}
               placeholder="Max"
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
             />
           </div>
         </div>
 
         {/* Date Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-            <Calendar size={14} />
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1">
+            <Calendar size={12} />
             Date Range
           </label>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5">
             <input
               type="date"
               value={filters.date?.split('-')[0] || ''}
@@ -150,9 +150,9 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
                   date: e.target.value ? `${e.target.value}${end ? `-${end}` : ''}` : undefined 
                 });
               }}
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
             />
-            <span className="self-center text-gray-500">-</span>
+            <span className="self-center text-gray-400 text-xs">to</span>
             <input
               type="date"
               value={filters.date?.split('-')[1] || ''}
@@ -163,14 +163,14 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
                   date: e.target.value ? `${start}-${e.target.value}` : start || undefined 
                 });
               }}
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
             />
           </div>
         </div>
 
         {/* Customer Name Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
             Customer Name
           </label>
           <input
@@ -178,13 +178,13 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
             value={filters.customer || ''}
             onChange={(e) => setFilters({ ...filters, customer: e.target.value || undefined })}
             placeholder="Search by customer name"
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
           />
         </div>
 
         {/* Model Filter */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
             Device Model
           </label>
           <input
@@ -192,22 +192,22 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
             value={filters.model || ''}
             onChange={(e) => setFilters({ ...filters, model: e.target.value || undefined })}
             placeholder="e.g., iPhone 13"
-            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200/60 bg-gray-50 focus:outline-none focus:bg-white focus:border-blue-400/50 transition-all text-sm"
           />
         </div>
       </div>
 
       {/* Actions */}
-      <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
+      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-200/50">
         <button
           onClick={handleReset}
-          className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+          className="flex-1 px-3 py-2 rounded-lg border border-gray-200/60 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
         >
-          Reset All
+          Reset
         </button>
         <button
           onClick={handleApply}
-          className="flex-1 px-4 py-2.5 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:from-blue-600 hover:to-purple-600 shadow-lg hover:shadow-xl transition-all"
+          className="flex-1 px-3 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 shadow-sm hover:shadow-md transition-all"
         >
           Apply Filters
         </button>
@@ -215,8 +215,8 @@ const SearchFiltersPanel: React.FC<SearchFiltersPanelProps> = ({
 
       {/* Active Filters Count */}
       {Object.keys(filters).filter(k => filters[k as keyof SearchFilters]).length > 0 && (
-        <div className="mt-4 text-center text-sm text-gray-600">
-          {Object.keys(filters).filter(k => filters[k as keyof SearchFilters]).length} active filter(s)
+        <div className="mt-3 text-center text-xs text-gray-500">
+          {Object.keys(filters).filter(k => filters[k as keyof SearchFilters]).length} active filter{Object.keys(filters).filter(k => filters[k as keyof SearchFilters]).length !== 1 ? 's' : ''}
         </div>
       )}
     </div>

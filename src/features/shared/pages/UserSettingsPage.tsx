@@ -9,6 +9,7 @@ import {
   Shield,
   Settings as SettingsIcon
 } from 'lucide-react';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 type SettingsTab = 'dashboard' | 'profile' | 'notifications' | 'security';
 

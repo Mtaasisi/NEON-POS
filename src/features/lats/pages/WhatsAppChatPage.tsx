@@ -29,6 +29,7 @@ import {
   Save,
   X as XIcon
 } from 'lucide-react';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { supabase } from '../../../lib/supabaseClient';
 import { toast } from '../../../lib/toastUtils';
 import { greenApiService } from '../../../services/greenApiService';

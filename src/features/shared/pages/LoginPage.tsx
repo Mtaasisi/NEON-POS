@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { PageErrorWrapper } from '../components/PageErrorWrapper';
 import { useErrorHandler } from '../../../hooks/useErrorHandler';
-import ModernLoadingOverlay from '../../../components/ui/ModernLoadingOverlay';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import InlineLoader from '../../../components/ui/InlineLoader';
 
 
 const LoginPage: React.FC = () => {
@@ -16,6 +17,9 @@ const LoginPage: React.FC = () => {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const { login, error, clearError, isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
+  
+  // Unified loading system
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
 
   // Error handling
   const { handleError, withErrorHandling } = useErrorHandler({
@@ -86,9 +90,9 @@ const LoginPage: React.FC = () => {
     }
   }, [isAuthenticated, loading, navigate, getLastVisitedPage]);
 
-  // Show loading state while checking authentication
+  // Show skeleton while checking authentication
   if (loading) {
-    return <ModernLoadingOverlay message="Checking authentication..." />;
+    return <InlineLoader fullscreen transparent message="Checking authentication..." />;
   }
 
   // Don't render login form if already authenticated
@@ -103,6 +107,8 @@ const LoginPage: React.FC = () => {
       handleError(new Error('Please enter both email and password'), 'Form validation');
       return;
     }
+    
+    const jobId = startLoading('Signing in...');
     
     await withErrorHandling(async () => {
       setIsLoading(true);
@@ -123,17 +129,22 @@ const LoginPage: React.FC = () => {
           localStorage.removeItem('last_login_password');
         }
         
+        completeLoading(jobId);
+        
         // On successful login, save email to localStorage
         localStorage.setItem('recent_login_email', email);
         
         const redirectPath = getLastVisitedPage();
         navigate(redirectPath);
       } else {
+        failLoading(jobId, 'Login failed');
         throw new Error('Login failed. Please check your credentials.');
       }
-    }, 'Login process');
-    
-    setIsLoading(false);
+    }, 'Login process').catch((error) => {
+      failLoading(jobId, 'Login failed');
+    }).finally(() => {
+      setIsLoading(false);
+    });
   };
 
   const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -293,8 +304,7 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Loading Overlay */}
-      {isLoading && <ModernLoadingOverlay message="Signing in..." />}
+      {/* Loading handled by unified spinner in top-right */}
     </PageErrorWrapper>
   );
 };

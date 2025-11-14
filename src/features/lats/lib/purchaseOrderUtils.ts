@@ -22,8 +22,8 @@ export const SUPPORTED_CURRENCIES: Currency[] = [
 
 
 
-// Purchase Order Status Types - Simplified to only sent and received
-export type PurchaseOrderStatus = 'sent' | 'received';
+// Purchase Order Status Types - Full workflow support
+export type PurchaseOrderStatus = 'draft' | 'sent' | 'partial_received' | 'received' | 'completed' | 'cancelled';
 
 // Centralized money formatting function
 export const formatMoney = (amount: number, currency: Currency) => {

@@ -5,6 +5,7 @@ import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import Modal from '../../../features/shared/components/ui/Modal';
 import { toast } from 'react-hot-toast';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface CustomerUpdateData {
   id: string;
@@ -30,6 +31,7 @@ interface CustomerUpdateData {
 }
 
 const CustomerDataUpdatePage: React.FC = () => {
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [customers, setCustomers] = useState<CustomerUpdateData[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerUpdateData | null>(null);
@@ -41,6 +43,7 @@ const CustomerDataUpdatePage: React.FC = () => {
 
   // Load customers from database
   const loadCustomers = async () => {
+    const jobId = startLoading('Loading customers...');
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -51,9 +54,11 @@ const CustomerDataUpdatePage: React.FC = () => {
 
       if (error) throw error;
       setCustomers(data || []);
+      completeLoading(jobId);
       toast.success(`Loaded ${data?.length || 0} customers`);
     } catch (error) {
       console.error('Error loading customers:', error);
+      failLoading(jobId, 'Failed to load customers');
       toast.error('Failed to load customers');
     } finally {
       setLoading(false);

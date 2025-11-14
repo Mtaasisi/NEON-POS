@@ -1,6 +1,7 @@
 import React from 'react';
 import SuccessModal from '../../../../components/ui/SuccessModal';
 import { PurchaseOrder } from '../../types/inventory';
+import { Eye, Edit, Printer, DollarSign } from 'lucide-react';
 
 interface PurchaseOrderSuccessModalProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ interface PurchaseOrderSuccessModalProps {
   onCopyOrderNumber: () => void;
   onShareOrder: () => void;
   onGoToOrders: () => void;
-  onCreateAnother: () => void;
+  onAddPayment?: () => void; // New: Add payment handler
 }
 
 const PurchaseOrderSuccessModal: React.FC<PurchaseOrderSuccessModalProps> = ({
@@ -29,7 +30,7 @@ const PurchaseOrderSuccessModal: React.FC<PurchaseOrderSuccessModalProps> = ({
   onCopyOrderNumber,
   onShareOrder,
   onGoToOrders,
-  onCreateAnother
+  onAddPayment
 }) => {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-TZ', {
@@ -46,29 +47,45 @@ const PurchaseOrderSuccessModal: React.FC<PurchaseOrderSuccessModalProps> = ({
   // Define action buttons
   const actionButtons = [
     {
-      label: '👁️ View Order',
+      label: (
+        <div className="flex items-center justify-center gap-2">
+          <Eye className="w-5 h-5" />
+          <span>View Order</span>
+        </div>
+      ),
       onClick: onViewOrder,
       variant: 'primary' as const
     },
     {
-      label: '✏️ Edit Order',
+      label: (
+        <div className="flex items-center justify-center gap-2">
+          <Edit className="w-5 h-5" />
+          <span>Edit Order</span>
+        </div>
+      ),
       onClick: onEditOrder,
       variant: 'secondary' as const
     },
     {
-      label: '🖨️ Print',
+      label: (
+        <div className="flex items-center justify-center gap-2">
+          <Printer className="w-5 h-5" />
+          <span>Print PO</span>
+        </div>
+      ),
       onClick: onPrintOrder,
       variant: 'secondary' as const
     },
     {
-      label: '📧 Send to Supplier',
-      onClick: onSendToSupplier,
-      variant: 'secondary' as const
-    },
-    {
-      label: '➕ Create Another',
-      onClick: onCreateAnother,
-      variant: 'secondary' as const
+      label: (
+        <div className="flex items-center justify-center gap-2">
+          <DollarSign className="w-5 h-5" />
+          <span>Add Payment</span>
+        </div>
+      ),
+      onClick: onAddPayment || (() => {}),
+      variant: 'success' as const,
+      disabled: !onAddPayment
     }
   ];
 

@@ -3,7 +3,7 @@
  * View all trade-in transactions with filtering and analytics
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Search,
   Filter,
@@ -38,32 +38,65 @@ const TradeInHistoryTab: React.FC = () => {
   const [needsRepairFilter, setNeedsRepairFilter] = useState<boolean | undefined>(undefined);
   const [readyForResaleFilter, setReadyForResaleFilter] = useState<boolean | undefined>(undefined);
 
-  // Load transactions
-  const loadTransactions = async () => {
+  // 🚀 OPTIMIZED: Debounced search and efficient loading
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(searchTerm);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Optimized load transactions with caching
+  const loadTransactions = useCallback(async () => {
     setLoading(true);
-    
-    const filterParams: TradeInFilters = {
-      search: searchTerm || undefined,
-      status: selectedStatus || undefined,
-      condition_rating: selectedCondition || undefined,
-      needs_repair: needsRepairFilter,
-      ready_for_resale: readyForResaleFilter,
-    };
 
-    const result = await getTradeInTransactions(filterParams);
-    
-    if (result.success && result.data) {
-      setTransactions(result.data);
-    } else {
-      toast.error(result.error || 'Failed to load transactions');
+    try {
+      if (import.meta.env.MODE === 'development') {
+        console.log('🔄 [TradeInHistory] Loading transactions with filters...');
+      }
+
+      const filterParams: TradeInFilters = {
+        search: debouncedSearchTerm || undefined,
+        status: selectedStatus || undefined,
+        condition_rating: selectedCondition || undefined,
+        needs_repair: needsRepairFilter,
+        ready_for_resale: readyForResaleFilter,
+      };
+
+      const result = await getTradeInTransactions(filterParams);
+
+      if (result.success && result.data) {
+        setTransactions(result.data);
+
+        if (import.meta.env.MODE === 'development') {
+          console.log(`✅ [TradeInHistory] Loaded ${result.data.length} transactions`);
+        }
+      } else {
+        toast.error(result.error || 'Failed to load transactions');
+        setTransactions([]);
+      }
+    } catch (error) {
+      console.error('❌ [TradeInHistory] Error loading transactions:', error);
+      toast.error('Failed to load transactions');
+      setTransactions([]);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
-  };
+  }, [debouncedSearchTerm, selectedStatus, selectedCondition, needsRepairFilter, readyForResaleFilter]);
 
+  // Load data when filters change (but not on search term change due to debouncing)
   useEffect(() => {
     loadTransactions();
   }, [selectedStatus, selectedCondition, needsRepairFilter, readyForResaleFilter]);
+
+  // Separate effect for debounced search
+  useEffect(() => {
+    loadTransactions();
+  }, [debouncedSearchTerm]);
 
   // Calculate analytics
   const analytics = React.useMemo(() => {

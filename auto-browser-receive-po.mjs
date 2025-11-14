@@ -30,10 +30,8 @@ async function main() {
         width: 1920,
         height: 1080
       },
-      args: [
-        '--start-maximized',
-        '--disable-blink-features=AutomationControlled'
-      ]
+      args: ['--start-maximized',
+        '--disable-blink-features=AutomationControlled', '--disable-extensions', '--disable-plugins', '--disable-default-apps', '--disable-background-timer-throttling', '--disable-renderer-backgrounding']]
     });
 
     const page = await browser.newPage();

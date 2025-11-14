@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MobileLayout from '../components/MobileLayout';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { DashboardSkeleton } from '../../../components/ui/SkeletonLoaders';
 import {
   Package,
   Heart,
@@ -26,6 +28,7 @@ interface DashboardStats {
 
 const CustomerDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [stats, setStats] = useState<DashboardStats>({
     loyaltyPoints: 0,
     activeOrders: 0,
@@ -41,6 +44,8 @@ const CustomerDashboardPage: React.FC = () => {
   }, []);
 
   const loadDashboardData = async () => {
+    const jobId = startLoading('Loading dashboard...');
+    
     try {
       setLoading(true);
       const customerId = localStorage.getItem('customer_id');
@@ -63,8 +68,11 @@ const CustomerDashboardPage: React.FC = () => {
           totalPurchases: Math.floor(Math.random() * 50)
         }));
       }
+      
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error loading dashboard:', error);
+      failLoading(jobId, 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }

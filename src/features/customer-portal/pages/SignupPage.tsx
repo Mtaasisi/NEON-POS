@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface SignupFormData {
   name: string;

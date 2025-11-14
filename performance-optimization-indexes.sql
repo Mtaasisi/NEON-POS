@@ -73,6 +73,39 @@ CREATE INDEX IF NOT EXISTS idx_lats_product_images_product
 ON lats_product_images(product_id);
 
 -- ==========================================
+-- PAYMENT PROCESSING INDEXES
+-- ==========================================
+-- Additional indexes to speed up payment processing
+
+-- 14. Index for parent-child variant relationships (used in stock validation)
+CREATE INDEX IF NOT EXISTS idx_lats_product_variants_parent_child
+ON lats_product_variants(parent_variant_id, is_active)
+WHERE parent_variant_id IS NOT NULL;
+
+-- 15. Index for IMEI child variant lookups
+CREATE INDEX IF NOT EXISTS idx_lats_product_variants_imei_child
+ON lats_product_variants(parent_variant_id, variant_type, is_active)
+WHERE variant_type = 'imei_child';
+
+-- 16. Index for cost price lookups (used in profit calculations)
+CREATE INDEX IF NOT EXISTS idx_lats_product_variants_cost_price
+ON lats_product_variants(product_id, cost_price)
+WHERE cost_price IS NOT NULL;
+
+-- 17. Index for finance account lookups (payment processing)
+CREATE INDEX IF NOT EXISTS idx_finance_accounts_payment_method
+ON finance_accounts(payment_method_id, balance);
+
+-- 18. Index for customer lookups in sales
+CREATE INDEX IF NOT EXISTS idx_lats_customers_active
+ON lats_customers(id, name, phone)
+WHERE is_active = true;
+
+-- 19. Composite index for sale items (used in reporting)
+CREATE INDEX IF NOT EXISTS idx_lats_sale_items_product_variant
+ON lats_sale_items(product_id, variant_id);
+
+-- ==========================================
 -- ANALYZE TABLES
 -- ==========================================
 -- Update table statistics for query planner
@@ -83,6 +116,9 @@ ANALYZE lats_product_variants;
 ANALYZE lats_categories;
 ANALYZE lats_suppliers;
 ANALYZE lats_product_images;
+ANALYZE finance_accounts;
+ANALYZE lats_customers;
+ANALYZE lats_sale_items;
 
 -- ==========================================
 -- VERIFY INDEXES

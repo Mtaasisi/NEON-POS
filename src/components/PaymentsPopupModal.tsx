@@ -144,50 +144,63 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
   const [newPrice, setNewPrice] = useState('');
   const [priceEditReason, setPriceEditReason] = useState('');
   const [isEditingAmount, setIsEditingAmount] = useState(false);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false); // Debounce flag
+  const [processingStep, setProcessingStep] = useState<string>(''); // Current processing step
 
-  // Reset form and REFRESH BALANCES when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedMethod('');
-      setSelectedCurrency(DEFAULT_CURRENCY);
-      setIsProcessing(false);
-      setIsMultipleMode(false);
-      setPaymentEntries([]);
-      setCustomAmount('');
-      setIsEditingAmount(false);
-      setShowPriceEdit(false);
-      setNewPrice('');
-      setPriceEditReason('');
-      
-      // 🔄 AUTOMATIC BALANCE REFRESH when modal opens
-      console.log('💳 Payment modal opened - Refreshing account balances...');
-      const refreshBalances = async () => {
-        setIsRefreshingBalances(true);
-        try {
-          if (refreshPaymentAccounts) {
-            await refreshPaymentAccounts();
-            console.log('✅ Account balances refreshed successfully');
-          } else {
-            // Fallback: reload payment accounts directly
-            console.log('⚠️ Using fallback balance refresh');
-            import('../lib/financeAccountService').then(({ financeAccountService }) => {
-              financeAccountService.getPaymentMethods().then(methods => {
-                console.log('✅ Balances loaded via fallback:', methods.map(m => ({
-                  name: m.name,
-                  balance: m.balance,
-                  currency: m.currency
-                })));
-              });
-            });
-          }
-        } catch (error) {
-          console.error('❌ Failed to refresh balances:', error);
-        } finally {
-          setIsRefreshingBalances(false);
-        }
+  // Reset form when modal opens (balances refresh only when stale)
+    useEffect(() => {
+      if (isOpen) {
+        setSelectedMethod('');
+        setSelectedCurrency(DEFAULT_CURRENCY);
+        setIsProcessing(false);
+        setIsMultipleMode(false);
+        setPaymentEntries([]);
+        setCustomAmount('');
+        setIsEditingAmount(false);
+        setShowPriceEdit(false);
+        setNewPrice('');
+        setPriceEditReason('');
+        setProcessingStep('');
+
+      // Only refresh balances if we don't have them or they're stale (older than 5 minutes)
+      const shouldRefreshBalances = () => {
+        if (!paymentAccounts || paymentAccounts.length === 0) return true;
+        // Check if balances are stale (no timestamp available, assume refresh needed)
+        return true; // For now, always refresh to ensure accuracy
       };
-      
-      refreshBalances();
+
+      if (shouldRefreshBalances()) {
+        console.log('💳 Payment modal opened - Refreshing account balances...');
+        const refreshBalances = async () => {
+          setIsRefreshingBalances(true);
+          try {
+            if (refreshPaymentAccounts) {
+              await refreshPaymentAccounts();
+              console.log('✅ Account balances refreshed successfully');
+            } else {
+              // Fallback: reload payment accounts directly
+              console.log('⚠️ Using fallback balance refresh');
+              import('../lib/financeAccountService').then(({ financeAccountService }) => {
+                financeAccountService.getPaymentMethods().then(methods => {
+                  console.log('✅ Balances loaded via fallback:', methods.map(m => ({
+                    name: m.name,
+                    balance: m.balance,
+                    currency: m.currency
+                  })));
+                });
+              });
+            }
+          } catch (error) {
+            console.error('❌ Failed to refresh balances:', error);
+          } finally {
+            setIsRefreshingBalances(false);
+          }
+        };
+
+        refreshBalances();
+      } else {
+        console.log('💳 Payment modal opened - Using cached balances');
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -217,6 +230,37 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                         displayCurrency === 'EUR' ? '€' : 
                         displayCurrency === 'GBP' ? '£' : 
                         displayCurrency === 'TZS' ? 'TSh' : displayCurrency;
+
+  // Manual balance refresh function
+  const handleManualBalanceRefresh = async () => {
+    console.log('🔄 Manual balance refresh requested...');
+    setIsRefreshingBalances(true);
+    try {
+      if (refreshPaymentAccounts) {
+        await refreshPaymentAccounts();
+        console.log('✅ Account balances refreshed manually');
+        toast.success('Balances refreshed successfully');
+      } else {
+        // Fallback: reload payment accounts directly
+        console.log('⚠️ Using fallback balance refresh');
+        import('../lib/financeAccountService').then(({ financeAccountService }) => {
+          financeAccountService.getPaymentMethods().then(methods => {
+            console.log('✅ Balances loaded via fallback:', methods.map(m => ({
+              name: m.name,
+              balance: m.balance,
+              currency: m.currency
+            })));
+            toast.success('Balances refreshed successfully');
+          });
+        });
+      }
+    } catch (error) {
+      console.error('❌ Failed to refresh balances:', error);
+      toast.error('Failed to refresh balances');
+    } finally {
+      setIsRefreshingBalances(false);
+    }
+  };
 
   // Auto-select the first available account for the selected payment method
   const getAutoSelectedAccount = (methodId: string) => {
@@ -315,12 +359,18 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
   };
 
   const handlePayment = async () => {
+    // Prevent double-clicks with debouncing
+    if (isProcessingPayment || isProcessing) {
+      console.log('⚠️ Payment already processing, ignoring duplicate request');
+      return;
+    }
+
     if (isMultipleMode) {
       if (paymentEntries.length === 0) {
         toast.error('Please add at least one payment');
         return;
       }
-      
+
       if (remainingAmount < 0) {
         toast.error('Payment amount exceeds required amount');
         return;
@@ -353,8 +403,11 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
       }
     }
 
+    // Set processing flags to prevent double-clicks
     setIsProcessing(true);
-    
+    setIsProcessingPayment(true);
+    setProcessingStep('Validating payment details...');
+
     try {
       // UUID validation helper
       const isValidUUID = (uuid: string): boolean => {
@@ -381,6 +434,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             return;
           }
         }
+
+        setProcessingStep('Processing multiple payments...');
 
         console.log('💰 Multiple payments data:', paymentEntries.map(entry => ({
           method: entry.method,
@@ -451,6 +506,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           return;
         }
 
+        setProcessingStep('Processing payment...');
+
         console.log('💳 Single payment data:', {
           method: method.name,
           methodId: method.id,
@@ -487,8 +544,10 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
     } catch (error) {
       console.error('Payment failed:', error);
       toast.error('Payment failed. Please try again.');
+      setProcessingStep('');
     } finally {
       setIsProcessing(false);
+      setIsProcessingPayment(false); // Reset debounce flag
     }
   };
 
@@ -868,6 +927,20 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             </div>
           )}
 
+          {/* Manual Balance Refresh Button */}
+          {!isRefreshingBalances && (
+            <div className="mb-4 flex justify-end">
+              <button
+                onClick={handleManualBalanceRefresh}
+                disabled={isRefreshingBalances}
+                className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-blue-700 hover:text-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span className="text-sm font-medium">Refresh Balances</span>
+              </button>
+            </div>
+          )}
+
           {/* Payment Methods */}
           {isLoading ? (
             <div className="flex items-center justify-center py-8">
@@ -968,7 +1041,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                     
                     // Use TZS amount if available, otherwise use the amount passed
                     const paymentAmount = amountInTZS || amount;
-                    const newBalance = account.balance - paymentAmount;
+                    const newBalance = Math.max(0, account.balance - paymentAmount);
                     
                     return (
                       <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl shadow-md">
@@ -1279,7 +1352,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                   const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
                   if (account) {
                     const paymentAmount = isMultipleMode ? totalPaid : (amountInTZS || amount);
-                    const newBalance = account.balance - paymentAmount;
+                    const newBalance = Math.max(0, account.balance - paymentAmount);
                     return (
                       <span>
                         Account balance: {account.balance.toLocaleString()} → {newBalance.toLocaleString()} {account.currency || 'TZS'}
@@ -1299,50 +1372,60 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             >
               Cancel
             </button>
-            <button
-              onClick={handlePayment}
-              disabled={
-                isProcessing || 
-                (isMultipleMode ? paymentEntries.length === 0 : !selectedMethod) ||
-                // Disable if insufficient balance for cash_out
-                (paymentType === 'cash_out' && !isMultipleMode && selectedMethod && (() => {
-                  const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
-                  const checkAmount = amountInTZS || amount;  // Use TZS amount if available
-                  return account && account.balance < checkAmount;
-                })()) ||
-                (paymentType === 'cash_out' && isMultipleMode && paymentEntries.some(entry => {
-                  const account = paymentAccounts.find(acc => acc.id === entry.accountId);
-                  return account && account.balance < entry.amount;
-                }))
-              }
-              className={`px-8 py-3 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 text-sm font-semibold flex items-center gap-2 ${
-                paymentType === 'cash_out'
-                  ? 'bg-red-600 hover:bg-red-700 shadow-lg disabled:hover:bg-gray-400'
-                  : 'bg-green-600 hover:bg-green-700 shadow-lg disabled:hover:bg-gray-400'
-              }`}
-              title={
-                paymentType === 'cash_out' && !isMultipleMode && selectedMethod ? (() => {
-                  const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
-                  const checkAmount = amountInTZS || amount;  // Use TZS amount if available
-                  if (account && account.balance < checkAmount) {
-                    return `Insufficient balance: ${account.balance.toLocaleString()} available, ${checkAmount.toLocaleString()} required`;
-                  }
-                  return '';
-                })() : ''
-              }
-            >
-              {isProcessing ? (
-                <>
+            <div className="flex flex-col items-center gap-3">
+              {/* Processing step indicator */}
+              {isProcessing && processingStep && (
+                <div className="flex items-center gap-2 text-blue-600 text-sm font-medium bg-blue-50 px-4 py-2 rounded-lg">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="w-4 h-4" />
-                  {paymentType === 'cash_out' ? 'Make Payment' : 'Complete Payment'}
-                </>
+                  {processingStep}
+                </div>
               )}
-            </button>
+
+              <button
+                onClick={handlePayment}
+                disabled={
+                  isProcessing ||
+                  (isMultipleMode ? paymentEntries.length === 0 : !selectedMethod) ||
+                  // Disable if insufficient balance for cash_out
+                  (paymentType === 'cash_out' && !isMultipleMode && selectedMethod && (() => {
+                    const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
+                    const checkAmount = amountInTZS || amount;  // Use TZS amount if available
+                    return account && account.balance < checkAmount;
+                  })()) ||
+                  (paymentType === 'cash_out' && isMultipleMode && paymentEntries.some(entry => {
+                    const account = paymentAccounts.find(acc => acc.id === entry.accountId);
+                    return account && account.balance < entry.amount;
+                  }))
+                }
+                className={`px-8 py-3 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 text-sm font-semibold flex items-center gap-2 ${
+                  paymentType === 'cash_out'
+                    ? 'bg-red-600 hover:bg-red-700 shadow-lg disabled:hover:bg-gray-400'
+                    : 'bg-green-600 hover:bg-green-700 shadow-lg disabled:hover:bg-gray-400'
+                }`}
+                title={
+                  paymentType === 'cash_out' && !isMultipleMode && selectedMethod ? (() => {
+                    const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
+                    const checkAmount = amountInTZS || amount;  // Use TZS amount if available
+                    if (account && account.balance < checkAmount) {
+                      return `Insufficient balance: ${account.balance.toLocaleString()} available, ${checkAmount.toLocaleString()} required`;
+                    }
+                    return '';
+                  })() : ''
+                }
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="w-4 h-4" />
+                    {paymentType === 'cash_out' ? 'Make Payment' : 'Complete Payment'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>

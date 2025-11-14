@@ -17,6 +17,7 @@ import EnhancedSupplierManagementPage from '../../settings/pages/EnhancedSupplie
 import StoreLocationsTab from '../components/inventory-management/StoreLocationsTab';
 import StorageRoomManagementPage from './StorageRoomManagementPage';
 import SpecificationsTab from '../components/inventory-management/SpecificationsTab';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 type TabType = 'categories' | 'suppliers' | 'store-locations' | 'storage-room' | 'specifications';
 

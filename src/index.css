@@ -9,6 +9,22 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Dialog Animations */
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
 /* Transparent Scrollbar Styles */
 .scrollbar-transparent {
   scrollbar-width: none; /* Firefox */
@@ -722,6 +738,87 @@ code {
   scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
 }
 
+/* Custom Order List Scrollbar */
+.order-list-scroll {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af transparent;
+}
+
+.order-list-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.order-list-scroll::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 10px;
+}
+
+.order-list-scroll::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.order-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Custom Expanded Order Content Scrollbar */
+.order-expanded-scroll {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #60a5fa #dbeafe;
+}
+
+.order-expanded-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.order-expanded-scroll::-webkit-scrollbar-track {
+  background: #dbeafe;
+  border-radius: 10px;
+}
+
+.order-expanded-scroll::-webkit-scrollbar-thumb {
+  background: #60a5fa;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.order-expanded-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+
+/* Order Items Grid Scrollbar */
+.order-items-scroll {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #e5e7eb;
+}
+
+.order-items-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.order-items-scroll::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 10px;
+}
+
+.order-items-scroll::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.order-items-scroll::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
 /* Glassy Assign Button Styles */
 .glassy-assign-btn {
   background: rgba(255, 255, 255, 0.05) !important;
@@ -1287,6 +1384,17 @@ body {
   }
 }
 
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @keyframes shrink {
   from {
     width: 100%;
@@ -1298,6 +1406,10 @@ body {
 
 .animate-slide-in {
   animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .animate-shrink {

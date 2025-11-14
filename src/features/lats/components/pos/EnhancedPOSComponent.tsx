@@ -22,7 +22,7 @@ const EnhancedPOSComponent: React.FC = () => {
   // Settings hooks
   const { settings: generalSettings } = useGeneralSettings();
   const TAX_RATE = (generalSettings?.tax_rate || 16) / 100; // Convert percentage to decimal
-  const isTaxEnabled = generalSettings?.enable_tax !== false; // Default to true if not set
+  const isTaxEnabled = generalSettings?.enable_tax === true; // Only enable tax if explicitly set to true
   
   // Store hooks
   const { 

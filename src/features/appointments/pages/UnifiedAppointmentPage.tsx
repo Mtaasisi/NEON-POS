@@ -11,6 +11,7 @@ import {
   Calendar, Plus, CheckCircle, CalendarDays, RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 // Import appointment components
 import AppointmentManagementTab from '../components/AppointmentManagementTab';

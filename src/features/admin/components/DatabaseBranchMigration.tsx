@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { GitBranch, Database, ArrowRight, RefreshCw, Download, Upload, Check, X, AlertTriangle, Info, CheckCircle } from 'lucide-react';
+import { GitBranch, Database, ArrowRight, RefreshCw, Download, Upload, Check, X, AlertTriangle, Info, CheckCircle, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import GlassCard from '../../shared/components/ui/GlassCard';
 
 // Backend API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const NEON_API_BASE_URL = import.meta.env.VITE_NEON_API_URL || 'http://localhost:8000';
 
 interface Branch {
   id: string;
@@ -49,7 +50,7 @@ const DatabaseBranchMigration: React.FC = () => {
   const [migrating, setMigrating] = useState(false);
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [schemaDiff, setSchemaDiff] = useState<SchemaDiff | null>(null);
-  const [migrationType, setMigrationType] = useState<'schema' | 'data' | 'both'>('both');
+  const [migrationType, setMigrationType] = useState<'schema' | 'data' | 'both' | 'selective-data' | 'schema-selective' | 'schema-missing'>('both');
   const [migrationProgress, setMigrationProgress] = useState<string>('');
   
   // Neon API Configuration
@@ -113,14 +114,14 @@ const DatabaseBranchMigration: React.FC = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/neon/branches?projectId=${neonProjectId}`, {
+      const response = await fetch(`${NEON_API_BASE_URL}/api/neon/branches?projectId=${neonProjectId}`, {
         headers: {
           'Authorization': `Bearer ${neonApiKey}`
         }
       });
 
       if (!response.ok) throw new Error('Failed to load branches');
-      
+
       const data = await response.json();
       setBranches(data.branches || []);
       toast.success(`Loaded ${data.branches?.length || 0} branches`);
@@ -129,6 +130,125 @@ const DatabaseBranchMigration: React.FC = () => {
       toast.error('Failed to load branches. Check your API credentials.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteBranch = async (branchId: string, branchName: string) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete the branch "${branchName}"?\n\n⚠️ This action cannot be undone and will permanently delete all data in this branch.`
+    );
+
+    if (!confirmed) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${NEON_API_BASE_URL}/api/neon/branches/${branchId}?projectId=${neonProjectId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${neonApiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to delete branch');
+      }
+
+      const data = await response.json();
+      toast.success(data.message);
+
+      // Refresh branches list
+      await loadBranches();
+    } catch (error: any) {
+      console.error('Error deleting branch:', error);
+      toast.error(error.message || 'Failed to delete branch');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Check if server is running
+  const checkServerStatus = async (): Promise<boolean> => {
+    try {
+      const response = await fetch(`${NEON_API_BASE_URL}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000) // 3 second timeout
+      });
+      return response.ok;
+    } catch (error) {
+      console.log('Server health check failed:', error);
+      return false;
+    }
+  };
+
+  // Attempt to start server automatically using server starter service
+  const attemptStartServer = async (): Promise<boolean> => {
+    try {
+      toast.loading('Starting backend server automatically...', { id: 'server-start' });
+
+      // First, check if server starter service is running
+      try {
+        const starterHealth = await fetch('http://localhost:3002/health', {
+          method: 'GET',
+          signal: AbortSignal.timeout(2000)
+        });
+
+        if (!starterHealth.ok) {
+          throw new Error('Server starter service not available');
+        }
+      } catch (error) {
+        toast.error('Server starter service not running. Please run: npm run server-starter', {
+          id: 'server-start',
+          duration: 8000
+        });
+        return false;
+      }
+
+      // Server starter is running, request server start
+      const response = await fetch('http://localhost:3002/start-server', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.loading('Server starting... please wait', { id: 'server-start' });
+
+        // Wait for server to fully start (up to 15 seconds)
+        let attempts = 0;
+        const maxAttempts = 15;
+
+        while (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          const isRunning = await checkServerStatus();
+
+          if (isRunning) {
+            toast.success('✅ Server started successfully!', { id: 'server-start' });
+            return true;
+          }
+
+          attempts++;
+          if (attempts % 3 === 0) {
+            toast.loading(`Still starting server... (${attempts}s)`, { id: 'server-start' });
+          }
+        }
+
+        toast.error('Server process started but not responding. Please check manually.', { id: 'server-start' });
+        return false;
+
+      } else {
+        toast.error(`Failed to start server: ${result.message}`, { id: 'server-start' });
+        return false;
+      }
+
+    } catch (error) {
+      console.error('Error starting server:', error);
+      toast.error('Failed to start server automatically. Please check server starter service.', { id: 'server-start' });
+      return false;
     }
   };
 
@@ -146,6 +266,26 @@ const DatabaseBranchMigration: React.FC = () => {
     }
 
     setLoading(true);
+
+    // Check if server is running first
+    console.log('Checking server status...');
+    const serverRunning = await checkServerStatus();
+
+    if (!serverRunning) {
+      console.log('Server not running, attempting to start...');
+      const serverStarted = await attemptStartServer();
+
+      if (!serverStarted) {
+        // If server still not running, show helpful error and return
+        toast.error(
+          'Backend server is required. Please start it manually with: cd server && npm run dev',
+          { duration: 8000 }
+        );
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const requestBody = useDirectConnection
         ? {
@@ -159,7 +299,7 @@ const DatabaseBranchMigration: React.FC = () => {
             useDirectConnection: false
           };
 
-      const response = await fetch(`${API_BASE_URL}/api/neon/tables`, {
+      const response = await fetch(`${NEON_API_BASE_URL}/api/neon/tables`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -194,6 +334,25 @@ const DatabaseBranchMigration: React.FC = () => {
     }
 
     setLoading(true);
+
+    // Check if server is running first
+    console.log('Checking server status for schema comparison...');
+    const serverRunning = await checkServerStatus();
+
+    if (!serverRunning) {
+      console.log('Server not running, attempting to start...');
+      const serverStarted = await attemptStartServer();
+
+      if (!serverStarted) {
+        toast.error(
+          'Backend server is required for schema comparison. Please start it manually with: cd server && npm run dev',
+          { duration: 8000 }
+        );
+        setLoading(false);
+        return;
+      }
+    }
+
     try {
       const requestBody = useDirectConnection
         ? {
@@ -209,7 +368,7 @@ const DatabaseBranchMigration: React.FC = () => {
             useDirectConnection: false
           };
 
-      const response = await fetch(`${API_BASE_URL}/api/neon/compare-schemas`, {
+      const response = await fetch(`${NEON_API_BASE_URL}/api/neon/compare-schemas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -231,6 +390,8 @@ const DatabaseBranchMigration: React.FC = () => {
   };
 
   const startMigration = async () => {
+    console.log('🚀 Start Migration button clicked!');
+    
     if (useDirectConnection) {
       if (!sourceConnectionString || !targetConnectionString) {
         toast.error('Please enter both source and target connection strings');
@@ -252,14 +413,43 @@ const DatabaseBranchMigration: React.FC = () => {
     const sourceLabel = useDirectConnection ? sourceName : branches.find(b => b.id === sourceBranch)?.name;
     const targetLabel = useDirectConnection ? targetName : branches.find(b => b.id === targetBranch)?.name;
 
-    const confirmed = window.confirm(
-      `Are you sure you want to migrate ${selectedTables.length} table(s) from ${sourceLabel} to ${targetLabel}?\n\nThis will:\n- ${migrationType === 'schema' || migrationType === 'both' ? 'Update schema structure' : ''}\n- ${migrationType === 'data' || migrationType === 'both' ? 'Copy data records' : ''}\n\nThis action cannot be undone.`
-    );
+    const migrationDetails = [
+      `Are you sure you want to migrate ${selectedTables.length} table(s) from ${sourceLabel} to ${targetLabel}?`,
+      '',
+      'This will:',
+      migrationType === 'schema' || migrationType === 'both' || migrationType === 'schema-selective' ? '- Update schema structure' : '',
+      migrationType === 'schema-missing' ? '- Add only missing schema elements (columns, tables)' : '',
+      migrationType === 'data' || migrationType === 'both' ? '- Copy all data records' : '',
+      migrationType === 'selective-data' || migrationType === 'schema-selective' ? '- Copy only data records that don\'t exist in target' : '',
+      '',
+      '⚠️ This action cannot be undone.'
+    ].filter(Boolean).join('\n');
+
+    const confirmed = window.confirm(migrationDetails);
 
     if (!confirmed) return;
 
     setMigrating(true);
     setMigrationProgress('Starting migration...');
+
+    // Check if server is running first
+    console.log('Checking server status for migration...');
+    const serverRunning = await checkServerStatus();
+
+    if (!serverRunning) {
+      console.log('Server not running, attempting to start...');
+      const serverStarted = await attemptStartServer();
+
+      if (!serverStarted) {
+        toast.error(
+          'Backend server is required for migration. Please start it manually with: cd server && npm run dev',
+          { duration: 8000 }
+        );
+        setMigrating(false);
+        setMigrationProgress('');
+        return;
+      }
+    }
 
     try {
       const requestBody = useDirectConnection
@@ -280,7 +470,7 @@ const DatabaseBranchMigration: React.FC = () => {
             useDirectConnection: false
           };
 
-      const response = await fetch(`${API_BASE_URL}/api/neon/migrate`, {
+      const response = await fetch(`${NEON_API_BASE_URL}/api/neon/migrate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -337,6 +527,23 @@ const DatabaseBranchMigration: React.FC = () => {
   const toggleAllTables = () => {
     const allSelected = tables.every(t => t.selected);
     setTables(tables.map(t => ({ ...t, selected: !allSelected })));
+  };
+
+  const selectOnlyMissing = () => {
+    if (!schemaDiff) {
+      toast.error('Please compare schemas first');
+      return;
+    }
+
+    // Select only tables that exist in source but not in target
+    const missingTableNames = schemaDiff.tables_only_in_source;
+    
+    setTables(tables.map(t => ({
+      ...t,
+      selected: missingTableNames.includes(t.table_name)
+    })));
+
+    toast.success(`Selected ${missingTableNames.length} missing table(s)`);
   };
 
   return (
@@ -603,9 +810,57 @@ const DatabaseBranchMigration: React.FC = () => {
           </div>
         )}
 
+        {/* Branch Management Section */}
+        {!useDirectConnection && branches.length > 0 && (
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-medium text-gray-900">Branch Management</h4>
+              <button
+                onClick={loadBranches}
+                disabled={loading}
+                className="px-3 py-1 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 text-sm"
+              >
+                <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {branches.map(branch => (
+                <div key={branch.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-md">
+                  <div className="flex items-center gap-3">
+                    <GitBranch className="w-4 h-4 text-indigo-600" />
+                    <div>
+                      <p className="font-medium text-gray-900">{branch.name}</p>
+                      <p className="text-sm text-gray-500">{branch.database_name}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      branch.current_state === 'ready'
+                        ? 'bg-green-100 text-green-700'
+                        : 'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {branch.current_state}
+                    </span>
+                    <button
+                      onClick={() => deleteBranch(branch.id, branch.name)}
+                      disabled={loading}
+                      className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md disabled:opacity-50"
+                      title={`Delete branch "${branch.name}"`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-3 mb-6">
-          {!useDirectConnection && (
+          {!useDirectConnection && branches.length === 0 && (
             <button
               onClick={loadBranches}
               disabled={loading}
@@ -655,6 +910,16 @@ const DatabaseBranchMigration: React.FC = () => {
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
+                  value="schema-missing"
+                  checked={migrationType === 'schema-missing'}
+                  onChange={(e) => setMigrationType(e.target.value as any)}
+                  className="text-indigo-600"
+                />
+                <span className="text-sm text-gray-700">Schema Only (Missing)</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
                   value="data"
                   checked={migrationType === 'data'}
                   onChange={(e) => setMigrationType(e.target.value as any)}
@@ -665,12 +930,32 @@ const DatabaseBranchMigration: React.FC = () => {
               <label className="flex items-center gap-2">
                 <input
                   type="radio"
+                  value="selective-data"
+                  checked={migrationType === 'selective-data'}
+                  onChange={(e) => setMigrationType(e.target.value as any)}
+                  className="text-indigo-600"
+                />
+                <span className="text-sm text-gray-700">Selective Data (Only Missing)</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  value="schema-selective"
+                  checked={migrationType === 'schema-selective'}
+                  onChange={(e) => setMigrationType(e.target.value as any)}
+                  className="text-indigo-600"
+                />
+                <span className="text-sm text-gray-700">Schema + Selective Data</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
                   value="both"
                   checked={migrationType === 'both'}
                   onChange={(e) => setMigrationType(e.target.value as any)}
                   className="text-indigo-600"
                 />
-                <span className="text-sm text-gray-700">Schema + Data</span>
+                <span className="text-sm text-gray-700">Schema + All Data</span>
               </label>
             </div>
           </div>
@@ -679,7 +964,13 @@ const DatabaseBranchMigration: React.FC = () => {
         {/* Schema Diff Display */}
         {schemaDiff && (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-medium text-gray-900 mb-3">Schema Differences</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-medium text-gray-900">Schema Differences</h4>
+              <div className="flex gap-2 text-xs">
+                <span className="px-2 py-1 bg-green-100 text-green-700 rounded">NEW = New table</span>
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">+COLS = Has new columns</span>
+              </div>
+            </div>
             
             {schemaDiff.tables_only_in_source.length > 0 && (
               <div className="mb-3">
@@ -742,12 +1033,23 @@ const DatabaseBranchMigration: React.FC = () => {
               <h4 className="font-medium text-gray-900">
                 Select Tables to Migrate ({tables.filter(t => t.selected).length}/{tables.length})
               </h4>
-              <button
-                onClick={toggleAllTables}
-                className="text-sm text-indigo-600 hover:text-indigo-700"
-              >
-                {tables.every(t => t.selected) ? 'Deselect All' : 'Select All'}
-              </button>
+              <div className="flex gap-2">
+                {schemaDiff && schemaDiff.tables_only_in_source.length > 0 && (
+                  <button
+                    onClick={selectOnlyMissing}
+                    className="text-sm px-3 py-1 bg-green-100 text-green-700 rounded-md hover:bg-green-200 font-medium"
+                    title="Select only tables that don't exist in target"
+                  >
+                    Select Missing Only ({schemaDiff.tables_only_in_source.length})
+                  </button>
+                )}
+                <button
+                  onClick={toggleAllTables}
+                  className="text-sm text-indigo-600 hover:text-indigo-700"
+                >
+                  {tables.every(t => t.selected) ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
             </div>
             
             <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-lg">
@@ -774,30 +1076,48 @@ const DatabaseBranchMigration: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {tables.map(table => (
-                    <tr
-                      key={table.table_name}
-                      className={`hover:bg-gray-50 ${table.selected ? 'bg-indigo-50' : ''}`}
-                    >
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          checked={table.selected}
-                          onChange={() => toggleTableSelection(table.table_name)}
-                          className="rounded text-indigo-600"
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {table.table_name}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {table.row_count.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-500">
-                        {table.size}
-                      </td>
-                    </tr>
-                  ))}
+                  {tables.map(table => {
+                    const isNewTable = schemaDiff?.tables_only_in_source.includes(table.table_name);
+                    const hasColumnDiff = schemaDiff?.columns_diff[table.table_name];
+                    const existsInBoth = schemaDiff?.tables_in_both.includes(table.table_name);
+                    
+                    return (
+                      <tr
+                        key={table.table_name}
+                        className={`hover:bg-gray-50 ${table.selected ? 'bg-indigo-50' : ''}`}
+                      >
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={table.selected}
+                            onChange={() => toggleTableSelection(table.table_name)}
+                            className="rounded text-indigo-600"
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                          <div className="flex items-center gap-2">
+                            {table.table_name}
+                            {isNewTable && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full" title="New table - doesn't exist in target">
+                                NEW
+                              </span>
+                            )}
+                            {hasColumnDiff && existsInBoth && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full" title="Has column differences">
+                                +COLS
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {table.row_count.toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {table.size}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -837,11 +1157,42 @@ const DatabaseBranchMigration: React.FC = () => {
       <GlassCard className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50">
         <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
           <Info className="w-5 h-5 text-blue-600" />
-          Important Notes
+          Important Notes & Best Practices
         </h4>
+        
+        {/* Recommended Workflow */}
+        <div className="mb-4 p-3 bg-white rounded-lg border border-blue-200">
+          <h5 className="font-medium text-gray-900 mb-2 text-sm">🎯 Recommended Workflow for Safe Migration:</h5>
+          <ol className="space-y-1 text-sm text-gray-700 list-decimal list-inside">
+            <li>Click <strong>"Load Branches"</strong> to see all available branches</li>
+            <li>Use the <strong>Branch Management</strong> section to delete unwanted branches</li>
+            <li>Click <strong>"Compare Schemas"</strong> to see differences between branches</li>
+            <li>Click <strong>"Select Missing Only"</strong> to select only new tables</li>
+            <li>Choose <strong>"Schema + Data"</strong> migration type</li>
+            <li>Review the selected tables (marked with "NEW" badge)</li>
+            <li>Click <strong>"Start Migration"</strong> to migrate safely</li>
+          </ol>
+        </div>
+
         <ul className="space-y-2 text-sm text-gray-700">
           <li className="flex gap-2">
+            <span className="text-red-600">🗑️</span>
+            <span><strong>Delete Branch</strong> - Permanently removes a branch and all its data (cannot be undone)</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-green-600">✓</span>
+            <span><strong>Select Missing Only</strong> - Safest option, only migrates tables that don't exist in target</span>
+          </li>
+          <li className="flex gap-2">
             <span className="text-blue-600">•</span>
+            <span><strong>NEW badge</strong> = Table doesn't exist in target (safe to migrate)</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-blue-600">•</span>
+            <span><strong>+COLS badge</strong> = Table exists but has new columns (will add columns only)</span>
+          </li>
+          <li className="flex gap-2">
+            <span className="text-orange-600">⚠</span>
             <span>Always test migrations on a copy of your data first</span>
           </li>
           <li className="flex gap-2">
@@ -855,10 +1206,6 @@ const DatabaseBranchMigration: React.FC = () => {
           <li className="flex gap-2">
             <span className="text-blue-600">•</span>
             <span>Data migration will INSERT new records (won't update existing ones)</span>
-          </li>
-          <li className="flex gap-2">
-            <span className="text-blue-600">•</span>
-            <span>Get your Neon API key from: console.neon.tech → Account Settings → API Keys</span>
           </li>
         </ul>
       </GlassCard>

@@ -21,9 +21,12 @@ import { useInventoryStore } from '../stores/useInventoryStore';
 import { format } from '../lib/format';
 import { SparePart } from '../types/spareParts';
 import { SafeImage } from '../../../components/SafeImage';
+import { useDialog } from '../../shared/hooks/useDialog';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const InventorySparePartsPage: React.FC = () => {
   // const { currentUser } = useAuth(); // Unused variable
+  const { confirm } = useDialog();
   
   // Database state management
   const { 
@@ -168,7 +171,7 @@ const InventorySparePartsPage: React.FC = () => {
   const handleBulkDelete = async () => {
     if (selectedSpareParts.length === 0) return;
     
-    const confirmed = window.confirm(`Are you sure you want to delete ${selectedSpareParts.length} spare parts?`);
+    const confirmed = await confirm(`Are you sure you want to delete ${selectedSpareParts.length} spare parts?`);
     if (!confirmed) return;
 
     try {
@@ -447,7 +450,7 @@ const InventorySparePartsPage: React.FC = () => {
 
   // Handle spare part deletion
   const handleDeleteSparePart = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this spare part?')) {
+    if (await confirm('Are you sure you want to delete this spare part?')) {
       try {
         const response = await deleteSparePart(id);
         if (response.ok) {

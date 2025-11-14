@@ -53,6 +53,7 @@ interface SetPricingModalProps {
   onConfirm: (pricingData: Map<string, PricingData>) => Promise<void>;
   isLoading?: boolean;
   initialPricingData?: Map<string, PricingData>;
+  selectedQuantities?: Map<string, number>; // New prop for selected quantities from partial receive
 }
 
 const COST_CATEGORIES = [
@@ -72,7 +73,8 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
   purchaseOrder,
   onConfirm,
   isLoading = false,
-  initialPricingData
+  initialPricingData,
+  selectedQuantities
 }) => {
   const [pricingData, setPricingData] = useState<Map<string, PricingData>>(new Map());
   const [productPrices, setProductPrices] = useState<Map<string, number>>(new Map());
@@ -94,6 +96,19 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
     }
     return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
+
+  // Block body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   // Helper function to convert cost from foreign currency to TZS
   const convertCostToTZS = useCallback((cost: number): number => {
@@ -205,21 +220,31 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
       
       setPricingData(initialPricing);
     }
-  }, [isOpen, purchaseOrder.items, purchaseOrder.currency, purchaseOrder.exchangeRate, productPrices, initialPricingData, convertCostToTZS]);
+  }, [isOpen, purchaseOrder.items, purchaseOrder.currency, purchaseOrder.exchangeRate, productPrices, initialPricingData, convertCostToTZS, selectedQuantities]);
+
+  // Helper function to get the quantity to receive for an item (either selected quantity or total pending)
+  const getQuantityToReceive = (item: PurchaseOrderItem): number => {
+    // If we have selected quantities (partial receive), use those
+    if (selectedQuantities && selectedQuantities.has(item.id)) {
+      return selectedQuantities.get(item.id) || 0;
+    }
+    // Otherwise, use total pending quantity (full receive)
+    return item.quantity - (item.receivedQuantity || 0);
+  };
 
   // Helper function to recalculate all items' costs when additional costs change
   const recalculateAllCosts = (pricingMap: Map<string, PricingData>) => {
     // Calculate total additional costs across entire order
     let totalAdditionalCosts = 0;
     let totalUnits = 0;
-    
+
     // Sum up all additional costs and total units
     purchaseOrder.items.forEach(item => {
       const pricing = pricingMap.get(item.id);
       if (pricing) {
-        const quantityToReceive = item.quantity - (item.receivedQuantity || 0);
+        const quantityToReceive = getQuantityToReceive(item);
         totalUnits += quantityToReceive;
-        
+
         // Only count additional costs from first item to avoid duplicates
         // (since all items share the same additional costs in the UI)
         if (item === purchaseOrder.items[0]) {
@@ -227,10 +252,10 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
         }
       }
     });
-    
+
     // Calculate per-unit additional cost
     const perUnitAdditionalCost = totalUnits > 0 ? totalAdditionalCosts / totalUnits : 0;
-    
+
     // Update each item with its share of additional costs
     const newMap = new Map(pricingMap);
     purchaseOrder.items.forEach(item => {
@@ -239,7 +264,7 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
         const totalCost = pricing.cost_price + perUnitAdditionalCost;
         const profit = pricing.selling_price - totalCost;
         const markup = totalCost > 0 ? (profit / totalCost) * 100 : 0;
-        
+
         newMap.set(item.id, {
           ...pricing,
           total_cost: parseFloat(totalCost.toFixed(2)),
@@ -248,7 +273,7 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
         });
       }
     });
-    
+
     return newMap;
   };
 
@@ -474,7 +499,7 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
       if (pricing) {
         if (pricing.selling_price > 0) {
           completedCount++;
-          const quantityToReceive = item.quantity - (item.receivedQuantity || 0);
+          const quantityToReceive = getQuantityToReceive(item);
           itemCount++;
           totalBaseCost += pricing.cost_price * quantityToReceive;
           totalCost += pricing.total_cost * quantityToReceive;
@@ -561,10 +586,10 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  // Add additional cost to all items
-                  purchaseOrder.items.forEach(item => {
-                    addAdditionalCost(item.id);
-                  });
+                  // Add additional cost to first item only (will be distributed across all items)
+                  if (purchaseOrder.items.length > 0) {
+                    addAdditionalCost(purchaseOrder.items[0].id);
+                  }
                 }}
                 className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm rounded-xl transition-colors font-semibold shadow-lg"
               >
@@ -585,13 +610,8 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                       <select
                         value={cost.category}
                         onChange={(e) => {
-                          // Update this cost for all items
-                          purchaseOrder.items.forEach(item => {
-                            const itemCosts = pricingData.get(item.id)?.additional_costs || [];
-                            if (itemCosts[idx]) {
-                              updateAdditionalCost(item.id, itemCosts[idx].id, 'category', e.target.value);
-                            }
-                          });
+                          // Update this cost for first item only (will be distributed across all)
+                          updateAdditionalCost(purchaseOrder.items[0].id, cost.id, 'category', e.target.value);
                         }}
                         className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 font-medium"
                       >
@@ -605,13 +625,8 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                         onChange={(e) => {
                           const value = e.target.value.replace(/,/g, '');
                           const amount = parseFloat(value) || 0;
-                          // Update this cost for all items
-                          purchaseOrder.items.forEach(item => {
-                            const itemCosts = pricingData.get(item.id)?.additional_costs || [];
-                            if (itemCosts[idx]) {
-                              updateAdditionalCost(item.id, itemCosts[idx].id, 'amount', amount);
-                            }
-                          });
+                          // Update this cost for first item only (will be distributed across all)
+                          updateAdditionalCost(purchaseOrder.items[0].id, cost.id, 'amount', amount);
                         }}
                         placeholder="Amount"
                         className="w-40 px-3 py-2 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 font-bold text-lg"
@@ -622,13 +637,8 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          // Remove this cost from all items
-                          purchaseOrder.items.forEach(item => {
-                            const itemCosts = pricingData.get(item.id)?.additional_costs || [];
-                            if (itemCosts[idx]) {
-                              removeAdditionalCost(item.id, itemCosts[idx].id);
-                            }
-                          });
+                          // Remove this cost from first item only (will be distributed across all)
+                          removeAdditionalCost(purchaseOrder.items[0].id, cost.id);
                         }}
                         className="p-2 text-red-600 hover:bg-red-100 rounded-xl transition-colors"
                       >
@@ -663,7 +673,7 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                 const pricing = pricingData.get(item.id);
                 if (!pricing) return null;
 
-                const quantityToReceive = item.quantity - (item.receivedQuantity || 0);
+                const quantityToReceive = getQuantityToReceive(item);
                 const totalItemProfit = pricing.profit_per_unit * quantityToReceive;
                 const isProfitable = pricing.profit_per_unit > 0;
                 const isExpanded = expandedItemId === item.id;
@@ -742,51 +752,96 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                     {/* Expanded Content - Only show when item is expanded */}
                     {isExpanded && (
                       <div className="px-6 pb-6">
-                        {/* Cost Summary Row */}
-                        <div className="grid grid-cols-2 gap-3 mb-5">
-                          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-                            <div className="flex justify-between items-start mb-3">
-                              <div>
-                                <p className="text-xs text-gray-500 mb-2">Base Cost</p>
-                                <p className="text-lg font-bold text-gray-900">
-                                  {formatPrice(pricing.cost_price * quantityToReceive)} <span className="text-sm text-gray-500">TZS</span>
-                                </p>
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {formatPrice(pricing.cost_price)} TZS per unit
-                                </p>
-                                {purchaseOrder.currency && purchaseOrder.currency !== 'TZS' && purchaseOrder.exchangeRate && (
-                                  <p className="text-xs text-blue-600 mt-1 font-medium">
-                                    💱 {formatPrice(item.costPrice)} {purchaseOrder.currency} × {purchaseOrder.exchangeRate}
-                                  </p>
-                                )}
+                        {/* Cost Summary - Polished Professional Design */}
+                        <div className="bg-white rounded-xl p-3.5 mb-3 border border-gray-200 shadow-sm">
+                          <div className="flex items-center gap-3">
+                            {/* Base Cost */}
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-orange-500 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                                </svg>
                               </div>
-                              <div className="text-right">
-                                <p className="text-xs text-gray-500 mb-2">Total Cost</p>
-                                <p className="text-xl font-bold text-gray-900">
-                                  {formatPrice(pricing.total_cost * quantityToReceive)} <span className="text-sm text-gray-500">TZS</span>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-gray-500 mb-0.5">Base Cost</p>
+                                <p className="text-base font-bold text-orange-600 truncate">
+                                  {formatPrice(pricing.cost_price * quantityToReceive)}
                                 </p>
-                                <p className="text-xs text-gray-400 mt-1">
-                                  {formatPrice(pricing.total_cost)} TZS per unit
-                                </p>
+                                <p className="text-xs text-orange-400">{formatPrice(pricing.cost_price)}/unit</p>
                               </div>
                             </div>
-                            {pricing.total_cost > pricing.cost_price && (
-                              <div className="pt-3 border-t border-gray-200">
-                                <p className="text-xs text-orange-600">
-                                  +{formatPrice((pricing.total_cost - pricing.cost_price) * quantityToReceive)} additional costs for all units
+
+                            {/* Divider */}
+                            <div className="h-14 w-px bg-gray-300"></div>
+
+                            {/* Total Cost */}
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-red-500 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                </svg>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-gray-500 mb-0.5">Total Cost</p>
+                                <p className="text-base font-bold text-red-600 truncate">
+                                  {formatPrice(pricing.total_cost * quantityToReceive)}
                                 </p>
+                                <p className="text-xs text-red-400">{formatPrice(pricing.total_cost)}/unit</p>
+                              </div>
+                            </div>
+
+                            {/* Divider */}
+                            <div className="h-14 w-px bg-gray-300"></div>
+
+                            {/* Selling Price */}
+                            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <div className="w-9 h-9 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                                <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 8h6m-5 0a3 3 0 110 6H9l3 3m-3-6h6m6 1a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium text-gray-500 mb-0.5">Selling Price</p>
+                                <p className="text-base font-bold text-emerald-600 truncate">
+                                  {formatPrice(pricing.selling_price * quantityToReceive)}
+                                </p>
+                                <p className="text-xs text-emerald-500">{formatPrice(pricing.selling_price)}/unit</p>
+                              </div>
+                            </div>
+
+                            {/* Profit Badge */}
+                            <div className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 border border-blue-200 flex-shrink-0">
+                              <svg className="w-3.5 h-3.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M12 7a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0V8.414l-4.293 4.293a1 1 0 01-1.414 0L8 10.414l-4.293 4.293a1 1 0 01-1.414-1.414l5-5a1 1 0 011.414 0L11 10.586 14.586 7H12z" clipRule="evenodd" />
+                              </svg>
+                              <div>
+                                <p className="text-xs font-bold text-blue-600 leading-none">
+                                  +{formatPrice((pricing.selling_price - pricing.total_cost) * quantityToReceive)}
+                                </p>
+                                <p className="text-xs text-blue-500 leading-none mt-0.5">Profit</p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Additional Info Row */}
+                          {((purchaseOrder.currency && purchaseOrder.currency !== 'TZS' && purchaseOrder.exchangeRate) || (pricing.total_cost > pricing.cost_price)) && (
+                            <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
+                              {purchaseOrder.currency && purchaseOrder.currency !== 'TZS' && purchaseOrder.exchangeRate && (
+                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-blue-50 border border-blue-100">
+                                  <span className="text-xs font-semibold text-blue-600">
+                                    💱 {formatPrice(item.costPrice)} {purchaseOrder.currency} × {purchaseOrder.exchangeRate}
+                                  </span>
+                                </div>
+                              )}
+                            {pricing.total_cost > pricing.cost_price && (
+                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-orange-50 border border-orange-100">
+                                  <span className="text-xs font-semibold text-orange-600">
+                                    +{formatPrice((pricing.total_cost - pricing.cost_price) * quantityToReceive)} additional costs
+                                  </span>
                               </div>
                             )}
                           </div>
-                          <div className="bg-blue-50 p-3 rounded-xl border border-blue-200">
-                            <p className="text-xs text-blue-700 mb-2 font-medium">Total Selling</p>
-                            <p className="text-3xl font-bold text-blue-600">
-                              {formatPrice(pricing.selling_price * quantityToReceive)} <span className="text-lg text-blue-500">TZS</span>
-                            </p>
-                            <p className="text-xs text-blue-500 mt-1">
-                              {formatPrice(pricing.selling_price)} TZS per unit
-                            </p>
-                          </div>
+                          )}
                         </div>
 
                         {/* Editable Fields Row */}
@@ -889,13 +944,18 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                           <div className="flex items-center gap-1 ml-2">
                             <input
                               type="text"
-                              value={customProfit}
+                              value={customProfit ? parseFloat(customProfit.replace(/,/g, '')).toLocaleString('en-US') : ''}
                               onChange={(e) => {
                                 const value = e.target.value.replace(/[^0-9]/g, '');
                                 setCustomProfit(value);
                               }}
                               placeholder="Custom"
-                              className="w-24 px-2 py-2 text-sm border-2 border-purple-300 rounded-lg focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-200 text-gray-900 font-semibold"
+                              style={{
+                                width: customProfit 
+                                  ? `${Math.max(96, Math.min(240, (customProfit.length + Math.floor(customProfit.length / 3)) * 9 + 24))}px` 
+                                  : '96px'
+                              }}
+                              className="min-w-[96px] px-3 py-2 text-sm border-2 border-purple-300 rounded-lg focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-200 text-gray-900 font-semibold transition-all duration-200"
                             />
                             <button
                               type="button"
@@ -966,3 +1026,4 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
 };
 
 export default SetPricingModal;
+

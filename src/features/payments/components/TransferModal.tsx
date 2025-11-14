@@ -631,7 +631,7 @@ const TransferModal: React.FC<TransferModalProps> = ({
               <div className="flex justify-between text-sm">
                 <span className="text-blue-700">{sourceAccount.name} new balance:</span>
                 <span className="font-bold text-blue-900">
-                  {formatCurrency((sourceAccount.balance || 0) - parseFloat(formData.amount), sourceAccount.currency)}
+                  {formatCurrency(Math.max(0, (sourceAccount.balance || 0) - parseFloat(formData.amount)), sourceAccount.currency)}
                 </span>
               </div>
               <div className="flex justify-between text-sm">

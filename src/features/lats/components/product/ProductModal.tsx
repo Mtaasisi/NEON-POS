@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   X, Package, Hash, DollarSign, Edit, Star, MapPin, Calendar, 
   TrendingUp, TrendingDown, BarChart3, CheckCircle,
@@ -55,6 +56,7 @@ const ProductModal: React.FC<ProductModalProps> = ({
   product,
   onEdit
 }) => {
+  const navigate = useNavigate();
   const { adjustStock, getProduct } = useInventoryStore();
   
   // Initialize with product directly - minimal processing
@@ -563,10 +565,10 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
         timestamp: Date.now()
       }));
       
-      toast.success('Redirecting to Purchase Orders...');
+      toast.success('Opening Purchase Orders...');
       setTimeout(() => {
-        window.location.href = '/lats/purchase-orders';
-      }, 1000);
+        navigate('/lats/purchase-orders');
+      }, 500);
     } catch (error) {
       toast.error('Failed to add to purchase order');
     }
@@ -585,7 +587,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
       
       toast.success('Opening stock transfer...');
       setTimeout(() => {
-        window.location.href = '/lats/stock-transfers?autoOpen=true';
+        navigate('/lats/stock-transfers?autoOpen=true');
       }, 500);
     } catch (error) {
       toast.error('Failed to initiate transfer');
@@ -823,6 +825,27 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
     setShowStockAdjustment(false);
   };
 
+  // Navigate to Create PO with pre-selected product
+  const handleCreatePO = () => {
+    // Check if product has low stock
+    const totalStock = calculateTotalStock(currentProduct.variants || []);
+    const isLowStock = totalStock <= (primaryVariant?.minQuantity || 0);
+    
+    if (isLowStock) {
+      toast.success(`Creating PO for low stock item: ${product.name}`);
+    }
+    
+    // Navigate to PO create page (can be enhanced to pre-select this product)
+    navigate('/lats/purchase-order/create', { 
+      state: { 
+        productId: product.id,
+        productName: product.name,
+        supplierId: product.supplierId
+      } 
+    });
+    onClose();
+  };
+
   return createPortal(
     <>
       {/* Backdrop */}
@@ -870,6 +893,56 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Create PO Button - Show if product has low stock or supplier */}
+            {(calculateTotalStock(currentProduct.variants || []) <= (primaryVariant?.minQuantity || 0) || product.supplierId) && (
+              <>
+                {/* Desktop button */}
+                <button 
+                  onClick={handleCreatePO}
+                  className="hidden sm:flex items-center gap-2 px-3 py-2 bg-orange-500/90 hover:bg-orange-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 text-sm font-medium"
+                  title="Create purchase order for this product"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  <span>Create PO</span>
+                </button>
+                {/* Mobile button - Icon only */}
+                <button 
+                  onClick={handleCreatePO}
+                  className="flex sm:hidden p-2.5 bg-orange-500/90 hover:bg-orange-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105"
+                  title="Create purchase order"
+                >
+                  <ShoppingCart className="w-5 h-5" />
+                </button>
+              </>
+            )}
+            {/* Edit Button */}
+            {onEdit && (
+              <>
+                {/* Desktop button */}
+                <button 
+                  onClick={() => {
+                    onClose();
+                    onEdit(product);
+                  }}
+                  className="hidden sm:flex items-center gap-2 px-3 py-2 bg-blue-500/90 hover:bg-blue-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105 text-sm font-medium"
+                  title="Edit product"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span>Edit</span>
+                </button>
+                {/* Mobile button - Icon only */}
+                <button 
+                  onClick={() => {
+                    onClose();
+                    onEdit(product);
+                  }}
+                  className="flex sm:hidden p-2.5 bg-blue-500/90 hover:bg-blue-600 text-white rounded-lg shadow-lg backdrop-blur-sm transition-all duration-200 transform hover:scale-105"
+                  title="Edit product"
+                >
+                  <Edit className="w-5 h-5" />
+                </button>
+              </>
+            )}
             {/* Redesigned Close Button - Red, Round, Larger */}
             <button 
               onClick={onClose}

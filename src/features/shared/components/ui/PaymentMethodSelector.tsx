@@ -102,6 +102,7 @@ export const PaymentAccountSelector: React.FC<PaymentAccountSelectorProps> = ({
               };
               return iconMap[account.type] || '💳';
             })()} {account.name}
+            {account.account_number && ` (${account.account_number})`}
             {showDescriptions && ` - ${account.type} (${account.balance})`}
           </option>
         ))}
@@ -214,6 +215,11 @@ export const PaymentAccountCardSelector: React.FC<PaymentAccountCardSelectorProp
             <div className="text-2xl">{getIconForAccount(account)}</div>
             <div className="flex-1 min-w-0">
               <div className={`font-semibold truncate ${value === account.id ? 'text-blue-900' : 'text-gray-900'}`}>{account.name}</div>
+              {account.account_number && (
+                <div className={`text-xs font-mono truncate ${value === account.id ? 'text-blue-600' : 'text-gray-600'}`}>
+                  #{account.account_number}
+                </div>
+              )}
               {showDescriptions && (
                 <div className={`text-sm truncate ${value === account.id ? 'text-blue-700' : 'text-gray-500'}`}>
                   {account.type} • ${(() => {
@@ -297,6 +303,11 @@ export const PaymentAccountDisplay: React.FC<PaymentAccountDisplayProps> = ({
       )}
       <div>
         <div className="font-medium">{account.name}</div>
+        {account.account_number && (
+          <div className="text-xs text-gray-600 font-mono">
+            #{account.account_number}
+          </div>
+        )}
         {showDescription && (
           <div className="text-sm text-gray-500">
                             {account.type} • ${(() => {

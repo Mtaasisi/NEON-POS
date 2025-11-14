@@ -16,6 +16,7 @@ import { smsService } from '../../../services/smsService';
 import { MessageCircle, Phone, Mail, Send, BarChart3, TrendingUp, Users, DollarSign, ShoppingBag, Clock, Gift, Award, CheckCircle, AlertCircle, Megaphone, Filter, Download, Upload, Target, Calendar, Star, Crown, Zap, Settings, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const CustomerLoyaltyPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');

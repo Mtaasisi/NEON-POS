@@ -27,8 +27,10 @@ import {
   StoreLocationFilters,
   StoreLocationStats 
 } from '../types/storeLocation';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 export const StoreLocationManagementPage: React.FC = () => {
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [locations, setLocations] = useState<StoreLocation[]>([]);
   const [stats, setStats] = useState<StoreLocationStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +56,7 @@ export const StoreLocationManagementPage: React.FC = () => {
   }, [filters]);
 
   const loadData = async () => {
+    const jobId = startLoading('Loading store locations...');
     try {
       setLoading(true);
       const [locationsData, statsData, citiesData, regionsData] = await Promise.all([
@@ -67,8 +70,10 @@ export const StoreLocationManagementPage: React.FC = () => {
       setStats(statsData);
       setCities(citiesData);
       setRegions(regionsData);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error loading data:', error);
+      failLoading(jobId, 'Failed to load locations');
     } finally {
       setLoading(false);
     }

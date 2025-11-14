@@ -1,1 +1,0 @@
-import{s as r}from"./index-222cfb29.js";async function t(t){try{const{data:e,error:a}=await r.from("returns").select("*").eq("customer_id",t).order("created_at",{ascending:!1});if(a)throw a;return e||[]}catch(e){return[]}}export{t as f};

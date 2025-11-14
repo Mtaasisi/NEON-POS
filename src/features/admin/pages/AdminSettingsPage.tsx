@@ -32,9 +32,11 @@ import ShippingSettings from '../../settings/components/ShippingSettings';
 import BranchIsolationDebugPanel from '../components/BranchIsolationDebugPanel';
 import { BranchDataCleanupPanel } from '../components/BranchDataCleanupPanel';
 import { BranchProductManagement } from '../components/BranchProductManagement';
+import { BranchProductSharing } from '../components/BranchProductSharing';
 import DashboardCustomizationSettings from '../components/DashboardCustomizationSettings';
 import { DatabaseDataCleanupPanel } from '../components/DatabaseDataCleanupPanel';
 import DatabaseBranchMigration from '../components/DatabaseBranchMigration';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { 
   Settings,
   Database,
@@ -104,7 +106,14 @@ import {
   FileText,
   Package,
   LayoutDashboard,
-  Truck
+  Truck,
+  Search,
+  X,
+  Store,
+  ShoppingCart,
+  Box,
+  Layers,
+  HelpCircle
 } from 'lucide-react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
@@ -537,23 +546,6 @@ const AdminSettingsPage: React.FC = () => {
               </h1>
               <p className="text-gray-600 mt-2">Manage system configuration, backend settings, and database connections</p>
             </div>
-            <div className="flex gap-2">
-              <GlassButton
-                onClick={() => window.location.href = '/integration-testing'}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-              >
-                <TestTube className="w-4 h-4" />
-                Test Integrations
-              </GlassButton>
-              <GlassButton
-                onClick={loadSystemSettings}
-                disabled={loading}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                Refresh
-              </GlassButton>
-            </div>
           </div>
         </div>
 
@@ -620,6 +612,9 @@ const AdminSettingsPage: React.FC = () => {
                 <BranchDataCleanupPanel />
                 <div className="mt-6">
                   <BranchProductManagement />
+                </div>
+                <div className="mt-6">
+                  <BranchProductSharing />
                 </div>
               </>
             )}
@@ -1828,6 +1823,14 @@ const DatabaseSettings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [settingsId, setSettingsId] = useState<string | null>(null);
   
+  // Table selection for backup
+  const [availableTables, setAvailableTables] = useState<string[]>([]);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [showTableSelector, setShowTableSelector] = useState(false);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [tableSearchQuery, setTableSearchQuery] = useState('');
+  
   // Automatic backup settings
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [autoBackupFrequency, setAutoBackupFrequency] = useState('daily');
@@ -1889,11 +1892,211 @@ const DatabaseSettings: React.FC = () => {
 
       if (error) throw error;
 
-      toast.success('Automatic backup settings saved to database!');
+      toast.success('Automatic backup settings saved!');
+      
+      // Show reminder about organizing backups on Desktop
+      if (autoBackupEnabled) {
+        setTimeout(() => {
+          toast.info('💡 Tip: Move backups from Downloads to Desktop/Dukani Pro [Backup]/', { duration: 6000 });
+        }, 2000);
+      }
     } catch (error: any) {
       console.error('Error saving auto backup settings:', error);
       toast.error('Failed to save automatic backup settings');
     }
+  };
+
+  // Fetch available tables for selection
+  const fetchAvailableTables = async () => {
+    setLoadingTables(true);
+    try {
+      // @ts-ignore - Neon query builder implements thenable interface
+      const { data: allTables, error } = await supabase
+        .from('information_schema.tables')
+        .select('table_name')
+        .eq('table_schema', 'public')
+        .order('table_name');
+
+      if (error) throw error;
+
+      const tableNames = allTables?.map((t: any) => t.table_name) || [];
+      setAvailableTables(tableNames);
+      
+      // Don't auto-select tables - let user choose
+      // if (selectedTables.length === 0) {
+      //   setSelectedTables(tableNames);
+      // }
+      
+      // Don't auto-expand groups - let user expand as needed
+      // if (expandedGroups.length === 0) {
+      //   setTimeout(() => {
+      //     const groups: { [key: string]: string[] } = {
+      //       'lats_pos': [],
+      //       'user': [],
+      //       'product': [],
+      //       'transaction': [],
+      //       'inventory': [],
+      //       'system': [],
+      //       'other': []
+      //     };
+      //
+      //     tableNames.forEach(table => {
+      //       if (table.startsWith('lats_pos_')) {
+      //         groups['lats_pos'].push(table);
+      //       } else if (table.startsWith('user')) {
+      //         groups['user'].push(table);
+      //       } else if (table.startsWith('product')) {
+      //         groups['product'].push(table);
+      //       } else if (table.includes('transaction') || table.includes('sale') || table.includes('payment')) {
+      //         groups['transaction'].push(table);
+      //       } else if (table.includes('inventory') || table.includes('stock') || table.includes('warehouse')) {
+      //         groups['inventory'].push(table);
+      //       } else if (table.includes('information_schema') || table.includes('pg_') || table.startsWith('_')) {
+      //         groups['system'].push(table);
+      //       } else {
+      //         groups['other'].push(table);
+      //       }
+      //     });
+      //
+      //     const nonEmptyGroups = Object.keys(groups).filter(key => groups[key].length > 0);
+      //     setExpandedGroups(nonEmptyGroups);
+      //   }, 100);
+      // }
+    } catch (error: any) {
+      console.error('Error fetching tables:', error);
+      toast.error('Failed to fetch table list');
+    } finally {
+      setLoadingTables(false);
+    }
+  };
+
+  // Toggle table selection
+  const toggleTableSelection = (tableName: string) => {
+    setSelectedTables(prev => 
+      prev.includes(tableName) 
+        ? prev.filter(t => t !== tableName)
+        : [...prev, tableName]
+    );
+  };
+
+  // Select all tables
+  const selectAllTables = () => {
+    setSelectedTables(availableTables);
+  };
+
+  // Deselect all tables
+  const deselectAllTables = () => {
+    setSelectedTables([]);
+  };
+
+  // Group tables by prefix
+  const groupTablesByPrefix = () => {
+    const groups: { [key: string]: string[] } = {
+      'lats_pos': [],
+      'user': [],
+      'product': [],
+      'transaction': [],
+      'inventory': [],
+      'system': [],
+      'other': []
+    };
+
+    // Filter tables by search query first
+    const filteredTables = tableSearchQuery 
+      ? availableTables.filter(table => 
+          table.toLowerCase().includes(tableSearchQuery.toLowerCase())
+        )
+      : availableTables;
+
+    filteredTables.forEach(table => {
+      if (table.startsWith('lats_pos_')) {
+        groups['lats_pos'].push(table);
+      } else if (table.startsWith('user')) {
+        groups['user'].push(table);
+      } else if (table.startsWith('product')) {
+        groups['product'].push(table);
+      } else if (table.includes('transaction') || table.includes('sale') || table.includes('payment')) {
+        groups['transaction'].push(table);
+      } else if (table.includes('inventory') || table.includes('stock') || table.includes('warehouse')) {
+        groups['inventory'].push(table);
+      } else if (table.includes('information_schema') || table.includes('pg_') || table.startsWith('_')) {
+        groups['system'].push(table);
+      } else {
+        groups['other'].push(table);
+      }
+    });
+
+    // Remove empty groups
+    Object.keys(groups).forEach(key => {
+      if (groups[key].length === 0) {
+        delete groups[key];
+      }
+    });
+
+    return groups;
+  };
+
+  // Toggle group expansion
+  const toggleGroupExpansion = (groupName: string) => {
+    setExpandedGroups(prev => 
+      prev.includes(groupName)
+        ? prev.filter(g => g !== groupName)
+        : [...prev, groupName]
+    );
+  };
+
+  // Expand all groups
+  const expandAllGroups = () => {
+    const groups = Object.keys(groupTablesByPrefix());
+    setExpandedGroups(groups);
+  };
+
+  // Collapse all groups
+  const collapseAllGroups = () => {
+    setExpandedGroups([]);
+  };
+
+  // Select all tables in a group
+  const selectGroupTables = (tables: string[]) => {
+    setSelectedTables(prev => {
+      const newSelected = [...prev];
+      tables.forEach(table => {
+        if (!newSelected.includes(table)) {
+          newSelected.push(table);
+        }
+      });
+      return newSelected;
+    });
+  };
+
+  // Deselect all tables in a group
+  const deselectGroupTables = (tables: string[]) => {
+    setSelectedTables(prev => prev.filter(t => !tables.includes(t)));
+  };
+
+  // Check if all tables in a group are selected
+  const isGroupFullySelected = (tables: string[]) => {
+    return tables.every(table => selectedTables.includes(table));
+  };
+
+  // Check if some (but not all) tables in a group are selected
+  const isGroupPartiallySelected = (tables: string[]) => {
+    const selectedCount = tables.filter(table => selectedTables.includes(table)).length;
+    return selectedCount > 0 && selectedCount < tables.length;
+  };
+
+  // Get group display name and icon
+  const getGroupInfo = (groupKey: string) => {
+    const groupInfo: { [key: string]: { name: string; icon: any; color: string } } = {
+      'lats_pos': { name: 'POS Tables', icon: Store, color: 'text-blue-600 bg-blue-50' },
+      'user': { name: 'User Tables', icon: Users, color: 'text-purple-600 bg-purple-50' },
+      'product': { name: 'Product Tables', icon: Package, color: 'text-green-600 bg-green-50' },
+      'transaction': { name: 'Transaction Tables', icon: ShoppingCart, color: 'text-orange-600 bg-orange-50' },
+      'inventory': { name: 'Inventory Tables', icon: Box, color: 'text-teal-600 bg-teal-50' },
+      'system': { name: 'System Tables', icon: Settings, color: 'text-gray-600 bg-gray-50' },
+      'other': { name: 'Other Tables', icon: Layers, color: 'text-indigo-600 bg-indigo-50' }
+    };
+    return groupInfo[groupKey] || { name: groupKey, icon: FileText, color: 'text-gray-600 bg-gray-50' };
   };
 
   // Check and run automatic backup
@@ -1937,9 +2140,9 @@ const DatabaseSettings: React.FC = () => {
           console.error('Error updating last backup timestamp:', error);
         }
 
-        // Set the backup type and run
+        // Set the backup type and run automatic backup
         setBackupType(autoBackupType);
-        performDatabaseBackup();
+        performDatabaseBackup(true); // Pass true for automatic backup
       }
     };
 
@@ -1950,8 +2153,132 @@ const DatabaseSettings: React.FC = () => {
     return () => clearInterval(interval);
   }, [autoBackupEnabled, autoBackupFrequency, autoBackupTime, autoBackupType, lastAutoBackup, settingsId]);
 
+  // Save backup to local file system
+  const saveBackupToLocal = async (backupData: any, isAutomatic: boolean = false) => {
+    try {
+      const date = new Date();
+      const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS format
+      const fileName = `backup_${dateStr}_${timeStr}.json`;
+      
+      const backupJson = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([backupJson], { type: 'application/json' });
+      
+      if (isAutomatic) {
+        // For automatic backups, download with special prefix
+        // Note: Browser security only allows downloading to Downloads folder
+        // Files are prefixed with [Dukani Pro Backup] for easy identification
+        // User should move files to Desktop/Dukani Pro [Backup]/ folder manually
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `[Dukani Pro Backup] ${fileName}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // Store backup metadata in localStorage to track count
+        const backupHistory = JSON.parse(localStorage.getItem('autoBackupHistory') || '[]');
+        backupHistory.push({
+          fileName: `[Dukani Pro Backup] ${fileName}`,
+          date: date.toISOString(),
+          size: blob.size,
+          type: backupData.backupType
+        });
+        
+        // Keep only last 30 backups in history
+        // Show notification about old backup removal
+        if (backupHistory.length > 30) {
+          const removed = backupHistory.shift();
+          console.log(`🗑️ Backup rotation: Removed old backup from history - ${removed.fileName}`);
+          toast.info(`Old backup removed from tracking. Delete file from Desktop if needed.`, { duration: 4000 });
+        }
+        
+        localStorage.setItem('autoBackupHistory', JSON.stringify(backupHistory));
+        
+        // Also create a README file on first automatic backup
+        const hasReadme = localStorage.getItem('backupReadmeCreated');
+        if (!hasReadme) {
+          createBackupReadme();
+          localStorage.setItem('backupReadmeCreated', 'true');
+        }
+        
+        return { success: true, fileName: `[Dukani Pro Backup] ${fileName}`, isAutomatic: true };
+      } else {
+        // For manual backups, standard download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        return { success: true, fileName, isAutomatic: false };
+      }
+    } catch (error) {
+      console.error('Error saving backup to local:', error);
+      return { success: false, error };
+    }
+  };
+
+  // Create README file for backup folder
+  const createBackupReadme = () => {
+    const readmeContent = `# Dukani Pro Automatic Backup System
+
+## 📁 Backup Organization - IMPORTANT
+Due to browser security, backups download to your Downloads folder.
+Please MOVE them to Desktop and organize into: 
+
+    Desktop/Dukani Pro [Backup]/
+
+## 📝 File Naming Convention
+- Format: [Dukani Pro Backup] backup_YYYY-MM-DD_HH-MM-SS.json
+- Example: [Dukani Pro Backup] backup_2025-11-11_14-30-00.json
+
+## ♻️ Backup Rotation (30 Backup Limit)
+- System tracks last 30 automatic backups
+- Old backup entries auto-removed from tracking when 31st is created
+- Manually delete old backup files from Desktop to save disk space
+
+## 🔄 Recommended Workflow
+1. Backups auto-download to Downloads folder
+2. Move files to: Desktop/Dukani Pro [Backup]/
+3. System auto-removes oldest entry after 30 backups
+4. Manually delete old files from Desktop folder
+
+## 💡 Best Practices
+1. Keep backups organized in Desktop/Dukani Pro [Backup]
+2. Periodically verify backup integrity
+3. Copy critical backups to external drive or cloud
+4. Test restore process monthly
+
+Generated: ${new Date().toLocaleString()}
+`;
+    
+    const blob = new Blob([readmeContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '[Dukani Pro Backup] README.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast.success('📄 Backup guide created! Move backups from Downloads to Desktop folder.', { duration: 6000 });
+  };
+
   // Full database schema backup function
-  const performDatabaseBackup = async () => {
+  const performDatabaseBackup = async (isAutomatic: boolean = false) => {
+    // Check if table selector has been opened and tables loaded (only for manual backups)
+    if (!isAutomatic && availableTables.length > 0 && selectedTables.length === 0) {
+      toast.error('Please select at least one table to backup');
+      return;
+    }
+
     setIsBackingUp(true);
     setBackupProgress(0);
     setBackupStatus('Fetching database schema...');
@@ -1972,8 +2299,18 @@ const DatabaseSettings: React.FC = () => {
         throw new Error('Failed to fetch database schema');
       }
 
-      const tableNames = allTables?.map((t: any) => t.table_name) || [];
+      let tableNames = allTables?.map((t: any) => t.table_name) || [];
+      
+      // Filter by selected tables if user has made a selection
+      if (selectedTables.length > 0 && selectedTables.length < tableNames.length) {
+        tableNames = tableNames.filter(t => selectedTables.includes(t));
+        console.log(`📊 Found ${tableNames.length} selected tables out of ${allTables?.length || 0} total tables`);
+      } else if (selectedTables.length === 0) {
+        // If no specific tables selected, backup all tables (default behavior)
+        console.log(`📊 Found ${tableNames.length} tables in database schema (backing up all)`);
+      } else {
       console.log(`📊 Found ${tableNames.length} tables in database schema`);
+      }
 
       setBackupStatus(`Found ${tableNames.length} tables. Fetching schema definitions...`);
       setBackupProgress(10);
@@ -2125,26 +2462,15 @@ const DatabaseSettings: React.FC = () => {
       backup.summary.emptyTables = emptyTables;
       backup.summary.totalRecords = totalRecords;
 
-      // Create download
-      setBackupStatus('Creating backup file...');
+      // Save backup to local file system
+      setBackupStatus('Saving backup file...');
       setBackupProgress(95);
       
-      const backupJson = JSON.stringify(backup, null, 2);
-      const blob = new Blob([backupJson], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
+      const saveResult = await saveBackupToLocal(backup, isAutomatic);
       
-      const filePrefix = 
-        backupType === 'schema-only' ? 'schema-only-backup' :
-        backupType === 'data-only' ? 'data-only-backup' :
-        'full-schema-backup';
-      
-      a.download = `${filePrefix}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (!saveResult.success) {
+        throw new Error('Failed to save backup file');
+      }
 
       const successMessage = 
         backupType === 'schema-only' 
@@ -2156,20 +2482,21 @@ const DatabaseSettings: React.FC = () => {
       setBackupStatus(successMessage);
       setBackupProgress(100);
       
-      const toastMessage = 
-        backupType === 'schema-only'
-          ? `Schema backup: ${tableNames.length} tables` :
-        backupType === 'data-only'
-          ? `Data backup: ${totalRecords.toLocaleString()} records` :
-          `Full backup: ${tableNames.length} tables, ${totalRecords.toLocaleString()} records`;
+      const toastMessage = isAutomatic 
+        ? `🔄 Auto backup saved to Downloads. Move to Desktop/Dukani Pro [Backup]/`
+        : backupType === 'schema-only'
+          ? `Schema backup: ${tableNames.length} tables`
+          : backupType === 'data-only'
+            ? `Data backup: ${totalRecords.toLocaleString()} records`
+            : `Full backup: ${tableNames.length} tables, ${totalRecords.toLocaleString()} records`;
       
-      toast.success(toastMessage);
+      toast.success(toastMessage, { duration: isAutomatic ? 6000 : 4000 });
 
       setTimeout(() => {
         setIsBackingUp(false);
         setBackupProgress(0);
         setBackupStatus('');
-      }, 5000);
+      }, isAutomatic ? 3000 : 5000);
 
     } catch (error: any) {
       setBackupStatus(`❌ Backup failed: ${error.message}`);
@@ -2200,21 +2527,25 @@ const DatabaseSettings: React.FC = () => {
       </div>
 
       <div className="space-y-6">
-          {/* Automatic Backup Configuration */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-              <RotateCcw className="h-5 w-5 text-blue-600 mr-2" />
-              Automatic Backup Schedule
-            </h4>
-            
-            <div className="space-y-4">
-              {/* Enable Automatic Backup */}
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-gray-600" />
-                  <div>
-                    <span className="font-medium text-gray-800">Enable Automatic Backup</span>
-                    <p className="text-sm text-gray-600">Automatically backup database on schedule</p>
+        {/* Automatic Backup */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <RotateCcw className="h-5 w-5 text-blue-600" />
+              <h4 className="font-medium text-gray-900">Auto Backup</h4>
+              <div className="group relative">
+                <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-80 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl">
+                  <div className="space-y-2">
+                    <p><strong>Downloads to:</strong> Downloads folder (browser limitation)</p>
+                    <p><strong>Move to:</strong> Desktop/Dukani Pro [Backup]/</p>
+                    <p><strong>File Name:</strong> [Dukani Pro Backup] backup_YYYY-MM-DD_HH-MM-SS.json</p>
+                    <p><strong>Rotation:</strong> Tracks 30 backups, auto-removes oldest</p>
+                    <p><strong>Schedule:</strong> Runs at configured time</p>
+                    <p className="text-yellow-300 mt-2">💡 Move files from Downloads to Desktop folder</p>
+                  </div>
+                  <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                </div>
                   </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -2229,118 +2560,390 @@ const DatabaseSettings: React.FC = () => {
               </div>
 
               {autoBackupEnabled && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-white rounded-lg border border-gray-200">
-                  {/* Frequency */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Backup Frequency
-                    </label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Frequency</label>
                     <select
                       value={autoBackupFrequency}
                       onChange={(e) => setAutoBackupFrequency(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="daily">Daily</option>
+                    <option value="daily">Daily (Recommended)</option>
                       <option value="weekly">Weekly</option>
                       <option value="monthly">Monthly</option>
                     </select>
                   </div>
-
-                  {/* Time */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Backup Time
-                    </label>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Time</label>
                     <input
                       type="time"
                       value={autoBackupTime}
                       onChange={(e) => setAutoBackupTime(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-
-                  {/* Backup Type */}
+              </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Backup Type
-                    </label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Backup Type</label>
                     <select
                       value={autoBackupType}
                       onChange={(e) => setAutoBackupType(e.target.value as any)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="full">Full (Schema + Data)</option>
                       <option value="schema-only">Schema Only</option>
                       <option value="data-only">Data Only</option>
                     </select>
                   </div>
+              <div className="flex items-center justify-between text-xs text-gray-600 p-2 bg-gray-50 rounded">
+                {lastAutoBackup ? (
+                  <span>Last: {new Date(lastAutoBackup).toLocaleDateString()}</span>
+                ) : (
+                  <span>Last: Never</span>
+                )}
+                  <div className="group relative">
+                    <span className="text-blue-600 font-medium cursor-help">
+                      {JSON.parse(localStorage.getItem('autoBackupHistory') || '[]').length}/30
+                    </span>
+                    <div className="invisible group-hover:visible absolute right-0 top-6 z-50 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+                      <p className="font-semibold mb-2">Backup Rotation</p>
+                      <p>• Tracks last 30 automatic backups</p>
+                      <p>• Old entries auto-removed from history</p>
+                      <p>• Delete old files from Desktop manually</p>
+                      <p className="text-yellow-300 mt-2">📁 Desktop/Dukani Pro [Backup]/</p>
+                      <div className="absolute -top-1 right-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
                 </div>
-              )}
-
-              {autoBackupEnabled && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                  <p className="text-xs text-yellow-800">
-                    <strong>⏰ Schedule:</strong> Backup will run automatically every{' '}
-                    <strong>{autoBackupFrequency}</strong> at <strong>{autoBackupTime}</strong> 
-                    {' '}({autoBackupType === 'full' ? 'Full backup' : autoBackupType === 'schema-only' ? 'Schema only' : 'Data only'})
-                  </p>
-                  <p className="text-xs text-yellow-700 mt-1">
-                    Last automatic backup: {lastAutoBackup 
-                      ? new Date(lastAutoBackup).toLocaleString() 
-                      : 'Never'}
-                  </p>
-                </div>
-              )}
-
+                  </div>
+              </div>
+              <button
+                onClick={createBackupReadme}
+                className="w-full text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-1.5 rounded transition-colors flex items-center justify-center gap-1"
+              >
+                <FileText className="w-3 h-3" />
+                Setup Guide (Desktop Folder)
+              </button>
+              <div className="grid grid-cols-2 gap-2">
               <GlassButton
                 onClick={saveAutoBackupSettings}
-                className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                  className="flex items-center justify-center gap-1 bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <Save className="w-4 h-4" />
-                Save Automatic Backup Settings
+                  <Save className="w-3 h-3" />
+                  <span className="text-xs">Save</span>
+                </GlassButton>
+                <GlassButton
+                  onClick={() => {
+                    const currentType = backupType;
+                    setBackupType(autoBackupType);
+                    performDatabaseBackup(true);
+                    setTimeout(() => setBackupType(currentType), 100);
+                  }}
+                  disabled={!autoBackupEnabled || isBackingUp}
+                  className="flex items-center justify-center gap-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span className="text-xs">Run Now</span>
               </GlassButton>
             </div>
+            </div>
+          )}
           </div>
 
-          {/* Manual Database Backup */}
-          <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg p-4">
-            <h4 className="font-medium text-gray-900 mb-4 flex items-center">
-              <Download className="h-5 w-5 text-orange-600 mr-2" />
-              Manual Database Backup
-            </h4>
+        {/* Manual Backup */}
+        <div>
+          <div className="flex items-center gap-2 mb-4">
+            <Download className="h-5 w-5 text-orange-600" />
+            <h4 className="font-medium text-gray-900">Manual Backup</h4>
+            <div className="group relative">
+              <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+              <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+                <div className="space-y-2">
+                  <p><strong>Full:</strong> Complete schema + all data</p>
+                  <p><strong>Schema:</strong> Table structures only</p>
+                  <p><strong>Data:</strong> Records only</p>
+                </div>
+                <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+              </div>
+            </div>
+          </div>
             
-            <div className="space-y-4">
-              {/* Backup Type Selector */}
+          <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Backup Type
-                </label>
-                <select
-                  value={backupType}
-                  onChange={(e) => setBackupType(e.target.value as any)}
+              <label className="block text-xs font-medium text-gray-700 mb-2">Type</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => setBackupType('full')}
                   disabled={isBackingUp}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all ${
+                    backupType === 'full'
+                      ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-orange-500 hover:bg-orange-50'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
-                  <option value="full">Full Backup (Schema + Data)</option>
-                  <option value="schema-only">Schema Only (No Data)</option>
-                  <option value="data-only">Data Only (No Schema)</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  {backupType === 'full' && '📦 Includes table structures AND all records (recommended for complete backup)'}
-                  {backupType === 'schema-only' && '📋 Only table structures - useful for database migration or documentation'}
-                  {backupType === 'data-only' && '💾 Only data records - useful for data export or analysis'}
-                </p>
+                  Full
+                </button>
+                <button
+                  onClick={() => setBackupType('schema-only')}
+                  disabled={isBackingUp}
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all ${
+                    backupType === 'schema-only'
+                      ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-orange-500 hover:bg-orange-50'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  Schema
+                </button>
+                <button
+                  onClick={() => setBackupType('data-only')}
+                  disabled={isBackingUp}
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all ${
+                    backupType === 'data-only'
+                      ? 'bg-orange-600 text-white border-orange-600 shadow-sm'
+                      : 'bg-white text-gray-700 border-gray-300 hover:border-orange-500 hover:bg-orange-50'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  Data
+                </button>
+              </div>
+            </div>
+
+            {/* Table Selection - Collapsible */}
+            <div className="border border-gray-200 rounded bg-white">
+              <button
+                onClick={() => {
+                  if (!showTableSelector && availableTables.length === 0) {
+                    fetchAvailableTables();
+                  }
+                  setShowTableSelector(!showTableSelector);
+                }}
+                disabled={isBackingUp}
+                className="w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 rounded transition-colors disabled:opacity-50"
+              >
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Database className="h-3.5 w-3.5 text-gray-600 flex-shrink-0" />
+                    <span className="text-xs font-medium text-gray-700">
+                      Select Tables
+                    </span>
+                    {!showTableSelector && availableTables.length > 0 && (
+                      <>
+                        <span className="text-xs text-gray-500">
+                          ({Object.keys(groupTablesByPrefix()).length} groups)
+                        </span>
+                        {selectedTables.length > 0 && selectedTables.length < availableTables.length && (
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
+                            {selectedTables.length}/{availableTables.length} tables
+                          </span>
+                        )}
+                        {selectedTables.length === availableTables.length && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                            All tables selected
+                          </span>
+                        )}
+                        {selectedTables.length === 0 && (
+                          <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">
+                            No tables selected
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <ChevronDown 
+                      className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${
+                        showTableSelector ? 'transform rotate-180' : ''
+                      }`}
+                    />
+                  </div>
+                </button>
+                
+                {showTableSelector && (
+                  <div className="border-t border-orange-200 animate-in slide-in-from-top-2 duration-200">
+                    <div className="p-3">
+                      {loadingTables ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-600"></div>
+                          <span className="ml-3 text-sm text-gray-600">Loading tables...</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="space-y-3 mb-3 pb-3 border-b border-gray-200">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-gray-700">
+                                {selectedTables.length} of {availableTables.length} tables selected
+                              </span>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={expandAllGroups}
+                                  className="text-xs text-orange-600 hover:text-orange-700 font-medium px-2 py-1 hover:bg-orange-50 rounded transition-colors"
+                                >
+                                  Expand All
+                                </button>
+                                <button
+                                  onClick={collapseAllGroups}
+                                  className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 hover:bg-gray-100 rounded transition-colors"
+                                >
+                                  Collapse All
+                                </button>
+                                <span className="border-l border-gray-300 mx-1"></span>
+                                <button
+                                  onClick={selectAllTables}
+                                  className="text-xs text-orange-600 hover:text-orange-700 font-medium px-2 py-1 hover:bg-orange-50 rounded transition-colors"
+                                >
+                                  Select All
+                                </button>
+                                <button
+                                  onClick={deselectAllTables}
+                                  className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 hover:bg-gray-100 rounded transition-colors"
+                                >
+                                  Deselect All
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {/* Search Input - Compact */}
+                            <div className="relative">
+                              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                              <input
+                                type="text"
+                                placeholder="Search tables..."
+                                value={tableSearchQuery}
+                                onChange={(e) => setTableSearchQuery(e.target.value)}
+                                className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-gray-50 focus:bg-white transition-colors"
+                              />
+                              {tableSearchQuery && (
+                                <button
+                                  onClick={() => setTableSearchQuery('')}
+                                  className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                                  title="Clear search"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+                            {Object.keys(groupTablesByPrefix()).length === 0 && tableSearchQuery ? (
+                              <div className="text-center py-8 text-gray-500">
+                                <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">No tables found matching "{tableSearchQuery}"</p>
+                                <button
+                                  onClick={() => setTableSearchQuery('')}
+                                  className="text-xs text-orange-600 hover:text-orange-700 font-medium mt-2"
+                                >
+                                  Clear search
+                                </button>
+                              </div>
+                            ) : (
+                              Object.entries(groupTablesByPrefix()).map(([groupKey, tables]) => {
+                              const groupInfo = getGroupInfo(groupKey);
+                              const isExpanded = expandedGroups.includes(groupKey);
+                              const isFullySelected = isGroupFullySelected(tables);
+                              const isPartiallySelected = isGroupPartiallySelected(tables);
+                              const selectedCount = tables.filter(t => selectedTables.includes(t)).length;
+
+                              return (
+                                <div key={groupKey} className="mb-2 border border-gray-200 rounded-lg overflow-hidden">
+                                  {/* Group Header */}
+                                  <div className="bg-gradient-to-r from-gray-50 to-white">
+                                    <div className="flex items-center justify-between p-3">
+                                      <button
+                                        onClick={() => toggleGroupExpansion(groupKey)}
+                                        className="flex items-center gap-2 flex-1 text-left hover:opacity-80 transition-opacity"
+                                      >
+                                        <ChevronDown 
+                                          className={`h-4 w-4 text-gray-500 transition-transform duration-200 ${
+                                            isExpanded ? 'transform rotate-180' : ''
+                                          }`}
+                                        />
+                                        {React.createElement(groupInfo.icon, {
+                                          className: `h-4 w-4 ${groupInfo.color.split(' ')[0]}`
+                                        })}
+                                        <span className="text-sm font-semibold text-gray-700">
+                                          {groupInfo.name}
+                                        </span>
+                                        <span className="text-xs text-gray-500 font-normal">
+                                          ({tables.length} table{tables.length !== 1 ? 's' : ''})
+                                        </span>
+                                        {selectedCount > 0 && (
+                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                            isFullySelected 
+                                              ? 'bg-green-100 text-green-700' 
+                                              : 'bg-orange-100 text-orange-700'
+                                          }`}>
+                                            {selectedCount}/{tables.length}
+                                          </span>
+                                        )}
+                                      </button>
+                                      <div className="flex items-center gap-2 ml-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={isFullySelected}
+                                          ref={(el) => {
+                                            if (el) el.indeterminate = isPartiallySelected;
+                                          }}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              selectGroupTables(tables);
+                                            } else {
+                                              deselectGroupTables(tables);
+                                            }
+                                          }}
+                                          className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded cursor-pointer"
+                                          title={isFullySelected ? 'Deselect all in group' : 'Select all in group'}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Group Tables */}
+                                  {isExpanded && (
+                                    <div className="border-t border-gray-200 bg-white animate-in slide-in-from-top-2 duration-200">
+                                      <div className="p-2 space-y-1">
+                                        {tables.map((tableName) => (
+                                          <label
+                                            key={tableName}
+                                            className="flex items-center py-2 px-3 hover:bg-orange-50 rounded-md cursor-pointer transition-colors group"
+                                          >
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedTables.includes(tableName)}
+                                              onChange={() => toggleTableSelection(tableName)}
+                                              className="mr-3 h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded cursor-pointer"
+                                            />
+                                            <span className="text-sm text-gray-700 font-mono group-hover:text-gray-900">
+                                              {tableName}
+                                            </span>
+                                          </label>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }))}
+                          </div>
+                          {availableTables.length === 0 && !tableSearchQuery && (
+                            <div className="text-center py-8 text-gray-500">
+                              <Database className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                              <p className="text-sm">No tables found in database</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {isBackingUp && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">{backupStatus}</span>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-600 truncate">{backupStatus}</span>
                     <span className="font-medium text-blue-600">{Math.round(backupProgress)}%</span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                <div className="w-full bg-gray-200 rounded-full h-1.5">
                     <div 
-                      className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
                       style={{ width: `${backupProgress}%` }}
                     ></div>
                   </div>
@@ -2348,83 +2951,34 @@ const DatabaseSettings: React.FC = () => {
               )}
 
               {!isBackingUp && backupStatus && (
-                <div className={`p-3 rounded-lg ${
+              <div className={`p-2 rounded text-xs ${
                   backupStatus.includes('✅') 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
+                  ? 'bg-green-50 text-green-800' 
+                  : 'bg-red-50 text-red-800'
                 }`}>
-                  <p className="text-sm font-medium">{backupStatus}</p>
+                {backupStatus}
                 </div>
               )}
 
               <GlassButton
                 onClick={performDatabaseBackup}
                 disabled={isBackingUp}
-                className="w-full flex items-center justify-center gap-2"
+              className="w-full flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white"
               >
                 {isBackingUp ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Backing up...
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  <span className="text-sm">Backing up...</span>
                   </>
                 ) : (
                   <>
-                    <Download className="w-4 h-4" />
-                    {backupType === 'full' && 'Download Full Backup'}
-                    {backupType === 'schema-only' && 'Download Schema Only'}
-                    {backupType === 'data-only' && 'Download Data Only'}
+                  <Download className="w-3 h-3" />
+                  <span className="text-sm">Download Backup</span>
                   </>
                 )}
               </GlassButton>
-
-              {backupType === 'full' && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <p className="text-xs text-blue-800">
-                    <strong>📦 Full Backup includes:</strong>
-                  </p>
-                  <ul className="text-xs text-blue-700 mt-1 ml-4 list-disc space-y-1">
-                    <li>Complete schema for ALL tables (column names, data types, constraints)</li>
-                    <li>All data records from every table</li>
-                    <li>Empty tables with their schema definitions</li>
-                    <li>Total record count and table statistics</li>
-                  </ul>
                 </div>
-              )}
-
-              {backupType === 'schema-only' && (
-                <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                  <p className="text-xs text-purple-800">
-                    <strong>📋 Schema Only includes:</strong>
-                  </p>
-                  <ul className="text-xs text-purple-700 mt-1 ml-4 list-disc space-y-1">
-                    <li>All table names</li>
-                    <li>Column definitions (names, types, nullable, defaults)</li>
-                    <li>Table structure for database recreation</li>
-                    <li><strong>No actual data</strong> - much smaller file size</li>
-                  </ul>
                 </div>
-              )}
-
-              {backupType === 'data-only' && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-xs text-green-800">
-                    <strong>💾 Data Only includes:</strong>
-                  </p>
-                  <ul className="text-xs text-green-700 mt-1 ml-4 list-disc space-y-1">
-                    <li>All records from all tables</li>
-                    <li>Complete data export for analysis</li>
-                    <li><strong>No schema definitions</strong> - data only</li>
-                    <li>Useful for data migration or import into existing database</li>
-                  </ul>
-                </div>
-              )}
-
-              <p className="text-xs text-gray-500">
-                Keep this backup in a safe place for disaster recovery and database migration.
-              </p>
-            </div>
-          </div>
-
         </div>
       
     </GlassCard>

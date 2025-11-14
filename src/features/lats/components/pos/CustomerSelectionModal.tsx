@@ -10,6 +10,7 @@ import AddCustomerModal from '../../../customers/components/forms/AddCustomerMod
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 import { customerCacheService } from '../../../../lib/customerCacheService';
+import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
 
 interface CustomerSelectionModalProps {
   isOpen: boolean;
@@ -357,12 +358,8 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
           
           {/* Loading overlay */}
           {loading && !hasAttemptedLoad && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white z-20">
-              <div className="relative">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-              </div>
-              <span className="mt-4 text-gray-900 font-bold text-lg">Loading Customers...</span>
-              <span className="mt-1 text-gray-600 text-sm">Please wait while we fetch your customer list</span>
+            <div className="absolute inset-0 flex items-center justify-center bg-white z-20">
+              <LoadingSpinner size="sm" color="blue" />
             </div>
           )}
 

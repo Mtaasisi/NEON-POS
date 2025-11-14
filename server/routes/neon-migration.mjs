@@ -409,7 +409,7 @@ router.post('/migrate', async (req, res) => {
 
         try {
           // Migrate Schema
-          if (migrationType === 'schema' || migrationType === 'both') {
+          if (migrationType === 'schema' || migrationType === 'both' || migrationType === 'schema-selective' || migrationType === 'schema-missing') {
             sendProgress(`Migrating schema for ${tableName}...`);
 
             // Get table schema from source
@@ -429,102 +429,242 @@ router.post('/migrate', async (req, res) => {
             // Check if table exists in target
             const tableExists = await targetSql`
               SELECT EXISTS (
-                SELECT FROM information_schema.tables 
+                SELECT FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name = ${tableName}
               ) as exists
             `;
 
-            if (!tableExists[0].exists) {
-              // Create table in target
-              sendProgress(`Creating table ${tableName} in target...`);
-              
-              const columns = tableSchema.map(col => {
-                let colDef = `"${col.column_name}" ${col.data_type}`;
-                if (col.character_maximum_length) {
-                  colDef += `(${col.character_maximum_length})`;
-                }
-                if (col.is_nullable === 'NO') {
-                  colDef += ' NOT NULL';
-                }
-                if (col.column_default) {
-                  colDef += ` DEFAULT ${col.column_default}`;
-                }
-                return colDef;
-              }).join(', ');
+            if (migrationType === 'schema-missing') {
+              // For schema-missing: only add what's missing, don't modify existing
+              if (!tableExists[0].exists) {
+                // Create table in target (only if it doesn't exist)
+                sendProgress(`Creating missing table ${tableName} in target...`);
 
-              await targetSql.unsafe(`CREATE TABLE IF NOT EXISTS "${tableName}" (${columns})`);
-              sendProgress(`✓ Table ${tableName} created`);
-            } else {
-              // Add missing columns to existing table
-              const targetColumns = await targetSql`
-                SELECT column_name
-                FROM information_schema.columns
-                WHERE table_schema = 'public' AND table_name = ${tableName}
-              `;
+                const columns = tableSchema.map(col => {
+                  let colDef = `"${col.column_name}" ${col.data_type}`;
+                  if (col.character_maximum_length) {
+                    colDef += `(${col.character_maximum_length})`;
+                  }
+                  if (col.is_nullable === 'NO') {
+                    colDef += ' NOT NULL';
+                  }
+                  if (col.column_default) {
+                    colDef += ` DEFAULT ${col.column_default}`;
+                  }
+                  return colDef;
+                }).join(', ');
 
-              const targetColNames = targetColumns.map(c => c.column_name);
-              const missingColumns = tableSchema.filter(
-                col => !targetColNames.includes(col.column_name)
-              );
+                await targetSql.unsafe(`CREATE TABLE IF NOT EXISTS "${tableName}" (${columns})`);
+                sendProgress(`✓ Missing table ${tableName} created`);
+              } else {
+                // Table exists, only add missing columns (don't modify existing ones)
+                const targetColumns = await targetSql`
+                  SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
+                  FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = ${tableName}
+                `;
 
-              for (const col of missingColumns) {
-                sendProgress(`Adding column ${col.column_name} to ${tableName}...`);
-                let colDef = `${col.data_type}`;
-                if (col.character_maximum_length) {
-                  colDef += `(${col.character_maximum_length})`;
+                const targetColMap = new Map();
+                targetColumns.forEach(col => {
+                  targetColMap.set(col.column_name, col);
+                });
+
+                const missingColumns = tableSchema.filter(col => !targetColMap.has(col.column_name));
+
+                for (const col of missingColumns) {
+                  sendProgress(`Adding missing column ${col.column_name} to ${tableName}...`);
+                  let colDef = `${col.data_type}`;
+                  if (col.character_maximum_length) {
+                    colDef += `(${col.character_maximum_length})`;
+                  }
+                  if (col.is_nullable === 'NO') {
+                    colDef += ' NOT NULL';
+                  }
+                  if (col.column_default) {
+                    colDef += ` DEFAULT ${col.column_default}`;
+                  }
+
+                  await targetSql.unsafe(
+                    `ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS "${col.column_name}" ${colDef}`
+                  );
                 }
-                if (col.column_default) {
-                  colDef += ` DEFAULT ${col.column_default}`;
+
+                if (missingColumns.length > 0) {
+                  sendProgress(`✓ Added ${missingColumns.length} missing column(s) to ${tableName}`);
+                } else {
+                  sendProgress(`✓ Table ${tableName} already has all required columns`);
                 }
-                
-                await targetSql.unsafe(
-                  `ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS "${col.column_name}" ${colDef}`
-                );
               }
+            } else {
+              // For regular schema migration: recreate tables and modify existing ones
+              if (!tableExists[0].exists) {
+                // Create table in target
+                sendProgress(`Creating table ${tableName} in target...`);
 
-              if (missingColumns.length > 0) {
-                sendProgress(`✓ Added ${missingColumns.length} column(s) to ${tableName}`);
+                const columns = tableSchema.map(col => {
+                  let colDef = `"${col.column_name}" ${col.data_type}`;
+                  if (col.character_maximum_length) {
+                    colDef += `(${col.character_maximum_length})`;
+                  }
+                  if (col.is_nullable === 'NO') {
+                    colDef += ' NOT NULL';
+                  }
+                  if (col.column_default) {
+                    colDef += ` DEFAULT ${col.column_default}`;
+                  }
+                  return colDef;
+                }).join(', ');
+
+                await targetSql.unsafe(`CREATE TABLE IF NOT EXISTS "${tableName}" (${columns})`);
+                sendProgress(`✓ Table ${tableName} created`);
+              } else {
+                // Add missing columns to existing table
+                const targetColumns = await targetSql`
+                  SELECT column_name
+                  FROM information_schema.columns
+                  WHERE table_schema = 'public' AND table_name = ${tableName}
+                `;
+
+                const targetColNames = targetColumns.map(c => c.column_name);
+                const missingColumns = tableSchema.filter(
+                  col => !targetColNames.includes(col.column_name)
+                );
+
+                for (const col of missingColumns) {
+                  sendProgress(`Adding column ${col.column_name} to ${tableName}...`);
+                  let colDef = `${col.data_type}`;
+                  if (col.character_maximum_length) {
+                    colDef += `(${col.character_maximum_length})`;
+                  }
+                  if (col.column_default) {
+                    colDef += ` DEFAULT ${col.column_default}`;
+                  }
+
+                  await targetSql.unsafe(
+                    `ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS "${col.column_name}" ${colDef}`
+                  );
+                }
+
+                if (missingColumns.length > 0) {
+                  sendProgress(`✓ Added ${missingColumns.length} column(s) to ${tableName}`);
+                }
               }
             }
           }
 
           // Migrate Data
-          if (migrationType === 'data' || migrationType === 'both') {
+          if (migrationType === 'data' || migrationType === 'both' || migrationType === 'selective-data' || migrationType === 'schema-selective') {
+            // Note: 'schema-missing' does NOT include data migration
             sendProgress(`Migrating data for ${tableName}...`);
 
             // Get data from source
-            const data = await sourceSql.unsafe(`SELECT * FROM "${tableName}"`);
+            const sourceData = await sourceSql.unsafe(`SELECT * FROM "${tableName}"`);
 
-            if (data.length > 0) {
-              sendProgress(`Copying ${data.length} rows to ${tableName}...`);
+            if (sourceData.length > 0) {
+              let dataToMigrate = sourceData;
 
-              // Get column names
-              const columns = Object.keys(data[0]);
-              const columnList = columns.map(c => `"${c}"`).join(', ');
-              const valuePlaceholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+              // For selective migration, filter out data that already exists in target
+              if (migrationType === 'selective-data' || migrationType === 'schema-selective') {
+                sendProgress(`Checking existing data in target for ${tableName}...`);
 
-              // Insert data in batches
-              const batchSize = 100;
-              for (let i = 0; i < data.length; i += batchSize) {
-                const batch = data.slice(i, i + batchSize);
-                
-                for (const row of batch) {
-                  const values = columns.map(col => row[col]);
-                  try {
-                    await targetSql.unsafe(
-                      `INSERT INTO "${tableName}" (${columnList}) VALUES (${valuePlaceholders}) ON CONFLICT DO NOTHING`,
-                      values
-                    );
-                  } catch (err) {
-                    // Log but continue on conflict
-                    console.error(`Error inserting row into ${tableName}:`, err.message);
+                // Get primary key or unique constraints for the table
+                const constraints = await targetSql`
+                  SELECT conname, conkey, contype
+                  FROM pg_constraint
+                  WHERE conrelid = (
+                    SELECT oid FROM pg_class WHERE relname = ${tableName}
+                  )
+                  AND (contype = 'p' OR contype = 'u')
+                  ORDER BY contype DESC
+                  LIMIT 1
+                `;
+
+                if (constraints.length > 0) {
+                  const constraint = constraints[0];
+                  const keyColumns = constraint.conkey;
+
+                  // Get column names for the primary key
+                  const columnInfo = await targetSql`
+                    SELECT attname
+                    FROM pg_attribute
+                    WHERE attrelid = (
+                      SELECT oid FROM pg_class WHERE relname = ${tableName}
+                    )
+                    AND attnum = ANY(${keyColumns})
+                    ORDER BY attnum
+                  `;
+
+                  const keyColumnNames = columnInfo.map(col => col.attname);
+
+                  if (keyColumnNames.length > 0) {
+                    sendProgress(`Using key columns: ${keyColumnNames.join(', ')} for selective migration`);
+
+                    // Get existing keys from target
+                    const existingKeysQuery = `
+                      SELECT ${keyColumnNames.map(col => `"${col}"`).join(', ')}
+                      FROM "${tableName}"
+                    `;
+                    const existingKeys = await targetSql.unsafe(existingKeysQuery);
+
+                    // Create a set of existing key combinations for fast lookup
+                    const existingKeySet = new Set();
+                    existingKeys.forEach(row => {
+                      const key = keyColumnNames.map(col => row[col]).join('|');
+                      existingKeySet.add(key);
+                    });
+
+                    // Filter source data to only include rows that don't exist in target
+                    dataToMigrate = sourceData.filter(row => {
+                      const key = keyColumnNames.map(col => row[col]).join('|');
+                      return !existingKeySet.has(key);
+                    });
+
+                    sendProgress(`Found ${sourceData.length} rows in source, ${dataToMigrate.length} new rows to migrate`);
+                  } else {
+                    sendProgress(`⚠️ No suitable key found for selective migration, falling back to regular migration`);
                   }
+                } else {
+                  sendProgress(`⚠️ No primary key or unique constraints found for selective migration, falling back to regular migration`);
                 }
-
-                sendProgress(`Copied ${Math.min(i + batchSize, data.length)}/${data.length} rows`);
               }
 
-              sendProgress(`✓ Data migration complete for ${tableName} (${data.length} rows)`);
+              if (dataToMigrate.length > 0) {
+                sendProgress(`Copying ${dataToMigrate.length} rows to ${tableName}...`);
+
+                // Get column names
+                const columns = Object.keys(dataToMigrate[0]);
+                const columnList = columns.map(c => `"${c}"`).join(', ');
+                const valuePlaceholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+
+                // Insert data in batches
+                const batchSize = 100;
+                let migratedCount = 0;
+
+                for (let i = 0; i < dataToMigrate.length; i += batchSize) {
+                  const batch = dataToMigrate.slice(i, i + batchSize);
+
+                  for (const row of batch) {
+                    const values = columns.map(col => row[col]);
+                    try {
+                      await targetSql.unsafe(
+                        `INSERT INTO "${tableName}" (${columnList}) VALUES (${valuePlaceholders}) ON CONFLICT DO NOTHING`,
+                        values
+                      );
+                      migratedCount++;
+                    } catch (err) {
+                      // Log but continue on conflict
+                      console.error(`Error inserting row into ${tableName}:`, err.message);
+                    }
+                  }
+
+                  sendProgress(`Migrated ${Math.min(i + batchSize, dataToMigrate.length)}/${dataToMigrate.length} rows`);
+                }
+
+                const migrationTypeText = (migrationType === 'selective-data' || migrationType === 'schema-selective') ? 'selective data' : 'data';
+                sendProgress(`✓ ${migrationTypeText} migration complete for ${tableName} (${migratedCount} rows migrated)`);
+              } else {
+                sendProgress(`✓ No new data to migrate for ${tableName}`);
+              }
             } else {
               sendProgress(`✓ No data to migrate for ${tableName}`);
             }
@@ -548,6 +688,62 @@ router.post('/migrate', async (req, res) => {
     res.status(500).json({ 
       error: 'Migration failed', 
       message: error.message 
+    });
+  }
+});
+
+/**
+ * DELETE /api/neon/branches/:branchId
+ * Delete a branch from Neon project
+ */
+router.delete('/branches/:branchId', async (req, res) => {
+  try {
+    const { branchId } = req.params;
+    const { projectId } = req.query;
+    const apiKey = req.headers.authorization?.replace('Bearer ', '');
+
+    if (!apiKey || !projectId || !branchId) {
+      return res.status(400).json({ error: 'Missing apiKey, projectId, or branchId' });
+    }
+
+    console.log(`🗑️ Deleting branch: ${branchId} from project: ${projectId}`);
+
+    // Get branch info first for confirmation
+    const branchData = await neonApiRequest(
+      `/projects/${projectId}/branches/${branchId}`,
+      apiKey
+    );
+
+    // Delete the branch
+    const deleteResponse = await fetch(`${NEON_API_BASE}/projects/${projectId}/branches/${branchId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!deleteResponse.ok) {
+      const error = await deleteResponse.text();
+      throw new Error(`Failed to delete branch: ${deleteResponse.status} - ${error}`);
+    }
+
+    console.log(`✅ Successfully deleted branch: ${branchData.branch.name} (${branchId})`);
+
+    res.json({
+      success: true,
+      message: `Branch "${branchData.branch.name}" has been deleted successfully`,
+      deletedBranch: {
+        id: branchId,
+        name: branchData.branch.name
+      }
+    });
+  } catch (error) {
+    console.error('Error deleting branch:', error);
+    res.status(500).json({
+      error: 'Failed to delete branch',
+      message: error.message
     });
   }
 });
@@ -585,7 +781,7 @@ router.post('/export-schema', async (req, res) => {
     for (const tableName of tablesToExport) {
       // Get table schema
       const columns = await sql`
-        SELECT 
+        SELECT
           column_name,
           data_type,
           character_maximum_length,
@@ -598,7 +794,7 @@ router.post('/export-schema', async (req, res) => {
 
       sqlScript += `-- Table: ${tableName}\n`;
       sqlScript += `CREATE TABLE IF NOT EXISTS "${tableName}" (\n`;
-      
+
       const columnDefs = columns.map(col => {
         let def = `  "${col.column_name}" ${col.data_type}`;
         if (col.character_maximum_length) {
@@ -622,9 +818,9 @@ router.post('/export-schema', async (req, res) => {
     res.send(sqlScript);
   } catch (error) {
     console.error('Error exporting schema:', error);
-    res.status(500).json({ 
-      error: 'Failed to export schema', 
-      message: error.message 
+    res.status(500).json({
+      error: 'Failed to export schema',
+      message: error.message
     });
   }
 });

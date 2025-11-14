@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 interface SMSLog {
   id: string;
@@ -37,6 +38,7 @@ const calculateSMSInfo = (message: string) => {
 };
 
 const SMSLogsPage: React.FC = () => {
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [logs, setLogs] = useState<SMSLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -61,6 +63,7 @@ const SMSLogsPage: React.FC = () => {
   }, []);
 
   const fetchSMSLogs = async () => {
+    const jobId = startLoading('Loading SMS logs...');
     try {
       setLoading(true);
       setError(null);
@@ -151,6 +154,7 @@ const SMSLogsPage: React.FC = () => {
       // Only update state if component is still mounted
       if (isMountedRef.current) {
         setLogs(validLogs);
+        completeLoading(jobId);
       }
     } catch (err: any) {
       // Handle case where entire response object is thrown
@@ -174,6 +178,7 @@ const SMSLogsPage: React.FC = () => {
         console.warn('❓ Unable to load SMS logs - unexpected error:', err);
         setError(`Unable to load SMS logs. Please try again later.`);
       }
+      failLoading(jobId, 'Failed to load SMS logs');
     } finally {
       // Only update state if component is still mounted
       if (isMountedRef.current) {

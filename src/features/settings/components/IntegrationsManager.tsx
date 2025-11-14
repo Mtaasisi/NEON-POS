@@ -29,12 +29,14 @@ import {
 } from '../../../lib/integrationService';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import toast from 'react-hot-toast';
+import { useDialog } from '../../shared/hooks/useDialog';
 
 interface IntegrationsManagerProps {
   onIntegrationUpdate?: () => void;
 }
 
 const IntegrationsManager: React.FC<IntegrationsManagerProps> = ({ onIntegrationUpdate }) => {
+  const { confirm } = useDialog();
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [integrationStatuses, setIntegrationStatuses] = useState<Record<string, IntegrationStatus>>({});
   const [loading, setLoading] = useState(false);
@@ -133,7 +135,7 @@ const IntegrationsManager: React.FC<IntegrationsManagerProps> = ({ onIntegration
   };
 
   const handleDeleteIntegration = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this integration?')) {
+    if (await confirm('Are you sure you want to delete this integration?')) {
       try {
         const success = await deleteIntegration(id);
         if (success) {
@@ -147,7 +149,7 @@ const IntegrationsManager: React.FC<IntegrationsManagerProps> = ({ onIntegration
   };
 
   const handleResetIntegration = async (integration: IntegrationConfig) => {
-    if (window.confirm(`Reset ${integration.name} to default configuration?`)) {
+    if (await confirm(`Reset ${integration.name} to default configuration?`)) {
       try {
         const defaultConfigs = {
           'Mobishastra SMS': {

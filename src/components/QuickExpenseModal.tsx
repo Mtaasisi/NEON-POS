@@ -74,13 +74,32 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
     }
   };
 
-  // Fetch data
+  // 🚀 OPTIMIZED: Parallel data loading for better performance
   useEffect(() => {
     if (isOpen) {
-      fetchData();
-      if (isCustomerCare) {
-        fetchDailySales();
-      }
+      // Load data in parallel for better performance
+      const loadDataOptimized = async () => {
+        if (import.meta.env.MODE === 'development') {
+          console.log('🔄 [QuickExpenseModal] Starting optimized parallel data loading...');
+        }
+
+        const [accountsResult, categoriesResult, dailySalesResult] = await Promise.allSettled([
+          // Load payment accounts and categories in parallel
+          fetchData().catch(err => {
+            console.error('❌ Failed to load accounts/categories:', err);
+          }),
+          // Load daily sales only for customer care
+          ...(isCustomerCare ? [fetchDailySales().catch(err => {
+            console.error('❌ Failed to load daily sales:', err);
+          })] : [])
+        ]);
+
+        if (import.meta.env.MODE === 'development') {
+          console.log('✅ [QuickExpenseModal] Optimized parallel loading completed');
+        }
+      };
+
+      loadDataOptimized();
     }
   }, [isOpen, isCustomerCare]);
 

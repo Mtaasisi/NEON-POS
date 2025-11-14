@@ -9,6 +9,7 @@
 
 import React, { useState } from 'react';
 import { LargeImageCleanup } from '../utils/cleanupLargeImages';
+import { useDialog } from '../features/shared/hooks/useDialog';
 
 interface CleanupStats {
   totalProducts: number;
@@ -18,6 +19,7 @@ interface CleanupStats {
 }
 
 export const ImageCleanupTool: React.FC = () => {
+  const { confirm } = useDialog();
   const [isScanning, setIsScanning] = useState(false);
   const [isCleaning, setIsCleaning] = useState(false);
   const [stats, setStats] = useState<CleanupStats | null>(null);
@@ -72,7 +74,7 @@ export const ImageCleanupTool: React.FC = () => {
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `This will ${selectedStrategy === 'placeholder' ? 'replace' : 'compress'} images for ${affectedProducts.length} products. Continue?`
     );
 

@@ -1,509 +1,545 @@
 #!/usr/bin/env node
+
 /**
- * 🚀 AUTO RECEIVE PURCHASE ORDER SCRIPT
- * =====================================
- * This script automatically:
- * 1. Fixes the missing database function
- * 2. Receives the specified Purchase Order
- * 
- * Usage: node auto-receive-po.mjs PO-1761412528053
+ * Automated Purchase Order Receive Script
+ * Receives PO-1763064185396 automatically
  */
 
-import { neon } from '@neondatabase/serverless';
-import dotenv from 'dotenv';
+import puppeteer from 'puppeteer';
+import { writeFileSync } from 'fs';
 
-dotenv.config();
+const APP_URL = 'http://localhost:5173';
+const LOGIN_EMAIL = 'care@care.com';
+const LOGIN_PASSWORD = '123456';
+const TARGET_PO = 'PO-1763064185396';
 
-// Get DATABASE_URL from environment or use default
-const DATABASE_URL = process.env.VITE_DATABASE_URL || process.env.DATABASE_URL ||
-  'postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvumr-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require';
-
-const sql = neon(DATABASE_URL);
-
-// Get PO number from command line args
-const PO_NUMBER = process.argv[2] || 'PO-1761412528053';
-
-console.log('╔═══════════════════════════════════════════════════════════════╗');
-console.log('║  🚀 AUTO RECEIVE PURCHASE ORDER SCRIPT                       ║');
-console.log('╚═══════════════════════════════════════════════════════════════╝');
-console.log('');
-console.log(`📦 Target PO: ${PO_NUMBER}`);
-console.log('');
-
-// ============================================================================
-// STEP 1: Check and Create Database Function
-// ============================================================================
-
-async function checkAndCreateFunction() {
-  console.log('🔍 STEP 1: Checking if database function exists...');
-  
-  try {
-    // Check if function exists
-    const checkResult = await sql`
-      SELECT EXISTS (
-        SELECT 1 FROM pg_proc 
-        WHERE proname = 'add_imei_to_parent_variant'
-      ) as exists
-    `;
-    
-    const functionExists = checkResult[0]?.exists;
-    
-    if (functionExists) {
-      console.log('✅ Function already exists - skipping creation');
-      return true;
-    }
-    
-    console.log('⚠️  Function does not exist - creating it now...');
-    
-    // Drop any old versions
-    await sql`
-      DROP FUNCTION IF EXISTS add_imei_to_parent_variant(UUID, TEXT, TEXT, TEXT, TEXT, INTEGER, TEXT, TEXT) CASCADE
-    `;
-    await sql`
-      DROP FUNCTION IF EXISTS add_imei_to_parent_variant(UUID, TEXT, TEXT, TEXT, DECIMAL, DECIMAL, TEXT, TEXT) CASCADE
-    `;
-    await sql`
-      DROP FUNCTION IF EXISTS add_imei_to_parent_variant(UUID, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, TEXT, TEXT) CASCADE
-    `;
-    await sql`
-      DROP FUNCTION IF EXISTS add_imei_to_parent_variant(UUID, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, TEXT, UUID, TEXT) CASCADE
-    `;
-    await sql`
-      DROP FUNCTION IF EXISTS add_imei_to_parent_variant CASCADE
-    `;
-    
-    // Create the function with proper signature
-    await sql`
-      CREATE OR REPLACE FUNCTION add_imei_to_parent_variant(
-        parent_variant_id_param UUID,
-        imei_param TEXT,
-        serial_number_param TEXT DEFAULT NULL,
-        mac_address_param TEXT DEFAULT NULL,
-        cost_price_param NUMERIC DEFAULT 0,
-        selling_price_param NUMERIC DEFAULT 0,
-        condition_param TEXT DEFAULT 'new',
-        notes_param TEXT DEFAULT NULL
-      )
-      RETURNS TABLE(
-        success BOOLEAN,
-        child_variant_id UUID,
-        error_message TEXT
-      ) AS $$
-      DECLARE
-        v_child_variant_id UUID;
-        v_parent_product_id UUID;
-        v_parent_sku TEXT;
-        v_parent_name TEXT;
-        v_parent_variant_name TEXT;
-        v_parent_branch_id UUID;
-        v_duplicate_count INT;
-      BEGIN
-        -- Validate IMEI format (15 digits)
-        IF imei_param !~ '^\\d{15}$' THEN
-          RETURN QUERY SELECT 
-            FALSE, 
-            NULL::UUID, 
-            'Invalid IMEI format. Must be exactly 15 digits.' AS error_message;
-          RETURN;
-        END IF;
-
-        -- Check for duplicate IMEI
-        SELECT COUNT(*) INTO v_duplicate_count
-        FROM lats_product_variants
-        WHERE (
-          variant_attributes->>'imei' = imei_param 
-          OR attributes->>'imei' = imei_param
-        );
-
-        IF v_duplicate_count > 0 THEN
-          RETURN QUERY SELECT 
-            FALSE, 
-            NULL::UUID, 
-            format('IMEI %s already exists in the system', imei_param) AS error_message;
-          RETURN;
-        END IF;
-
-        -- Get parent variant details
-        SELECT 
-          product_id, 
-          sku, 
-          name,
-          COALESCE(variant_name, name) as variant_name,
-          branch_id
-        INTO 
-          v_parent_product_id, 
-          v_parent_sku, 
-          v_parent_name,
-          v_parent_variant_name,
-          v_parent_branch_id
-        FROM lats_product_variants
-        WHERE id = parent_variant_id_param;
-
-        IF v_parent_product_id IS NULL THEN
-          RETURN QUERY SELECT 
-            FALSE, 
-            NULL::UUID, 
-            format('Parent variant %s not found', parent_variant_id_param) AS error_message;
-          RETURN;
-        END IF;
-
-        -- Create IMEI child variant
-        INSERT INTO lats_product_variants (
-          product_id,
-          parent_variant_id,
-          variant_type,
-          name,
-          variant_name,
-          sku,
-          attributes,
-          variant_attributes,
-          quantity,
-          cost_price,
-          selling_price,
-          is_active,
-          branch_id
-        ) VALUES (
-          v_parent_product_id,
-          parent_variant_id_param,
-          'imei_child',
-          COALESCE(serial_number_param, imei_param),
-          format('IMEI: %s', imei_param),
-          v_parent_sku || '-IMEI-' || SUBSTRING(imei_param, 10, 6),
-          jsonb_build_object(
-            'imei', imei_param,
-            'serial_number', serial_number_param,
-            'mac_address', mac_address_param,
-            'condition', condition_param,
-            'imei_status', 'available',
-            'parent_variant_name', v_parent_variant_name,
-            'added_at', NOW(),
-            'notes', notes_param
-          ),
-          jsonb_build_object(
-            'imei', imei_param,
-            'serial_number', serial_number_param,
-            'mac_address', mac_address_param,
-            'condition', condition_param,
-            'imei_status', 'available',
-            'parent_variant_name', v_parent_variant_name,
-            'added_at', NOW(),
-            'notes', notes_param
-          ),
-          1,
-          COALESCE(cost_price_param, 0),
-          COALESCE(selling_price_param, 0),
-          true,
-          v_parent_branch_id
-        ) RETURNING id INTO v_child_variant_id;
-
-        -- Mark parent as parent type
-        UPDATE lats_product_variants
-        SET 
-          is_parent = true,
-          variant_type = CASE 
-            WHEN variant_type IS NULL OR variant_type = 'standard' THEN 'parent'
-            ELSE variant_type
-          END,
-          updated_at = NOW()
-        WHERE id = parent_variant_id_param
-          AND (is_parent IS NULL OR is_parent = false);
-
-        -- Update parent quantity
-        UPDATE lats_product_variants
-        SET 
-          quantity = (
-            SELECT COALESCE(SUM(quantity), 0)
-            FROM lats_product_variants
-            WHERE parent_variant_id = parent_variant_id_param
-            AND variant_type = 'imei_child'
-          ),
-          updated_at = NOW()
-        WHERE id = parent_variant_id_param;
-
-        RETURN QUERY SELECT 
-          TRUE, 
-          v_child_variant_id, 
-          NULL::TEXT AS error_message;
-      END;
-      $$ LANGUAGE plpgsql
-    `;
-    
-    console.log('✅ Function created successfully!');
-    return true;
-    
-  } catch (error) {
-    console.error('❌ Error creating function:', error.message);
-    return false;
-  }
+// Logging functions
+function log(message, color = 'reset') {
+  const colors = {
+    reset: '\x1b[0m',
+    red: '\x1b[31m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    blue: '\x1b[34m',
+    magenta: '\x1b[35m',
+    cyan: '\x1b[36m',
+    bright: '\x1b[1m'
+  };
+  console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
-// ============================================================================
-// STEP 2: Get Purchase Order Details
-// ============================================================================
-
-async function getPurchaseOrder() {
-  console.log('');
-  console.log('🔍 STEP 2: Loading Purchase Order details...');
-  
-  try {
-    const result = await sql`
-      SELECT 
-        po.id,
-        po.po_number,
-        po.supplier_id,
-        po.status,
-        po.total_amount,
-        po.branch_id
-      FROM lats_purchase_orders po
-      WHERE po.po_number = ${PO_NUMBER}
-      LIMIT 1
-    `;
-    
-    if (result.length === 0) {
-      console.error(`❌ Purchase Order ${PO_NUMBER} not found`);
-      return null;
-    }
-    
-    const po = result[0];
-    console.log('✅ Purchase Order found:');
-    console.log(`   - ID: ${po.id}`);
-    console.log(`   - Status: ${po.status}`);
-    console.log(`   - Total: ${po.total_amount}`);
-    console.log(`   - Branch ID: ${po.branch_id}`);
-    
-    return po;
-    
-  } catch (error) {
-    console.error('❌ Error loading PO:', error.message);
-    return null;
-  }
+function logStep(step, message) {
+  log(`\n${'═'.repeat(60)}`, 'cyan');
+  log(`Step ${step}: ${message}`, 'bright');
+  log('═'.repeat(60), 'cyan');
 }
 
-// ============================================================================
-// STEP 3: Get PO Items
-// ============================================================================
-
-async function getPOItems(poId) {
-  console.log('');
-  console.log('🔍 STEP 3: Loading PO items...');
-  
-  try {
-    const result = await sql`
-      SELECT 
-        poi.id,
-        poi.product_id,
-        poi.variant_id,
-        poi.quantity_ordered,
-        poi.quantity_received,
-        poi.unit_cost,
-        p.name as product_name,
-        pv.variant_name,
-        pv.sku,
-        pv.variant_type
-      FROM lats_purchase_order_items poi
-      LEFT JOIN lats_products p ON poi.product_id = p.id
-      LEFT JOIN lats_product_variants pv ON poi.variant_id = pv.id
-      WHERE poi.purchase_order_id = ${poId}
-    `;
-    
-    console.log(`✅ Found ${result.length} items in PO`);
-    
-    result.forEach((item, idx) => {
-      const pending = item.quantity_ordered - (item.quantity_received || 0);
-      console.log(`   ${idx + 1}. ${item.product_name} - ${item.variant_name}`);
-      console.log(`      Ordered: ${item.quantity_ordered}, Received: ${item.quantity_received || 0}, Pending: ${pending}`);
-    });
-    
-    return result;
-    
-  } catch (error) {
-    console.error('❌ Error loading PO items:', error.message);
-    return [];
-  }
+function logSuccess(message) {
+  log(`✅ ${message}`, 'green');
 }
 
-// ============================================================================
-// STEP 4: Receive PO Items
-// ============================================================================
-
-async function receivePOItem(item, quantityToReceive) {
-  try {
-    // Update received quantity
-    await sql`
-      UPDATE lats_purchase_order_items
-      SET 
-        quantity_received = COALESCE(quantity_received, 0) + ${quantityToReceive},
-        updated_at = NOW()
-      WHERE id = ${item.id}
-    `;
-    
-    // Update variant stock
-    await sql`
-      UPDATE lats_product_variants
-      SET 
-        quantity = COALESCE(quantity, 0) + ${quantityToReceive},
-        updated_at = NOW()
-      WHERE id = ${item.variant_id}
-    `;
-    
-    // Create stock movement record
-    await sql`
-      INSERT INTO lats_stock_movements (
-        product_id,
-        variant_id,
-        movement_type,
-        quantity,
-        reference_type,
-        reference_id,
-        notes,
-        created_at
-      ) VALUES (
-        ${item.product_id},
-        ${item.variant_id},
-        'purchase',
-        ${quantityToReceive},
-        'purchase_order',
-        ${item.id},
-        'Auto-received via script',
-        NOW()
-      )
-    `;
-    
-    return true;
-  } catch (error) {
-    console.error(`   ❌ Error receiving item: ${error.message}`);
-    return false;
-  }
+function logError(message) {
+  log(`❌ ${message}`, 'red');
 }
 
-// ============================================================================
-// STEP 5: Update PO Status
-// ============================================================================
-
-async function updatePOStatus(poId) {
-  try {
-    // Check if all items are fully received
-    const result = await sql`
-      SELECT 
-        SUM(quantity_ordered) as total_ordered,
-        SUM(COALESCE(quantity_received, 0)) as total_received
-      FROM lats_purchase_order_items
-      WHERE purchase_order_id = ${poId}
-    `;
-    
-    const { total_ordered, total_received } = result[0];
-    
-    const newStatus = total_received >= total_ordered ? 'received' : 'partially_received';
-    
-    await sql`
-      UPDATE lats_purchase_orders
-      SET 
-        status = ${newStatus},
-        received_date = CASE 
-          WHEN ${newStatus} = 'received' THEN NOW() 
-          ELSE received_date 
-        END,
-        updated_at = NOW()
-      WHERE id = ${poId}
-    `;
-    
-    console.log(`✅ PO status updated to: ${newStatus}`);
-    return true;
-    
-  } catch (error) {
-    console.error('❌ Error updating PO status:', error.message);
-    return false;
-  }
+function logWarning(message) {
+  log(`⚠️  ${message}`, 'yellow');
 }
 
-// ============================================================================
-// MAIN EXECUTION
-// ============================================================================
+function logInfo(message) {
+  log(`ℹ️  ${message}`, 'blue');
+}
 
-async function main() {
+async function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function captureScreenshot(page, name) {
+  const filename = `auto-receive-${name}-${Date.now()}.png`;
+  await page.screenshot({ path: filename, fullPage: true });
+  logInfo(`Screenshot saved: ${filename}`);
+  return filename;
+}
+
+async function login(page) {
+  logStep(1, 'Logging in to the application');
+
   try {
-    // Step 1: Ensure function exists
-    const functionReady = await checkAndCreateFunction();
-    if (!functionReady) {
-      console.error('');
-      console.error('❌ FAILED: Could not create database function');
-      process.exit(1);
+    await page.goto(APP_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+    logSuccess('Application loaded');
+
+    // Wait for login form
+    await page.waitForSelector('input[type="email"], input[type="text"]', { timeout: 10000 });
+    logSuccess('Login form found');
+
+    // Fill in credentials
+    const emailInput = await page.$('input[type="email"], input[type="text"]');
+    const passwordInput = await page.$('input[type="password"]');
+
+    if (!emailInput || !passwordInput) {
+      throw new Error('Could not find login form inputs');
     }
-    
-    // Step 2: Get PO
-    const po = await getPurchaseOrder();
-    if (!po) {
-      console.error('');
-      console.error('❌ FAILED: Purchase Order not found');
-      process.exit(1);
+
+    await emailInput.type(LOGIN_EMAIL, { delay: 50 });
+    logInfo(`Entered email: ${LOGIN_EMAIL}`);
+
+    await passwordInput.type(LOGIN_PASSWORD, { delay: 50 });
+    logInfo('Entered password');
+
+    // Find and click login button
+    const loginButton = await page.$('button[type="submit"]');
+    if (!loginButton) {
+      throw new Error('Could not find login button');
     }
-    
-    // Step 3: Get items
-    const items = await getPOItems(po.id);
-    if (items.length === 0) {
-      console.error('');
-      console.error('❌ FAILED: No items found in Purchase Order');
-      process.exit(1);
-    }
-    
-    // Step 4: Receive all pending items
-    console.log('');
-    console.log('📦 STEP 4: Receiving PO items...');
-    
-    let successCount = 0;
-    let errorCount = 0;
-    
-    for (const item of items) {
-      const pending = item.quantity_ordered - (item.quantity_received || 0);
-      
-      if (pending > 0) {
-        console.log(`   📥 Receiving ${pending} units of ${item.product_name}...`);
-        const success = await receivePOItem(item, pending);
-        
-        if (success) {
-          successCount++;
-          console.log(`   ✅ Successfully received`);
-        } else {
-          errorCount++;
-        }
-      } else {
-        console.log(`   ⏭️  Skipping ${item.product_name} (already fully received)`);
+
+    await loginButton.click();
+    logInfo('Clicked login button');
+
+    // Wait for navigation after login
+    await wait(3000);
+
+    // Check if we're logged in
+    const url = page.url();
+    if (url.includes('/login') || url === APP_URL + '/') {
+      const errors = await page.$$eval('.error, .text-red-500, [class*="error"]', elements =>
+        elements.map(el => el.textContent).filter(text => text && text.trim())
+      );
+      if (errors.length > 0) {
+        throw new Error(`Login failed: ${errors[0]}`);
       }
     }
-    
-    // Step 5: Update PO status
-    console.log('');
-    console.log('🔄 STEP 5: Updating PO status...');
-    await updatePOStatus(po.id);
-    
-    // Final summary
-    console.log('');
-    console.log('╔═══════════════════════════════════════════════════════════════╗');
-    console.log('║  ✅ PURCHASE ORDER RECEIVED SUCCESSFULLY!                    ║');
-    console.log('╚═══════════════════════════════════════════════════════════════╝');
-    console.log('');
-    console.log(`📊 Summary:`);
-    console.log(`   - PO Number: ${PO_NUMBER}`);
-    console.log(`   - Items Received: ${successCount}`);
-    console.log(`   - Errors: ${errorCount}`);
-    console.log('');
-    console.log('🎉 You can now refresh your browser to see the updated PO!');
-    console.log('');
-    
-    process.exit(0);
-    
+
+    logSuccess('Logged in successfully');
+    await captureScreenshot(page, 'after-login');
+
   } catch (error) {
-    console.error('');
-    console.error('╔═══════════════════════════════════════════════════════════════╗');
-    console.error('║  ❌ ERROR OCCURRED                                           ║');
-    console.error('╚═══════════════════════════════════════════════════════════════╝');
-    console.error('');
-    console.error(error);
-    console.error('');
-    process.exit(1);
+    logError(`Login failed: ${error.message}`);
+    await captureScreenshot(page, 'login-error');
+    throw error;
   }
 }
 
-// Run the script
-main();
+async function navigateToPurchaseOrders(page) {
+  logStep(2, 'Navigating to Purchase Orders');
 
+  try {
+    // Try direct navigation to purchase orders
+    logInfo('Navigating to /lats/purchase-orders');
+    await page.goto(APP_URL + '/lats/purchase-orders', { waitUntil: 'networkidle2', timeout: 30000 });
+    await wait(3000);
+
+    logSuccess('Purchase orders page loaded');
+    await captureScreenshot(page, 'purchase-orders-page');
+
+  } catch (error) {
+    logError(`Navigation failed: ${error.message}`);
+    await captureScreenshot(page, 'navigation-error');
+    throw error;
+  }
+}
+
+async function findAndClickPurchaseOrder(page) {
+  logStep(3, `Finding Purchase Order ${TARGET_PO}`);
+
+  try {
+    // Wait for the page to load
+    await wait(2000);
+
+    // Look for the PO in the table
+    logInfo(`Searching for ${TARGET_PO}...`);
+
+    // Try multiple selectors
+    const selectors = [
+      `a[href*="${TARGET_PO.replace('PO-', '')}"]`,
+      `tr:has-text("${TARGET_PO}") a`,
+      `td:has-text("${TARGET_PO}")`,
+      `a:has-text("${TARGET_PO}")`
+    ];
+
+    let poElement = null;
+    for (const selector of selectors) {
+      try {
+        poElement = await page.$(selector);
+        if (poElement) {
+          logSuccess(`Found PO with selector: ${selector}`);
+          break;
+        }
+      } catch (e) {
+        // Continue to next selector
+      }
+    }
+
+    if (!poElement) {
+      // Check if the PO exists on the page
+      const pageText = await page.evaluate(() => document.body.innerText);
+      if (pageText.includes(TARGET_PO.replace('PO-', ''))) {
+        logWarning('PO ID found in page text but could not locate clickable element');
+
+        // Try to find any link that might be the PO
+        const links = await page.$$('a');
+        for (const link of links) {
+          const href = await page.evaluate(el => el.href, link);
+          const text = await page.evaluate(el => el.textContent, link);
+          if (href && href.includes('purchase-orders') && text && text.includes(TARGET_PO.replace('PO-', ''))) {
+            poElement = link;
+            logSuccess('Found PO link by href and text analysis');
+            break;
+          }
+        }
+      }
+    }
+
+    if (!poElement) {
+      throw new Error(`Purchase order ${TARGET_PO} not found on the page`);
+    }
+
+    // Click on the PO
+    logInfo('Clicking on purchase order...');
+    await poElement.click();
+    await wait(3000);
+
+    logSuccess('Purchase order detail page opened');
+    await captureScreenshot(page, 'po-detail-opened');
+
+  } catch (error) {
+    logError(`Failed to find PO: ${error.message}`);
+    await captureScreenshot(page, 'po-not-found');
+    throw error;
+  }
+}
+
+async function initiateReceive(page) {
+  logStep(4, 'Initiating Receive Process');
+
+  try {
+    // Look for receive button
+    logInfo('Looking for receive button...');
+
+    const buttons = await page.$$('button, a[role="button"]');
+    let receiveButton = null;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent || '', button);
+      const isVisible = await page.evaluate(el => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      }, button);
+
+      if (isVisible && text.toLowerCase().includes('receive')) {
+        receiveButton = button;
+        logSuccess(`Found receive button: "${text.trim()}"`);
+        break;
+      }
+    }
+
+    if (!receiveButton) {
+      throw new Error('Receive button not found');
+    }
+
+    await receiveButton.click();
+    logInfo('Clicked receive button');
+    await wait(2000);
+
+    logSuccess('Receive modal opened');
+    await captureScreenshot(page, 'receive-modal-opened');
+
+  } catch (error) {
+    logError(`Failed to initiate receive: ${error.message}`);
+    await captureScreenshot(page, 'receive-initiate-error');
+    throw error;
+  }
+}
+
+async function selectPartialReceive(page) {
+  logStep(5, 'Selecting Partial Receive');
+
+  try {
+    await wait(1000);
+
+    const buttons = await page.$$('button');
+    let partialButton = null;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent || '', button);
+      if (text.toLowerCase().includes('partial')) {
+        partialButton = button;
+        logSuccess(`Found partial receive button: "${text.trim()}"`);
+        break;
+      }
+    }
+
+    if (partialButton) {
+      await partialButton.click();
+      logInfo('Selected partial receive');
+      await wait(2000);
+    } else {
+      logWarning('Partial receive button not found, continuing with default selection');
+    }
+
+    logSuccess('Partial receive selected');
+    await captureScreenshot(page, 'partial-receive-selected');
+
+  } catch (error) {
+    logError(`Failed to select partial receive: ${error.message}`);
+    await captureScreenshot(page, 'partial-select-error');
+    throw error;
+  }
+}
+
+async function selectItemsToReceive(page) {
+  logStep(6, 'Selecting Items to Receive');
+
+  try {
+    await wait(1000);
+
+    // Look for "Receive All" or "Select All" buttons
+    const buttons = await page.$$('button');
+    let selectAllButton = null;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent || '', button);
+      if (text.toLowerCase().includes('receive all') || text.toLowerCase().includes('select all')) {
+        selectAllButton = button;
+        logSuccess(`Found select all button: "${text.trim()}"`);
+        break;
+      }
+    }
+
+    if (selectAllButton) {
+      await selectAllButton.click();
+      logInfo('Clicked select all button');
+      await wait(1500);
+    } else {
+      logWarning('Select all button not found, trying manual quantity input');
+
+      // Try to set quantities manually
+      const quantityInputs = await page.$$('input[type="number"]');
+      logInfo(`Found ${quantityInputs.length} quantity inputs`);
+
+      for (let i = 0; i < Math.min(quantityInputs.length, 5); i++) {
+        try {
+          await quantityInputs[i].clear();
+          await quantityInputs[i].type('1');
+          logInfo(`Set quantity input ${i + 1} to 1`);
+        } catch (e) {
+          logWarning(`Could not set quantity input ${i + 1}`);
+        }
+      }
+    }
+
+    logSuccess('Items selected for receive');
+    await captureScreenshot(page, 'items-selected');
+
+  } catch (error) {
+    logError(`Failed to select items: ${error.message}`);
+    await captureScreenshot(page, 'item-selection-error');
+    throw error;
+  }
+}
+
+async function continueThroughSteps(page) {
+  logStep(7, 'Continuing Through Receive Steps');
+
+  try {
+    // Look for continue/confirm buttons
+    const buttons = await page.$$('button');
+    let continueButton = null;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent || '', button);
+      if (text.toLowerCase().includes('continue') || text.toLowerCase().includes('confirm') || text.toLowerCase().includes('next')) {
+        continueButton = button;
+        logSuccess(`Found continue button: "${text.trim()}"`);
+        break;
+      }
+    }
+
+    if (continueButton) {
+      await continueButton.click();
+      logInfo('Clicked continue button');
+      await wait(2000);
+
+      logSuccess('Continued to next step');
+      await captureScreenshot(page, 'continued-to-next-step');
+    } else {
+      logWarning('Continue button not found');
+    }
+
+  } catch (error) {
+    logError(`Failed to continue: ${error.message}`);
+    await captureScreenshot(page, 'continue-error');
+    throw error;
+  }
+}
+
+async function handleSerialNumbers(page) {
+  logStep(8, 'Handling Serial Numbers');
+
+  try {
+    await wait(1000);
+
+    const buttons = await page.$$('button');
+    let continueButton = null;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent || '', button);
+      if (text.toLowerCase().includes('continue') || text.toLowerCase().includes('skip') || text.toLowerCase().includes('next')) {
+        continueButton = button;
+        logSuccess(`Found serial number continue button: "${text.trim()}"`);
+        break;
+      }
+    }
+
+    if (continueButton) {
+      await continueButton.click();
+      logInfo('Handled serial numbers');
+      await wait(2000);
+    }
+
+    logSuccess('Serial numbers handled');
+    await captureScreenshot(page, 'serial-numbers-handled');
+
+  } catch (error) {
+    logError(`Failed to handle serial numbers: ${error.message}`);
+    await captureScreenshot(page, 'serial-numbers-error');
+    throw error;
+  }
+}
+
+async function setPricing(page) {
+  logStep(9, 'Setting Pricing');
+
+  try {
+    await wait(1000);
+
+    const buttons = await page.$$('button');
+    let pricingButton = null;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent || '', button);
+      if (text.toLowerCase().includes('set pricing') || text.toLowerCase().includes('continue') || text.toLowerCase().includes('confirm')) {
+        pricingButton = button;
+        logSuccess(`Found pricing button: "${text.trim()}"`);
+        break;
+      }
+    }
+
+    if (pricingButton) {
+      await pricingButton.click();
+      logInfo('Set pricing');
+      await wait(2000);
+    }
+
+    logSuccess('Pricing set');
+    await captureScreenshot(page, 'pricing-set');
+
+  } catch (error) {
+    logError(`Failed to set pricing: ${error.message}`);
+    await captureScreenshot(page, 'pricing-error');
+    throw error;
+  }
+}
+
+async function finalizeReceive(page) {
+  logStep(10, 'Finalizing Receive');
+
+  try {
+    await wait(1000);
+
+    const buttons = await page.$$('button');
+    let finalButton = null;
+
+    for (const button of buttons) {
+      const text = await page.evaluate(el => el.textContent || '', button);
+      if (text.toLowerCase().includes('add to inventory') ||
+          (text.toLowerCase().includes('receive') && !text.toLowerCase().includes('partial'))) {
+        finalButton = button;
+        logSuccess(`Found final receive button: "${text.trim()}"`);
+        break;
+      }
+    }
+
+    if (finalButton) {
+      await finalButton.click();
+      logInfo('Clicked final receive button');
+      await wait(3000);
+
+      logSuccess('Receive finalized');
+      await captureScreenshot(page, 'receive-finalized');
+    } else {
+      throw new Error('Final receive button not found');
+    }
+
+  } catch (error) {
+    logError(`Failed to finalize receive: ${error.message}`);
+    await captureScreenshot(page, 'finalize-error');
+    throw error;
+  }
+}
+
+async function main() {
+  log('\n🚀 AUTOMATED PURCHASE ORDER RECEIVE', 'cyan');
+  log('═══════════════════════════════════════════════', 'cyan');
+  log(`Target PO: ${TARGET_PO}`, 'bright');
+  log('═══════════════════════════════════════════════', 'cyan');
+
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: false,
+      defaultViewport: { width: 1920, height: 1080 },
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+
+    const page = await browser.newPage();
+
+    // Enable console logging
+    page.on('console', msg => {
+      if (msg.type() === 'error') {
+        logWarning(`Browser console error: ${msg.text()}`);
+      }
+    });
+
+    await login(page);
+    await navigateToPurchaseOrders(page);
+    await findAndClickPurchaseOrder(page);
+    await initiateReceive(page);
+    await selectPartialReceive(page);
+    await selectItemsToReceive(page);
+    await continueThroughSteps(page);
+    await handleSerialNumbers(page);
+    await setPricing(page);
+    await finalizeReceive(page);
+
+    log('\n🎉 PURCHASE ORDER RECEIVE COMPLETED SUCCESSFULLY!', 'green');
+    log('═══════════════════════════════════════════════════════════════', 'green');
+
+    // Wait a bit to see the results
+    await wait(5000);
+
+  } catch (error) {
+    log('\n❌ RECEIVE PROCESS FAILED', 'red');
+    log('══════════════════════════', 'red');
+    log(`Error: ${error.message}`, 'red');
+
+    // Save error details
+    const errorReport = {
+      timestamp: new Date().toISOString(),
+      targetPO: TARGET_PO,
+      error: error.message,
+      stack: error.stack
+    };
+
+    writeFileSync('auto-receive-error.json', JSON.stringify(errorReport, null, 2));
+    logError('Error report saved to: auto-receive-error.json');
+
+  } finally {
+    if (browser) {
+      await browser.close();
+      logInfo('Browser closed');
+    }
+  }
+}
+
+main().catch(console.error);

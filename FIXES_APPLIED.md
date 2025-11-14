@@ -325,11 +325,139 @@ Created a new feature to easily convert user accounts into employee records:
 
 ## Summary
 
-**4 Issues Fixed:**
+**5 Issues Fixed:**
 1. ✅ "relation 'branch_id' does not exist" - Fixed duplicate join creation
 2. ✅ "relation 'user_id' does not exist" - Fixed ambiguous relationship syntax
 3. ✅ "column users.user_id does not exist" - Fixed JOIN construction logic
 4. ✅ Empty employee dropdown - Fixed column name mismatches
+5. ✅ "syntax error at or near ')'" - Fixed nested relationship parsing
+
+---
+
+## Issue 5: SQL Error - "syntax error at or near ')'" in Low Stock Products Query
+
+### Problem
+The Low Stock Suggestions Widget in the Purchase Order page was showing this SQL error:
+```
+❌ SQL Error: syntax error at or near ")"
+Code: 42601
+```
+
+The malformed SQL contained: `lats_product_variants.) as )`
+
+This was happening with a query that had **multiple nested relationships**:
+```typescript
+product:lats_products!inner(
+  id,
+  name,
+  supplier_id,
+  category:lats_categories(name),      // Nested relationship 1
+  supplier:lats_suppliers(id, name)    // Nested relationship 2
+)
+```
+
+### Root Cause
+In `src/lib/supabaseClient.ts`, the regex patterns used to parse PostgREST relationship syntax could only handle **one level of nested parentheses**.
+
+The regex patterns were:
+```typescript
+// Pattern 1: Explicit FK
+const explicitPattern = /(\w+):(\w+)!(\w+)\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/g;
+                                                   ^^^^^^^^^^^^^^^^^^^^
+                                                   Only matches ONE nested ()
+
+// Pattern 2: Inferred FK  
+const inferredPattern = /(\w+):(\w+)\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/g;
+                                          ^^^^^^^^^^^^^^^^^^^^
+                                          Only matches ONE nested ()
+```
+
+When encountering a query with TWO nested relationships (`category:...` and `supplier:...`), the regex:
+1. Matched incorrectly
+2. Extracted incomplete column strings
+3. Left behind malformed SQL fragments like `.) as )`
+
+### Solution Applied
+**File**: `src/lib/supabaseClient.ts` (lines 423-571)
+
+Changed all three patterns to use the existing `findMatchingParen()` helper function instead of relying on regex to match nested parentheses.
+
+**Before**:
+```typescript
+// Regex tries to match the entire relationship including nested parens
+const explicitPattern = /(\w+):(\w+)!(\w+)\s*\(([^)]*(?:\([^)]*\))?[^)]*)\)/g;
+while ((match = explicitPattern.exec(workingFields)) !== null) {
+  const [fullMatch, alias, table, foreignKey, columnsStr] = match;
+  // Process...
+}
+```
+
+**After**:
+```typescript
+// Regex only finds the START, then use helper to find matching close paren
+const explicitPattern = /(\w+):(\w+)!(\w+)\s*\(/g;
+while ((match = explicitPattern.exec(workingFields)) !== null) {
+  const [startMatch, alias, table, foreignKey] = match;
+  const openParenIdx = match.index + startMatch.length - 1;
+  const closeParenIdx = findMatchingParen(workingFields, openParenIdx);
+  
+  if (closeParenIdx === -1) {
+    console.warn(`⚠️ Could not find matching parenthesis`);
+    continue;
+  }
+  
+  const fullMatch = workingFields.substring(match.index, closeParenIdx + 1);
+  const columnsStr = workingFields.substring(openParenIdx + 1, closeParenIdx);
+  // Process...
+}
+```
+
+The `findMatchingParen()` function properly tracks parenthesis depth:
+```typescript
+const findMatchingParen = (str: string, startIdx: number): number => {
+  let depth = 1;
+  for (let i = startIdx + 1; i < str.length; i++) {
+    if (str[i] === '(') depth++;
+    else if (str[i] === ')') {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+};
+```
+
+This fix was applied to all three patterns:
+1. **Pattern 1**: `alias:table!foreign_key(...)` - Explicit foreign key
+2. **Pattern 2**: `alias:table(...)` - Inferred foreign key  
+3. **Pattern 3**: `table_name(...)` - Simple syntax
+
+### Result
+✅ Low Stock Products query now works correctly  
+✅ Handles unlimited levels of nested relationships  
+✅ No more "syntax error at or near ')'" errors  
+✅ Robust parsing for complex PostgREST queries  
+
+### Testing
+The fix properly handles queries like:
+```typescript
+.select(`
+  id,
+  variant_name,
+  product:lats_products!inner(
+    id,
+    name,
+    category:lats_categories(name),           // Nested level 1
+    supplier:lats_suppliers(
+      id,
+      name,
+      country:countries(name, code)           // Nested level 2 (if needed)
+    )
+  )
+`)
+```
+
+---
 
 ## Status
 
@@ -342,4 +470,6 @@ Created a new feature to easily convert user accounts into employee records:
 - User branch assignments load correctly
 - Employee-user links display properly
 - Manual linking works with populated dropdowns
+- **Low Stock Suggestions Widget loads products correctly**
+- **Purchase Orders page works without SQL errors**
 - No SQL errors in console

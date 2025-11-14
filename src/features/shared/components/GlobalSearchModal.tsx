@@ -125,9 +125,9 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
 
   return createPortal(
     <>
-      {/* Backdrop - respects sidebar and topbar */}
+      {/* Backdrop with macOS-style blur */}
       <div
-        className="fixed"
+        className="fixed animate-fadeIn"
         onClick={handleBackdropClick}
         style={{
           left: 'var(--sidebar-width, 0px)',
@@ -135,14 +135,15 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           right: 0,
           bottom: 0,
           zIndex: 35,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          backdropFilter: 'blur(8px)',
+          backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.25)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
         }}
       />
       
       {/* Modal Container */}
       <div
-        className="fixed flex items-start justify-center pt-12"
+        className="fixed flex items-start justify-center pt-16"
         style={{
           left: 'var(--sidebar-width, 0px)',
           top: 'var(--topbar-height, 64px)',
@@ -156,35 +157,35 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           className={`
             relative w-full max-w-4xl mx-auto mb-8
             ${isDark ? 'bg-slate-900/95' : 'bg-white/95'}
-            backdrop-blur-2xl rounded-2xl shadow-2xl
-            ${isDark ? 'border border-slate-700/50' : 'border border-white/50'}
+            backdrop-blur-2xl rounded-2xl
             overflow-hidden
             transition-all duration-300
           `}
           style={{
             maxHeight: 'calc(90vh - 200px)',
-            animation: 'slideDown 0.3s ease-out',
+            animation: 'slideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
             pointerEvents: 'auto',
             margin: '0 1rem',
+            boxShadow: isDark 
+              ? '0 25px 80px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.1)' 
+              : '0 20px 70px rgba(0, 0, 0, 0.3), 0 0 0 0.5px rgba(0, 0, 0, 0.1)',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-        {/* Search Header */}
+        {/* Search Header - macOS style */}
         <div className={`
           sticky top-0 z-20
-          ${isDark ? 'bg-slate-800/90' : 'bg-white/90'}
+          ${isDark ? 'bg-slate-800/90' : 'bg-gradient-to-b from-gray-50/50 to-transparent'}
           backdrop-blur-xl border-b
           ${isDark ? 'border-slate-700/50' : 'border-gray-200/50'}
-          shadow-sm
         `}>
           <div className="px-6 py-4">
             <form onSubmit={handleSearch} className="relative group">
               <div className="absolute left-4 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
                 <Search 
                   className={`
-                    transition-colors duration-200
+                    transition-colors duration-200 flex-shrink-0
                     ${searchQuery ? (isDark ? 'text-blue-400' : 'text-blue-500') : (isDark ? 'text-gray-500' : 'text-gray-400')}
-                    group-focus-within:${isDark ? 'text-blue-400' : 'text-blue-500'}
                   `} 
                   size={20} 
                 />
@@ -196,17 +197,18 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className={`
-                  w-full pl-12 pr-24 py-3.5 rounded-xl
+                  w-full pl-12 pr-32 py-3.5 rounded-xl
                   ${isDark 
-                    ? 'bg-slate-700/50 border-slate-600/50 text-white placeholder-gray-400' 
-                    : 'bg-gray-50/50 border-gray-300/50 text-gray-900 placeholder-gray-500'
+                    ? 'bg-transparent text-white placeholder-gray-400' 
+                    : 'bg-transparent text-gray-900 placeholder-gray-400'
                   }
-                  border focus:outline-none
-                  focus:${isDark ? 'border-blue-500 bg-slate-700' : 'border-blue-400 bg-white'}
-                  focus:ring-2 focus:ring-blue-500/20
+                  border-0 focus:outline-none
                   transition-all duration-200
                   text-base
                 `}
+                style={{
+                  fontWeight: 400,
+                }}
                 autoFocus
               />
               
@@ -215,12 +217,12 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                   type="button"
                   onClick={() => setShowFilters(!showFilters)}
                   className={`
-                    p-1.5 rounded-lg flex items-center gap-1 transition-all duration-200
+                    p-1.5 rounded-lg flex items-center gap-1 transition-all duration-150
                     ${showFilters
-                      ? 'bg-blue-500 text-white shadow-lg'
+                      ? 'bg-blue-500 text-white shadow-md'
                       : isDark 
-                        ? 'bg-slate-600/50 hover:bg-slate-600 text-gray-300' 
-                        : 'bg-gray-200/50 hover:bg-gray-300 text-gray-600'
+                        ? 'bg-slate-700/50 hover:bg-slate-600 text-gray-300 border border-slate-600/50' 
+                        : 'bg-gray-100/80 hover:bg-gray-200/80 text-gray-600 border border-gray-200/50'
                     }
                   `}
                   title="Advanced Filters"
@@ -238,51 +240,51 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                     type="button"
                     onClick={clearSearch}
                     className={`
-                      p-1.5 rounded-lg
+                      p-1.5 rounded-lg transition-all duration-150
                       ${isDark 
-                        ? 'bg-slate-600/50 hover:bg-slate-600 text-gray-300' 
-                        : 'bg-gray-200/50 hover:bg-gray-300 text-gray-600'
+                        ? 'bg-slate-700/50 hover:bg-slate-600 text-gray-300 border border-slate-600/50' 
+                        : 'bg-gray-100/80 hover:bg-gray-200/80 text-gray-600 border border-gray-200/50'
                       }
-                      transition-all duration-200
                     `}
                   >
                     <X size={14} />
                   </button>
                 )}
                 
-                <button
-                  onClick={handleClose}
-                  className={`
-                    p-1.5 rounded-lg
+                <div className={`
+                  flex items-center gap-1 px-2 py-1 rounded-md
                     ${isDark 
-                      ? 'bg-slate-600/50 hover:bg-slate-600 text-gray-300' 
-                      : 'bg-gray-200/50 hover:bg-gray-300 text-gray-600'
+                    ? 'bg-slate-700/50 border border-slate-600/50' 
+                    : 'bg-gray-100/80 border border-gray-200/50'
                     }
-                    transition-all duration-200
-                  `}
-                  type="button"
-                >
-                  <kbd className="text-xs font-mono">ESC</kbd>
-                </button>
+                `}>
+                  <span className={`text-xs font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>ESC</span>
+                </div>
               </div>
             </form>
 
-            {/* Quick Tips - Minimal */}
+            {/* Quick Tips - macOS style */}
             <div className={`
               flex items-center gap-3 mt-3 text-xs
-              ${isDark ? 'text-gray-500' : 'text-gray-400'}
+              ${isDark ? 'text-gray-500' : 'text-gray-500'}
             `}>
-              <kbd className={`px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-slate-700 text-gray-300' : 'bg-gray-200/50 text-gray-700'}`}>↑↓</kbd>
-              <kbd className={`px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-slate-700 text-gray-300' : 'bg-gray-200/50 text-gray-700'}`}>Enter</kbd>
-              <kbd className={`px-1.5 py-0.5 rounded font-mono ${isDark ? 'bg-slate-700 text-gray-300' : 'bg-gray-200/50 text-gray-700'}`}>ESC</kbd>
+              <div className="flex items-center gap-1.5">
+                <kbd className={`px-2 py-1 rounded font-medium shadow-sm ${isDark ? 'bg-slate-700 text-gray-300 border border-slate-600/50' : 'bg-white/80 border border-gray-200/50 text-gray-600'}`}>↑</kbd>
+                <kbd className={`px-2 py-1 rounded font-medium shadow-sm ${isDark ? 'bg-slate-700 text-gray-300 border border-slate-600/50' : 'bg-white/80 border border-gray-200/50 text-gray-600'}`}>↓</kbd>
+                <span>Navigate</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <kbd className={`px-2 py-1 rounded font-medium shadow-sm ${isDark ? 'bg-slate-700 text-gray-300 border border-slate-600/50' : 'bg-white/80 border border-gray-200/50 text-gray-600'}`}>↵</kbd>
+                <span>Select</span>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Content Area */}
+        {/* Content Area - macOS style scrollbar */}
         <div 
           className={`
-            overflow-y-auto px-6 py-6
+            overflow-y-auto px-6 py-6 custom-scrollbar
             ${isDark ? 'bg-slate-900/50' : 'bg-gray-50/30'}
           `}
           style={{ 
@@ -331,7 +333,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           )}
         </div>
         
-        {/* Add CSS animations */}
+        {/* Add CSS animations and custom scrollbar */}
         <style>{`
           @keyframes fadeIn {
             from {
@@ -345,12 +347,30 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           @keyframes slideDown {
             from {
               opacity: 0;
-              transform: translateY(-20px) scale(0.95);
+              transform: translateY(-20px) scale(0.96);
             }
             to {
               opacity: 1;
               transform: translateY(0) scale(1);
             }
+          }
+
+          /* Custom scrollbar for macOS look */
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+          }
+
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+          }
+
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: ${isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'};
+            border-radius: 4px;
+          }
+
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: ${isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.3)'};
           }
         `}</style>
       </div>

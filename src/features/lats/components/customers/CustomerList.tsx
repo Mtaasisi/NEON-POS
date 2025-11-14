@@ -1,5 +1,6 @@
 // CustomerList component for LATS module
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { LATS_CLASSES } from '../../tokens';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
@@ -44,6 +45,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
   showSelection = false,
   className = ''
 }) => {
+  const navigate = useNavigate();
   const [sortBy, setSortBy] = useState<'name' | 'joinedDate' | 'totalSpent' | 'points'>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
@@ -164,7 +166,7 @@ const CustomerList: React.FC<CustomerListProps> = ({
         actions={[
           {
             label: 'Add Customer',
-            onClick: () => window.location.href = '/customers/new',
+            onClick: () => navigate('/customers/new'),
             variant: 'primary'
           }
         ]}

@@ -17,7 +17,8 @@ import {
   Search, Star, HardDrive,
   MessageSquare, Download, Upload,
   UserCheck, Database, Target, Bot,
-  Printer, Tag, Building, MapPin, Clock
+  Printer, Tag, Building, MapPin, Clock,
+  Truck
 } from 'lucide-react';
 import {
   NotificationWidget,
@@ -48,21 +49,29 @@ import {
   SalesChart,
   PaymentMethodsChart,
   SalesByCategoryChart,
-  ProfitMarginChart
+  ProfitMarginChart,
+  // New enhanced widgets
+  AIInsightsWidget,
+  PredictiveAnalyticsWidget,
+  AlertSystemWidget
 } from '../components/dashboard';
 import { dashboardService, DashboardStats } from '../../../services/dashboardService';
 import { getDashboardTitleForRole, getDashboardDescriptionForRole } from '../../../config/roleBasedWidgets';
+import { useRealtimeDashboard } from '../../../hooks/useRealtimeDashboard';
 
 const DashboardPageContent: React.FC = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  
+
+  // Real-time dashboard updates
+  const { metrics, isConnected, lastUpdate, updates, refresh } = useRealtimeDashboard();
+
   // Dashboard settings hook
-  const { 
-    isQuickActionEnabled, 
-    isWidgetEnabled, 
+  const {
+    isQuickActionEnabled,
+    isWidgetEnabled,
     getWidgetSize,
-    loading: settingsLoading 
+    loading: settingsLoading
   } = useDashboardSettings();
   
   // Smart grid layout hook
@@ -321,6 +330,14 @@ const DashboardPageContent: React.FC = () => {
       path: '/lats/unified-inventory'
     },
     {
+      id: 'purchaseOrder' as const,
+      title: 'Purchase Order',
+      description: 'Create PO (⌘⇧O)',
+      icon: Truck,
+      color: 'from-orange-500 to-amber-600',
+      path: '/lats/purchase-order/create'
+    },
+    {
       id: 'appointments' as const,
       title: 'Appointments',
       description: 'Scheduling',
@@ -335,6 +352,14 @@ const DashboardPageContent: React.FC = () => {
       icon: Package,
       color: 'from-orange-500 to-orange-600',
       path: '/lats/purchase-orders'
+    },
+    {
+      id: 'createPO' as const,
+      title: 'Create PO',
+      description: 'New purchase order',
+      icon: Plus,
+      color: 'from-orange-500 to-orange-600',
+      path: '/lats/purchase-order/create'
     },
     {
       id: 'payments' as const,
@@ -629,12 +654,26 @@ const DashboardPageContent: React.FC = () => {
                 <Plus size={18} />
                 Add Device
               </button>
+              {/* Real-time Connection Status */}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100">
+                <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <span className="text-xs text-gray-600">
+                  {isConnected ? 'Live' : 'Offline'}
+                </span>
+                {lastUpdate && (
+                  <span className="text-xs text-gray-500 ml-2">
+                    {new Date(lastUpdate).toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+
               <button
-                onClick={handleRefresh}
+                onClick={refresh}
                 disabled={isLoading}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm disabled:opacity-50"
               >
-                <RefreshCw size={18} />
+                <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                Refresh
               </button>
             </div>
         </div>
@@ -809,7 +848,11 @@ const DashboardPageContent: React.FC = () => {
             'staffPerformanceWidget': StaffPerformanceWidget,
             'systemHealthWidget': SystemHealthWidget,
             'inventoryWidget': InventoryWidget,
-            'activityFeedWidget': ActivityFeedWidget
+            'activityFeedWidget': ActivityFeedWidget,
+            // Enhanced AI-powered widgets
+            'aiInsightsWidget': AIInsightsWidget,
+            'predictiveAnalyticsWidget': PredictiveAnalyticsWidget,
+            'alertSystemWidget': AlertSystemWidget
           };
           
           // Get the saved order (prefer ref, then state)

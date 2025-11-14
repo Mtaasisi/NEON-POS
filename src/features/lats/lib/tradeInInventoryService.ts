@@ -152,7 +152,7 @@ export const addTradeInDeviceToInventory = async (params: AddToInventoryParams) 
       const { data: existingIMEI } = await supabase
         .from('lats_product_variants')
         .select('id, product_id, variant_attributes')
-        .filter('variant_attributes->imei', 'eq', transaction.device_imei)
+        .filter("variant_attributes->>'imei'", 'eq', transaction.device_imei)
         .maybeSingle();
       
       if (existingIMEI) {

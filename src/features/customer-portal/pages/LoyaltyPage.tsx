@@ -14,9 +14,11 @@ import {
 import { LoyaltyReward } from '../types';
 import toast from 'react-hot-toast';
 import customerPortalService from '../services/customerPortalService';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 const LoyaltyPage: React.FC = () => {
   const navigate = useNavigate();
+  const { startLoading, completeLoading, failLoading } = useLoadingJob();
   const [points, setPoints] = useState(0);
   const [tier, setTier] = useState<'interested' | 'engaged' | 'payment_customer' | 'active' | 'regular' | 'premium' | 'vip'>('interested');
   const [rewards, setRewards] = useState<LoyaltyReward[]>([]);
@@ -28,6 +30,8 @@ const LoyaltyPage: React.FC = () => {
   }, []);
 
   const loadLoyaltyData = async () => {
+    const jobId = startLoading('Loading loyalty data...');
+    
     try {
       setLoading(true);
       const customerId = localStorage.getItem('customer_id');
@@ -78,9 +82,11 @@ const LoyaltyPage: React.FC = () => {
       ];
 
       setRewards(mockRewards);
+      completeLoading(jobId);
     } catch (error) {
       console.error('Error loading loyalty data:', error);
       toast.error('Failed to load loyalty data');
+      failLoading(jobId, 'Failed to load loyalty data');
     } finally {
       setLoading(false);
     }

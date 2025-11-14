@@ -97,11 +97,10 @@ export class SearchService {
         .select(`
           id,
           model,
-          serialNumber,
+          serial_number,
           status,
-          issue,
-          expectedReturnDate,
-          customerName,
+          problem_description,
+          estimated_completion_date,
           created_at,
           updated_at
         `)
@@ -128,11 +127,10 @@ export class SearchService {
       const deviceList = devices.map(device => ({
         id: device.id,
         model: device.model || '',
-        serialNumber: device.serialNumber || '',
+        serialNumber: device.serial_number || '',
         status: device.status || '',
-        issue: device.issue || '',
-        expectedReturnDate: device.expectedReturnDate || '',
-        customerName: device.customerName || 'No customer',
+        issue: device.problem_description || '',
+        expectedReturnDate: device.estimated_completion_date || '',
         createdAt: device.created_at,
         updatedAt: device.updated_at,
       }));
@@ -144,16 +142,11 @@ export class SearchService {
           device.model.toLowerCase().includes(filters.model!.toLowerCase())
         );
       }
-      if (filters.customer) {
-        filteredDevices = filteredDevices.filter(device =>
-          device.customerName.toLowerCase().includes(filters.customer!.toLowerCase())
-        );
-      }
 
       // If search terms provided, use fuzzy search
       if (terms.length > 0) {
         const fuse = new Fuse(filteredDevices, {
-          keys: ['model', 'serialNumber', 'customerName', 'issue', 'status'],
+          keys: ['model', 'serialNumber', 'issue', 'status'],
           threshold: 0.3, // Lower = more strict
           includeScore: true,
           includeMatches: true,
@@ -170,8 +163,8 @@ export class SearchService {
             id: device.id,
             type: 'device' as const,
             title: device.model,
-            subtitle: device.customerName,
-            description: `Status: ${device.status} | Serial: ${device.serialNumber}`,
+            subtitle: device.serialNumber || 'No serial number',
+            description: `Status: ${device.status}${device.issue ? ' | Issue: ' + device.issue : ''}`,
             url: `/devices/${device.id}`,
             metadata: {
               status: device.status,
@@ -179,7 +172,7 @@ export class SearchService {
               issue: device.issue,
               expectedReturnDate: device.expectedReturnDate,
             },
-            priority: device.status === 'active' ? 1 : 2,
+            priority: device.status === 'pending' || device.status === 'in-progress' ? 1 : 2,
             score: result.score,
             matches,
             createdAt: device.createdAt,
@@ -193,8 +186,8 @@ export class SearchService {
         id: device.id,
         type: 'device' as const,
         title: device.model,
-        subtitle: device.customerName,
-        description: `Status: ${device.status} | Serial: ${device.serialNumber}`,
+        subtitle: device.serialNumber || 'No serial number',
+        description: `Status: ${device.status}${device.issue ? ' | Issue: ' + device.issue : ''}`,
         url: `/devices/${device.id}`,
         metadata: {
           status: device.status,
@@ -202,7 +195,7 @@ export class SearchService {
           issue: device.issue,
           expectedReturnDate: device.expectedReturnDate,
         },
-        priority: device.status === 'active' ? 1 : 2,
+        priority: device.status === 'pending' || device.status === 'in-progress' ? 1 : 2,
         createdAt: device.createdAt,
         updatedAt: device.updatedAt,
       }));
@@ -223,9 +216,8 @@ export class SearchService {
           name,
           phone,
           email,
-          location,
+          city,
           notes,
-          isRead,
           created_at,
           updated_at
         `)
@@ -249,9 +241,8 @@ export class SearchService {
         name: customer.name || '',
         phone: customer.phone || '',
         email: customer.email || '',
-        location: customer.location || '',
+        location: customer.city || '',
         notes: customer.notes || '',
-        isRead: customer.isRead,
         createdAt: customer.created_at,
         updatedAt: customer.updated_at,
       }));
@@ -305,9 +296,24 @@ export class SearchService {
             metadata: {
               email: customer.email,
               location: customer.location,
-              isRead: customer.isRead,
+              phone: customer.phone,
+              whatsapp: customer.whatsapp,
+              gender: customer.gender,
+              city: customer.city,
+              loyaltyLevel: customer.loyalty_level,
+              points: customer.points,
+              totalSpent: customer.total_spent,
+              lastVisit: customer.last_visit,
+              isActive: customer.is_active,
+              totalPurchases: customer.total_purchases,
+              colorTag: customer.color_tag,
+              loyaltyTier: customer.loyalty_tier,
+              birthday: customer.birthday,
+              joinedDate: customer.joined_date,
+              totalCalls: customer.total_calls,
+              callLoyaltyLevel: customer.call_loyalty_level,
             },
-            priority: customer.isRead === false ? 1 : 2,
+            priority: 2,
             score: result.score,
             matches,
             createdAt: customer.createdAt,
@@ -327,9 +333,24 @@ export class SearchService {
         metadata: {
           email: customer.email,
           location: customer.location,
-          isRead: customer.isRead,
+          phone: customer.phone,
+          whatsapp: customer.whatsapp,
+          gender: customer.gender,
+          city: customer.city,
+          loyaltyLevel: customer.loyalty_level,
+          points: customer.points,
+          totalSpent: customer.total_spent,
+          lastVisit: customer.last_visit,
+          isActive: customer.is_active,
+          totalPurchases: customer.total_purchases,
+          colorTag: customer.color_tag,
+          loyaltyTier: customer.loyalty_tier,
+          birthday: customer.birthday,
+          joinedDate: customer.joined_date,
+          totalCalls: customer.total_calls,
+          callLoyaltyLevel: customer.call_loyalty_level,
         },
-        priority: customer.isRead === false ? 1 : 2,
+        priority: 2,
         createdAt: customer.createdAt,
         updatedAt: customer.updatedAt,
       }));
@@ -348,14 +369,14 @@ export class SearchService {
     try {
       // Query database for products
       let query = supabase
-        .from('lats_inventory')
+        .from('lats_products')
         .select(`
           id,
-          product_name,
+          name,
           sku,
           barcode,
           selling_price,
-          quantity,
+          stock_quantity,
           category_id,
           branch_id,
           created_at,
@@ -383,11 +404,11 @@ export class SearchService {
       // Map database results to searchable format
       const productList = products.map(product => ({
         id: product.id,
-        name: product.product_name || '',
+        name: product.name || '',
         sku: product.sku || '',
         barcode: product.barcode || '',
         price: product.selling_price || 0,
-        stockQuantity: product.quantity || 0,
+        stockQuantity: product.stock_quantity || 0,
         categoryId: product.category_id || '',
         branchId: product.branch_id || '',
         createdAt: product.created_at,

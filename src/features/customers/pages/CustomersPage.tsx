@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useCustomers } from '../../../context/CustomersContext';
+import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { CustomerListSkeleton } from '../../../components/ui/SkeletonLoaders';
 import { Customer, LoyaltyLevel } from '../../../types';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
@@ -36,6 +38,7 @@ import BirthdayRewards from '../components/BirthdayRewards';
 import { createAppointment, updateAppointment, CreateAppointmentData, UpdateAppointmentData, Appointment } from '../../../lib/customerApi/appointments';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
+import { useDialog } from '../../shared/hooks/useDialog';
 
 // Helper to escape CSV fields
 function escapeCSVField(field: any) {
@@ -64,6 +67,7 @@ const getInitialPrefs = () => {
 
 const CustomersPage = () => {
   const { currentUser } = useAuth();
+  const { confirm } = useDialog();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { markCustomerAsRead } = useCustomers();
@@ -1045,7 +1049,7 @@ const CustomersPage = () => {
 
   // Handle bulk delete with confirmation
   const handleBulkDelete = async () => {
-    const confirmed = window.confirm(
+    const confirmed = await confirm(
       `Are you sure you want to delete ${selectedCustomers.length} customer${selectedCustomers.length !== 1 ? 's' : ''}? This action cannot be undone.`
     );
     
@@ -1352,20 +1356,13 @@ const CustomersPage = () => {
     );
   }
 
+  // Show skeleton while loading initial data
+  if (loading && customers.length === 0) {
+    return <CustomerListSkeleton rows={10} />;
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* Initial Loading Progress Bar */}
-      {loading && customers.length === 0 && (
-        <div className="mb-4">
-          <BackgroundSearchIndicator
-            isSearching={true}
-            searchStatus="processing"
-            searchProgress={50}
-            resultCount={0}
-          />
-        </div>
-      )}
-
       {isOffline && (
         <div style={{ background: '#fbbf24', color: 'black', padding: '8px', textAlign: 'center' }}>
           You are offline. Data is loaded from cache.

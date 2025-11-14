@@ -68,6 +68,95 @@ export interface Sale {
   [key: string]: any;
 }
 
+export interface ParentVariant {
+  id: string;
+  product_id: string;
+  variant_name?: string;
+  name?: string;
+  is_parent?: boolean;
+  variant_type?: string;
+  quantity?: number;
+  available_imeis?: number;
+  [key: string]: any;
+}
+
+export interface ChildVariant {
+  id: string;
+  parent_variant_id: string;
+  variant_name?: string;
+  imei?: string;
+  quantity?: number;
+  is_active?: boolean;
+  [key: string]: any;
+}
+
+export interface Employee {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  full_name?: string;
+  email: string;
+  phone?: string;
+  position?: string;
+  department?: string;
+  hireDate?: string;
+  salary?: number;
+  status?: 'active' | 'inactive' | 'on-leave' | 'terminated';
+  performance?: number;
+  attendance?: number;
+  skills?: string[];
+  manager?: string;
+  location?: string;
+  branchId?: string;
+  userId?: string;
+  userRole?: string;
+  branch?: {
+    id: string;
+    name: string;
+    code: string;
+    isMain: boolean;
+  };
+  [key: string]: any;
+}
+
+export interface Device {
+  id: string;
+  customer_name?: string;
+  customer_phone?: string;
+  device_model?: string;
+  imei?: string;
+  serial_number?: string;
+  issue_description?: string;
+  status?: string;
+  priority?: string;
+  technician_id?: string;
+  technician_name?: string;
+  created_at?: string;
+  expected_return_date?: string;
+  [key: string]: any;
+}
+
+export interface PaymentMethod {
+  id: string;
+  name: string;
+  type: string;
+  account_number?: string;
+  is_active?: boolean;
+  [key: string]: any;
+}
+
+export interface AttendanceRecord {
+  id: string;
+  employeeId: string;
+  attendanceDate: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  totalHours: number;
+  status: 'present' | 'absent' | 'late' | 'half-day';
+  notes?: string;
+  [key: string]: any;
+}
+
 interface CacheMetadata {
   timestamp: number;
   isStale: boolean;
@@ -85,6 +174,11 @@ interface DataState {
   devices: Device[];
   sales: Sale[];
   settings: Settings | null;
+  parentVariants: ParentVariant[];
+  childVariants: ChildVariant[];
+  employees: Employee[];
+  paymentMethods: PaymentMethod[];
+  attendanceRecords: AttendanceRecord[];
 
   // Cache metadata
   cache: {
@@ -97,6 +191,11 @@ interface DataState {
     devices: CacheMetadata;
     sales: CacheMetadata;
     settings: CacheMetadata;
+    parentVariants: CacheMetadata;
+    childVariants: CacheMetadata;
+    employees: CacheMetadata;
+    paymentMethods: CacheMetadata;
+    attendanceRecords: CacheMetadata;
   };
 
   // Loading states
@@ -122,6 +221,11 @@ interface DataState {
   setDevices: (devices: Device[]) => void;
   setSales: (sales: Sale[]) => void;
   setSettings: (settings: Settings) => void;
+  setParentVariants: (parentVariants: ParentVariant[]) => void;
+  setChildVariants: (childVariants: ChildVariant[]) => void;
+  setEmployees: (employees: Employee[]) => void;
+  setPaymentMethods: (paymentMethods: PaymentMethod[]) => void;
+  setAttendanceRecords: (attendanceRecords: AttendanceRecord[]) => void;
 
   // Preload actions
   setPreloadProgress: (progress: number, status: string) => void;
@@ -145,6 +249,11 @@ interface DataState {
   getCategories: () => Category[];
   getSuppliers: () => Supplier[];
   getBranches: () => Branch[];
+  getParentVariants: () => ParentVariant[];
+  getChildVariants: () => ChildVariant[];
+  getEmployees: () => Employee[];
+  getPaymentMethods: () => PaymentMethod[];
+  getAttendanceRecords: () => AttendanceRecord[];
 
   // Utility
   clearAllData: () => void;
@@ -171,6 +280,11 @@ export const useDataStore = create<DataState>()(
         devices: [],
         sales: [],
         settings: null,
+        parentVariants: [],
+        childVariants: [],
+        employees: [],
+        paymentMethods: [],
+        attendanceRecords: [],
 
         // Initial cache metadata
         cache: {
@@ -183,6 +297,11 @@ export const useDataStore = create<DataState>()(
           devices: createCacheMetadata(),
           sales: createCacheMetadata(),
           settings: createCacheMetadata(),
+          parentVariants: createCacheMetadata(),
+          childVariants: createCacheMetadata(),
+          employees: createCacheMetadata(),
+          paymentMethods: createCacheMetadata(),
+          attendanceRecords: createCacheMetadata(),
         },
 
         // Initial loading states
@@ -242,6 +361,31 @@ export const useDataStore = create<DataState>()(
         setSettings: (settings) => {
           set({ settings });
           get().updateCacheTimestamp('settings');
+        },
+
+        setParentVariants: (parentVariants) => {
+          set({ parentVariants });
+          get().updateCacheTimestamp('parentVariants');
+        },
+
+        setChildVariants: (childVariants) => {
+          set({ childVariants });
+          get().updateCacheTimestamp('childVariants');
+        },
+
+        setEmployees: (employees) => {
+          set({ employees });
+          get().updateCacheTimestamp('employees');
+        },
+
+        setPaymentMethods: (paymentMethods) => {
+          set({ paymentMethods });
+          get().updateCacheTimestamp('paymentMethods');
+        },
+
+        setAttendanceRecords: (attendanceRecords) => {
+          set({ attendanceRecords });
+          get().updateCacheTimestamp('attendanceRecords');
         },
 
         // Preload actions
@@ -367,6 +511,46 @@ export const useDataStore = create<DataState>()(
           return state.branches;
         },
 
+        getParentVariants: () => {
+          const state = get();
+          if (!state.isCacheValid('parentVariants')) {
+            console.warn('⚠️ Parent variants cache is stale');
+          }
+          return state.parentVariants;
+        },
+
+        getChildVariants: () => {
+          const state = get();
+          if (!state.isCacheValid('childVariants')) {
+            console.warn('⚠️ Child variants cache is stale');
+          }
+          return state.childVariants;
+        },
+
+        getEmployees: () => {
+          const state = get();
+          if (!state.isCacheValid('employees')) {
+            console.warn('⚠️ Employees cache is stale');
+          }
+          return state.employees;
+        },
+
+        getPaymentMethods: () => {
+          const state = get();
+          if (!state.isCacheValid('paymentMethods')) {
+            console.warn('⚠️ Payment methods cache is stale');
+          }
+          return state.paymentMethods;
+        },
+
+        getAttendanceRecords: () => {
+          const state = get();
+          if (!state.isCacheValid('attendanceRecords')) {
+            console.warn('⚠️ Attendance records cache is stale');
+          }
+          return state.attendanceRecords;
+        },
+
         // Utility
         clearAllData: () => {
           set({
@@ -379,6 +563,11 @@ export const useDataStore = create<DataState>()(
             devices: [],
             sales: [],
             settings: null,
+            parentVariants: [],
+            childVariants: [],
+            employees: [],
+            paymentMethods: [],
+            attendanceRecords: [],
             isLoaded: false,
             preloadProgress: 0,
             preloadStatus: 'Not started',
@@ -402,6 +591,11 @@ export const useDataStore = create<DataState>()(
               users: state.users.length,
               devices: state.devices.length,
               sales: state.sales.length,
+              parentVariants: state.parentVariants.length,
+              childVariants: state.childVariants.length,
+              employees: state.employees.length,
+              paymentMethods: state.paymentMethods.length,
+              attendanceRecords: state.attendanceRecords.length,
             },
             cacheStatus: Object.keys(state.cache).map(key => ({
               dataType: key,
@@ -433,6 +627,11 @@ export const useProductsData = () => useDataStore((state) => state.products);
 export const useCategoriesData = () => useDataStore((state) => state.categories);
 export const useSuppliersData = () => useDataStore((state) => state.suppliers);
 export const useBranchesData = () => useDataStore((state) => state.branches);
+export const useParentVariantsData = () => useDataStore((state) => state.parentVariants);
+export const useChildVariantsData = () => useDataStore((state) => state.childVariants);
+export const useEmployeesData = () => useDataStore((state) => state.employees);
+export const usePaymentMethodsData = () => useDataStore((state) => state.paymentMethods);
+export const useAttendanceRecordsData = () => useDataStore((state) => state.attendanceRecords);
 export const usePreloadStatus = () => useDataStore((state) => ({
   isPreloading: state.isPreloading,
   progress: state.preloadProgress,

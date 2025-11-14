@@ -91,7 +91,6 @@ export const countryFlags: Record<string, string> = {
   'AE': '🇦🇪',
   'SA': '🇸🇦',
   'TR': '🇹🇷',
-  'UK': '🇬🇧',
   'GB': '🇬🇧',
   'DE': '🇩🇪',
   'FR': '🇫🇷',
