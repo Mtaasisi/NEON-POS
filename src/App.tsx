@@ -580,7 +580,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           }
         >
           <Route index element={<DefaultRedirect />} />
-          <Route path="/dashboard" element={
+          <Route path="dashboard" element={
             <Suspense fallback={<DynamicPageLoader />}>
               <ConditionalDashboard />
             </Suspense>
