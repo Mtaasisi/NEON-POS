@@ -124,6 +124,11 @@ export function processProductData(products: Product[]): Product[] {
       transformedProduct.images = replacePlaceholderImages(processProductImages(transformedProduct.images));
     }
 
+    // Process direct image_url field if present (check original product before transformation)
+    if (processedProduct.image_url) {
+      transformedProduct.image_url = emergencyUrlCleanup(processedProduct.image_url);
+    }
+
     // Process variants if they exist (optimized)
     if (transformedProduct.variants && Array.isArray(transformedProduct.variants)) {
       transformedProduct.variants = transformedProduct.variants.map((variant: any) => {

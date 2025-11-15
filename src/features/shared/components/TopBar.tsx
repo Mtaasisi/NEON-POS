@@ -93,6 +93,7 @@ import Modal from './ui/Modal';
 import ImportEmployeesFromUsersModal from '../../employees/components/ImportEmployeesFromUsersModal';
 import TransferModal from '../../payments/components/TransferModal';
 import BulkSMSModal from '../../reports/components/BulkSMSModal';
+import DailyReportModal from './DailyReportModal';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -101,7 +102,7 @@ interface TopBarProps {
 }
 
 const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapsed }) => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, logout, isImpersonating, impersonateUser, stopImpersonation, getAvailableTestUsers } = useAuth();
   const { isDark } = useTheme();
   const { openSearch } = useGlobalSearchModal();
   const [showQuickExpense, setShowQuickExpense] = useState(false);
@@ -117,6 +118,11 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const [showEmployeeImportModal, setShowEmployeeImportModal] = useState(false);
   const [showAccountTransferModal, setShowAccountTransferModal] = useState(false);
   const [showBulkSMSModal, setShowBulkSMSModal] = useState(false);
+  const [showDailyReportModal, setShowDailyReportModal] = useState(false);
+  const [showUserSelector, setShowUserSelector] = useState(false);
+  const [availableTestUsers, setAvailableTestUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [reportType, setReportType] = useState<'daily' | 'monthly'>('daily');
   const [paymentModalConfig, setPaymentModalConfig] = useState({
     amount: 0,
     description: 'Manual payment entry',
@@ -233,6 +239,35 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Load available test users for admin
+  const loadTestUsers = async () => {
+    if (currentUser?.role !== 'admin') return;
+
+    setLoadingUsers(true);
+    try {
+      const users = await getAvailableTestUsers();
+      setAvailableTestUsers(users);
+    } catch (error) {
+      console.error('Error loading test users:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleUserSelect = async (userId: string) => {
+    const success = await impersonateUser(userId);
+    if (success) {
+      setShowUserSelector(false);
+      // No longer need to reload - impersonation state is now persisted
+    }
+  };
+
+  const handleStopImpersonation = () => {
+    stopImpersonation();
+    setShowUserSelector(false);
+    // No longer need to reload - impersonation state is now persisted
+  };
 
   // Handle fullscreen change events
   useEffect(() => {
@@ -570,8 +605,39 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
       });
     }
 
+    // Daily Reports - All authenticated users
+    if (role) {
+      options.push({
+        key: 'daily-report',
+        label: 'Daily Report',
+        description: 'Submit your daily work report',
+        icon: FileText,
+        gradient: 'from-blue-500 to-indigo-600',
+        hover: 'hover:from-indigo-600 hover:to-blue-700',
+        action: () => {
+          setReportType('daily');
+          setShowDailyReportModal(true);
+          setShowCreateDropdown(false);
+        },
+      });
+
+      options.push({
+        key: 'monthly-report',
+        label: 'Monthly Report',
+        description: 'Submit your monthly summary report',
+        icon: Calendar,
+        gradient: 'from-teal-500 to-cyan-600',
+        hover: 'hover:from-cyan-600 hover:to-teal-700',
+        action: () => {
+          setReportType('monthly');
+          setShowDailyReportModal(true);
+          setShowCreateDropdown(false);
+        },
+      });
+    }
+
     return options;
-  }, [currentUser, navigate, setShowCreateDropdown, setShowAddProductModal, setShowBulkImportModal, setShowAddSupplierModal, setShowCustomerImportModal, setShowAppointmentModal, setPaymentModalConfig, setShowPaymentModal, setShowSMSModal, setShowEmployeeImportModal, setShowAccountTransferModal, setShowBulkSMSModal]);
+  }, [currentUser, navigate, setShowCreateDropdown, setShowAddProductModal, setShowBulkImportModal, setShowAddSupplierModal, setShowCustomerImportModal, setShowAppointmentModal, setPaymentModalConfig, setShowPaymentModal, setShowSMSModal, setShowEmployeeImportModal, setShowAccountTransferModal, setShowBulkSMSModal, setShowDailyReportModal, setReportType]);
 
   return (
     <header ref={headerRef} className={`fixed top-0 left-0 right-0 z-20 transition-all duration-500 ${isNavCollapsed ? 'md:ml-[5.5rem]' : 'md:ml-72'}`}>
@@ -1045,6 +1111,110 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               <SimpleBranchSelector />
             )}
 
+            {/* User Selector for Testing - Admin Only */}
+            {currentUser?.role === 'admin' && (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowUserSelector(!showUserSelector);
+                    if (!showUserSelector && availableTestUsers.length === 0) {
+                      loadTestUsers();
+                    }
+                  }}
+                  className={`p-3 rounded-xl transition-all duration-200 backdrop-blur-sm border shadow-sm ${
+                    isImpersonating
+                      ? 'bg-red-500 text-white border-red-400 hover:bg-red-600'
+                      : 'bg-purple-500 text-white border-purple-400 hover:bg-purple-600'
+                  }`}
+                  title={isImpersonating ? 'Stop User Testing (Currently impersonating)' : 'Test as Different User'}
+                >
+                  <User size={18} className={isImpersonating ? 'text-white' : 'text-white'} />
+                </button>
+
+                {/* User Selector Dropdown */}
+                {showUserSelector && (
+                  <div className={`absolute right-0 top-full mt-2 w-80 ${isDark ? 'bg-slate-800/95 border-slate-700/60' : 'bg-white/95 border-gray-200/60'} backdrop-blur-xl rounded-xl shadow-xl border z-50 max-h-96 overflow-y-auto`}>
+                    <div className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {isImpersonating ? 'Stop Testing' : 'Test as User'}
+                        </h3>
+                        {isImpersonating && (
+                          <button
+                            onClick={handleStopImpersonation}
+                            className="px-3 py-1 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors"
+                          >
+                            Stop Testing
+                          </button>
+                        )}
+                      </div>
+
+                      {isImpersonating && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center gap-2 text-red-700">
+                            <User size={16} />
+                            <span className="text-sm font-medium">
+                              Currently testing as: <strong>{currentUser?.name}</strong> ({currentUser?.role})
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {!isImpersonating && (
+                        <div className="space-y-2">
+                          {loadingUsers ? (
+                            <div className="text-center py-4">
+                              <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                              <p className="text-sm text-gray-600">Loading users...</p>
+                            </div>
+                          ) : availableTestUsers.length === 0 ? (
+                            <div className="text-center py-4 text-gray-500">
+                              <User size={24} className="mx-auto mb-2 opacity-50" />
+                              <p className="text-sm">No users available for testing</p>
+                            </div>
+                          ) : (
+                            availableTestUsers.map((user) => (
+                              <button
+                                key={user.id}
+                                onClick={() => handleUserSelect(user.id)}
+                                className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-colors ${
+                                  isDark
+                                    ? 'hover:bg-slate-700/60 text-gray-300'
+                                    : 'hover:bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                                    <span className="text-xs text-white font-bold">
+                                      {(user.full_name || user.email || 'U').charAt(0).toUpperCase()}
+                                    </span>
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="text-sm font-medium">{user.full_name || user.email}</p>
+                                    <p className="text-xs text-gray-500 capitalize">{user.role?.replace('-', ' ') || 'user'}</p>
+                                  </div>
+                                </div>
+                                <ArrowRight size={16} className="text-gray-400" />
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <p className="text-xs text-gray-500 text-center">
+                          {isImpersonating
+                            ? 'Click "Stop Testing" to return to admin account'
+                            : 'Select a user to test the system from their perspective'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -1237,6 +1407,17 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           }}
         />
       )}
+
+      {/* Daily Report Modal */}
+      <DailyReportModal
+        isOpen={showDailyReportModal}
+        onClose={() => setShowDailyReportModal(false)}
+        reportType={reportType}
+        onSuccess={() => {
+          toast.success('Report submitted successfully!');
+          setShowDailyReportModal(false);
+        }}
+      />
 
     </header>
   );

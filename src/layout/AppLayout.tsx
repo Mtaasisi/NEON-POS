@@ -362,6 +362,13 @@ const AppLayout: React.FC = () => {
         count: 0
       },
       {
+        path: '/admin/reports',
+        label: 'Employee Reports',
+        icon: <ClipboardList size={20} strokeWidth={1.5} />,
+        roles: ['admin', 'manager'],
+        count: 0
+      },
+      {
         path: '/payments',
         label: 'Payments',
         icon: <CreditCard size={20} strokeWidth={1.5} />,

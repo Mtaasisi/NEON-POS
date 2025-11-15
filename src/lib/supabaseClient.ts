@@ -361,9 +361,12 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
       } else {
         console.error('❌ SQL Error:', finalErrorMsg);
       }
-      // Only show details for unexpected errors
+      // Always show full query for "column does not exist" errors (42703)
       const errorCode = error?.code || '';
-      if (errorCode && errorCode !== '42703' && errorCode !== '42P01') {
+      if (errorCode === '42703') {
+        console.error('🔍 COLUMN ERROR - Full Query:', query);
+        console.error('🔍 Error Code:', errorCode);
+      } else if (errorCode && errorCode !== '42P01') {
         console.error('Code:', errorCode, '| Query:', query.substring(0, 100));
       }
     }
@@ -388,6 +391,14 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
 
   constructor(tableName: string) {
     this.tableName = tableName;
+    // Initialize operation flags
+    (this as any).isInsert = false;
+    (this as any).isUpdate = false;
+    (this as any).isUpsert = false;
+    (this as any).isDelete = false;
+    (this as any).insertData = null;
+    (this as any).updateData = null;
+    (this as any).deleteData = null;
   }
 
   select(fields: string = '*', options?: { count?: 'exact' | 'planned' | 'estimated'; head?: boolean }) {
@@ -775,11 +786,13 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         if (result.data.length > 0) {
           return { data: result.data[0], error: null };
         }
-        // Empty array - this shouldn't happen for INSERT with RETURNING *
+        // Empty array - for INSERT operations, this shouldn't happen with RETURNING *
         if (isInsertOp && isDevelopment) {
           console.error('❌ [single()] INSERT returned empty array - possible RLS issue');
+          return { data: null, error: { message: 'No data returned from insert. Check RLS policies and database triggers.' } };
         }
-        return { data: null, error: { message: 'No data returned from insert. Check RLS policies and database triggers.' } };
+        // For SELECT operations, empty array is normal (no rows found)
+        return { data: null, error: { message: 'No rows found', code: 'PGRST116' } };
       }
       
       // Handle single object (non-array) data
@@ -1048,7 +1061,7 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
     if (!this.suppressErrors && isDevelopment) {
       console.log('🔍 [SQL Query]:', query.substring(0, 300) + (query.length > 300 ? '...' : ''));
     }
-    
+
     // Execute using Neon WebSocket Pool
     // Pass suppressErrors flag to reduce noise for expected errors
     let data = await executeSql(query, [], this.suppressErrors);
@@ -1087,13 +1100,20 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
       // Minimal logging - only unexpected errors in development mode
       if (!this.suppressErrors && !isExpectedError && isDevelopment) {
         console.error(`❌ Query failed on '${this.tableName}':`, catchErrorMsg);
-        
+
         // If it's a 400 error, log the full query to help debug
         if (is400Error) {
           console.error('🔍 Failing SQL Query:', query);
           console.error('🔍 Error Code:', errorCode);
           console.error('🔍 Error Details:', error);
         }
+      }
+
+      // Always log full query for "column does not exist" errors
+      if (errorCode === '42703' && isDevelopment) {
+        console.error('🔍 COLUMN ERROR - Table:', this.tableName);
+        console.error('🔍 COLUMN ERROR - Full Query:', query);
+        console.error('🔍 COLUMN ERROR - Error:', catchErrorMsg);
       }
       
       return { data: null, error: { message: catchErrorMsg, code: errorCode || '400' }, count: null };
@@ -1104,8 +1124,21 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
     return this.then(undefined, onRejected);
   }
 
+  // Reset operation flags to prevent state pollution between chained operations
+  resetOperationFlags() {
+    (this as any).isInsert = false;
+    (this as any).isUpdate = false;
+    (this as any).isUpsert = false;
+    (this as any).isDelete = false;
+    (this as any).insertData = null;
+    (this as any).updateData = null;
+    (this as any).deleteData = null;
+  }
+
   // Insert method
   insert(values: any) {
+    // Reset any previous operation flags
+    this.resetOperationFlags();
     // Store the insert data and return this for chaining
     (this as any).insertData = values;
     (this as any).isInsert = true;
@@ -1114,6 +1147,8 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
 
   // Update method
   update(values: any) {
+    // Reset any previous operation flags
+    this.resetOperationFlags();
     // Store the update data and return this for chaining
     (this as any).updateData = values;
     (this as any).isUpdate = true;
@@ -1122,6 +1157,8 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
 
   // Delete method
   delete() {
+    // Reset any previous operation flags
+    this.resetOperationFlags();
     // Store the delete flag and return this for chaining
     (this as any).isDelete = true;
     return this;
@@ -1129,6 +1166,8 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
 
   // Upsert method - supports chaining
   upsert(values: any, options?: { onConflict?: string }) {
+    // Reset any previous operation flags
+    this.resetOperationFlags();
     // Store the upsert data and options for execution in then()
     (this as any).upsertData = values;
     (this as any).upsertOptions = options;

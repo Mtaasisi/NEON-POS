@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Check Browser Branch Setting</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button.danger { background: #dc3545; }
+        button.danger:hover { background: #c82333; }
+        .accounts-list {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Check Browser Branch Setting</h1>
+        <p>This tool helps diagnose why accounts might be empty in Expense Management.</p>
+
+        <div id="status"></div>
+
+        <button onclick="checkBranch()">Check Current Branch</button>
+        <button onclick="clearBranch()">Clear Branch Setting</button>
+        <button onclick="setDefaultBranch()">Set Default Branch</button>
+        <button class="danger" onclick="clearAllLocalStorage()">Clear All LocalStorage</button>
+
+        <h2>📋 Instructions</h2>
+        <ol>
+            <li>Click "Check Current Branch" to see what branch is currently selected</li>
+            <li>If no branch is set, accounts should be visible</li>
+            <li>If a branch is set, only accounts for that branch (or global/shared accounts) will show</li>
+            <li>Use "Clear Branch Setting" to reset to no branch (shows all global + shared accounts)</li>
+        </ol>
+
+        <h2>💡 Expected Behavior</h2>
+        <div class="info status">
+            <strong>With our fix, you should now have:</strong>
+            <ul>
+                <li>6 Global accounts (visible in any branch)</li>
+                <li>1 Shared account (visible in any branch)</li>
+                <li>3 Branch-specific accounts (only visible in their specific branch)</li>
+            </ul>
+            <strong>Total: 10 payment methods available</strong>
+        </div>
+
+        <h2>🔧 Manual Branch Setting</h2>
+        <p>If you know the branch ID you want to use, you can set it manually:</p>
+        <input type="text" id="manualBranchId" placeholder="Enter branch ID" style="padding: 8px; margin: 5px; width: 300px;">
+        <button onclick="setManualBranch()">Set Manual Branch</button>
+
+        <script>
+            function showStatus(message, type = 'info') {
+                const statusDiv = document.getElementById('status');
+                statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+            }
+
+            function checkBranch() {
+                try {
+                    const currentBranch = localStorage.getItem('current_branch_id');
+                    if (currentBranch) {
+                        showStatus(`
+                            <strong>Current Branch:</strong> ${currentBranch}<br>
+                            <strong>Impact:</strong> Only accounts for this branch (plus global/shared accounts) will be visible in Expense Management.
+                        `, 'info');
+                    } else {
+                        showStatus(`
+                            <strong>No Branch Selected</strong><br>
+                            <strong>Impact:</strong> All global and shared accounts should be visible in Expense Management.<br>
+                            <strong>Expected:</strong> You should see 7 accounts (6 global + 1 shared).
+                        `, 'success');
+                    }
+                } catch (error) {
+                    showStatus(`Error checking branch: ${error.message}`, 'error');
+                }
+            }
+
+            function clearBranch() {
+                try {
+                    localStorage.removeItem('current_branch_id');
+                    showStatus('Branch setting cleared! Refresh Expense Management to see all accounts.', 'success');
+                } catch (error) {
+                    showStatus(`Error clearing branch: ${error.message}`, 'error');
+                }
+            }
+
+            function setDefaultBranch() {
+                try {
+                    // Set to null to show all accounts
+                    localStorage.removeItem('current_branch_id');
+                    showStatus('Set to default (no branch) - all global and shared accounts will be visible.', 'success');
+                } catch (error) {
+                    showStatus(`Error setting default branch: ${error.message}`, 'error');
+                }
+            }
+
+            function setManualBranch() {
+                try {
+                    const branchId = document.getElementById('manualBranchId').value.trim();
+                    if (!branchId) {
+                        showStatus('Please enter a branch ID first.', 'warning');
+                        return;
+                    }
+                    localStorage.setItem('current_branch_id', branchId);
+                    showStatus(`Branch set to: ${branchId}. Only accounts for this branch will be visible.`, 'info');
+                } catch (error) {
+                    showStatus(`Error setting manual branch: ${error.message}`, 'error');
+                }
+            }
+
+            function clearAllLocalStorage() {
+                if (confirm('Are you sure you want to clear ALL localStorage? This will reset all app settings.')) {
+                    try {
+                        localStorage.clear();
+                        showStatus('All localStorage cleared! The app will behave as if running for the first time.', 'warning');
+                    } catch (error) {
+                        showStatus(`Error clearing localStorage: ${error.message}`, 'error');
+                    }
+                }
+            }
+
+            // Auto-check on load
+            window.onload = function() {
+                checkBranch();
+            };
+        </script>
+    </div>
+</body>
+</html>

@@ -93,7 +93,7 @@ const DashboardPageContent: React.FC = () => {
   // State management
   const [isLoading, setIsLoading] = useState(true);
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null);
-  
+
   // Widget order state - loads from localStorage (set in settings)
   const [widgetOrder, setWidgetOrder] = useState<string[]>([]);
   const committedOrderRef = useRef<string[]>([]);
@@ -119,7 +119,7 @@ const DashboardPageContent: React.FC = () => {
           'financialWidget', 'salesFunnelChart',
           'customerInsightsWidget', 'serviceWidget', 'reminderWidget',
           'systemHealthWidget', 'inventoryWidget', 'activityFeedWidget',
-          'purchaseOrderWidget', 'chatWidget', 'salesWidget', 'topProductsWidget', 
+          'purchaseOrderWidget', 'chatWidget', 'salesWidget', 'topProductsWidget',
           'expensesWidget', 'staffPerformanceWidget'
         ];
         const filteredOrder = DEFAULT_WIDGET_ORDER.filter((widget: string) => isWidgetEnabled(widget as any));
@@ -738,93 +738,81 @@ const DashboardPageContent: React.FC = () => {
             'performanceMetricsChart': PerformanceMetricsChart,
             'customerActivityChart': CustomerActivityChart
           };
-          
+
           // Get the saved order (prefer ref, then state)
-          const baseOrder = committedOrderRef.current.length > 0 
-            ? committedOrderRef.current 
+          const baseOrder = committedOrderRef.current.length > 0
+            ? committedOrderRef.current
             : widgetOrder;
-          
+
           // Filter to only enabled chart widgets that have components
-          const enabledCharts = baseOrder.filter(widget => 
+          const enabledCharts = baseOrder.filter(widget =>
             isWidgetEnabled(widget as any) && CHART_COMPONENTS[widget]
           );
-          
+
           console.log('📊 Rendering charts in custom order:', enabledCharts);
-          
+
           if (enabledCharts.length === 0) return null;
-          
-          // Group charts into rows of 3 for better layout
-          const chartRows: string[][] = [];
-          for (let i = 0; i < enabledCharts.length; i += 3) {
-            chartRows.push(enabledCharts.slice(i, i + 3));
-          }
-          
+
+          // Use auto-arrangement on all charts at once for seamless layout
+          const smartLayout = autoArrangeWidgets(enabledCharts);
+
           return (
-            <>
-              {chartRows.map((row, rowIndex) => {
-                const smartLayout = autoArrangeWidgets(row);
-                
+            <div
+              className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full"
+              style={{
+                alignItems: 'stretch'
+              }}
+            >
+              {smartLayout.widgets.map((widget) => {
+                const { key, expanded, gridColumn } = widget;
+                const repositioned = 'repositioned' in widget ? widget.repositioned : false;
+                const ChartComponent = CHART_COMPONENTS[key];
+
+                if (!ChartComponent) return null;
+
+                // Get user's chosen size for this widget
+                const widgetSize = getWidgetSize(key);
+
+                // Convert widget size to Tailwind responsive classes based on gridColumn
+                const getResponsiveClass = () => {
+                  const colSpan = parseInt(gridColumn.split(' ')[1]);
+                  if (colSpan === 3) return 'md:col-span-2 lg:col-span-3';
+                  if (colSpan === 2) return 'md:col-span-2 lg:col-span-2';
+                  return 'md:col-span-1'; // colSpan === 1
+                };
+
                 return (
-                  <div 
-                    key={`chart-row-${rowIndex}`}
-                    className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full" 
-                    style={{ 
-                      alignItems: 'stretch'
+                  <div
+                    key={key}
+                    style={{
+                      height: '100%',
+                      transition: 'all 0.3s ease',
+                      ...(expanded && {
+                        background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
+                        borderRadius: '12px'
+                      }),
+                      ...(repositioned && {
+                        background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                        borderRadius: '12px'
+                      })
                     }}
+                    className={`dashboard-card ${getResponsiveClass()} relative ${expanded || repositioned ? 'shadow-lg' : ''}`}
                   >
-                    {smartLayout.widgets.map((widget) => {
-                      const { key, expanded } = widget;
-                      const repositioned = 'repositioned' in widget ? widget.repositioned : false;
-                      const ChartComponent = CHART_COMPONENTS[key];
-                      
-                      if (!ChartComponent) return null;
-                      
-                      // Get user's chosen size for this widget
-                      const widgetSize = getWidgetSize(key);
-                      
-                      // Convert widget size to Tailwind responsive classes
-                      const getResponsiveClass = () => {
-                        if (widgetSize === 'small') return 'md:col-span-1';
-                        if (widgetSize === 'large') return 'md:col-span-2 lg:col-span-3';
-                        // medium (default)
-                        return 'md:col-span-2 lg:col-span-2';
-                      };
-                      
-                      return (
-                        <div 
-                          key={key}
-                          style={{ 
-                            height: '100%',
-                            transition: 'all 0.3s ease',
-                            ...(expanded && { 
-                              background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)',
-                              borderRadius: '12px'
-                            }),
-                            ...(repositioned && { 
-                              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                              borderRadius: '12px'
-                            })
-                          }}
-                          className={`dashboard-card ${getResponsiveClass()} relative ${expanded || repositioned ? 'shadow-lg' : ''}`}
-                        >
-                          <ChartComponent className="h-full" />
-                          {expanded && (
-                            <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full z-10">
-                              Auto-Expanded
-                            </div>
-                          )}
-                          {repositioned && !expanded && (
-                            <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full z-10">
-                              Moved to Fill Gap
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <ChartComponent className="h-full" />
+                    {expanded && (
+                      <div className="absolute top-2 right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                        Auto-Expanded
+                      </div>
+                    )}
+                    {repositioned && !expanded && (
+                      <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                        Moved to Fill Gap
+                      </div>
+                    )}
                   </div>
                 );
               })}
-            </>
+            </div>
           );
         })()}
 
@@ -854,89 +842,77 @@ const DashboardPageContent: React.FC = () => {
             'predictiveAnalyticsWidget': PredictiveAnalyticsWidget,
             'alertSystemWidget': AlertSystemWidget
           };
-          
+
           // Get the saved order (prefer ref, then state)
-          const baseOrder = committedOrderRef.current.length > 0 
-            ? committedOrderRef.current 
+          const baseOrder = committedOrderRef.current.length > 0
+            ? committedOrderRef.current
             : widgetOrder;
-          
+
           // Filter to only enabled widgets that have components
-          const enabledWidgets = baseOrder.filter(widget => 
+          const enabledWidgets = baseOrder.filter(widget =>
             isWidgetEnabled(widget as any) && WIDGET_COMPONENTS[widget]
           );
-          
+
           console.log('🎯 Rendering widgets in custom order:', enabledWidgets);
-          
+
           if (enabledWidgets.length === 0) return null;
-          
-          // Group widgets into rows of 3 for better layout
-          const widgetRows: string[][] = [];
-          for (let i = 0; i < enabledWidgets.length; i += 3) {
-            widgetRows.push(enabledWidgets.slice(i, i + 3));
-          }
-          
+
+          // Use auto-arrangement on all widgets at once for seamless layout
+          const smartLayout = autoArrangeWidgets(enabledWidgets);
+
           return (
-            <div className="space-y-6">
-              {widgetRows.map((row, rowIndex) => {
-                const smartLayout = autoArrangeWidgets(row);
-                
+            <div
+              className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full"
+              style={{
+                alignItems: 'stretch'
+              }}
+            >
+              {smartLayout.widgets.map((widget) => {
+                const { key, expanded, gridColumn } = widget;
+                const repositioned = 'repositioned' in widget ? widget.repositioned : false;
+                const WidgetComponent = WIDGET_COMPONENTS[key];
+
+                if (!WidgetComponent) return null;
+
+                // Get user's chosen size for this widget
+                const widgetSize = getWidgetSize(key);
+
+                // Convert widget size to Tailwind responsive classes based on gridColumn
+                const getResponsiveClass = () => {
+                  const colSpan = parseInt(gridColumn.split(' ')[1]);
+                  if (colSpan === 3) return 'md:col-span-2 lg:col-span-3';
+                  if (colSpan === 2) return 'md:col-span-2 lg:col-span-2';
+                  return 'md:col-span-1'; // colSpan === 1
+                };
+
                 return (
-                  <div 
-                    key={`widget-row-${rowIndex}`}
-                    className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full" 
-                    style={{ 
-                      alignItems: 'stretch'
+                  <div
+                    key={key}
+                    style={{
+                      height: '100%',
+                      transition: 'all 0.3s ease',
+                      ...(expanded && {
+                        background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+                        borderRadius: '12px'
+                      }),
+                      ...(repositioned && {
+                        background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+                        borderRadius: '12px'
+                      })
                     }}
+                    className={`dashboard-card ${getResponsiveClass()} relative ${expanded || repositioned ? 'shadow-lg' : ''}`}
                   >
-                    {smartLayout.widgets.map((widget) => {
-                      const { key, expanded } = widget;
-                      const repositioned = 'repositioned' in widget ? widget.repositioned : false;
-                      const WidgetComponent = WIDGET_COMPONENTS[key];
-                      
-                      if (!WidgetComponent) return null;
-                      
-                      // Get user's chosen size for this widget
-                      const widgetSize = getWidgetSize(key);
-                      
-                      // Convert widget size to Tailwind responsive classes
-                      const getResponsiveClass = () => {
-                        if (widgetSize === 'small') return 'md:col-span-1';
-                        if (widgetSize === 'large') return 'md:col-span-2 lg:col-span-3';
-                        // medium (default)
-                        return 'md:col-span-2 lg:col-span-2';
-                      };
-                      
-                      return (
-                        <div 
-                          key={key}
-                          style={{ 
-                            height: '100%',
-                            transition: 'all 0.3s ease',
-                            ...(expanded && { 
-                              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-                              borderRadius: '12px'
-                            }),
-                            ...(repositioned && { 
-                              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                              borderRadius: '12px'
-                            })
-                          }}
-                          className={`dashboard-card ${getResponsiveClass()} relative ${expanded || repositioned ? 'shadow-lg' : ''}`}
-                        >
-                          <WidgetComponent className="h-full" />
-                          {expanded && (
-                            <div className="absolute top-2 right-2 bg-cyan-500 text-white text-xs px-2 py-1 rounded-full z-10">
-                              Auto-Expanded
-                            </div>
-                          )}
-                          {repositioned && !expanded && (
-                            <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full z-10">
-                              Moved to Fill Gap
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <WidgetComponent className="h-full" />
+                    {expanded && (
+                      <div className="absolute top-2 right-2 bg-cyan-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                        Auto-Expanded
+                      </div>
+                    )}
+                    {repositioned && !expanded && (
+                      <div className="absolute top-2 right-2 bg-amber-500 text-white text-xs px-2 py-1 rounded-full z-10">
+                        Moved to Fill Gap
+                      </div>
+                    )}
                   </div>
                 );
               })}

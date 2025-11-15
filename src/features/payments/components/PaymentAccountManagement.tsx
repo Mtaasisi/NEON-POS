@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
+import { addBranchFilter, createWithBranch } from '../../../lib/branchAwareApi';
 import { usePaymentMethodsContext } from '../../../context/PaymentMethodsContext';
 import { financeAccountService, FinanceAccount } from '../../../lib/financeAccountService';
 import { exportToCSV, exportToPDF } from '../utils/exportTransactions';
@@ -160,19 +161,23 @@ const PaymentAccountManagement: React.FC = () => {
       // Get transaction data for each account
       const accountsWithTransactions: AccountWithTransactions[] = await Promise.all(
         paymentAccounts.map(async (account) => {
-          // Get recent transactions
-          const { data: transactions } = await supabase
+          // Get recent transactions with branch filtering
+          let recentQuery = supabase
             .from('account_transactions')
             .select('*')
             .eq('account_id', account.id)
             .order('created_at', { ascending: false })
             .limit(5);
+          const filteredRecentQuery = await addBranchFilter(recentQuery, 'payments');
+          const { data: transactions } = await filteredRecentQuery;
 
-          // Calculate totals
-          const { data: allTransactions } = await supabase
+          // Calculate totals with branch filtering
+          let totalsQuery = supabase
             .from('account_transactions')
             .select('transaction_type, amount')
             .eq('account_id', account.id);
+          const filteredTotalsQuery = await addBranchFilter(totalsQuery, 'payments');
+          const { data: allTransactions } = await filteredTotalsQuery;
 
           // Transaction types that increase balance (money in)
           const totalReceived = allTransactions
@@ -303,10 +308,10 @@ const PaymentAccountManagement: React.FC = () => {
         if (error) throw error;
         toast.success('Account updated successfully');
       } else {
-        // Create new account (trigger will sync duplicate columns automatically)
-        const { error } = await supabase
-          .from('finance_accounts')
-          .insert({
+        // Create new account with branch assignment (respects isolation/sharing rules)
+        await createWithBranch(
+          'finance_accounts',
+          {
             name: formData.name,
             type: formData.type,
             balance: formData.balance || 0,
@@ -318,9 +323,9 @@ const PaymentAccountManagement: React.FC = () => {
             account_number: formData.account_number,
             bank_name: formData.bank_name,
             notes: formData.notes
-          });
-
-        if (error) throw error;
+          },
+          'accounts'
+        );
         toast.success('Account created successfully');
       }
 
@@ -389,11 +394,16 @@ const PaymentAccountManagement: React.FC = () => {
   const loadAccountTransactions = async (accountId: string) => {
     setIsLoadingTransactions(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('account_transactions')
         .select('*')
         .eq('account_id', accountId)
         .order('created_at', { ascending: false });
+
+      // Apply branch filtering for proper isolation
+      const filteredQuery = await addBranchFilter(query, 'payments');
+
+      const { data, error } = await filteredQuery;
 
       if (error) throw error;
       setAccountTransactions(data || []);

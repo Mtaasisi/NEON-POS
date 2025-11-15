@@ -27,6 +27,7 @@ import {
 } from 'recharts';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
+import { addBranchFilter } from '../../../lib/branchAwareApi';
 import { 
   paymentTrackingService,
   PaymentTransaction,
@@ -343,9 +344,19 @@ const PaymentTrackingDashboard: React.FC<PaymentTrackingDashboardProps> = ({
         supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500).then(r => r.error ? { data: [], error: r.error } : r),
         // Additional comprehensive data queries with graceful error handling
         supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000).then(r => r.error ? { data: [], error: r.error } : r),
-        supabase.from('finance_accounts').select('*').order('created_at', { ascending: false }).then(r => r.error ? { data: [], error: r.error } : r),
-        // Use finance_accounts as payment_providers fallback (payment_providers table doesn't exist yet)
-        supabase.from('finance_accounts').select('*').eq('is_payment_method', true).order('created_at', { ascending: false }).then(r => r.error ? { data: [], error: r.error } : r)
+        (async () => {
+          const query = supabase.from('finance_accounts').select('*').order('created_at', { ascending: false });
+          const filteredQuery = await addBranchFilter(query, 'accounts');
+          const result = await filteredQuery;
+          return result.error ? { data: [], error: result.error } : result;
+        })(),
+        // Use finance_accounts as payment_providers fallback (payment_providers table doesn't exist yet) - with branch filtering
+        (async () => {
+          const query = supabase.from('finance_accounts').select('*').eq('is_payment_method', true).order('created_at', { ascending: false });
+          const filteredQuery = await addBranchFilter(query, 'accounts');
+          const result = await filteredQuery;
+          return result.error ? { data: [], error: result.error } : result;
+        })()
       ]);
 
       // Handle each result individually with comprehensive error handling

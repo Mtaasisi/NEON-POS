@@ -152,6 +152,7 @@ const TradeInManagementPage = lazy(() => import('./features/lats/pages/TradeInMa
 const TradeInTestPage = lazy(() => import('./features/lats/pages/TradeInTestPage'));
 
 const SalesReportsPage = lazy(() => import('./features/lats/pages/SalesReportsPage'));
+const ReportsPage = lazy(() => import('./features/admin/pages/ReportsPage'));
 const LoyaltyManagementPage = lazy(() => import('./features/lats/pages/CustomerLoyaltyPage'));
 
 // Purchase Orders Module Pages
@@ -829,6 +830,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           } />
 
           <Route path="/lats/sales-reports" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SalesReportsPage /></Suspense></RoleProtectedRoute>} />
+          <Route path="/admin/reports" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><ReportsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/loyalty" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><LoyaltyManagementPage /></Suspense></RoleProtectedRoute>} />
 
           <Route path="/lats/purchase-orders" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><PurchaseOrdersPage /></Suspense></RoleProtectedRoute>} />

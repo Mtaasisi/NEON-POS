@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { fetchAllCustomers, fetchAllCustomersSimple, clearRequestCache, checkNetworkStatus, getConnectionQuality } from '../lib/customerApi/core';
+import { fetchAllCustomers, fetchAllCustomersSimple, fetchAllCustomersLight, clearRequestCache, checkNetworkStatus, getConnectionQuality } from '../lib/customerApi/core';
 import { Customer } from '../lib/customerApi/types';
 import { retryWithBackoff, isNetworkError } from '../utils/networkErrorHandler';
 import { useDataStore } from '../stores/useDataStore';
@@ -17,6 +17,7 @@ const CACHE_TIMEOUT = 5 * 60 * 1000;
 interface UseCustomersOptions {
   autoFetch?: boolean;
   simple?: boolean;
+  light?: boolean; // Use lightweight query for initial loading
   cacheKey?: string;
 }
 
@@ -34,7 +35,7 @@ interface UseCustomersReturn {
 }
 
 export function useCustomers(options: UseCustomersOptions = {}): UseCustomersReturn {
-  const { autoFetch = true, simple = false, cacheKey = 'default' } = options;
+  const { autoFetch = true, simple = false, light = false, cacheKey = 'default' } = options;
 
   const dataStore = useDataStore();
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -94,7 +95,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
   const fetchCustomers = async (forceRefresh = false) => {
     if (!isMountedRef.current) return;
 
-    const cacheKeyWithType = `${cacheKey}_${simple ? 'simple' : 'full'}`;
+    const cacheKeyWithType = `${cacheKey}_${light ? 'light' : simple ? 'simple' : 'full'}`;
 
     // Check preloaded data first (unless force refresh)
     if (!forceRefresh && dataStore.customers.length > 0) {
@@ -161,7 +162,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
         }, 120000); // 120 second timeout for entire operation (allows core 90s + buffer)
         
         
-        const fetchPromise = simple ? fetchAllCustomersSimple() : fetchAllCustomers();
+        const fetchPromise = light ? fetchAllCustomersLight() : simple ? fetchAllCustomersSimple() : fetchAllCustomers();
         
         // Store the promise in cache to prevent duplicate requests
         customerDataCache.set(cacheKeyWithType, {
@@ -288,7 +289,7 @@ export function useCustomers(options: UseCustomersOptions = {}): UseCustomersRet
     if (autoFetch) {
       fetchCustomers();
     }
-  }, [autoFetch, simple, cacheKey]);
+  }, [autoFetch, simple, light, cacheKey]);
 
   return {
     customers,

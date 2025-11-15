@@ -4,7 +4,7 @@
  */
 
 import { supabase } from './supabaseClient';
-import { deduplicatedQuery } from './queryDeduplication';
+import { deduplicatedQuery, queryDeduplication } from './queryDeduplication';
 import { getCurrentBranchId } from './branchAwareApi';
 
 /**
@@ -202,18 +202,29 @@ export async function fetchSuppliers(cacheDuration: number = 30000) {
 
 /**
  * Fetch payment methods with deduplication
+ * Respects branch isolation settings for accounts
  */
 export async function fetchPaymentMethods(cacheDuration: number = 30000) {
+  const currentBranchId = getCurrentBranchId();
+  const cacheKey = `payment-methods-${currentBranchId || 'all'}`;
+
   return deduplicatedQuery(
-    'payment-methods',
+    cacheKey,
     async () => {
-      const { data, error } = await supabase
+      // Import addBranchFilter dynamically to avoid circular imports
+      const { addBranchFilter } = await import('./branchAwareApi');
+
+      const query = supabase
         .from('finance_accounts')
         .select('*')
         .eq('is_active', true)
         .eq('is_payment_method', true)
         .order('name', { ascending: true });
-      
+
+      // Apply branch filtering based on isolation settings
+      const filteredQuery = await addBranchFilter(query, 'accounts');
+      const { data, error } = await filteredQuery;
+
       if (error) throw error;
       return data || [];
     },
@@ -301,7 +312,6 @@ export async function fetchRecentPayments(limit: number = 5, cacheDuration: numb
  * Clear all query caches (useful after mutations)
  */
 export function clearAllQueryCaches() {
-  const { queryDeduplication } = require('./queryDeduplication');
   queryDeduplication.clearCache();
 }
 
@@ -309,7 +319,6 @@ export function clearAllQueryCaches() {
  * Clear specific query cache
  */
 export function clearQueryCache(key: string) {
-  const { queryDeduplication } = require('./queryDeduplication');
   queryDeduplication.clearCache(key);
 }
 

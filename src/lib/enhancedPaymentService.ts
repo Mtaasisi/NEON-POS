@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { getCurrentBranchId } from './branchAwareApi';
 
 export interface PaymentTransaction {
   id: string;
@@ -187,6 +188,7 @@ class EnhancedPaymentService {
       // Generate a unique order_id if not provided
       const finalOrderId = orderId || `order-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+      const branchId = getCurrentBranchId();
       const { data, error } = await supabase
         .from('payment_transactions')
         .insert([{
@@ -200,7 +202,8 @@ class EnhancedPaymentService {
           metadata: {
             transaction_type: transactionType,
             source_type: sourceType,
-            account_id: accountId
+            account_id: accountId,
+            ...(branchId ? { branch_id: branchId } : {})
           }
         }])
         .select()

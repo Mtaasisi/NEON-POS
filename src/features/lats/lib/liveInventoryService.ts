@@ -246,32 +246,38 @@ export class LiveInventoryService {
     try {
       console.log('🔍 [LiveInventoryService] Fetching live inventory value breakdown...');
       
-      // Fetch all variants with pricing data
+      // Fetch all variants with pricing data for active products
       const { data: variants, error: variantsError } = await supabase
         .from('lats_product_variants')
-        .select(`
-          id,
-          quantity,
-          cost_price,
-          unit_price,
-          lats_products!inner(
-            id,
-            is_active
-          )
-        `)
-        .eq('lats_products.is_active', true); // Only active products
+        .select('id, quantity, cost_price, unit_price, product_id');
 
       if (variantsError) {
         console.error('❌ [LiveInventoryService] Error fetching variants:', variantsError);
         throw variantsError;
       }
 
-      console.log(`📦 [LiveInventoryService] Fetched ${variants?.length || 0} variants for value calculation`);
+      // Filter for active products by fetching active products separately
+      const productIds = variants?.map(v => v.product_id).filter(Boolean) || [];
+      const { data: activeProducts, error: productsError } = await supabase
+        .from('lats_products')
+        .select('id')
+        .eq('is_active', true)
+        .in('id', productIds);
+
+      if (productsError) {
+        console.warn('⚠️ [LiveInventoryService] Error fetching active products:', productsError);
+      }
+
+      // Filter variants to only include those for active products
+      const activeProductIds = new Set(activeProducts?.map(p => p.id) || []);
+      const activeVariants = variants?.filter(v => activeProductIds.has(v.product_id)) || [];
+
+      console.log(`📦 [LiveInventoryService] Fetched ${activeVariants?.length || 0} active variants for value calculation`);
 
       let costValue = 0;
       let retailValue = 0;
 
-      variants?.forEach((variant: any) => {
+      activeVariants?.forEach((variant: any) => {
         const quantity = variant.quantity || 0;
         const costPrice = variant.cost_price || 0;
         const sellingPrice = variant.selling_price || 0;

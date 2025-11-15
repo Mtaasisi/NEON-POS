@@ -31,7 +31,16 @@ import {
   ClipboardList,
   UserCheck,
   Award,
-  Star
+  Star,
+  Gift,
+  RefreshCw,
+  MessageSquare,
+  BarChart3,
+  ArrowLeftRight,
+  Bug,
+  ChevronDown,
+  ChevronUp,
+  Database
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -75,7 +84,16 @@ interface Store {
   share_special_orders: boolean;
   share_attendance: boolean;
   share_loyalty_points: boolean;
-  
+  share_accounts: boolean;
+
+  // Additional Business Features
+  share_gift_cards: boolean;
+  share_quality_checks: boolean;
+  share_recurring_expenses: boolean;
+  share_communications: boolean;
+  share_reports: boolean;
+  share_finance_transfers: boolean;
+
   // Transfer & Sync Options
   allow_stock_transfer: boolean;
   auto_sync_products: boolean;
@@ -97,6 +115,9 @@ const StoreManagementSettings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [isolationData, setIsolationData] = useState<any>(null);
+  const [loadingDebug, setLoadingDebug] = useState(false);
 
   const emptyStore: Store = useMemo(() => ({
     name: '',
@@ -135,7 +156,16 @@ const StoreManagementSettings: React.FC = () => {
     share_special_orders: false,
     share_attendance: false,
     share_loyalty_points: false,
-    
+    share_accounts: true,
+
+    // Additional business feature defaults
+    share_gift_cards: true,
+    share_quality_checks: false,
+    share_recurring_expenses: false,
+    share_communications: false,
+    share_reports: false,
+    share_finance_transfers: false,
+
     // Transfer Options
     allow_stock_transfer: true,
     auto_sync_products: true,
@@ -327,6 +357,147 @@ const StoreManagementSettings: React.FC = () => {
     } catch (error: any) {
       console.error('Error setting main branch:', error);
       toast.error(error.message || 'Failed to set main branch');
+    }
+  };
+
+  const loadIsolationDebugData = async (branchId: string) => {
+    setLoadingDebug(true);
+    try {
+      // Test what this branch can see using the actual API logic (addBranchFilter)
+      const [
+        productsResult,
+        customersResult,
+        inventoryResult,
+        suppliersResult,
+        categoriesResult,
+        employeesResult,
+        paymentsResult,
+        accountsResult,
+        giftCardsResult,
+        qualityChecksResult,
+        recurringExpensesResult,
+        communicationsResult,
+        reportsResult,
+        financeTransfersResult
+      ] = await Promise.allSettled([
+        // Use addBranchFilter to test actual API behavior
+        (async () => {
+          const query = supabase.from('lats_products').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'products');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('lats_customers').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'customers');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('inventory').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'inventory');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('lats_suppliers').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'suppliers');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('lats_categories').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'categories');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('lats_employees').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'employees');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('customer_payments').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'payments');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('finance_accounts').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'accounts');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('gift_cards').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'gift_cards');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('quality_checks').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'quality_checks');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('recurring_expenses').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'recurring_expenses');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('sms_logs').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'communications');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('daily_reports').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'reports');
+          return await filteredQuery;
+        })(),
+        (async () => {
+          const query = supabase.from('finance_transfers').select('*', { count: 'exact', head: true });
+          const filteredQuery = await addBranchFilter(query, 'finance_transfers');
+          return await filteredQuery;
+        })()
+      ]);
+
+      // Get branch settings
+      const branch = stores.find(s => s.id === branchId);
+
+      setIsolationData({
+        branchId,
+        branchName: branch?.name || 'Unknown',
+        isolationMode: branch?.data_isolation_mode || 'unknown',
+        settings: {
+          share_products: branch?.share_products,
+          share_customers: branch?.share_customers,
+          share_inventory: branch?.share_inventory,
+          share_suppliers: branch?.share_suppliers,
+          share_categories: branch?.share_categories,
+          share_employees: branch?.share_employees,
+          share_payments: branch?.share_payments,
+          share_accounts: branch?.share_accounts,
+          share_gift_cards: branch?.share_gift_cards,
+          share_quality_checks: branch?.share_quality_checks,
+          share_recurring_expenses: branch?.share_recurring_expenses,
+          share_communications: branch?.share_communications,
+          share_reports: branch?.share_reports,
+          share_finance_transfers: branch?.share_finance_transfers,
+        },
+        visibleData: {
+          products: productsResult.status === 'fulfilled' ? productsResult.value.count || 0 : 0,
+          customers: customersResult.status === 'fulfilled' ? customersResult.value.count || 0 : 0,
+          inventory: inventoryResult.status === 'fulfilled' ? inventoryResult.value.count || 0 : 0,
+          suppliers: suppliersResult.status === 'fulfilled' ? suppliersResult.value.count || 0 : 0,
+          categories: categoriesResult.status === 'fulfilled' ? categoriesResult.value.count || 0 : 0,
+          employees: employeesResult.status === 'fulfilled' ? employeesResult.value.count || 0 : 0,
+          payments: paymentsResult.status === 'fulfilled' ? paymentsResult.value.count || 0 : 0,
+          accounts: accountsResult.status === 'fulfilled' ? accountsResult.value.count || 0 : 0,
+          giftCards: giftCardsResult.status === 'fulfilled' ? giftCardsResult.value.count || 0 : 0,
+          qualityChecks: qualityChecksResult.status === 'fulfilled' ? qualityChecksResult.value.count || 0 : 0,
+          recurringExpenses: recurringExpensesResult.status === 'fulfilled' ? recurringExpensesResult.value.count || 0 : 0,
+          communications: communicationsResult.status === 'fulfilled' ? communicationsResult.value.count || 0 : 0,
+          reports: reportsResult.status === 'fulfilled' ? reportsResult.value.count || 0 : 0,
+          financeTransfers: financeTransfersResult.status === 'fulfilled' ? financeTransfersResult.value.count || 0 : 0,
+        }
+      });
+    } catch (error) {
+      console.error('Error loading isolation debug data:', error);
+      toast.error('Failed to load isolation debug data');
+    } finally {
+      setLoadingDebug(false);
     }
   };
 
@@ -654,13 +825,22 @@ const StoreManagementSettings: React.FC = () => {
                 { key: 'share_purchase_orders', label: 'Purchase Orders', Icon: FileText, description: 'Share purchase orders', category: 'Operations' },
                 { key: 'share_devices', label: 'Devices & Repairs', Icon: Smartphone, description: 'Share device repair records', category: 'Operations' },
                 { key: 'share_payments', label: 'Payments', Icon: CreditCard, description: 'Share payment records', category: 'Operations' },
+                { key: 'share_accounts', label: 'Accounts', Icon: Star, description: 'Share financial accounts', category: 'Operations' },
                 { key: 'share_appointments', label: 'Appointments', Icon: Calendar, description: 'Share customer appointments', category: 'Operations' },
                 { key: 'share_reminders', label: 'Reminders', Icon: Bell, description: 'Share task reminders', category: 'Operations' },
                 { key: 'share_expenses', label: 'Expenses', Icon: DollarSign, description: 'Share expense records', category: 'Operations' },
                 { key: 'share_trade_ins', label: 'Trade-Ins', Icon: Repeat, description: 'Share device trade-ins', category: 'Operations' },
                 { key: 'share_special_orders', label: 'Special Orders', Icon: ClipboardList, description: 'Share custom orders', category: 'Operations' },
                 { key: 'share_attendance', label: 'Attendance', Icon: UserCheck, description: 'Share employee attendance', category: 'Operations' },
-                { key: 'share_loyalty_points', label: 'Loyalty Program', Icon: Award, description: 'Share loyalty points', category: 'Operations' }
+                { key: 'share_loyalty_points', label: 'Loyalty Program', Icon: Award, description: 'Share loyalty points', category: 'Operations' },
+
+                // Additional Business Features
+                { key: 'share_gift_cards', label: 'Gift Cards', Icon: Gift, description: 'Share gift card programs', category: 'Business' },
+                { key: 'share_quality_checks', label: 'Quality Checks', Icon: CheckCircle, description: 'Share quality control processes', category: 'Business' },
+                { key: 'share_recurring_expenses', label: 'Recurring Expenses', Icon: RefreshCw, description: 'Share automated expense schedules', category: 'Business' },
+                { key: 'share_communications', label: 'Communications', Icon: MessageSquare, description: 'Share SMS/WhatsApp logs', category: 'Business' },
+                { key: 'share_reports', label: 'Reports', Icon: BarChart3, description: 'Share daily reports and analytics', category: 'Business' },
+                { key: 'share_finance_transfers', label: 'Finance Transfers', Icon: ArrowLeftRight, description: 'Share financial transfers', category: 'Business' }
               ].map(({ key, label, Icon, description, category }) => (
                 <div key={key} className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
                   <div className="flex items-center gap-3 flex-1">
@@ -832,6 +1012,207 @@ const StoreManagementSettings: React.FC = () => {
           </div>
           </div>
         </div>
+
+        {/* Isolation Debug Panel */}
+        {store.id && (
+          <div className="border-t pt-6 mt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Bug className="w-5 h-5 text-orange-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Isolation Debug Panel</h3>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDebugPanel(!showDebugPanel);
+                  if (!showDebugPanel && !isolationData) {
+                    loadIsolationDebugData(store.id);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors border border-orange-200"
+              >
+                <Database className="w-4 h-4" />
+                {showDebugPanel ? (
+                  <>
+                    <ChevronUp className="w-4 h-4" />
+                    <span className="text-sm font-medium">Hide Debug</span>
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4" />
+                    <span className="text-sm font-medium">Show Debug</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {showDebugPanel && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                {loadingDebug ? (
+                  <div className="flex items-center gap-3 text-orange-700">
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    <span>Loading isolation debug data...</span>
+                  </div>
+                ) : isolationData ? (
+                  <div className="space-y-4">
+                    {/* Branch Info */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2">Branch Information</h4>
+                        <div className="space-y-1 text-sm">
+                          <div><strong>Name:</strong> {isolationData.branchName}</div>
+                          <div><strong>ID:</strong> {isolationData.branchId}</div>
+                          <div><strong>Isolation Mode:</strong>
+                            <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
+                              isolationData.isolationMode === 'isolated'
+                                ? 'bg-red-100 text-red-700'
+                                : isolationData.isolationMode === 'hybrid'
+                                ? 'bg-purple-100 text-purple-700'
+                                : 'bg-blue-100 text-blue-700'
+                            }`}>
+                              {isolationData.isolationMode}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-2">Sharing Settings</h4>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div className={isolationData.settings.share_products ? 'text-green-700' : 'text-red-700'}>
+                            Products: {isolationData.settings.share_products ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_customers ? 'text-green-700' : 'text-red-700'}>
+                            Customers: {isolationData.settings.share_customers ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_inventory ? 'text-green-700' : 'text-red-700'}>
+                            Inventory: {isolationData.settings.share_inventory ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_suppliers ? 'text-green-700' : 'text-red-700'}>
+                            Suppliers: {isolationData.settings.share_suppliers ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_categories ? 'text-green-700' : 'text-red-700'}>
+                            Categories: {isolationData.settings.share_categories ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_employees ? 'text-green-700' : 'text-red-700'}>
+                            Employees: {isolationData.settings.share_employees ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_payments ? 'text-green-700' : 'text-red-700'}>
+                            Payments: {isolationData.settings.share_payments ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_accounts ? 'text-green-700' : 'text-red-700'}>
+                            Accounts: {isolationData.settings.share_accounts ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_gift_cards ? 'text-green-700' : 'text-red-700'}>
+                            Gift Cards: {isolationData.settings.share_gift_cards ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_quality_checks ? 'text-green-700' : 'text-red-700'}>
+                            Quality Checks: {isolationData.settings.share_quality_checks ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_recurring_expenses ? 'text-green-700' : 'text-red-700'}>
+                            Recurring Expenses: {isolationData.settings.share_recurring_expenses ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_communications ? 'text-green-700' : 'text-red-700'}>
+                            Communications: {isolationData.settings.share_communications ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_reports ? 'text-green-700' : 'text-red-700'}>
+                            Reports: {isolationData.settings.share_reports ? 'Shared' : 'Isolated'}
+                          </div>
+                          <div className={isolationData.settings.share_finance_transfers ? 'text-green-700' : 'text-red-700'}>
+                            Finance Transfers: {isolationData.settings.share_finance_transfers ? 'Shared' : 'Isolated'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Data Visibility */}
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-3">Data Visibility Test</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-2xl font-bold text-blue-600">{isolationData.visibleData.products}</div>
+                          <div className="text-sm text-gray-600">Products</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-2xl font-bold text-green-600">{isolationData.visibleData.customers}</div>
+                          <div className="text-sm text-gray-600">Customers</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-xl font-bold text-yellow-600">{isolationData.visibleData.inventory}</div>
+                          <div className="text-sm text-gray-600">Inventory</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-2xl font-bold text-purple-600">{isolationData.visibleData.suppliers}</div>
+                          <div className="text-sm text-gray-600">Suppliers</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-xl font-bold text-teal-600">{isolationData.visibleData.categories}</div>
+                          <div className="text-sm text-gray-600">Categories</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-xl font-bold text-cyan-600">{isolationData.visibleData.employees}</div>
+                          <div className="text-sm text-gray-600">Employees</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-2xl font-bold text-orange-600">{isolationData.visibleData.payments}</div>
+                          <div className="text-sm text-gray-600">Payments</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-2xl font-bold text-red-600">{isolationData.visibleData.accounts}</div>
+                          <div className="text-sm text-gray-600">Accounts</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-2xl font-bold text-pink-600">{isolationData.visibleData.giftCards}</div>
+                          <div className="text-sm text-gray-600">Gift Cards</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-2xl font-bold text-indigo-600">{isolationData.visibleData.qualityChecks}</div>
+                          <div className="text-sm text-gray-600">Quality Checks</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-xl font-bold text-violet-600">{isolationData.visibleData.recurringExpenses}</div>
+                          <div className="text-sm text-gray-600">Recurring Expenses</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-xl font-bold text-sky-600">{isolationData.visibleData.communications}</div>
+                          <div className="text-sm text-gray-600">Communications</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-xl font-bold text-gray-700">{isolationData.visibleData.reports}</div>
+                          <div className="text-sm text-gray-600">Reports</div>
+                        </div>
+                        <div className="bg-white p-3 rounded border">
+                          <div className="text-xl font-bold text-amber-600">{isolationData.visibleData.financeTransfers}</div>
+                          <div className="text-sm text-gray-600">Finance Transfers</div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                          <div>
+                            <div className="font-medium text-blue-900">Isolation Status</div>
+                            <div className="text-sm text-blue-700 mt-1">
+                              {isolationData.isolationMode === 'isolated'
+                                ? '✅ Isolated mode active: Branch sees only its own data'
+                                : isolationData.isolationMode === 'hybrid'
+                                ? '✅ Hybrid mode active: Branch sees own data + selectively shared data'
+                                : '✅ Shared mode active: Branch sees all data'
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-center py-8">
+                    No debug data loaded. Click "Show Debug" to test isolation.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Actions */}
         <div className="flex gap-3 pt-6 mt-6 border-t">

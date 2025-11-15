@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { DollarSign, X, AlertCircle, TrendingUp, Calculator, Package, Plus, Trash2, CheckCircle, Smartphone } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../../lib/supabaseClient';
+import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
 import type { TradeInTransaction } from '../../types/tradeIn';
 import { useDialog } from '../../../shared/hooks/useDialog';
 
@@ -202,6 +203,7 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
       if (pricingData.additional_costs.length > 0) {
         const { data: { user } } = await supabase.auth.getUser();
         const userId = user?.id;
+        const currentBranchId = getCurrentBranchId();
 
         for (const cost of pricingData.additional_costs) {
           if (cost.amount > 0) {
@@ -214,6 +216,7 @@ const TradeInPricingModal: React.FC<TradeInPricingModalProps> = ({
                   description: `${cost.description || cost.category} for ${transaction.device_name} ${transaction.device_model} - Trade-In Transaction ${transaction.id}`,
                   date: new Date().toISOString().split('T')[0],
                   created_by: userId,
+                  branch_id: currentBranchId, // Assign current branch for isolation
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString()
                 });

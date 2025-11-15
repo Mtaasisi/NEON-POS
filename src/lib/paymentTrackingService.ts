@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { addBranchFilter } from './branchAwareApi';
 
 export interface SoldItem {
   id: string;
@@ -429,11 +430,14 @@ class PaymentTrackingService {
 
     try {
       // Fetch device payments (repair payments) with safe query
-      const { data: devicePayments, error: devicePaymentsError } = await supabase
+      // Apply branch filter to customer_payments
+      const devicePaymentsBase = supabase
         .from('customer_payments')
         .select('*')
         .order('payment_date', { ascending: false })
         .limit(1000); // Add reasonable limit to prevent performance issues
+      const devicePaymentsQuery = await addBranchFilter(devicePaymentsBase, 'payments');
+      const { data: devicePayments, error: devicePaymentsError } = await devicePaymentsQuery;
 
       if (devicePaymentsError) {
         console.log('⚠️ PaymentTrackingService: customer_payments error:', devicePaymentsError);
@@ -544,11 +548,14 @@ class PaymentTrackingService {
         console.log('🔍 PaymentTrackingService: Fetching Purchase Order payments...');
         
         // First, try with simplified query (no joins) to avoid 400 errors
-        const { data: poPayments, error: poPaymentsError } = await supabase
+        // Apply branch filter to purchase_order_payments
+        const poPaymentsBase = supabase
           .from('purchase_order_payments')
           .select('*')
           .order('payment_date', { ascending: false })
           .limit(1000); // Add reasonable limit
+        const poPaymentsQuery = await addBranchFilter(poPaymentsBase, 'payments');
+        const { data: poPayments, error: poPaymentsError } = await poPaymentsQuery;
 
         if (!poPaymentsError && poPayments && poPayments.length > 0) {
           console.log(`📊 PaymentTrackingService: Found ${poPayments.length} Purchase Order payments`);

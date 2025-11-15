@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { addBranchFilter } from './branchAwareApi';
 import { fetchPaymentMethods as fetchPaymentMethodsDedup } from './deduplicatedQueries';
 
 export interface FinanceAccount {
@@ -52,11 +53,14 @@ class FinanceAccountService {
   // Get all active finance accounts
   async getActiveFinanceAccounts(): Promise<FinanceAccount[]> {
     try {
-      const { data, error } = await supabase
+      const query = supabase
         .from('finance_accounts')
         .select('*')
         .eq('is_active', true)
         .order('name');
+
+      const filteredQuery = await addBranchFilter(query, 'accounts');
+      const { data, error } = await filteredQuery;
 
       if (error) throw error;
       return data || [];
@@ -69,12 +73,15 @@ class FinanceAccountService {
   // Get finance accounts by type
   async getFinanceAccountsByType(type: FinanceAccount['type']): Promise<FinanceAccount[]> {
     try {
-      const { data, error } = await supabase
+      const query = supabase
         .from('finance_accounts')
         .select('*')
         .eq('type', type)
         .eq('is_active', true)
         .order('name');
+
+      const filteredQuery = await addBranchFilter(query, 'accounts');
+      const { data, error } = await filteredQuery;
 
       if (error) throw error;
       return data || [];

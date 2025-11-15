@@ -52,7 +52,7 @@ export const getBranchSettings = async (branchId: string) => {
 
 // Check if data type is shared for current branch
 export const isDataShared = async (
-  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees'
+  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 'payments' | 'accounts' | 'gift_cards' | 'quality_checks' | 'recurring_expenses' | 'communications' | 'reports' | 'finance_transfers'
 ): Promise<boolean> => {
   const branchId = getCurrentBranchId();
   if (!branchId) return true; // No branch selected = show all data
@@ -78,7 +78,15 @@ export const isDataShared = async (
       inventory: branch.share_inventory,
       suppliers: branch.share_suppliers,
       categories: branch.share_categories,
-      employees: branch.share_employees
+      employees: branch.share_employees,
+      payments: branch.share_payments,
+      accounts: branch.share_accounts,
+      gift_cards: branch.share_gift_cards,
+      quality_checks: branch.share_quality_checks,
+      recurring_expenses: branch.share_recurring_expenses,
+      communications: branch.share_communications,
+      reports: branch.share_reports,
+      finance_transfers: branch.share_finance_transfers
     };
 
     return shareMapping[entityType] ?? true;
@@ -91,7 +99,7 @@ export const isDataShared = async (
 // Add branch filter to query builder
 export const addBranchFilter = async (
   query: any,
-  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees'
+  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 'payments' | 'accounts' | 'gift_cards' | 'quality_checks' | 'recurring_expenses' | 'communications' | 'reports' | 'finance_transfers'
 ) => {
   const branchId = getCurrentBranchId();
   
@@ -106,26 +114,29 @@ export const addBranchFilter = async (
   const shared = await isDataShared(entityType);
 
   if (shared) {
-    // Data is shared - no filter needed
-    console.log(`📊 No branch filter applied (${entityType} are shared)`);
-    logQueryDebug(entityType, query, branch?.data_isolation_mode || 'shared', false);
-    return query;
+    if (branch?.data_isolation_mode === 'shared') {
+      console.log(`📊 No branch filter applied (${entityType} shared in shared mode)`);
+      logQueryDebug(entityType, query, 'shared', false);
+      return query;
+    }
+
+    if (branch?.data_isolation_mode === 'hybrid') {
+      console.log(`🔄 HYBRID SHARED: ${entityType} - branch ${branchId} + shared data`);
+      logQueryDebug(entityType, query, 'hybrid', true);
+      return query.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+    }
   }
 
-  // Data is isolated - show items from this branch OR items marked as shared
-  console.log(`🔒 Filtering ${entityType} by branch: ${branchId} OR is_shared=true`);
+  console.log(`🔒 ISOLATED DATA: Filtering ${entityType} by branch ${branchId}`);
   logQueryDebug(entityType, query, branch?.data_isolation_mode || 'isolated', true);
-  
-  // In isolated/hybrid mode: show items from this branch OR shared items from other branches
-  // This allows branches to see shared data even when in isolated mode
-  return query.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+  return query.eq('branch_id', branchId);
 };
 
 // Create entity with branch assignment
 export const createWithBranch = async (
   tableName: string,
   data: any,
-  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees'
+  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 'payments' | 'accounts' | 'gift_cards' | 'quality_checks' | 'recurring_expenses' | 'communications' | 'reports' | 'finance_transfers'
 ) => {
   const branchId = getCurrentBranchId();
   const shared = await isDataShared(entityType);

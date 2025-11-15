@@ -221,6 +221,7 @@ const useDebounce = (value: string, delay: number) => {
 };
 
 const POcreate: React.FC = () => {
+  console.log('🔧 POcreate component initializing...');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { currentUser } = useAuth();
@@ -704,8 +705,17 @@ const POcreate: React.FC = () => {
   }, [duplicateOrderId, suppliers.length, loadPurchaseOrderForDuplication]);
 
   // Local state for purchase order
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null); // Fixed temporal dead zone issue
+  const [hasRestoredSession, setHasRestoredSession] = useState(false);
+
+  // Auto-open supplier selection modal for new purchase orders
+  useEffect(() => {
+    // Only show automatically for new purchase orders (not edit or duplicate mode)
+    if (!isEditMode && !isDuplicateMode && !selectedSupplier && suppliers.length > 0 && !hasRestoredSession) {
+      setShowSupplierSearch(true);
+    }
+  }, [isEditMode, isDuplicateMode, selectedSupplier, suppliers.length, hasRestoredSession]);
   const [purchaseCartItems, setPurchaseCartItems] = useState<PurchaseCartItem[]>([]);
-  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [selectedCurrency, setSelectedCurrency] = useState(() => {
     // Default to TZS (Tanzanian Shilling) as the base currency
     return SUPPORTED_CURRENCIES.find(c => c.code === 'TZS') || SUPPORTED_CURRENCIES[0];
@@ -726,7 +736,6 @@ const POcreate: React.FC = () => {
   const [purchaseOrderNotes, setPurchaseOrderNotes] = useState('');
   const [purchaseOrderStatus, setPurchaseOrderStatus] = useState<PurchaseOrderStatus>('sent');
   const [isSavingDraft, setIsSavingDraft] = useState(false);
-  const [hasRestoredSession, setHasRestoredSession] = useState(false);
 
   // Calculate exchange rate info for use in components
   const exchangeRateInfo = getExchangeRateInfo(exchangeRates, selectedCurrency.code, 'TZS');

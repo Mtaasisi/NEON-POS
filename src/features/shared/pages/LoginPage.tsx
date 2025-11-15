@@ -253,6 +253,27 @@ const LoginPage: React.FC = () => {
                 />
               </div>
 
+            {/* Remember Me Checkbox */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <input
+                  id="rememberMe"
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 text-blue-500 focus:ring-blue-500 border-gray-300 rounded"
+                  disabled={isLoading}
+                />
+                <label
+                  htmlFor="rememberMe"
+                  className="ml-3 block text-sm text-gray-700 font-medium cursor-pointer select-none"
+                  style={{ fontSize: '15px' }}
+                >
+                  Remember me
+                </label>
+              </div>
+            </div>
+
             {/* Error Message - iOS Style */}
               {error && (
               <div className="px-4 py-3 bg-red-50 rounded-2xl">

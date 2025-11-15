@@ -1,5 +1,6 @@
 import { supabase } from '../../../lib/supabaseClient';
 import { getAccountBalanceBeforeStorage, validateBalanceBeforeTransaction, FinanceAccount } from '../../../lib/financeAccountService';
+import { addBranchFilter } from '../../../lib/branchAwareApi';
 
 export interface PurchaseOrderPayment {
   id: string;
@@ -146,10 +147,10 @@ class PurchaseOrderPaymentService {
         notes: payment.notes || null
       }));
 
-      // Use batch processing stored procedure
+      // Use batch processing stored procedure - pass as JSON string
       const { data: result, error } = await supabase
-        .rpc('process_purchase_order_payments_batch', {
-          payment_data: paymentData
+        .rpc('process_purchase_order_payments_batch_simple', {
+          payment_data_json: JSON.stringify(paymentData)
         });
 
       if (error) {
@@ -553,11 +554,15 @@ class PurchaseOrderPaymentService {
   // Get payments for a purchase order
   async getPurchaseOrderPayments(purchaseOrderId: string): Promise<PurchaseOrderPayment[]> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('purchase_order_payments')
         .select('*')
         .eq('purchase_order_id', purchaseOrderId)
         .order('created_at', { ascending: false });
+
+      // Apply branch filtering for proper isolation
+      const filteredQuery = await addBranchFilter(query, 'payments');
+      const { data, error } = await filteredQuery;
 
       if (error) {
         console.error('❌ Error fetching purchase order payments:', error);

@@ -11,6 +11,7 @@ import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 import { customerCacheService } from '../../../../lib/customerCacheService';
 import LoadingSpinner from '../../../../components/ui/LoadingSpinner';
+import { useDataStore } from '../../../../stores/useDataStore';
 
 interface CustomerSelectionModalProps {
   isOpen: boolean;
@@ -44,6 +45,10 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
     }
   }, [isOpen]);
 
+  // Also check dataStore for preloaded customers
+  const preloadedCustomers = useDataStore((state) => state.customers);
+  const isDataStoreCacheValid = useDataStore((state) => state.isCacheValid('customers'));
+
   // Search customers when query changes with debouncing
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -61,8 +66,18 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
   const loadAllCustomers = async () => {
     try {
       setLoading(true);
-      
-      // 🚀 OPTIMIZED: Try localStorage cache first (instant load!)
+
+      // 🚀 PRIORITY: Check dataStore first (preloaded data)
+      if (preloadedCustomers && preloadedCustomers.length > 0 && isDataStoreCacheValid) {
+        console.log(`⚡ [CustomerModal] Using preloaded customers from dataStore (${preloadedCustomers.length} customers)`);
+        setRecentCustomers(preloadedCustomers);
+        setCustomers(preloadedCustomers.slice(0, 24));
+        setLoading(false);
+        setHasAttemptedLoad(true);
+        return;
+      }
+
+      // 🚀 SECONDARY: Try localStorage cache (instant load!)
       const cachedCustomers = customerCacheService.getCustomers();
       if (cachedCustomers && cachedCustomers.length > 0) {
         console.log(`⚡ [CustomerModal] Using cached customers (${cachedCustomers.length} customers)`);
@@ -70,7 +85,7 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
         setCustomers(cachedCustomers.slice(0, 24));
         setLoading(false);
         setHasAttemptedLoad(true);
-        
+
         // ⚡ OPTIMIZED: Only refresh cache if data is stale (older than 5 minutes)
         const cacheAge = customerCacheService.getCacheAge();
         if (cacheAge > 5 * 60 * 1000) { // 5 minutes in milliseconds
@@ -83,10 +98,10 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
             // Silently fail - cache is still valid
           });
         }
-        
+
         return;
       }
-      
+
       console.log('📡 [CustomerModal] No cache, fetching from database...');
       const result = await fetchAllCustomersSimple();
       console.log('📊 fetchAllCustomersSimple result:', {
@@ -95,15 +110,15 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
         hasCustomers: result && result.customers,
         length: Array.isArray(result) ? result.length : (result?.customers?.length || 0)
       });
-      
+
       if (result && Array.isArray(result)) {
         setRecentCustomers(result);
         setCustomers(result.slice(0, 24)); // Show only first 24 customers
         console.log(`✅ Loaded ${result.length} customers, showing first 24`);
-        
+
         // 🚀 Save to cache for next time
         customerCacheService.saveCustomers(result);
-        
+
         // Debug: Check for customers with missing data
         const customersWithNames = result.filter(c => c.name && c.name.trim());
         const customersWithPhones = result.filter(c => c.phone && c.phone.trim());

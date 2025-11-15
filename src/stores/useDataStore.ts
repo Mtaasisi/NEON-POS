@@ -6,6 +6,7 @@
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
+import { AdminSetting } from '../lib/adminSettingsApi';
 
 // Types
 export interface Customer {
@@ -145,6 +146,28 @@ export interface PaymentMethod {
   [key: string]: any;
 }
 
+export interface PaymentAccount {
+  id: string;
+  name: string;
+  type: 'bank' | 'cash' | 'mobile_money' | 'credit_card' | 'savings' | 'investment' | 'other';
+  balance: number;
+  account_number?: string;
+  bank_name?: string;
+  currency: string;
+  is_active: boolean;
+  is_payment_method: boolean;
+  payment_icon?: string;
+  payment_color?: string;
+  payment_description?: string;
+  requires_reference: boolean;
+  requires_account_number: boolean;
+  notes?: string;
+  branch_id?: string;
+  is_shared?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AttendanceRecord {
   id: string;
   employeeId: string;
@@ -154,6 +177,37 @@ export interface AttendanceRecord {
   totalHours: number;
   status: 'present' | 'absent' | 'late' | 'half-day';
   notes?: string;
+  [key: string]: any;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  orderNumber: string;
+  supplierId: string;
+  status: string;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  [key: string]: any;
+}
+
+export interface StockMovement {
+  id: string;
+  productId: string;
+  variantId?: string;
+  quantity: number;
+  movementType: string;
+  reason: string;
+  createdAt: string;
+  [key: string]: any;
+}
+
+export interface SaleRecord {
+  id: string;
+  totalAmount: number;
+  createdAt: string;
+  customerId?: string;
+  employeeId?: string;
   [key: string]: any;
 }
 
@@ -174,11 +228,16 @@ interface DataState {
   devices: Device[];
   sales: Sale[];
   settings: Settings | null;
+  adminSettings: AdminSetting[];
   parentVariants: ParentVariant[];
   childVariants: ChildVariant[];
   employees: Employee[];
   paymentMethods: PaymentMethod[];
+  paymentAccounts: PaymentAccount[];
   attendanceRecords: AttendanceRecord[];
+  purchaseOrders: PurchaseOrder[];
+  stockMovements: StockMovement[];
+  sales: SaleRecord[];
 
   // Cache metadata
   cache: {
@@ -191,11 +250,16 @@ interface DataState {
     devices: CacheMetadata;
     sales: CacheMetadata;
     settings: CacheMetadata;
+    adminSettings: CacheMetadata;
     parentVariants: CacheMetadata;
     childVariants: CacheMetadata;
     employees: CacheMetadata;
     paymentMethods: CacheMetadata;
+    paymentAccounts: CacheMetadata;
     attendanceRecords: CacheMetadata;
+    purchaseOrders: CacheMetadata;
+    stockMovements: CacheMetadata;
+    sales: CacheMetadata;
   };
 
   // Loading states
@@ -221,11 +285,16 @@ interface DataState {
   setDevices: (devices: Device[]) => void;
   setSales: (sales: Sale[]) => void;
   setSettings: (settings: Settings) => void;
+  setAdminSettings: (adminSettings: AdminSetting[]) => void;
   setParentVariants: (parentVariants: ParentVariant[]) => void;
   setChildVariants: (childVariants: ChildVariant[]) => void;
   setEmployees: (employees: Employee[]) => void;
   setPaymentMethods: (paymentMethods: PaymentMethod[]) => void;
+  setPaymentAccounts: (paymentAccounts: PaymentAccount[]) => void;
   setAttendanceRecords: (attendanceRecords: AttendanceRecord[]) => void;
+  setPurchaseOrders: (purchaseOrders: PurchaseOrder[]) => void;
+  setStockMovements: (stockMovements: StockMovement[]) => void;
+  setSales: (sales: SaleRecord[]) => void;
 
   // Preload actions
   setPreloadProgress: (progress: number, status: string) => void;
@@ -280,11 +349,16 @@ export const useDataStore = create<DataState>()(
         devices: [],
         sales: [],
         settings: null,
+        adminSettings: [],
         parentVariants: [],
         childVariants: [],
         employees: [],
         paymentMethods: [],
+        paymentAccounts: [],
         attendanceRecords: [],
+        purchaseOrders: [],
+        stockMovements: [],
+        sales: [],
 
         // Initial cache metadata
         cache: {
@@ -297,11 +371,16 @@ export const useDataStore = create<DataState>()(
           devices: createCacheMetadata(),
           sales: createCacheMetadata(),
           settings: createCacheMetadata(),
+          adminSettings: createCacheMetadata(),
           parentVariants: createCacheMetadata(),
           childVariants: createCacheMetadata(),
           employees: createCacheMetadata(),
           paymentMethods: createCacheMetadata(),
+          paymentAccounts: createCacheMetadata(),
           attendanceRecords: createCacheMetadata(),
+          purchaseOrders: createCacheMetadata(),
+          stockMovements: createCacheMetadata(),
+          sales: createCacheMetadata(),
         },
 
         // Initial loading states
@@ -363,6 +442,11 @@ export const useDataStore = create<DataState>()(
           get().updateCacheTimestamp('settings');
         },
 
+        setAdminSettings: (adminSettings) => {
+          set({ adminSettings });
+          get().updateCacheTimestamp('adminSettings');
+        },
+
         setParentVariants: (parentVariants) => {
           set({ parentVariants });
           get().updateCacheTimestamp('parentVariants');
@@ -383,9 +467,29 @@ export const useDataStore = create<DataState>()(
           get().updateCacheTimestamp('paymentMethods');
         },
 
+        setPaymentAccounts: (paymentAccounts) => {
+          set({ paymentAccounts });
+          get().updateCacheTimestamp('paymentAccounts');
+        },
+
         setAttendanceRecords: (attendanceRecords) => {
           set({ attendanceRecords });
           get().updateCacheTimestamp('attendanceRecords');
+        },
+
+        setPurchaseOrders: (purchaseOrders) => {
+          set({ purchaseOrders });
+          get().updateCacheTimestamp('purchaseOrders');
+        },
+
+        setStockMovements: (stockMovements) => {
+          set({ stockMovements });
+          get().updateCacheTimestamp('stockMovements');
+        },
+
+        setSales: (sales) => {
+          set({ sales });
+          get().updateCacheTimestamp('sales');
         },
 
         // Preload actions
@@ -563,11 +667,16 @@ export const useDataStore = create<DataState>()(
             devices: [],
             sales: [],
             settings: null,
+            adminSettings: [],
             parentVariants: [],
             childVariants: [],
             employees: [],
             paymentMethods: [],
+            paymentAccounts: [],
             attendanceRecords: [],
+            purchaseOrders: [],
+            stockMovements: [],
+            sales: [],
             isLoaded: false,
             preloadProgress: 0,
             preloadStatus: 'Not started',
@@ -583,19 +692,19 @@ export const useDataStore = create<DataState>()(
             progress: state.preloadProgress,
             status: state.preloadStatus,
             dataCounts: {
-              customers: state.customers.length,
-              products: state.products.length,
-              categories: state.categories.length,
-              suppliers: state.suppliers.length,
-              branches: state.branches.length,
-              users: state.users.length,
-              devices: state.devices.length,
-              sales: state.sales.length,
-              parentVariants: state.parentVariants.length,
-              childVariants: state.childVariants.length,
-              employees: state.employees.length,
-              paymentMethods: state.paymentMethods.length,
-              attendanceRecords: state.attendanceRecords.length,
+              customers: state.customers?.length || 0,
+              products: state.products?.length || 0,
+              categories: state.categories?.length || 0,
+              suppliers: state.suppliers?.length || 0,
+              branches: state.branches?.length || 0,
+              users: state.users?.length || 0,
+              devices: state.devices?.length || 0,
+              sales: state.sales?.length || 0,
+              parentVariants: state.parentVariants?.length || 0,
+              childVariants: state.childVariants?.length || 0,
+              employees: state.employees?.length || 0,
+              paymentMethods: state.paymentMethods?.length || 0,
+              attendanceRecords: state.attendanceRecords?.length || 0,
             },
             cacheStatus: Object.keys(state.cache).map(key => ({
               dataType: key,
@@ -631,6 +740,7 @@ export const useParentVariantsData = () => useDataStore((state) => state.parentV
 export const useChildVariantsData = () => useDataStore((state) => state.childVariants);
 export const useEmployeesData = () => useDataStore((state) => state.employees);
 export const usePaymentMethodsData = () => useDataStore((state) => state.paymentMethods);
+export const usePaymentAccountsData = () => useDataStore((state) => state.paymentAccounts);
 export const useAttendanceRecordsData = () => useDataStore((state) => state.attendanceRecords);
 export const usePreloadStatus = () => useDataStore((state) => ({
   isPreloading: state.isPreloading,

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
+import { usePaymentAccountsData, useDataStore } from '../../../stores/useDataStore';
+import { getCurrentBranchId } from '../../../lib/branchAwareApi';
+import { clearQueryCache } from '../../../lib/deduplicatedQueries';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
 import GlassInput from '../../shared/components/ui/GlassInput';
@@ -68,6 +71,8 @@ interface DebugLog {
 const ExpenseManagement: React.FC = () => {
   const { currentUser } = useAuth();
   const successModal = useSuccessModal();
+  const preloadedPaymentAccounts = usePaymentAccountsData();
+  const dataStore = useDataStore();
   const [expenses, setExpenses] = useState<AccountTransaction[]>([]);
   const [paymentAccounts, setPaymentAccounts] = useState<FinanceAccount[]>([]);
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
@@ -152,11 +157,22 @@ const ExpenseManagement: React.FC = () => {
       setIsLoading(true);
       addDebugLog('info', 'FETCH_EXPENSES', 'Loading state set to true');
       
-      // Fetch expense transactions
+      // Fetch expense transactions with branch isolation via finance account IDs (no branch_id on this table)
+      const branchAccounts = await financeAccountService.getPaymentMethods();
+      const accountIdsForBranch = [...new Set(branchAccounts.map(a => a.id))];
+
+      if (accountIdsForBranch.length === 0) {
+        addDebugLog('info', 'FETCH_EXPENSES', 'No accounts for current branch; returning empty list');
+        setExpenses([]);
+        setIsLoading(false);
+        return;
+      }
+
       const { data: transactions, error } = await supabase
         .from('account_transactions')
         .select('*')
         .eq('transaction_type', 'expense')
+        .in('account_id', accountIdsForBranch)
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -223,25 +239,99 @@ const ExpenseManagement: React.FC = () => {
     }
   }, [addDebugLog]);
 
-  // Fetch payment accounts
+  // Load preloaded payment accounts on mount
+  useEffect(() => {
+    const currentBranchId = getCurrentBranchId();
+    addDebugLog('info', 'INIT', `Loading payment accounts for branch: ${currentBranchId || 'none'}`);
+    addDebugLog('info', 'INIT', `Preloaded accounts available: ${preloadedPaymentAccounts?.length || 0}`);
+
+    if (preloadedPaymentAccounts && preloadedPaymentAccounts.length > 0) {
+      // Filter accounts to only show those for current branch (accounts are now isolated)
+      const branchAccounts = preloadedPaymentAccounts.filter(account =>
+        !account.branch_id || account.branch_id === currentBranchId || account.is_shared
+      );
+      addDebugLog('info', 'INIT', `Branch-filtered accounts: ${branchAccounts.length}/${preloadedPaymentAccounts.length}`);
+      addDebugLog('info', 'INIT', `Filtered accounts: ${branchAccounts.map(a => `${a.name}(branch:${a.branch_id})`).join(', ')}`);
+      setPaymentAccounts(branchAccounts);
+    } else {
+      // If no preloaded accounts, fetch them
+      addDebugLog('warning', 'INIT', 'No preloaded payment accounts, fetching directly...');
+      fetchPaymentAccounts();
+    }
+  }, [preloadedPaymentAccounts, addDebugLog]);
+
+  // Watch for branch changes and reload payment accounts
+  const [currentBranchId, setCurrentBranchId] = useState(getCurrentBranchId());
+  useEffect(() => {
+    const checkBranchChange = () => {
+      const newBranchId = getCurrentBranchId();
+      if (newBranchId !== currentBranchId) {
+        addDebugLog('info', 'BRANCH_CHANGE', `Branch changed from ${currentBranchId} to ${newBranchId}, reloading payment accounts`);
+        setCurrentBranchId(newBranchId);
+        // Clear current accounts from both local state and data store
+        setPaymentAccounts([]);
+        dataStore.setPaymentAccounts([]);
+        // Clear cache for both old and new branches to force reload
+        clearQueryCache(`payment-methods-${newBranchId || 'all'}`);
+        clearQueryCache(`payment-methods-${currentBranchId || 'all'}`);
+        // Also clear any "all" cache that might exist
+        clearQueryCache('payment-methods-all');
+        // Reload accounts for new branch
+        fetchPaymentAccounts();
+      }
+    };
+
+    // Check for branch changes every 2 seconds
+    const interval = setInterval(checkBranchChange, 2000);
+    return () => clearInterval(interval);
+  }, [currentBranchId, addDebugLog, dataStore]);
+
+  // Fetch payment accounts (fallback if not preloaded)
   const fetchPaymentAccounts = useCallback(async () => {
     const startTime = performance.now();
-    addDebugLog('api', 'FETCH_ACCOUNTS', 'Fetching payment accounts...');
-    
+    const currentBranchId = getCurrentBranchId();
+    addDebugLog('api', 'FETCH_ACCOUNTS', `Fetching payment accounts for branch: ${currentBranchId || 'none'}`);
+
     try {
+      // Clear cache to force fresh fetch
+      const cacheKey = `payment-methods-${currentBranchId || 'all'}`;
+      clearQueryCache(cacheKey);
+      addDebugLog('info', 'FETCH_ACCOUNTS', `Cleared cache for key: ${cacheKey}`);
+
+      // If we already have preloaded data, check if it's for the current branch
+      if (preloadedPaymentAccounts && preloadedPaymentAccounts.length > 0) {
+        const branchAccounts = preloadedPaymentAccounts.filter(account =>
+          !account.branch_id || account.branch_id === currentBranchId || account.is_shared
+        );
+        addDebugLog('info', 'FETCH_ACCOUNTS', `Using preloaded accounts: ${branchAccounts.length} for current branch`);
+        setPaymentAccounts(branchAccounts);
+        return;
+      }
+
+      addDebugLog('info', 'FETCH_ACCOUNTS', 'No preloaded accounts, calling financeAccountService.getPaymentMethods()...');
       const accounts = await financeAccountService.getPaymentMethods();
-      setPaymentAccounts(accounts);
-      
+
+      addDebugLog('success', 'FETCH_ACCOUNTS', `Service returned ${accounts.length} accounts:`, accounts);
+
+      // Filter accounts for current branch (additional safety)
+      const branchAccounts = accounts.filter(account =>
+        !account.branch_id || account.branch_id === currentBranchId || account.is_shared
+      );
+
+      addDebugLog('success', 'FETCH_ACCOUNTS', `After branch filtering: ${branchAccounts.length} accounts`);
+      setPaymentAccounts(branchAccounts);
+
       const duration = performance.now() - startTime;
-      addDebugLog('success', 'FETCH_ACCOUNTS', `Fetched ${accounts.length} payment accounts`, {
-        accounts: accounts.map(a => ({ id: a.id, name: a.name, balance: a.balance }))
-      }, duration);
+      addDebugLog('success', 'FETCH_ACCOUNTS', `Fetch completed in ${duration.toFixed(2)}ms`);
     } catch (error) {
       const duration = performance.now() - startTime;
       addDebugLog('error', 'FETCH_ACCOUNTS', 'Failed to fetch payment accounts', error, duration);
       console.error('Error fetching payment accounts:', error);
+
+      // Set empty array on error
+      setPaymentAccounts([]);
     }
-  }, [addDebugLog]);
+  }, [addDebugLog, preloadedPaymentAccounts]);
 
   // Fetch expense categories
   const fetchExpenseCategories = useCallback(async () => {
@@ -333,7 +423,7 @@ const ExpenseManagement: React.FC = () => {
     };
 
     loadInitialData();
-  }, [fetchExpenses, fetchPaymentAccounts, fetchExpenseCategories, addDebugLog]);
+  }, [fetchExpenses, fetchExpenseCategories, addDebugLog]);
 
   // Handle form input change
   const handleInputChange = (field: string, value: any) => {
@@ -375,7 +465,7 @@ const ExpenseManagement: React.FC = () => {
       const isAdmin = currentUser?.role === 'admin';
       const status = isAdmin ? 'approved' : 'pending';
 
-      // Insert into account_transactions
+      // Insert into account_transactions (branch isolation enforced by selected account)
       const { data, error } = await supabase
         .from('account_transactions')
         .insert({
@@ -894,11 +984,29 @@ const ExpenseManagement: React.FC = () => {
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No Expenses Found</h3>
             <p className="text-gray-600 mb-4">
-              {expenses.length === 0 
+              {expenses.length === 0
                 ? 'No expenses have been recorded yet.'
                 : 'No expenses match your current filters.'}
             </p>
-            {expenses.length === 0 && (
+            {expenses.length === 0 && paymentAccounts.length === 0 && (
+              <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-center gap-2 text-yellow-800 mb-2">
+                  <AlertTriangle size={16} />
+                  <span className="font-medium">No Payment Accounts Found</span>
+                </div>
+                <p className="text-sm text-yellow-700 mb-3">
+                  You need payment accounts to record expenses. Go to Payment Account Management to create accounts for your branch.
+                </p>
+                <a
+                  href="/payments/accounts"
+                  className="inline-flex items-center gap-2 px-3 py-2 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <CreditCard size={14} />
+                  Manage Payment Accounts
+                </a>
+              </div>
+            )}
+            {expenses.length === 0 && paymentAccounts.length > 0 && (
               <GlassButton onClick={() => setShowAddModal(true)}>
                 <Plus size={16} />
                 Add Your First Expense
@@ -1035,16 +1143,14 @@ const ExpenseManagement: React.FC = () => {
             </label>
             <GlassSelect
               value={formData.account_id}
-              onChange={(e) => handleInputChange('account_id', e.target.value)}
+              onChange={(value) => handleInputChange('account_id', value)}
+              placeholder="Select Account"
+              options={paymentAccounts.map(account => ({
+                value: account.id,
+                label: `${account.name} - ${formatMoney(account.balance || 0)}`
+              }))}
               required
-            >
-              <option value="">Select Account</option>
-              {paymentAccounts.map(account => (
-                <option key={account.id} value={account.id}>
-                  {account.name} - {formatMoney(account.balance || 0)}
-                </option>
-              ))}
-            </GlassSelect>
+            />
           </div>
 
           <div>
@@ -1054,16 +1160,14 @@ const ExpenseManagement: React.FC = () => {
             </label>
             <GlassSelect
               value={formData.category}
-              onChange={(e) => handleInputChange('category', e.target.value)}
+              onChange={(value) => handleInputChange('category', value)}
+              placeholder="Select Category"
+              options={expenseCategories.map(category => ({
+                value: category.name,
+                label: category.name
+              }))}
               required
-            >
-              <option value="">Select Category</option>
-              {expenseCategories.map(category => (
-                <option key={category.id} value={category.name}>
-                  {category.name}
-                </option>
-              ))}
-            </GlassSelect>
+            />
           </div>
 
           <div>

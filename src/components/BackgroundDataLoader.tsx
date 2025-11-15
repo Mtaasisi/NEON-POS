@@ -60,7 +60,7 @@ const BackgroundDataLoader: React.FC = () => {
       const tasks = [];
 
       // Preload customers
-      if (!customersLoadedRef.current && dataStore.customers.length === 0) {
+      if (!customersLoadedRef.current && (!dataStore.customers || dataStore.customers.length === 0)) {
         tasks.push(
           (async () => {
             try {
@@ -76,8 +76,88 @@ const BackgroundDataLoader: React.FC = () => {
         );
       }
 
+      // Preload settings - HIGH PRIORITY for fast settings access
+      if (!dataStore.settings) {
+        tasks.push(
+          (async () => {
+            try {
+              console.log('🚀 Preloading settings data...');
+              const { dataPreloadService } = await import('../services/dataPreloadService');
+              await dataPreloadService.refreshData('settings');
+              console.log('✅ Settings data preloaded successfully');
+            } catch (error) {
+              console.warn('⚠️ Failed to preload settings:', error);
+            }
+          })()
+        );
+      }
+
+      // Preload admin settings - HIGH PRIORITY for fast admin access
+      if (!dataStore.adminSettings || dataStore.adminSettings.length === 0) {
+        tasks.push(
+          (async () => {
+            try {
+              console.log('🚀 Preloading admin settings data...');
+              const { dataPreloadService } = await import('../services/dataPreloadService');
+              await dataPreloadService.refreshData('admin_settings');
+              console.log('✅ Admin settings data preloaded successfully');
+            } catch (error) {
+              console.warn('⚠️ Failed to preload admin settings:', error);
+            }
+          })()
+        );
+      }
+
+      // Preload purchase orders - HIGH PRIORITY for fast PO page access
+      if (!dataStore.purchaseOrders || dataStore.purchaseOrders.length === 0) {
+        tasks.push(
+          (async () => {
+            try {
+              console.log('🚀 Preloading purchase orders data...');
+              const { dataPreloadService } = await import('../services/dataPreloadService');
+              await dataPreloadService.refreshData('purchase_orders');
+              console.log('✅ Purchase orders data preloaded successfully');
+            } catch (error) {
+              console.warn('⚠️ Failed to preload purchase orders:', error);
+            }
+          })()
+        );
+      }
+
+      // Preload stock movements - MEDIUM PRIORITY for inventory tracking
+      if (!dataStore.stockMovements || dataStore.stockMovements.length === 0) {
+        tasks.push(
+          (async () => {
+            try {
+              console.log('🚀 Preloading stock movements data...');
+              const { dataPreloadService } = await import('../services/dataPreloadService');
+              await dataPreloadService.refreshData('stock_movements');
+              console.log('✅ Stock movements data preloaded successfully');
+            } catch (error) {
+              console.warn('⚠️ Failed to preload stock movements:', error);
+            }
+          })()
+        );
+      }
+
+      // Preload sales data - MEDIUM PRIORITY for analytics and history
+      if (!dataStore.sales || dataStore.sales.length === 0) {
+        tasks.push(
+          (async () => {
+            try {
+              console.log('🚀 Preloading sales data...');
+              const { dataPreloadService } = await import('../services/dataPreloadService');
+              await dataPreloadService.refreshData('sales');
+              console.log('✅ Sales data preloaded successfully');
+            } catch (error) {
+              console.warn('⚠️ Failed to preload sales:', error);
+            }
+          })()
+        );
+      }
+
       // Preload parent variants
-      if (dataStore.parentVariants.length === 0) {
+      if (!dataStore.parentVariants || dataStore.parentVariants.length === 0) {
         tasks.push(
           (async () => {
             try {
@@ -93,7 +173,7 @@ const BackgroundDataLoader: React.FC = () => {
       }
 
       // Preload employees
-      if (dataStore.employees.length === 0) {
+      if (!dataStore.employees || dataStore.employees.length === 0) {
         tasks.push(
           (async () => {
             try {
@@ -109,7 +189,7 @@ const BackgroundDataLoader: React.FC = () => {
       }
 
       // Preload payment methods
-      if (dataStore.paymentMethods.length === 0) {
+      if (!dataStore.paymentMethods || dataStore.paymentMethods.length === 0) {
         tasks.push(
           (async () => {
             try {
@@ -125,7 +205,7 @@ const BackgroundDataLoader: React.FC = () => {
       }
 
       // Preload attendance records
-      if (dataStore.attendanceRecords.length === 0) {
+      if (!dataStore.attendanceRecords || dataStore.attendanceRecords.length === 0) {
         tasks.push(
           (async () => {
             try {
@@ -147,11 +227,16 @@ const BackgroundDataLoader: React.FC = () => {
     // Preload data immediately (non-blocking)
     preloadData();
   }, [
-    dataStore.customers.length,
-    dataStore.parentVariants.length,
-    dataStore.employees.length,
-    dataStore.paymentMethods.length,
-    dataStore.attendanceRecords.length
+    dataStore.customers?.length || 0,
+    dataStore.settings,
+    dataStore.adminSettings?.length || 0,
+    dataStore.purchaseOrders?.length || 0,
+    dataStore.stockMovements?.length || 0,
+    dataStore.sales?.length || 0,
+    dataStore.parentVariants?.length || 0,
+    dataStore.employees?.length || 0,
+    dataStore.paymentMethods?.length || 0,
+    dataStore.attendanceRecords?.length || 0
   ]);
 
   // No visible component needed - GlobalLoadingProgress handles it!

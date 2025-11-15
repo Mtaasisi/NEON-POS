@@ -97,9 +97,20 @@ const RecurringExpenseManagement: React.FC = () => {
     try {
       setIsLoading(true);
       
+      // Filter by finance accounts in current branch (table may not have branch_id)
+      const branchAccounts = await financeAccountService.getPaymentMethods();
+      const accountIdsForBranch = [...new Set(branchAccounts.map(a => a.id))];
+      
+      if (accountIdsForBranch.length === 0) {
+        setRecurringExpenses([]);
+        setIsLoading(false);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('recurring_expenses')
         .select('*')
+        .in('account_id', accountIdsForBranch)
         .order('next_due_date', { ascending: true });
 
       if (error) throw error;

@@ -32,6 +32,14 @@ export interface BranchDebugInfo {
     share_suppliers: boolean;
     share_categories: boolean;
     share_employees: boolean;
+    share_payments: boolean;
+    share_accounts: boolean;
+    share_gift_cards: boolean;
+    share_quality_checks: boolean;
+    share_recurring_expenses: boolean;
+    share_communications: boolean;
+    share_reports: boolean;
+    share_finance_transfers: boolean;
   };
   testResults: IsolationTestResult[];
   summary: {
@@ -542,6 +550,580 @@ export async function testCategoriesIsolation(branchId: string): Promise<Isolati
 }
 
 /**
+ * Test if gift cards isolation is working correctly
+ * Tests what gift cards would be VISIBLE to this branch through the API
+ */
+export async function testGiftCardsIsolation(branchId: string): Promise<IsolationTestResult> {
+  try {
+    const branch = await getBranchSettings(branchId);
+    if (!branch) throw new Error('Branch not found');
+
+    const expected = getExpectedIsolation('gift_cards', branch);
+
+    // Test what gift cards would be VISIBLE to this branch
+    let visibleGiftCardsQuery;
+
+    if (expected === 'isolated') {
+      // In isolated mode: only gift cards from this branch
+      visibleGiftCardsQuery = supabase
+        .from('gift_cards')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
+    } else {
+      // In shared mode: all gift cards
+      visibleGiftCardsQuery = supabase
+        .from('gift_cards')
+        .select('*', { count: 'exact', head: true });
+    }
+
+    const { count: visibleCount } = await visibleGiftCardsQuery;
+
+    // Count for context
+    const { count: currentBranchCount } = await supabase
+      .from('gift_cards')
+      .select('*', { count: 'exact', head: true })
+      .eq('branch_id', branchId);
+
+    const { count: otherBranchesCount } = await supabase
+      .from('gift_cards')
+      .select('*', { count: 'exact', head: true })
+      .neq('branch_id', branchId)
+      .not('branch_id', 'is', null);
+
+    const { count: totalCount } = await supabase
+      .from('gift_cards')
+      .select('*', { count: 'exact', head: true });
+
+    const dataCount = {
+      currentBranch: currentBranchCount || 0,
+      otherBranches: otherBranchesCount || 0,
+      shared: 0,
+      total: totalCount || 0,
+    };
+
+    let actual: 'isolated' | 'shared' | 'unknown' = 'unknown';
+    let passed = true;
+    let details = '';
+
+    if (expected === 'isolated') {
+      if (visibleCount === currentBranchCount && currentBranchCount > 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `✅ Isolation working: ${visibleCount} gift cards visible (only from this branch). Database has ${otherBranchesCount} gift cards from other branches (correctly hidden)`;
+      } else if (visibleCount === 0 && currentBranchCount === 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `⚠️ No gift cards found for this branch yet. Database has ${otherBranchesCount} gift cards from other branches (correctly hidden)`;
+      } else {
+        actual = 'shared';
+        passed = false;
+        details = `❌ Isolation FAILED: ${visibleCount} gift cards visible but should only be ${currentBranchCount}`;
+      }
+    } else {
+      actual = 'shared';
+      passed = true;
+      details = `✅ Sharing working: ${visibleCount} total gift cards visible`;
+    }
+
+    return {
+      feature: 'Gift Cards',
+      passed,
+      expected,
+      actual,
+      details,
+      dataCount,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    return {
+      feature: 'Gift Cards',
+      passed: false,
+      expected: 'unknown',
+      actual: 'unknown',
+      details: `❌ Error testing gift cards: ${error.message}`,
+      dataCount: { currentBranch: 0, otherBranches: 0, shared: 0, total: 0 },
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Test if quality checks isolation is working correctly
+ * Tests what quality checks would be VISIBLE to this branch through the API
+ */
+export async function testQualityChecksIsolation(branchId: string): Promise<IsolationTestResult> {
+  try {
+    const branch = await getBranchSettings(branchId);
+    if (!branch) throw new Error('Branch not found');
+
+    const expected = getExpectedIsolation('quality_checks', branch);
+
+    // Test what quality checks would be VISIBLE to this branch
+    let visibleQualityChecksQuery;
+
+    if (expected === 'isolated') {
+      // In isolated mode: only quality checks from this branch
+      visibleQualityChecksQuery = supabase
+        .from('quality_checks')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
+    } else {
+      // In shared mode: all quality checks
+      visibleQualityChecksQuery = supabase
+        .from('quality_checks')
+        .select('*', { count: 'exact', head: true });
+    }
+
+    const { count: visibleCount } = await visibleQualityChecksQuery;
+
+    // Count for context
+    const { count: currentBranchCount } = await supabase
+      .from('quality_checks')
+      .select('*', { count: 'exact', head: true })
+      .eq('branch_id', branchId);
+
+    const { count: otherBranchesCount } = await supabase
+      .from('quality_checks')
+      .select('*', { count: 'exact', head: true })
+      .neq('branch_id', branchId)
+      .not('branch_id', 'is', null);
+
+    const { count: totalCount } = await supabase
+      .from('quality_checks')
+      .select('*', { count: 'exact', head: true });
+
+    const dataCount = {
+      currentBranch: currentBranchCount || 0,
+      otherBranches: otherBranchesCount || 0,
+      shared: 0,
+      total: totalCount || 0,
+    };
+
+    let actual: 'isolated' | 'shared' | 'unknown' = 'unknown';
+    let passed = true;
+    let details = '';
+
+    if (expected === 'isolated') {
+      if (visibleCount === currentBranchCount && currentBranchCount > 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `✅ Isolation working: ${visibleCount} quality checks visible (only from this branch). Database has ${otherBranchesCount} quality checks from other branches (correctly hidden)`;
+      } else if (visibleCount === 0 && currentBranchCount === 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `⚠️ No quality checks found for this branch yet. Database has ${otherBranchesCount} quality checks from other branches (correctly hidden)`;
+      } else {
+        actual = 'shared';
+        passed = false;
+        details = `❌ Isolation FAILED: ${visibleCount} quality checks visible but should only be ${currentBranchCount}`;
+      }
+    } else {
+      actual = 'shared';
+      passed = true;
+      details = `✅ Sharing working: ${visibleCount} total quality checks visible`;
+    }
+
+    return {
+      feature: 'Quality Checks',
+      passed,
+      expected,
+      actual,
+      details,
+      dataCount,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    return {
+      feature: 'Quality Checks',
+      passed: false,
+      expected: 'unknown',
+      actual: 'unknown',
+      details: `❌ Error testing quality checks: ${error.message}`,
+      dataCount: { currentBranch: 0, otherBranches: 0, shared: 0, total: 0 },
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Test if recurring expenses isolation is working correctly
+ * Tests what recurring expenses would be VISIBLE to this branch through the API
+ */
+export async function testRecurringExpensesIsolation(branchId: string): Promise<IsolationTestResult> {
+  try {
+    const branch = await getBranchSettings(branchId);
+    if (!branch) throw new Error('Branch not found');
+
+    const expected = getExpectedIsolation('recurring_expenses', branch);
+
+    // Test what recurring expenses would be VISIBLE to this branch
+    let visibleRecurringExpensesQuery;
+
+    if (expected === 'isolated') {
+      // In isolated mode: only recurring expenses from this branch
+      visibleRecurringExpensesQuery = supabase
+        .from('recurring_expenses')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
+    } else {
+      // In shared mode: all recurring expenses
+      visibleRecurringExpensesQuery = supabase
+        .from('recurring_expenses')
+        .select('*', { count: 'exact', head: true });
+    }
+
+    const { count: visibleCount } = await visibleRecurringExpensesQuery;
+
+    // Count for context
+    const { count: currentBranchCount } = await supabase
+      .from('recurring_expenses')
+      .select('*', { count: 'exact', head: true })
+      .eq('branch_id', branchId);
+
+    const { count: otherBranchesCount } = await supabase
+      .from('recurring_expenses')
+      .select('*', { count: 'exact', head: true })
+      .neq('branch_id', branchId)
+      .not('branch_id', 'is', null);
+
+    const { count: totalCount } = await supabase
+      .from('recurring_expenses')
+      .select('*', { count: 'exact', head: true });
+
+    const dataCount = {
+      currentBranch: currentBranchCount || 0,
+      otherBranches: otherBranchesCount || 0,
+      shared: 0,
+      total: totalCount || 0,
+    };
+
+    let actual: 'isolated' | 'shared' | 'unknown' = 'unknown';
+    let passed = true;
+    let details = '';
+
+    if (expected === 'isolated') {
+      if (visibleCount === currentBranchCount && currentBranchCount > 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `✅ Isolation working: ${visibleCount} recurring expenses visible (only from this branch). Database has ${otherBranchesCount} recurring expenses from other branches (correctly hidden)`;
+      } else if (visibleCount === 0 && currentBranchCount === 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `⚠️ No recurring expenses found for this branch yet. Database has ${otherBranchesCount} recurring expenses from other branches (correctly hidden)`;
+      } else {
+        actual = 'shared';
+        passed = false;
+        details = `❌ Isolation FAILED: ${visibleCount} recurring expenses visible but should only be ${currentBranchCount}`;
+      }
+    } else {
+      actual = 'shared';
+      passed = true;
+      details = `✅ Sharing working: ${visibleCount} total recurring expenses visible`;
+    }
+
+    return {
+      feature: 'Recurring Expenses',
+      passed,
+      expected,
+      actual,
+      details,
+      dataCount,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    return {
+      feature: 'Recurring Expenses',
+      passed: false,
+      expected: 'unknown',
+      actual: 'unknown',
+      details: `❌ Error testing recurring expenses: ${error.message}`,
+      dataCount: { currentBranch: 0, otherBranches: 0, shared: 0, total: 0 },
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Test if communications isolation is working correctly
+ * Tests what communications (SMS logs) would be VISIBLE to this branch
+ */
+export async function testCommunicationsIsolation(branchId: string): Promise<IsolationTestResult> {
+  try {
+    const branch = await getBranchSettings(branchId);
+    if (!branch) throw new Error('Branch not found');
+
+    const expected = getExpectedIsolation('communications', branch);
+
+    let visibleCommunicationsQuery;
+
+    if (expected === 'isolated') {
+      visibleCommunicationsQuery = supabase
+        .from('sms_logs')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
+    } else {
+      visibleCommunicationsQuery = supabase
+        .from('sms_logs')
+        .select('*', { count: 'exact', head: true });
+    }
+
+    const { count: visibleCount } = await visibleCommunicationsQuery;
+
+    const { count: currentBranchCount } = await supabase
+      .from('sms_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('branch_id', branchId);
+
+    const { count: otherBranchesCount } = await supabase
+      .from('sms_logs')
+      .select('*', { count: 'exact', head: true })
+      .neq('branch_id', branchId)
+      .not('branch_id', 'is', null);
+
+    const { count: totalCount } = await supabase
+      .from('sms_logs')
+      .select('*', { count: 'exact', head: true });
+
+    const dataCount = {
+      currentBranch: currentBranchCount || 0,
+      otherBranches: otherBranchesCount || 0,
+      shared: 0,
+      total: totalCount || 0,
+    };
+
+    let actual: 'isolated' | 'shared' | 'unknown' = 'unknown';
+    let passed = true;
+    let details = '';
+
+    if (expected === 'isolated') {
+      if (visibleCount === currentBranchCount && currentBranchCount > 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `✅ Isolation working: ${visibleCount} communications visible (only from this branch). Database has ${otherBranchesCount} communications from other branches (correctly hidden)`;
+      } else if (visibleCount === 0 && currentBranchCount === 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `⚠️ No communications found for this branch yet. Database has ${otherBranchesCount} communications from other branches (correctly hidden)`;
+      } else {
+        actual = 'shared';
+        passed = false;
+        details = `❌ Isolation FAILED: ${visibleCount} communications visible but should only be ${currentBranchCount}`;
+      }
+    } else {
+      actual = 'shared';
+      passed = true;
+      details = `✅ Sharing working: ${visibleCount} total communications visible`;
+    }
+
+    return {
+      feature: 'Communications',
+      passed,
+      expected,
+      actual,
+      details,
+      dataCount,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    return {
+      feature: 'Communications',
+      passed: false,
+      expected: 'unknown',
+      actual: 'unknown',
+      details: `❌ Error testing communications: ${error.message}`,
+      dataCount: { currentBranch: 0, otherBranches: 0, shared: 0, total: 0 },
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Test if reports isolation is working correctly
+ */
+export async function testReportsIsolation(branchId: string): Promise<IsolationTestResult> {
+  try {
+    const branch = await getBranchSettings(branchId);
+    if (!branch) throw new Error('Branch not found');
+
+    const expected = getExpectedIsolation('reports', branch);
+
+    let visibleReportsQuery;
+
+    if (expected === 'isolated') {
+      visibleReportsQuery = supabase
+        .from('daily_reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
+    } else {
+      visibleReportsQuery = supabase
+        .from('daily_reports')
+        .select('*', { count: 'exact', head: true });
+    }
+
+    const { count: visibleCount } = await visibleReportsQuery;
+
+    const { count: currentBranchCount } = await supabase
+      .from('daily_reports')
+      .select('*', { count: 'exact', head: true })
+      .eq('branch_id', branchId);
+
+    const { count: otherBranchesCount } = await supabase
+      .from('daily_reports')
+      .select('*', { count: 'exact', head: true })
+      .neq('branch_id', branchId)
+      .not('branch_id', 'is', null);
+
+    const { count: totalCount } = await supabase
+      .from('daily_reports')
+      .select('*', { count: 'exact', head: true });
+
+    const dataCount = {
+      currentBranch: currentBranchCount || 0,
+      otherBranches: otherBranchesCount || 0,
+      shared: 0,
+      total: totalCount || 0,
+    };
+
+    let actual: 'isolated' | 'shared' | 'unknown' = 'unknown';
+    let passed = true;
+    let details = '';
+
+    if (expected === 'isolated') {
+      if (visibleCount === currentBranchCount && currentBranchCount > 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `✅ Isolation working: ${visibleCount} reports visible (only from this branch). Database has ${otherBranchesCount} reports from other branches (correctly hidden)`;
+      } else if (visibleCount === 0 && currentBranchCount === 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `⚠️ No reports found for this branch yet. Database has ${otherBranchesCount} reports from other branches (correctly hidden)`;
+      } else {
+        actual = 'shared';
+        passed = false;
+        details = `❌ Isolation FAILED: ${visibleCount} reports visible but should only be ${currentBranchCount}`;
+      }
+    } else {
+      actual = 'shared';
+      passed = true;
+      details = `✅ Sharing working: ${visibleCount} total reports visible`;
+    }
+
+    return {
+      feature: 'Reports',
+      passed,
+      expected,
+      actual,
+      details,
+      dataCount,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    return {
+      feature: 'Reports',
+      passed: false,
+      expected: 'unknown',
+      actual: 'unknown',
+      details: `❌ Error testing reports: ${error.message}`,
+      dataCount: { currentBranch: 0, otherBranches: 0, shared: 0, total: 0 },
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
+ * Test if finance transfers isolation is working correctly
+ */
+export async function testFinanceTransfersIsolation(branchId: string): Promise<IsolationTestResult> {
+  try {
+    const branch = await getBranchSettings(branchId);
+    if (!branch) throw new Error('Branch not found');
+
+    const expected = getExpectedIsolation('finance_transfers', branch);
+
+    let visibleTransfersQuery;
+
+    if (expected === 'isolated') {
+      visibleTransfersQuery = supabase
+        .from('finance_transfers')
+        .select('*', { count: 'exact', head: true })
+        .eq('branch_id', branchId);
+    } else {
+      visibleTransfersQuery = supabase
+        .from('finance_transfers')
+        .select('*', { count: 'exact', head: true });
+    }
+
+    const { count: visibleCount } = await visibleTransfersQuery;
+
+    const { count: currentBranchCount } = await supabase
+      .from('finance_transfers')
+      .select('*', { count: 'exact', head: true })
+      .eq('branch_id', branchId);
+
+    const { count: otherBranchesCount } = await supabase
+      .from('finance_transfers')
+      .select('*', { count: 'exact', head: true })
+      .neq('branch_id', branchId)
+      .not('branch_id', 'is', null);
+
+    const { count: totalCount } = await supabase
+      .from('finance_transfers')
+      .select('*', { count: 'exact', head: true });
+
+    const dataCount = {
+      currentBranch: currentBranchCount || 0,
+      otherBranches: otherBranchesCount || 0,
+      shared: 0,
+      total: totalCount || 0,
+    };
+
+    let actual: 'isolated' | 'shared' | 'unknown' = 'unknown';
+    let passed = true;
+    let details = '';
+
+    if (expected === 'isolated') {
+      if (visibleCount === currentBranchCount && currentBranchCount > 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `✅ Isolation working: ${visibleCount} finance transfers visible (only from this branch). Database has ${otherBranchesCount} transfers from other branches (correctly hidden)`;
+      } else if (visibleCount === 0 && currentBranchCount === 0) {
+        actual = 'isolated';
+        passed = true;
+        details = `⚠️ No finance transfers found for this branch yet. Database has ${otherBranchesCount} transfers from other branches (correctly hidden)`;
+      } else {
+        actual = 'shared';
+        passed = false;
+        details = `❌ Isolation FAILED: ${visibleCount} finance transfers visible but should only be ${currentBranchCount}`;
+      }
+    } else {
+      actual = 'shared';
+      passed = true;
+      details = `✅ Sharing working: ${visibleCount} total finance transfers visible`;
+    }
+
+    return {
+      feature: 'Finance Transfers',
+      passed,
+      expected,
+      actual,
+      details,
+      dataCount,
+      timestamp: new Date().toISOString(),
+    };
+  } catch (error: any) {
+    return {
+      feature: 'Finance Transfers',
+      passed: false,
+      expected: 'unknown',
+      actual: 'unknown',
+      details: `❌ Error testing finance transfers: ${error.message}`,
+      dataCount: { currentBranch: 0, otherBranches: 0, shared: 0, total: 0 },
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+/**
  * Test all features for a branch
  */
 export async function runFullIsolationTest(branchId?: string): Promise<BranchDebugInfo> {
@@ -583,6 +1165,23 @@ export async function runFullIsolationTest(branchId?: string): Promise<BranchDeb
   const categoriesTest = await testCategoriesIsolation(currentBranchId);
   testResults.push(categoriesTest);
 
+  const giftCardsTest = await testGiftCardsIsolation(currentBranchId);
+  testResults.push(giftCardsTest);
+
+  const qualityChecksTest = await testQualityChecksIsolation(currentBranchId);
+  testResults.push(qualityChecksTest);
+
+  const recurringExpensesTest = await testRecurringExpensesIsolation(currentBranchId);
+  testResults.push(recurringExpensesTest);
+
+  const communicationsTest = await testCommunicationsIsolation(currentBranchId);
+  testResults.push(communicationsTest);
+
+  const reportsTest = await testReportsIsolation(currentBranchId);
+  testResults.push(reportsTest);
+
+  const financeTransfersTest = await testFinanceTransfersIsolation(currentBranchId);
+  testResults.push(financeTransfersTest);
 
   // Calculate summary
   const passed = testResults.filter(t => t.passed).length;
@@ -601,6 +1200,14 @@ export async function runFullIsolationTest(branchId?: string): Promise<BranchDeb
       share_suppliers: branch.share_suppliers,
       share_categories: branch.share_categories,
       share_employees: branch.share_employees,
+      share_payments: branch.share_payments,
+      share_accounts: branch.share_accounts,
+      share_gift_cards: branch.share_gift_cards,
+      share_quality_checks: branch.share_quality_checks,
+      share_recurring_expenses: branch.share_recurring_expenses,
+      share_communications: branch.share_communications,
+      share_reports: branch.share_reports,
+      share_finance_transfers: branch.share_finance_transfers,
     },
     testResults,
     summary: {
@@ -616,7 +1223,7 @@ export async function runFullIsolationTest(branchId?: string): Promise<BranchDeb
  * Helper: Determine expected isolation mode for a feature
  */
 function getExpectedIsolation(
-  feature: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees',
+  feature: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 'gift_cards' | 'quality_checks' | 'recurring_expenses' | 'communications' | 'reports' | 'finance_transfers',
   branch: any
 ): 'isolated' | 'shared' {
   if (branch.data_isolation_mode === 'shared') {
@@ -635,6 +1242,12 @@ function getExpectedIsolation(
     suppliers: branch.share_suppliers,
     categories: branch.share_categories,
     employees: branch.share_employees,
+    gift_cards: branch.share_gift_cards,
+    quality_checks: branch.share_quality_checks,
+    recurring_expenses: branch.share_recurring_expenses,
+    communications: branch.share_communications,
+    reports: branch.share_reports,
+    finance_transfers: branch.share_finance_transfers,
   };
   
   return shareMapping[feature] ? 'shared' : 'isolated';

@@ -490,9 +490,32 @@ async function performFetchAllCustomers() {
   }
 }
 
+// Lightweight version for app initialization - only essential fields
+export async function fetchAllCustomersLight() {
+  // Use request deduplication to prevent multiple simultaneous requests
+  const cacheKey = 'fetchAllCustomersLight';
+  if (requestCache.has(cacheKey)) {
+    return requestCache.get(cacheKey)!;
+  }
+
+  // Create new request
+  const requestPromise = performFetchAllCustomersLight();
+  requestCache.set(cacheKey, requestPromise);
+
+  try {
+    const result = await requestPromise;
+    return result;
+  } finally {
+    // Clean up cache after request completes (success or failure)
+    setTimeout(() => {
+      requestCache.delete(cacheKey);
+    }, 1000); // Keep in cache for 1 second to prevent rapid re-requests
+  }
+}
+
 export async function fetchAllCustomersSimple() {
   // console.log removed.toISOString());
-  
+
   // Use request deduplication to prevent multiple simultaneous requests
   const cacheKey = 'fetchAllCustomersSimple';
   if (requestCache.has(cacheKey)) {
@@ -512,6 +535,85 @@ export async function fetchAllCustomersSimple() {
     setTimeout(() => {
       requestCache.delete(cacheKey);
     }, 1000); // Keep in cache for 1 second to prevent rapid re-requests
+  }
+}
+
+async function performFetchAllCustomersLight() {
+  if (navigator.onLine) {
+    try {
+      // 🔒 CHECK BRANCH ISOLATION MODE
+      const currentBranchId = localStorage.getItem('current_branch_id');
+
+      // Get branch settings to determine isolation mode
+      let isolationMode: 'shared' | 'isolated' | 'hybrid' = 'shared';
+      let shareCustomers = true;
+
+      if (currentBranchId) {
+        try {
+          const { data: branchSettings } = await checkSupabase()
+            .from('store_locations')
+            .select('data_isolation_mode, share_customers')
+            .eq('id', currentBranchId)
+            .single();
+
+          if (branchSettings) {
+            isolationMode = branchSettings.data_isolation_mode;
+            shareCustomers = isolationMode === 'shared' ||
+                           (isolationMode === 'hybrid' && branchSettings.share_customers);
+          }
+        } catch (err) {
+          console.warn('⚠️ Could not fetch branch settings, defaulting to shared mode');
+        }
+      }
+
+      // Lightweight query - only essential fields for app initialization
+      const { data, error } = await withTimeout(
+        retryRequest(async () => {
+          let query = checkSupabase()
+            .from('customers')
+            .select(`
+              id,name,phone,email,is_active,total_spent,last_visit,points,city,branch_id
+            `)
+            .order('created_at', { ascending: false })
+            .limit(5000); // Reasonable limit for initial load
+
+          // Apply branch filter in isolated mode
+          if (currentBranchId && !shareCustomers) {
+            query = query.eq('branch_id', currentBranchId);
+          }
+
+          const result = await query;
+          return result;
+        }),
+        30000 // 30 second timeout for lightweight query
+      );
+
+      if (error) {
+        console.error('❌ Error fetching customers (light):', error);
+        console.error('❌ Error details:', JSON.stringify(error, null, 2));
+        throw error;
+      }
+
+      console.log(`✅ Fetched ${data?.length || 0} customers (lightweight)`);
+      return data || [];
+
+    } catch (error: any) {
+      console.error('❌ Error fetching customers (light):', error.message || error);
+      console.error('❌ Error type:', typeof error);
+      console.error('❌ Error stringified:', JSON.stringify(error, null, 2));
+      if (error && typeof error === 'object') {
+        console.error('❌ Error keys:', Object.keys(error as any));
+        console.error('❌ Error message:', (error as any)?.message);
+        console.error('❌ Error code:', (error as any)?.code);
+        console.error('❌ Error details:', (error as any)?.details);
+        console.error('❌ Error hint:', (error as any)?.hint);
+      }
+      throw error;
+    }
+  } else {
+    // Return cached data when offline
+    const cachedCustomers = await import('../offlineCache').then(m => m.cacheGetAll('customers'));
+    return cachedCustomers || [];
   }
 }
 

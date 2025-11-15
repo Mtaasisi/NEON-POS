@@ -18,6 +18,7 @@ import ConfirmationDialog from '../../shared/components/ui/ConfirmationDialog';
 import PromptDialog from '../../shared/components/ui/PromptDialog';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
+import { addBranchFilter, getCurrentBranchId } from '../../../lib/branchAwareApi';
 import { 
   paymentTrackingService,
   PaymentTransaction,
@@ -107,6 +108,30 @@ const PaymentTransactions: React.FC<PaymentTransactionsProps> = ({
       }
 
       // Then try direct database queries as fallback
+      // Create queries with branch filtering
+      const customerPaymentsQuery = supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500);
+      const filteredCustomerPaymentsQuery = await addBranchFilter(customerPaymentsQuery, 'payments');
+
+      const purchaseOrderPaymentsBase = supabase.from('purchase_order_payments').select('*').order('created_at', { ascending: false }).limit(500);
+      const filteredPurchaseOrderPaymentsQuery = await addBranchFilter(purchaseOrderPaymentsBase, 'payments');
+
+      const devicePaymentsQuery = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
+      const filteredDevicePaymentsQuery = await addBranchFilter(devicePaymentsQuery, 'payments');
+
+      const repairPaymentsQuery = supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500);
+      const filteredRepairPaymentsQuery = await addBranchFilter(repairPaymentsQuery, 'payments');
+
+      // Filter payment_transactions by branch via metadata.branch_id if available
+      const branchId = getCurrentBranchId();
+      let paymentTransactionsQuery = supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000);
+      if (branchId) {
+        // Prefer server-side filter when possible
+        paymentTransactionsQuery = paymentTransactionsQuery.contains('metadata', { branch_id: branchId });
+      }
+
+      const customersQuery = supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(1000);
+      const filteredCustomersQuery = await addBranchFilter(customersQuery, 'customers');
+
       const [
         customerPaymentsData,
         purchaseOrderPaymentsData,
@@ -115,12 +140,12 @@ const PaymentTransactions: React.FC<PaymentTransactionsProps> = ({
         paymentTransactionsData,
         customersData
       ] = await Promise.allSettled([
-        supabase.from('customer_payments').select('*').order('created_at', { ascending: false }).limit(500),
-        supabase.from('purchase_order_payments').select('*').order('created_at', { ascending: false }).limit(500),
-        supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500),
-        supabase.from('customer_payments').select('*').not('device_id', 'is', null).order('created_at', { ascending: false }).limit(500),
-        supabase.from('payment_transactions').select('*').order('created_at', { ascending: false }).limit(1000),
-        supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(1000)
+        filteredCustomerPaymentsQuery,
+        filteredPurchaseOrderPaymentsQuery,
+        filteredDevicePaymentsQuery,
+        filteredRepairPaymentsQuery,
+        paymentTransactionsQuery,
+        filteredCustomersQuery
       ]);
 
       // Handle each result with detailed logging and error handling
@@ -161,7 +186,11 @@ const PaymentTransactions: React.FC<PaymentTransactionsProps> = ({
       }
       
       if (paymentTransactionsData.status === 'fulfilled') {
-        const data = paymentTransactionsData.value.data || [];
+        let data = paymentTransactionsData.value.data || [];
+        // Client-side safety: if metadata.branch_id is present, restrict to current branch
+        if (branchId) {
+          data = data.filter((t: any) => t?.metadata?.branch_id === branchId || !t?.metadata?.branch_id);
+        }
         setPaymentTransactions(data);
         console.log(`✅ PaymentTransactions: Fetched ${data.length} payment transactions`);
       } else {

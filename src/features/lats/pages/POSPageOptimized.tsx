@@ -1330,23 +1330,27 @@ const POSPageOptimized: React.FC = () => {
             let createError = null;
             
             try {
+              // Use UPSERT to handle duplicate key errors gracefully
               const result = await supabase
                 .from('daily_opening_sessions')
-                .insert([{
+                .upsert([{
                   date: today,
                   opened_at: new Date().toISOString(),
                   opened_by: currentUser?.role || 'system',
                   opened_by_user_id: currentUser?.id,
                   is_active: true
-                }])
+                }], {
+                  onConflict: 'date,is_active',
+                  ignoreDuplicates: false
+                })
                 .select()
                 .single();
-              
+
               newSession = result.data;
               createError = result.error;
             } catch (err: any) {
               // Catch network errors and table doesn't exist errors
-              if (err.message?.includes('400') || err.message?.includes('Bad Request') || 
+              if (err.message?.includes('400') || err.message?.includes('Bad Request') ||
                   err.message?.includes('relation') || err.message?.includes('does not exist')) {
                 console.warn('⚠️ Cannot create session (table not available) - using fallback mode');
                 setSessionStartTime(new Date().toISOString());
@@ -1373,41 +1377,18 @@ const POSPageOptimized: React.FC = () => {
                 console.warn('⚠️ Cannot create session (table not ready) - using fallback');
                 // Fallback to current time
                 setSessionStartTime(new Date().toISOString());
-              } else if (createError.code === '23505') {
-                // Duplicate key error - session already exists, fetch it
-                console.log('ℹ️ Session already exists, fetching existing session...');
-                try {
-                  const { data: existingSession, error: fetchError } = await supabase
-                    .from('daily_opening_sessions')
-                    .select('id, date, opened_at, opened_by')
-                    .eq('date', today)
-                    .eq('is_active', true)
-                    .maybeSingle();
-                  
-                  if (fetchError) {
-                    console.error('❌ Error fetching existing session:', fetchError);
-                    setSessionStartTime(new Date().toISOString());
-                  } else if (existingSession) {
-                    console.log('✅ Using existing session:', existingSession);
-                    setSessionStartTime(existingSession.opened_at);
-                  } else {
-                    // Shouldn't happen but fallback anyway
-                    setSessionStartTime(new Date().toISOString());
-                  }
-                } catch (err) {
-                  console.error('❌ Error fetching existing session:', err);
-                  setSessionStartTime(new Date().toISOString());
-                }
               } else {
                 console.error('❌ Error creating session:', createError);
                 // Fallback to current time
                 setSessionStartTime(new Date().toISOString());
               }
             } else if (newSession) {
-              console.log('✅ New session created:', newSession);
+              // Session created or retrieved successfully via UPSERT
+              console.log('✅ Session handled successfully:', newSession);
               setSessionStartTime(newSession.opened_at);
             } else {
               // No session created, use fallback
+              console.warn('⚠️ Session handling failed - using fallback mode');
               setSessionStartTime(new Date().toISOString());
             }
             

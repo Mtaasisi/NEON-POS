@@ -44,56 +44,94 @@ const LowStockSuggestionsWidget: React.FC<LowStockSuggestionsWidgetProps> = ({
   const loadLowStockProducts = async () => {
     setIsLoading(true);
     try {
-      let query = supabase
+      // First get variants with low stock
+      let variantsQuery = supabase
         .from('lats_product_variants')
-        .select(`
-          id,
-          variant_name,
-          sku,
-          quantity,
-          min_quantity,
-          cost_price,
-          product:lats_products!inner(
-            id,
-            name,
-            supplier_id,
-            category:lats_categories(name),
-            supplier:lats_suppliers(id, name)
-          )
-        `)
+        .select('id, variant_name, sku, quantity, min_quantity, cost_price, product_id')
         .eq('is_active', true)
         .order('quantity', { ascending: true });
 
-      // Filter by supplier if selected
-      if (selectedSupplierId) {
-        query = query.eq('product.supplier_id', selectedSupplierId);
+      const { data: variants, error: variantsError } = await variantsQuery;
+
+      if (variantsError) throw variantsError;
+
+      if (!variants || variants.length === 0) {
+        setLowStockProducts([]);
+        return;
       }
 
-      const { data, error } = await query;
+      // Filter for low stock items
+      const lowStockVariants = variants.filter((item: any) =>
+        (item.quantity || 0) <= (item.min_quantity || 0)
+      ).slice(0, 20); // Limit to 20 items
 
-      if (error) throw error;
+      // Get unique product IDs
+      const productIds = [...new Set(lowStockVariants.map(v => v.product_id).filter(Boolean))];
 
-      if (data) {
-        // Filter for low stock items (quantity <= min_quantity) and transform
-        const transformed: LowStockProduct[] = data
-          .filter((item: any) => (item.quantity || 0) <= (item.min_quantity || 0))
-          .slice(0, 20) // Limit to 20 items
-          .map((item: any) => ({
-            id: item.product.id,
-            name: item.product.name,
-            sku: item.sku,
-            stockQuantity: item.quantity || 0,
-            minStockLevel: item.min_quantity || 0,
-            supplierId: item.product.supplier_id,
-            supplierName: item.product.supplier?.name || 'Unknown',
-            costPrice: item.cost_price || 0,
-            categoryName: item.product.category?.name || 'Uncategorized',
-            variantId: item.id,
-            variantName: item.variant_name
-          }));
+      // Fetch products with related data
+      const { data: products, error: productsError } = await supabase
+        .from('lats_products')
+        .select(`
+          id,
+          name,
+          supplier_id
+        `)
+        .in('id', productIds);
 
-        setLowStockProducts(transformed);
-      }
+      if (productsError) throw productsError;
+
+      // Get supplier IDs for fetching supplier and category data
+      const supplierIds = products?.map(p => p.supplier_id).filter(Boolean) || [];
+
+      // Fetch suppliers and categories
+      const [suppliersResult, categoriesResult] = await Promise.all([
+        supplierIds.length > 0
+          ? supabase.from('lats_suppliers').select('id, name').in('id', supplierIds)
+          : Promise.resolve({ data: [], error: null }),
+        supabase.from('lats_categories').select('id, name')
+      ]);
+
+      // Create lookup maps
+      const productsMap = new Map(products?.map(p => [p.id, p]) || []);
+      const suppliersMap = new Map(suppliersResult.data?.map(s => [s.id, s]) || []);
+      const categoriesMap = new Map(categoriesResult.data?.map(c => [c.id, c]) || []);
+
+      // Fetch category relationships for products
+      const { data: productCategories, error: pcError } = await supabase
+        .from('lats_products')
+        .select('id, category_id')
+        .in('id', productIds);
+
+      // Create product to category mapping
+      const productCategoryMap = new Map(productCategories?.map(pc => [pc.id, pc.category_id]) || []);
+
+      // Transform the data
+      const transformed: LowStockProduct[] = lowStockVariants.map((item: any) => {
+        const product = productsMap.get(item.product_id);
+        const supplierId = product?.supplier_id;
+        const categoryId = productCategoryMap.get(item.product_id);
+
+        return {
+          id: product?.id || item.product_id,
+          name: product?.name || 'Unknown Product',
+          sku: item.sku,
+          stockQuantity: item.quantity || 0,
+          minStockLevel: item.min_quantity || 0,
+          supplierId: supplierId,
+          supplierName: supplierId ? suppliersMap.get(supplierId)?.name || 'Unknown' : 'Unknown',
+          costPrice: item.cost_price || 0,
+          categoryName: categoryId ? categoriesMap.get(categoryId)?.name || 'Uncategorized' : 'Uncategorized',
+          variantId: item.id,
+          variantName: item.variant_name
+        };
+      });
+
+      // Apply supplier filter if selected
+      const filtered = selectedSupplierId
+        ? transformed.filter(item => item.supplierId === selectedSupplierId)
+        : transformed;
+
+      setLowStockProducts(filtered);
     } catch (error) {
       console.error('Error loading low stock products:', error);
       toast.error('Failed to load low stock products');

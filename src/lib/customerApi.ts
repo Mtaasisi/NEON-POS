@@ -6,6 +6,7 @@ export {
   formatCurrency,
   fetchAllCustomers,
   fetchAllCustomersSimple,
+  fetchAllCustomersLight,
   fetchCustomerById,
   addCustomerToDb,
   updateCustomerInDb,

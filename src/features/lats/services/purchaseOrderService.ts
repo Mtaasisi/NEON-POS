@@ -1,4 +1,5 @@
 import { supabase } from '../../../lib/supabaseClient';
+import { addBranchFilter } from '../../../lib/branchAwareApi';
 import { ErrorLogger, logPurchaseOrderError, validateProductId, withErrorHandling } from '../lib/errorLogger';
 import { latsEventBus } from '../lib/data/eventBus';
 
@@ -169,21 +170,33 @@ export class PurchaseOrderService {
   // Payment functions - Updated to use new payment system
   static async getPayments(purchaseOrderId: string): Promise<PurchaseOrderPayment[]> {
     return this.retryOperation(async () => {
-      // Optimized query: select only needed fields for faster response
-      const { data, error } = await supabase
+      console.log(`🔄 [PurchaseOrderService] getPayments called for PO: ${purchaseOrderId}`);
+
+      // Apply branch filtering to ensure proper isolation
+      let query = supabase
         .from('purchase_order_payments')
         .select('id, purchase_order_id, payment_method, amount, currency, status, reference, payment_date, created_at')
         .eq('purchase_order_id', purchaseOrderId)
         .order('created_at', { ascending: false })
         .limit(100); // Reasonable limit for performance
 
+      console.log(`🔍 [PurchaseOrderService] Built query for purchase_order_id: ${purchaseOrderId}`);
+
+      // Apply branch filtering for proper isolation
+      const filteredQuery = await addBranchFilter(query, 'payments');
+      console.log(`🔍 [PurchaseOrderService] Applied branch filter for payments`);
+
+      const { data, error } = await filteredQuery;
+
       if (error) {
-        console.error('Error fetching payments:', error);
+        console.error('❌ Error fetching payments:', error);
         throw error;
       }
-      
+
+      console.log(`✅ [PurchaseOrderService] Fetched ${data?.length || 0} payments for PO: ${purchaseOrderId}`);
+
       // Map database fields to TypeScript interface
-      return (data || []).map((payment: any) => ({
+      const mappedPayments = (data || []).map((payment: any) => ({
         id: payment.id,
         purchaseOrderId: payment.purchase_order_id,
         method: payment.payment_method,
@@ -193,7 +206,67 @@ export class PurchaseOrderService {
         reference: payment.reference,
         timestamp: payment.payment_date || payment.created_at
       }));
+
+      console.log(`✅ [PurchaseOrderService] Mapped ${mappedPayments.length} payments`);
+      return mappedPayments;
     }, 'get_payments');
+  }
+
+  // Get expenses for a purchase order from account_transactions table
+  static async getExpenses(purchaseOrderId: string): Promise<any[]> {
+    return this.retryOperation(async () => {
+      // Get expense transactions linked to this purchase order
+      // Use contains method for JSON query which is more reliable in PostgREST
+      const { data: transactions, error } = await supabase
+        .from('account_transactions')
+        .select('id, transaction_type, amount, description, reference_number, created_at, metadata, account_id')
+        .eq('transaction_type', 'expense')
+        .contains('metadata', { purchase_order_id: purchaseOrderId })
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) {
+        console.error('Error fetching expenses:', error);
+        throw error;
+      }
+
+      if (!transactions || transactions.length === 0) {
+        return [];
+      }
+
+      // Fetch related account data separately
+      const accountIds = transactions.map(t => t.account_id).filter(Boolean);
+
+      const { data: accounts, error: accountsError } = await supabase
+        .from('finance_accounts')
+        .select('id, name, type, currency')
+        .in('id', accountIds);
+
+      if (accountsError) {
+        console.warn('Error fetching account data:', accountsError);
+      }
+
+      // Map account data for easy lookup
+      const accountsMap = new Map(accounts?.map(a => [a.id, a]) || []);
+
+      // Map to a consistent format
+      return transactions.map((expense: any) => {
+        const account = accountsMap.get(expense.account_id);
+        return {
+          id: expense.id,
+          purchaseOrderId: purchaseOrderId,
+          type: 'expense',
+          category: expense.metadata?.category || 'Other',
+          description: expense.description,
+          amount: expense.amount,
+          currency: account?.currency || 'TZS',
+          accountName: account?.name || 'Unknown Account',
+          reference: expense.reference_number,
+          timestamp: expense.created_at,
+          metadata: expense.metadata
+        };
+      });
+    }, 'get_expenses');
   }
 
   static async addPayment(payment: Omit<PurchaseOrderPayment, 'id' | 'timestamp'>): Promise<boolean> {
@@ -2533,11 +2606,78 @@ export class PurchaseOrderService {
       return { success: true, message: 'Purchase order rejected' };
     } catch (error) {
       console.error('Error rejecting purchase order:', error);
-      return { 
-        success: false, 
-        message: `Failed to reject purchase order: ${error instanceof Error ? error.message : 'Unknown error'}` 
+      return {
+        success: false,
+        message: `Failed to reject purchase order: ${error instanceof Error ? error.message : 'Unknown error'}`
       };
     }
+  }
+
+  // Update purchase order payment status and total paid amount
+  static async updatePaymentStatus(purchaseOrderId: string): Promise<{ success: boolean; message: string }> {
+    return this.retryOperation(async () => {
+      try {
+        // Get total amount from purchase order
+        const { data: order, error: orderError } = await supabase
+          .from('lats_purchase_orders')
+          .select('total_amount')
+          .eq('id', purchaseOrderId)
+          .single();
+
+        if (orderError || !order) {
+          throw new Error('Purchase order not found');
+        }
+
+        const totalAmount = order.total_amount || 0;
+
+        // Get sum of all completed payments
+        const { data: payments, error: paymentsError } = await supabase
+          .from('purchase_order_payments')
+          .select('amount')
+          .eq('purchase_order_id', purchaseOrderId)
+          .eq('status', 'completed');
+
+        if (paymentsError) {
+          throw paymentsError;
+        }
+
+        const totalPaid = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+
+        // Determine payment status
+        let paymentStatus: 'unpaid' | 'partial' | 'paid';
+        if (totalPaid === 0) {
+          paymentStatus = 'unpaid';
+        } else if (totalPaid >= totalAmount) {
+          paymentStatus = 'paid';
+        } else {
+          paymentStatus = 'partial';
+        }
+
+        // Update purchase order
+        const { error: updateError } = await supabase
+          .from('lats_purchase_orders')
+          .update({
+            total_paid: totalPaid,
+            payment_status: paymentStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', purchaseOrderId);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        console.log(`✅ Updated PO ${purchaseOrderId} payment status: ${paymentStatus}, total paid: ${totalPaid}`);
+        return { success: true, message: 'Payment status updated successfully' };
+
+      } catch (error) {
+        console.error('Error updating payment status:', error);
+        return {
+          success: false,
+          message: `Failed to update payment status: ${error instanceof Error ? error.message : 'Unknown error'}`
+        };
+      }
+    }, 'update_payment_status');
   }
 }
 

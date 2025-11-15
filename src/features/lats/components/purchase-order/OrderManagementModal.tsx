@@ -792,6 +792,15 @@ const registerOrderCardRef = useCallback(
         toast.error(`Some payments failed: ${errorMessages}`);
       } else {
         toast.success('Payment processed successfully!');
+
+        // Update the purchase order's payment status and total paid
+        try {
+          await PurchaseOrderService.updatePaymentStatus(order.id);
+          console.log('✅ Purchase order payment status updated');
+        } catch (updateError) {
+          console.warn('⚠️ Failed to update payment status:', updateError);
+          // Don't block the success flow for this non-critical update
+        }
       }
 
       setShowPurchaseOrderPaymentModal(false);

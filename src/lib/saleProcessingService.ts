@@ -727,6 +727,14 @@ class SaleProcessingService {
 
             try {
               console.log('📝 Recording account transaction for account:', p.accountId);
+
+              // Get account branch_id for transaction isolation
+              const { data: accountData } = await supabase
+                .from('finance_accounts')
+                .select('branch_id')
+                .eq('id', p.accountId)
+                .single();
+
               const { error: atErr } = await supabase
                 .from('account_transactions')
                 .insert({
@@ -735,10 +743,11 @@ class SaleProcessingService {
                   amount: p.amount,
                   reference_number: saleNumber,
                   description: `POS sale payment (${p.method || 'payment'})`,
+                  branch_id: accountData?.branch_id, // Assign branch_id from account for isolation
                   metadata: { sale_id: sale.id, customer_id: saleData.customerId },
                   created_at: new Date().toISOString()
                 });
-              
+
               if (atErr) {
                 console.warn('⚠️ account_transactions insert failed:', atErr.message);
               } else {

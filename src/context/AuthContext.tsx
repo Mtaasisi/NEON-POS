@@ -22,6 +22,8 @@ import { useInventoryStore } from '../features/lats/stores/useInventoryStore';
 
 interface AuthContextType {
   currentUser: any;
+  originalUser: any; // For admin testing - stores the real admin user
+  isImpersonating: boolean; // Whether admin is currently impersonating another user
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -30,6 +32,10 @@ interface AuthContextType {
   loading: boolean;
   refreshSession: () => Promise<boolean>;
   handleAuthError: (error: any) => Promise<boolean>;
+  // User impersonation for testing (admin only)
+  impersonateUser: (userId: string) => Promise<boolean>;
+  stopImpersonation: () => void;
+  getAvailableTestUsers: () => Promise<any[]>;
   // Permission checking functions
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
@@ -60,6 +66,8 @@ export const useAuth = () => {
     // Return a fallback context during development HMR
     return {
       currentUser: null,
+      originalUser: null,
+      isImpersonating: false,
       login: async () => false,
       logout: async () => {},
       isAuthenticated: false,
@@ -68,6 +76,9 @@ export const useAuth = () => {
       loading: true,
       refreshSession: async () => false,
       handleAuthError: async () => false,
+      impersonateUser: async () => false,
+      stopImpersonation: () => {},
+      getAvailableTestUsers: async () => [],
       hasPermission: () => false,
       hasAnyPermission: () => false,
       hasAllPermissions: () => false,
@@ -121,12 +132,57 @@ function mapUserFromSupabase(user: any): any {
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [originalUser, setOriginalUser] = useState<any>(() => {
+    // Initialize from localStorage to persist impersonation across page reloads
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('admin_impersonation_state');
+      if (stored) {
+        try {
+          const { originalUser } = JSON.parse(stored);
+          return originalUser || null;
+        } catch (e) {
+          return null;
+        }
+      }
+    }
+    return null;
+  });
+  const [isImpersonating, setIsImpersonating] = useState(() => {
+    // Initialize from localStorage to persist impersonation across page reloads
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('admin_impersonation_state');
+      if (stored) {
+        try {
+          const { isImpersonating } = JSON.parse(stored);
+          return isImpersonating || false;
+        } catch (e) {
+          return false;
+        }
+      }
+    }
+    return false;
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const initializedRef = useRef(false);
   const authProviderMountCount = useRef(0);
   const dataLoadedRef = useRef(false);
   
+  // Helper function to persist impersonation state
+  const saveImpersonationState = (isImpersonating: boolean, originalUser: any = null, impersonatedUser: any = null) => {
+    if (typeof window !== 'undefined') {
+      if (isImpersonating && originalUser && impersonatedUser) {
+        localStorage.setItem('admin_impersonation_state', JSON.stringify({
+          isImpersonating: true,
+          originalUser,
+          impersonatedUser
+        }));
+      } else {
+        localStorage.removeItem('admin_impersonation_state');
+      }
+    }
+  };
+
   // Expose data loaded flag globally for cache manager
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -190,8 +246,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       while (retryCount < maxRetries) {
         try {
           // Import dynamically to avoid circular dependencies
-          const { fetchAllCustomersSimple } = await import('../lib/customerApi');
-          const customers = await fetchAllCustomersSimple();
+          const { fetchAllCustomersLight } = await import('../lib/customerApi');
+          const customers = await fetchAllCustomersLight();
 
           return customers;
         } catch (error) {
@@ -432,15 +488,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logWarn('AuthProvider', 'Already initialized, skipping...');
       return;
     }
-    
+
     if (!trackInit('AuthProvider')) {
       return;
     }
-    
+
     globalAuthProviderInitialized = true;
     authProviderMountCount.current++;
     logInfo('AuthProvider', `Initializing (mount #${authProviderMountCount.current})`);
-    
+
     const initializeAuth = async () => {
         try {
           setLoading(true);
@@ -479,9 +535,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (session?.user) {
             logInfo('AuthProvider', `Found existing session for user: ${session.user.email}`);
             await fetchAndSetUserProfile(session.user);
+
+            // Check if there's an active impersonation session to restore
+            if (typeof window !== 'undefined') {
+              const stored = localStorage.getItem('admin_impersonation_state');
+              if (stored && isImpersonating) {
+                try {
+                  const { impersonatedUser } = JSON.parse(stored);
+                  if (impersonatedUser) {
+                    logInfo('AuthProvider', `Restoring impersonation as: ${impersonatedUser.full_name} (${impersonatedUser.role})`);
+                    setCurrentUser(impersonatedUser);
+                  }
+                } catch (e) {
+                  logWarn('AuthProvider', 'Failed to restore impersonation state:', e);
+                  // Clear corrupted state
+                  localStorage.removeItem('admin_impersonation_state');
+                  setIsImpersonating(false);
+                  setOriginalUser(null);
+                }
+              }
+            }
           } else {
             logInfo('AuthProvider', 'No existing session found');
             setCurrentUser(null);
+            // Clear impersonation state if no session
+            if (typeof window !== 'undefined') {
+              localStorage.removeItem('admin_impersonation_state');
+            }
+            setIsImpersonating(false);
+            setOriginalUser(null);
           }
           
           setLoading(false);
@@ -588,10 +670,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('🚪 Logging out...');
       setLoading(true);
-      
+
       // Clear POS settings user cache
       POSSettingsAPI.clearUserCache();
-      
+
       // Clear preloaded data
       try {
         const { dataPreloadService } = await import('../services/dataPreloadService');
@@ -600,7 +682,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.error('❌ Error clearing preloaded data:', error);
       }
-      
+
+      // Clear impersonation state
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('admin_impersonation_state');
+      }
+      setIsImpersonating(false);
+      setOriginalUser(null);
+
       await supabase.auth.signOut();
       setCurrentUser(null);
       setError(null);
@@ -625,9 +714,104 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const userCheckAccess = (options: { roles?: string[]; permissions?: string[]; requireAll?: boolean }) => 
     checkAccess(currentUser, options);
 
+  // User impersonation methods (admin only)
+  const impersonateUser = async (userId: string): Promise<boolean> => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      toast.error('Only admins can impersonate users');
+      return false;
+    }
+
+    try {
+      // Store original user
+      setOriginalUser(currentUser);
+      setIsImpersonating(true);
+
+      // Get user data from database
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('id, full_name, email, role, is_active')
+        .eq('id', userId)
+        .single();
+
+      if (error || !userData) {
+        throw new Error('User not found');
+      }
+
+      // Create impersonated user object with proper structure
+      const getRolePermissions = (role: string): string[] => {
+        switch (role) {
+          case 'admin':
+            return ['all'];
+          case 'technician':
+            return ['view_devices', 'update_device_status', 'view_customers'];
+          case 'customer-care':
+            return ['view_customers', 'create_customers', 'edit_customers', 'view_devices', 'assign_devices'];
+          default:
+            return ['view_devices', 'update_device_status', 'view_customers'];
+        }
+      };
+
+      const impersonatedUser = {
+        ...userData,
+        role: userData.role || 'user',
+        permissions: getRolePermissions(userData.role || 'user'),
+        name: userData.full_name || userData.name || userData.email || 'Unknown User'
+      };
+
+      setCurrentUser(impersonatedUser);
+
+      // Persist impersonation state
+      saveImpersonationState(true, currentUser, impersonatedUser);
+
+      toast.success(`Now testing as: ${impersonatedUser.name} (${impersonatedUser.role})`);
+
+      return true;
+    } catch (error) {
+      console.error('Impersonation error:', error);
+      toast.error('Failed to impersonate user');
+      return false;
+    }
+  };
+
+  const stopImpersonation = () => {
+    if (originalUser) {
+      setCurrentUser(originalUser);
+      setOriginalUser(null);
+      setIsImpersonating(false);
+
+      // Clear persisted impersonation state
+      saveImpersonationState(false);
+
+      toast.success('Returned to admin account');
+    }
+  };
+
+  const getAvailableTestUsers = async (): Promise<any[]> => {
+    if (!currentUser || currentUser.role !== 'admin') {
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, email, role')
+        .neq('role', 'admin') // Don't include other admins
+        .order('full_name');
+
+      if (error) throw error;
+
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching test users:', error);
+      return [];
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ 
+    <AuthContext.Provider value={{
       currentUser,
+      originalUser,
+      isImpersonating,
       login,
       logout,
       isAuthenticated: !!currentUser,
@@ -636,6 +820,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       refreshSession,
       handleAuthError,
+      // User impersonation for testing
+      impersonateUser,
+      stopImpersonation,
+      getAvailableTestUsers,
       // Permission checking functions
       hasPermission: userHasPermission,
       hasAnyPermission: userHasAnyPermission,

@@ -26,23 +26,36 @@ export const useCostComparison = (variantId: string, currentPrice: number) => {
 
     setIsLoading(true);
     try {
+      // First get valid purchase order IDs with required status
+      const { data: validOrders, error: ordersError } = await supabase
+        .from('lats_purchase_orders')
+        .select('id, order_date')
+        .in('status', ['sent', 'received', 'completed']);
+
+      if (ordersError) throw ordersError;
+
+      const validPurchaseOrderIds = validOrders?.map(po => po.id) || [];
+
+      if (validPurchaseOrderIds.length === 0) {
+        setComparison({ currentPrice, trend: 'new' });
+        return;
+      }
+
       // Get the most recent purchase order item for this variant
       const { data, error } = await supabase
         .from('lats_purchase_order_items')
-        .select(`
-          cost_price,
-          purchase_order:lats_purchase_orders!inner(order_date, status)
-        `)
+        .select('cost_price, purchase_order_id')
         .eq('variant_id', variantId)
-        .in('purchase_order.status', ['sent', 'received', 'completed'])
-        .order('purchase_order.order_date', { ascending: false })
+        .in('purchase_order_id', validPurchaseOrderIds)
+        .order('created_at', { ascending: false })
         .limit(1);
 
       if (error) throw error;
 
       if (data && data.length > 0) {
         const lastPrice = data[0].cost_price;
-        const lastOrderDate = (data[0].purchase_order as any).order_date;
+        const purchaseOrder = validOrders?.find(po => po.id === data[0].purchase_order_id);
+        const lastOrderDate = purchaseOrder?.order_date;
         const priceChange = currentPrice - lastPrice;
         const percentageChange = lastPrice > 0 ? ((currentPrice - lastPrice) / lastPrice) * 100 : 0;
 

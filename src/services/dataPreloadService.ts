@@ -15,6 +15,7 @@ import { useDataStore } from '../stores/useDataStore';
 import { useInventoryStore } from '../features/lats/stores/useInventoryStore';
 import { smartCache, fetchProducts, fetchCustomers, fetchCategories, fetchSuppliers, fetchBranches, fetchPaymentAccounts } from '../lib/enhancedCacheManager';
 import { loadParentVariants } from '../features/lats/lib/variantHelpers';
+import { clearQueryCache } from '../lib/deduplicatedQueries';
 
 interface PreloadResult {
   success: boolean;
@@ -155,8 +156,17 @@ class DataPreloadService {
       {
         name: 'payment_accounts',
         fn: async () => {
+          // Clear existing payment accounts and cache to ensure fresh load
+          dataStore.setPaymentAccounts([]);
+          const currentBranchId = localStorage.getItem('current_branch_id');
+          const cacheKey = `payment-methods-${currentBranchId || 'all'}`;
+          clearQueryCache(cacheKey);
+
           const accounts = await fetchPaymentAccounts(forceRefresh);
-          // Store in dataStore if needed
+          // Store payment accounts in dataStore for immediate access
+          // Note: With branch isolation (share_accounts: false), this loads accounts for current branch only
+          console.log(`📦 [Preload] Loaded ${accounts.length} payment accounts for branch ${currentBranchId || 'none'}`);
+          dataStore.setPaymentAccounts(accounts);
           return accounts;
         }
       },
@@ -190,6 +200,46 @@ class DataPreloadService {
           const attendanceRecords = await this.preloadAttendanceRecords();
           dataStore.setAttendanceRecords(attendanceRecords);
           return attendanceRecords;
+        }
+      },
+      {
+        name: 'settings',
+        fn: async () => {
+          const settings = await this.preloadSettings();
+          dataStore.setSettings(settings);
+          return settings;
+        }
+      },
+      {
+        name: 'admin_settings',
+        fn: async () => {
+          const adminSettings = await this.preloadAdminSettings();
+          dataStore.setAdminSettings(adminSettings);
+          return adminSettings;
+        }
+      },
+      {
+        name: 'purchase_orders',
+        fn: async () => {
+          const purchaseOrders = await this.preloadPurchaseOrders();
+          dataStore.setPurchaseOrders(purchaseOrders);
+          return purchaseOrders;
+        }
+      },
+      {
+        name: 'stock_movements',
+        fn: async () => {
+          const stockMovements = await this.preloadStockMovements();
+          dataStore.setStockMovements(stockMovements);
+          return stockMovements;
+        }
+      },
+      {
+        name: 'sales',
+        fn: async () => {
+          const sales = await this.preloadSales();
+          dataStore.setSales(sales);
+          return sales;
         }
       }
     ];
@@ -336,9 +386,9 @@ class DataPreloadService {
   // Individual preload functions
   private async preloadCustomers() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
-    if (dataStore.isCacheValid('customers') && dataStore.customers.length > 0) {
+    if (dataStore.isCacheValid('customers') && dataStore.customers && dataStore.customers.length > 0) {
       console.log('📦 Using cached customers');
       return;
     }
@@ -354,6 +404,17 @@ class DataPreloadService {
 
       dataStore.setCustomers(data || []);
       console.log(`✅ Preloaded ${data?.length || 0} customers`);
+
+      // Also populate customerCacheService for components that use it
+      if (data && data.length > 0) {
+        try {
+          const { customerCacheService } = await import('../lib/customerCacheService');
+          customerCacheService.saveCustomers(data);
+          console.log(`✅ Also cached ${data.length} customers in customerCacheService`);
+        } catch (cacheError) {
+          console.warn('⚠️ Could not populate customerCacheService:', cacheError);
+        }
+      }
     } catch (error: any) {
       console.error('❌ Error preloading customers:', error);
       dataStore.setError('customers', error.message);
@@ -363,9 +424,9 @@ class DataPreloadService {
 
   private async preloadProducts() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
-    if (dataStore.isCacheValid('products') && dataStore.products.length > 0) {
+    if (dataStore.isCacheValid('products') && dataStore.products && dataStore.products.length > 0) {
       console.log('📦 Using cached products');
       return;
     }
@@ -388,9 +449,9 @@ class DataPreloadService {
 
   private async preloadCategories() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
-    if (dataStore.isCacheValid('categories') && dataStore.categories.length > 0) {
+    if (dataStore.isCacheValid('categories') && dataStore.categories && dataStore.categories.length > 0) {
       console.log('📦 Using cached categories');
       return;
     }
@@ -412,9 +473,9 @@ class DataPreloadService {
 
   private async preloadSuppliers() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
-    if (dataStore.isCacheValid('suppliers') && dataStore.suppliers.length > 0) {
+    if (dataStore.isCacheValid('suppliers') && dataStore.suppliers && dataStore.suppliers.length > 0) {
       console.log('📦 Using cached suppliers');
       return;
     }
@@ -436,9 +497,9 @@ class DataPreloadService {
 
   private async preloadBranches() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
-    if (dataStore.isCacheValid('branches') && dataStore.branches.length > 0) {
+    if (dataStore.isCacheValid('branches') && dataStore.branches && dataStore.branches.length > 0) {
       console.log('📦 Using cached branches');
       return;
     }
@@ -462,7 +523,7 @@ class DataPreloadService {
 
   private async preloadSettings() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
     if (dataStore.isCacheValid('settings') && dataStore.settings) {
       console.log('📦 Using cached settings');
@@ -470,16 +531,13 @@ class DataPreloadService {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('lats_pos_settings')
-        .select('*')
-        .limit(1)
-        .single();
+      // Use comprehensive POS settings API to load ALL settings data
+      const { POSSettingsAPI } = await import('../lib/posSettingsApi');
+      const allSettings = await POSSettingsAPI.loadAllSettings();
 
-      if (error && error.code !== 'PGRST116') throw error; // Ignore "no rows" error
-
-      dataStore.setSettings(data || {});
-      console.log('✅ Preloaded settings');
+      // Store all settings in dataStore for fast access
+      dataStore.setSettings(allSettings);
+      console.log('✅ Preloaded all POS settings data');
     } catch (error: any) {
       console.error('❌ Error preloading settings:', error);
       dataStore.setError('settings', error.message);
@@ -487,11 +545,119 @@ class DataPreloadService {
     }
   }
 
+  private async preloadAdminSettings() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('adminSettings') && dataStore.adminSettings && dataStore.adminSettings.length > 0) {
+      console.log('📦 Using cached admin settings');
+      return;
+    }
+
+    try {
+      // Load all admin settings from the admin_settings table
+      const { getAdminSettings } = await import('../lib/adminSettingsApi');
+      const adminSettings = await getAdminSettings();
+
+      // Store admin settings in dataStore for fast access
+      dataStore.setAdminSettings(adminSettings);
+      console.log(`✅ Preloaded ${adminSettings.length} admin settings`);
+    } catch (error: any) {
+      console.error('❌ Error preloading admin settings:', error);
+      dataStore.setError('adminSettings', error.message);
+      // Don't throw - admin settings are not critical
+    }
+  }
+
+  private async preloadPurchaseOrders() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('purchaseOrders') && dataStore.purchaseOrders && dataStore.purchaseOrders.length > 0) {
+      console.log('📦 Using cached purchase orders');
+      return;
+    }
+
+    try {
+      // Load purchase orders via inventory store
+      const { useInventoryStore } = await import('../features/lats/stores/useInventoryStore');
+      const inventoryStore = useInventoryStore.getState();
+
+      // Use the inventory store's loadPurchaseOrders method
+      await inventoryStore.loadPurchaseOrders();
+
+      // Get the loaded purchase orders and store in dataStore
+      const purchaseOrders = inventoryStore.purchaseOrders || [];
+      dataStore.setPurchaseOrders(purchaseOrders);
+      console.log(`✅ Preloaded ${purchaseOrders.length} purchase orders`);
+    } catch (error: any) {
+      console.error('❌ Error preloading purchase orders:', error);
+      dataStore.setError('purchaseOrders', error.message);
+      // Don't throw - purchase orders are not critical for initial app load
+    }
+  }
+
+  private async preloadStockMovements() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('stockMovements') && dataStore.stockMovements && dataStore.stockMovements.length > 0) {
+      console.log('📦 Using cached stock movements');
+      return;
+    }
+
+    try {
+      // Load stock movements via inventory store
+      const { useInventoryStore } = await import('../features/lats/stores/useInventoryStore');
+      const inventoryStore = useInventoryStore.getState();
+
+      // Use the inventory store's loadStockMovements method
+      await inventoryStore.loadStockMovements();
+
+      // Get the loaded stock movements and store in dataStore
+      const stockMovements = inventoryStore.stockMovements || [];
+      dataStore.setStockMovements(stockMovements);
+      console.log(`✅ Preloaded ${stockMovements.length} stock movements`);
+    } catch (error: any) {
+      console.error('❌ Error preloading stock movements:', error);
+      dataStore.setError('stockMovements', error.message);
+      // Don't throw - stock movements are not critical for initial app load
+    }
+  }
+
+  private async preloadSales() {
+    const dataStore = useDataStore.getState();
+
+    // Check cache first
+    if (dataStore.isCacheValid('sales') && dataStore.sales && dataStore.sales.length > 0) {
+      console.log('📦 Using cached sales');
+      return;
+    }
+
+    try {
+      // Load sales via inventory store
+      const { useInventoryStore } = await import('../features/lats/stores/useInventoryStore');
+      const inventoryStore = useInventoryStore.getState();
+
+      // Use the inventory store's loadSales method
+      await inventoryStore.loadSales();
+
+      // Get the loaded sales and store in dataStore
+      const sales = inventoryStore.sales || [];
+      dataStore.setSales(sales);
+      console.log(`✅ Preloaded ${sales.length} sales records`);
+    } catch (error: any) {
+      console.error('❌ Error preloading sales:', error);
+      dataStore.setError('sales', error.message);
+      // Don't throw - sales are not critical for initial app load
+    }
+  }
+
   private async preloadUsers() {
     const dataStore = useDataStore.getState();
-    
+
     // Check cache first
-    if (dataStore.isCacheValid('users') && dataStore.users.length > 0) {
+    if (dataStore.isCacheValid('users') && dataStore.users && dataStore.users.length > 0) {
       console.log('📦 Using cached users');
       return;
     }
@@ -518,7 +684,7 @@ class DataPreloadService {
     const dataStore = useDataStore.getState();
 
     // Check cache first
-    if (dataStore.isCacheValid('devices') && dataStore.devices.length > 0) {
+    if (dataStore.isCacheValid('devices') && dataStore.devices && dataStore.devices.length > 0) {
       console.log('📦 Using cached devices');
       return;
     }
@@ -545,7 +711,7 @@ class DataPreloadService {
     const dataStore = useDataStore.getState();
 
     // Check cache first
-    if (dataStore.isCacheValid('parentVariants') && dataStore.parentVariants.length > 0) {
+    if (dataStore.isCacheValid('parentVariants') && dataStore.parentVariants && dataStore.parentVariants.length > 0) {
       console.log('📦 Using cached parent variants');
       return;
     }
@@ -591,7 +757,7 @@ class DataPreloadService {
     const dataStore = useDataStore.getState();
 
     // Check cache first
-    if (dataStore.isCacheValid('employees') && dataStore.employees.length > 0) {
+    if (dataStore.isCacheValid('employees') && dataStore.employees && dataStore.employees.length > 0) {
       console.log('📦 Using cached employees');
       return;
     }
@@ -618,7 +784,7 @@ class DataPreloadService {
     const dataStore = useDataStore.getState();
 
     // Check cache first
-    if (dataStore.isCacheValid('paymentMethods') && dataStore.paymentMethods.length > 0) {
+    if (dataStore.isCacheValid('paymentMethods') && dataStore.paymentMethods && dataStore.paymentMethods.length > 0) {
       console.log('📦 Using cached payment methods');
       return;
     }
@@ -645,7 +811,7 @@ class DataPreloadService {
     const dataStore = useDataStore.getState();
 
     // Check cache first
-    if (dataStore.isCacheValid('attendanceRecords') && dataStore.attendanceRecords.length > 0) {
+    if (dataStore.isCacheValid('attendanceRecords') && dataStore.attendanceRecords && dataStore.attendanceRecords.length > 0) {
       console.log('📦 Using cached attendance records');
       return;
     }
@@ -686,6 +852,10 @@ class DataPreloadService {
       suppliers: () => this.preloadSuppliers(),
       branches: () => this.preloadBranches(),
       settings: () => this.preloadSettings(),
+      admin_settings: () => this.preloadAdminSettings(),
+      purchase_orders: () => this.preloadPurchaseOrders(),
+      stock_movements: () => this.preloadStockMovements(),
+      sales: () => this.preloadSales(),
       users: () => this.preloadUsers(),
       devices: () => this.preloadDevices(),
       parent_variants: () => this.preloadParentVariants(),

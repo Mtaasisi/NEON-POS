@@ -2,18 +2,18 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
-import { 
-  Package, Edit, Save, X, AlertCircle, 
+import {
+  Package, Edit, Save, X, AlertCircle,
   FileText, Clock, CheckSquare, Send,
   DollarSign, Printer, Download,
-  PackageCheck, Building, MapPin, 
-  TrendingUp, BarChart3, Calculator, 
-  Copy, History, Store, Info, 
+  PackageCheck, Building, MapPin,
+  TrendingUp, BarChart3, Calculator,
+  Copy, History, Store, Info,
   RotateCcw, Shield, Layers, QrCode, Eye, MessageSquare,
   CheckCircle2, CheckCircle, AlertTriangle,
   Zap, CreditCard,
   XSquare, XCircle, FileSpreadsheet,
-  Truck, RefreshCw, Settings, Trash2, Share2
+  Truck, RefreshCw, Settings, Trash2, Share2, Receipt
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { logPurchaseOrderError, validateProductId } from '../lib/errorLogger';
@@ -201,7 +201,9 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
   const [auditHistory, setAuditHistory] = useState<any[]>([]);
   const [communicationHistory, setCommunicationHistory] = useState<any[]>([]);
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
+  const [expenseHistory, setExpenseHistory] = useState<any[]>([]);
   const [paymentsCacheTime, setPaymentsCacheTime] = useState<number>(0);
+  const [expensesCacheTime, setExpensesCacheTime] = useState<number>(0);
   const PAYMENTS_CACHE_DURATION = 30000; // 30 seconds cache
   const [qualityCheckItems, setQualityCheckItems] = useState<any[]>([]);
   const [, setIsLoadingQualityCheckItems] = useState(false);
@@ -428,6 +430,31 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
             itemsCount: response.data.items?.length || 0,
             supplierName: response.data.supplier?.name
           });
+
+          // Load payments and expenses immediately after PO data is loaded
+          console.log('💰 [PurchaseOrderDetailPage] Loading payment and expense data for PO:', response.data.id);
+          const now = Date.now();
+          await Promise.allSettled([
+            // Load payments
+            PurchaseOrderService.getPayments(response.data.id).then(_payments => {
+              console.log(`💰 [PurchaseOrderDetailPage] Setting payment history:`, _payments);
+              setPaymentHistory(_payments);
+              setPaymentsCacheTime(now);
+              console.log(`✅ [PurchaseOrderDetailPage] Payment history state updated with ${_payments.length} payments`);
+            }).catch(error => {
+              console.warn('❌ [PurchaseOrderDetailPage] Failed to load payments:', error);
+            }),
+
+            // Load expenses
+            PurchaseOrderService.getExpenses(response.data.id).then(_expenses => {
+              console.log(`💰 [PurchaseOrderDetailPage] Setting expense history:`, _expenses);
+              setExpenseHistory(_expenses);
+              setExpensesCacheTime(now);
+              console.log(`✅ [PurchaseOrderDetailPage] Expense history state updated with ${_expenses.length} expenses`);
+            }).catch(error => {
+              console.warn('❌ [PurchaseOrderDetailPage] Failed to load expenses:', error);
+            })
+          ]);
         }
         
         // Fix order status if needed (for existing orders created before auto-status logic)
@@ -657,6 +684,14 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
             setPaymentsCacheTime(Date.now());
           }).catch(error => {
             console.warn('Failed to refresh payments:', error);
+          }),
+
+          // Load expenses and update cache
+          PurchaseOrderService.getExpenses(purchaseOrder.id).then(_expenses => {
+            setExpenseHistory(_expenses);
+            setExpensesCacheTime(Date.now());
+          }).catch(error => {
+            console.warn('Failed to refresh expenses:', error);
           }),
           
           // Load received items
@@ -1327,18 +1362,18 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
 
   const handleViewPayments = async () => {
     setShowPaymentModal(true);
-    
+
     // Load payment history from database with caching
     if (purchaseOrder) {
       const now = Date.now();
       const isCacheValid = (now - paymentsCacheTime) < PAYMENTS_CACHE_DURATION;
-      
+
       // Use cached data if available and fresh
       if (paymentHistory.length > 0 && isCacheValid) {
         console.log('✅ Using cached payment data');
         return;
       }
-      
+
       try {
         console.log('🔄 Fetching fresh payment data...');
         const _payments = await PurchaseOrderService.getPayments(purchaseOrder.id);
@@ -1347,6 +1382,30 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
         console.log(`✅ Loaded ${_payments.length} payments`);
       } catch (error) {
         console.error('Failed to load payment history:', error);
+      }
+    }
+  };
+
+  const handleViewExpenses = async () => {
+    // Load expense history from database with caching
+    if (purchaseOrder) {
+      const now = Date.now();
+      const isCacheValid = (now - expensesCacheTime) < PAYMENTS_CACHE_DURATION;
+
+      // Use cached data if available and fresh
+      if (expenseHistory.length > 0 && isCacheValid) {
+        console.log('✅ Using cached expense data');
+        return;
+      }
+
+      try {
+        console.log('🔄 Fetching fresh expense data...');
+        const _expenses = await PurchaseOrderService.getExpenses(purchaseOrder.id);
+        setExpenseHistory(_expenses);
+        setExpensesCacheTime(now);
+        console.log(`✅ Loaded ${_expenses.length} expenses`);
+      } catch (error) {
+        console.error('Failed to load expense history:', error);
       }
     }
   };
@@ -1600,13 +1659,24 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
         toast.error(`Some payments failed: ${errorMessages}`);
       } else {
         toast.success('All payments processed successfully');
+
+        // Update the purchase order's payment status and total paid
+        try {
+          if (purchaseOrder?.id) {
+            await PurchaseOrderService.updatePaymentStatus(purchaseOrder.id);
+            console.log('✅ Purchase order payment status updated');
+          }
+        } catch (updateError) {
+          console.warn('⚠️ Failed to update payment status:', updateError);
+          // Don't block the success flow for this non-critical update
+        }
       }
-      
+
       setShowPurchaseOrderPaymentModal(false);
-      
+
       // Invalidate payment cache to ensure fresh data on next view
       setPaymentsCacheTime(0);
-      
+
       // Reload purchase order to reflect payment changes
       await loadPurchaseOrder();
       
@@ -5158,6 +5228,63 @@ TERMS AND CONDITIONS:
                     ))
                   ) : (
                     <p className="text-sm text-gray-500 text-center py-4">No payment history</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Expense History */}
+              <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-orange-600" />
+                    <h3 className="text-sm font-semibold text-gray-800">Expense History</h3>
+                  </div>
+                  <button
+                    onClick={handleViewExpenses}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    View All
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {expenseHistory.length > 0 ? (
+                    expenseHistory.slice(0, 3).map((expense, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{expense.category || 'Expense'}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {new Intl.NumberFormat('en-US', {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2
+                              }).format(expense.amount || 0)}
+                            </p>
+                            {expense.currency && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-blue-100 text-blue-800 text-xs rounded-full font-medium">
+                                {expense.currency}
+                              </span>
+                            )}
+                          </div>
+                          {expense.accountName && (
+                            <p className="text-xs text-gray-600">Account: {expense.accountName}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-gray-500">
+                            {expense.timestamp ? new Date(expense.timestamp).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric'
+                            }) : 'N/A'}
+                          </p>
+                          {expense.reference && (
+                            <p className="text-xs text-gray-500">Ref: {expense.reference}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">No expense history</p>
                   )}
                 </div>
               </div>

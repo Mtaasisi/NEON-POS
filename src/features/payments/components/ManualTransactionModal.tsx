@@ -97,6 +97,7 @@ const ManualTransactionModal: React.FC<ManualTransactionModalProps> = ({
           balance_after: newBalance,
           description: formData.description,
           reference_number: formData.reference || `MAN-${Date.now().toString(36).toUpperCase()}`,
+          branch_id: account.branch_id, // Assign branch_id from account for isolation
           metadata: {
             manual_entry: true,
             entry_type: formData.type,

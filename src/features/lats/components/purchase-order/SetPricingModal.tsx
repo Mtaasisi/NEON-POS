@@ -3,6 +3,7 @@ import { X, Package, Plus, Trash2, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getLatsProvider } from '../../lib/data/provider';
 import { supabase } from '../../../../lib/supabaseClient';
+import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
 
 interface PurchaseOrderItem {
   id: string;
@@ -441,6 +442,7 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
       if (additionalCosts.length > 0) {
         const { data: { user } } = await supabase.auth.getUser();
         const userId = user?.id;
+        const currentBranchId = getCurrentBranchId();
 
         for (const cost of additionalCosts) {
           if (cost.amount > 0) {
@@ -455,6 +457,7 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
                   date: new Date().toISOString().split('T')[0],
                   created_by: userId,
                   purchase_order_id: purchaseOrder.id,
+                  branch_id: currentBranchId, // Assign current branch for isolation
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString()
                 });
