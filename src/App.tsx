@@ -580,14 +580,14 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           }
         >
           <Route index element={<DefaultRedirect />} />
-          <Route path="/dashboard" element={
+          <Route path="dashboard" element={
             <Suspense fallback={<DynamicPageLoader />}>
               <ConditionalDashboard />
             </Suspense>
           } />
 
           {/* Alternative Dashboard Views - Previously Unlinked */}
-          <Route path="/dashboard/admin" element={
+          <Route path="dashboard/admin" element={
             <RoleProtectedRoute allowedRoles={['admin']}>
               <Suspense fallback={<DynamicPageLoader />}>
                 <DashboardPage />
