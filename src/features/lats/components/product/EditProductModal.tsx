@@ -749,7 +749,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               {!useVariants && (
                 <div className="bg-gray-50 rounded-xl p-6">
                   <h4 className="text-lg font-bold text-gray-900 mb-4">Pricing & Stock</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Cost Price
@@ -796,7 +796,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Quantity
+                      Stock Qty
                     </label>
                     <input
                       type="number"
@@ -808,13 +808,14 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                           : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
                       }`}
                       min="0"
+                      placeholder="0"
                     />
                     {errors.stockQuantity && <p className="text-red-600 text-sm mt-1">{errors.stockQuantity}</p>}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Minimum Stock Level
+                      Min Stock
                     </label>
                     <input
                       type="number"
@@ -826,6 +827,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                           : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
                       }`}
                       min="0"
+                      placeholder="0"
                     />
                     {errors.minStockLevel && <p className="text-red-600 text-sm mt-1">{errors.minStockLevel}</p>}
                   </div>
