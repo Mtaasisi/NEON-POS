@@ -1,0 +1,18 @@
+# LATS CHANCE Environment Configuration
+# Copy this file to .env and fill in your actual values
+
+# Development Configuration
+NODE_ENV=development
+VITE_APP_ENV=development
+
+# Production Configuration (uncomment for production)
+# NODE_ENV=production
+# VITE_APP_ENV=production
+
+# Optional: Custom API endpoints
+# VITE_API_BASE_URL=https://your-api-domain.com
+# VITE_WHATSAPP_API_URL=https://your-whatsapp-api.com
+
+# Optional: Feature flags
+# VITE_ENABLE_DEBUG=true
+# VITE_ENABLE_ANALYTICS=false

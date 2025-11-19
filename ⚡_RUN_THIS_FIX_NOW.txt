@@ -1,0 +1,109 @@
+⚡ DATABASE FIX REQUIRED ⚡
+===========================
+
+PROBLEM: Your variants have IMEI children but aren't marked as "parents"
+SOLUTION: Run the SQL fix to mark them correctly
+
+
+🔧 METHOD 1: Using Node Script (EASIEST)
+=========================================
+
+In terminal:
+cd "/Users/mtaasisi/Downloads/POS-main NEON DATABASE"
+node fix-parent-prices.mjs
+
+This will:
+✅ Mark parent variants correctly
+✅ Sync parent prices
+✅ Update stock quantities
+✅ Show verification report
+
+
+🔧 METHOD 2: Direct SQL (IF METHOD 1 FAILS)
+============================================
+
+1. Get your database connection string:
+   - Open Supabase dashboard
+   - Go to Settings → Database
+   - Copy "Connection string" (Postgres URL)
+
+2. Run the fix:
+   psql "YOUR_CONNECTION_STRING" -f fix-parent-markers.sql
+
+Or use Supabase SQL Editor:
+   - Open Supabase dashboard
+   - Go to SQL Editor
+   - Create new query
+   - Copy contents of fix-parent-markers.sql
+   - Click "Run"
+
+
+🔧 METHOD 3: Manual Database Update (QUICK)
+============================================
+
+Run this ONE query in Supabase SQL Editor:
+
+```sql
+UPDATE lats_product_variants parent
+SET 
+  is_parent = TRUE,
+  variant_type = 'parent',
+  updated_at = NOW()
+WHERE EXISTS (
+  SELECT 1
+  FROM lats_product_variants child
+  WHERE child.parent_variant_id = parent.id
+    AND child.variant_type = 'imei_child'
+)
+AND (parent.is_parent IS NULL OR parent.is_parent = FALSE);
+```
+
+
+✅ AFTER RUNNING THE FIX:
+=========================
+
+1. Check the output - should see:
+   ✅ Correctly marked as parent with X children
+
+2. Refresh your browser:
+   Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
+
+3. Open POS and test:
+   - Search for product
+   - Click on it
+   - Parent variants should now show purple borders
+   - Click to expand and see IMEI children
+
+
+🔍 VERIFY IT WORKED:
+====================
+
+Run this query to check:
+
+```sql
+SELECT 
+  v.variant_name,
+  v.is_parent,
+  v.variant_type,
+  v.quantity,
+  (SELECT COUNT(*) 
+   FROM lats_product_variants child 
+   WHERE child.parent_variant_id = v.id 
+   AND child.variant_type = 'imei_child') as child_count
+FROM lats_product_variants v
+JOIN lats_products p ON v.product_id = p.id
+WHERE p.name ILIKE '%Mtaa%'
+  AND v.parent_variant_id IS NULL;
+```
+
+Expected output:
+variant_name | is_parent | variant_type | quantity | child_count
+-------------|-----------|--------------|----------|------------
+128GB        | t         | parent       | 1        | 1
+256GB        | t         | parent       | 2        | 2
+
+If you see is_parent = 't' (true), it's fixed! ✅
+
+
+⚠️  RUN THE FIX NOW, THEN REFRESH YOUR BROWSER! ⚠️
+

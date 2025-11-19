@@ -1,0 +1,11 @@
+{
+  "projectId": "YOUR_NEON_PROJECT_ID",
+  "apiKey": "YOUR_NEON_API_KEY",
+  "branches": {
+    "dev": "postgresql://user:password@ep-branch-dev.neon.tech/neondb?sslmode=require",
+    "main": "postgresql://user:password@ep-branch-main.neon.tech/neondb?sslmode=require",
+    "staging": "postgresql://user:password@ep-branch-staging.neon.tech/neondb?sslmode=require"
+  },
+  "defaultBranch": "main"
+}
+

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Accounts Test Automation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .test-section h2 {
+            color: #333;
+            font-size: 18px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .test-scenario {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .test-scenario h3 {
+            color: #667eea;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .test-steps {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .test-steps li {
+            padding: 8px 0;
+            color: #555;
+            font-size: 13px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .test-steps li:last-child {
+            border-bottom: none;
+        }
+
+        .test-steps li::before {
+            content: "→";
+            color: #667eea;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .expected-result {
+            background: #e7f3e7;
+            border-left: 3px solid #4caf50;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        .expected-result::before {
+            content: "✓ Expected: ";
+            color: #4caf50;
+            font-weight: 600;
+        }
+
+        .error-result {
+            background: #ffe7e7;
+            border-left: 3px solid #f44336;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+
+        .error-result::before {
+            content: "✗ Should Error: ";
+            color: #f44336;
+            font-weight: 600;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .status-box {
+            margin-top: 20px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 10px;
+            border: 2px solid #e0e0e0;
+            display: none;
+        }
+
+        .status-box.active {
+            display: block;
+        }
+
+        .status-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+
+        .url-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .url-info strong {
+            color: #1976d2;
+        }
+
+        .url-info code {
+            background: #fff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Payment Accounts - Automated Tests</h1>
+        <p class="subtitle">Comprehensive testing suite for the Payment Accounts form</p>
+
+        <div class="url-info">
+            <strong>📍 Test URL:</strong> <code>http://localhost:5173/payments</code><br>
+            <strong>📑 Tab:</strong> Click on "Payment Accounts" (Providers tab)
+        </div>
+
+        <!-- Test Scenario 1 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">📝</span>
+                Test 1: Create Cash Account (USD)
+            </h2>
+            <div class="test-scenario">
+                <h3>Happy Path - Valid Cash Account</h3>
+                <ol class="test-steps">
+                    <li>Navigate to /payments</li>
+                    <li>Click "Payment Accounts" tab (if not already active)</li>
+                    <li>Click "Add Account" button</li>
+                    <li>Enter name: "Test Cash USD"</li>
+                    <li>Select type: "Cash"</li>
+                    <li>Select currency: "USD - US Dollar"</li>
+                    <li>Enter balance: 1000</li>
+                    <li>Check "Active Account"</li>
+                    <li>Check "Payment Method"</li>
+                    <li>Click "Create Account"</li>
+                </ol>
+                <div class="expected-result">
+                    Account created successfully, shows in list with USD currency
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Scenario 2 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">🏦</span>
+                Test 2: Create Bank Account with Validation
+            </h2>
+            <div class="test-scenario">
+                <h3>Test Validation - Missing Required Fields</h3>
+                <ol class="test-steps">
+                    <li>Click "Add Account" button</li>
+                    <li>Enter name: "CRDB Bank"</li>
+                    <li>Select type: "Bank"</li>
+                    <li>Leave bank name EMPTY</li>
+                    <li>Click "Create Account"</li>
+                </ol>
+                <div class="error-result">
+                    "Bank name is required for bank accounts"
+                </div>
+            </div>
+            <div class="test-scenario">
+                <h3>Happy Path - Complete Bank Account</h3>
+                <ol class="test-steps">
+                    <li>Fill bank name: "CRDB Bank"</li>
+                    <li>Enter account number: "01150012345"</li>
+                    <li>Select currency: "TZS - Tanzanian Shilling"</li>
+                    <li>Enter balance: 5000000</li>
+                    <li>Click "Create Account"</li>
+                </ol>
+                <div class="expected-result">
+                    Bank account created, shows bank icon and TZS currency
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Scenario 3 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">📱</span>
+                Test 3: Create Mobile Money Account
+            </h2>
+            <div class="test-scenario">
+                <h3>Test Mobile Money Fields</h3>
+                <ol class="test-steps">
+                    <li>Click "Add Account" button</li>
+                    <li>Enter name: "M-Pesa Main"</li>
+                    <li>Select type: "Mobile Money"</li>
+                    <li>Enter provider: "M-Pesa"</li>
+                    <li>Enter phone: "+255712345678"</li>
+                    <li>Select currency: "TZS"</li>
+                    <li>Check "Require Reference Number"</li>
+                    <li>Check "Require Account Number"</li>
+                    <li>Click "Create Account"</li>
+                </ol>
+                <div class="expected-result">
+                    Mobile money account created with all settings saved
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Scenario 4 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">💳</span>
+                Test 4: Create Credit Card Account
+            </h2>
+            <div class="test-scenario">
+                <h3>Test Credit Card Fields</h3>
+                <ol class="test-steps">
+                    <li>Click "Add Account" button</li>
+                    <li>Enter name: "Business Visa"</li>
+                    <li>Select type: "Credit Card"</li>
+                    <li>Enter card issuer: "Visa"</li>
+                    <li>Enter last 4 digits: "4532"</li>
+                    <li>Select currency: "USD"</li>
+                    <li>Enter balance: 5000</li>
+                    <li>Click "Create Account"</li>
+                </ol>
+                <div class="expected-result">
+                    Credit card account created, displays in USD
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Scenario 5 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">✏️</span>
+                Test 5: Edit Existing Account
+            </h2>
+            <div class="test-scenario">
+                <h3>Test Edit Functionality</h3>
+                <ol class="test-steps">
+                    <li>Find the "Test Cash USD" account</li>
+                    <li>Click the Edit button</li>
+                    <li>Change currency to "EUR - Euro"</li>
+                    <li>Change balance to 2500</li>
+                    <li>Check "Require Reference Number"</li>
+                    <li>Click "Update Account"</li>
+                </ol>
+                <div class="expected-result">
+                    Account updated, now shows EUR currency and new balance
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Scenario 6 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">💱</span>
+                Test 6: Currency Filter
+            </h2>
+            <div class="test-scenario">
+                <h3>Test Currency Filtering</h3>
+                <ol class="test-steps">
+                    <li>Look at currency filter dropdown</li>
+                    <li>Select "USD - US Dollar"</li>
+                    <li>Verify only USD accounts show</li>
+                    <li>Check summary shows USD totals</li>
+                    <li>Select "TZS - Tanzanian Shilling"</li>
+                    <li>Verify only TZS accounts show</li>
+                    <li>Select "All Currencies"</li>
+                    <li>Verify all accounts show again</li>
+                </ol>
+                <div class="expected-result">
+                    Filter works correctly, totals update per currency
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Scenario 7 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">📊</span>
+                Test 7: View Transaction History
+            </h2>
+            <div class="test-scenario">
+                <h3>Test History Modal</h3>
+                <ol class="test-steps">
+                    <li>Click "View Full History" on any account</li>
+                    <li>Verify modal opens with account details</li>
+                    <li>Check currency displays correctly in all amounts</li>
+                    <li>Test transaction type filter</li>
+                    <li>Close modal</li>
+                </ol>
+                <div class="expected-result">
+                    History modal shows all data with correct currencies
+                </div>
+            </div>
+        </div>
+
+        <!-- Test Scenario 8 -->
+        <div class="test-section">
+            <h2>
+                <span class="icon">❌</span>
+                Test 8: Validation Edge Cases
+            </h2>
+            <div class="test-scenario">
+                <h3>Test Various Validation Scenarios</h3>
+                <ol class="test-steps">
+                    <li>Try creating account with empty name</li>
+                    <li>Try creating bank without bank name</li>
+                    <li>Try creating mobile money without phone</li>
+                    <li>Verify all show appropriate error messages</li>
+                </ol>
+                <div class="error-result">
+                    Each scenario should show specific error message
+                </div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button class="btn-secondary" onclick="window.open('http://localhost:5173/payments', '_blank')">
+                🌐 Open Application
+            </button>
+            <button class="btn-primary" onclick="showManualInstructions()">
+                📋 Manual Test Guide
+            </button>
+        </div>
+
+        <div id="statusBox" class="status-box">
+            <h3 style="margin-bottom: 15px;">📝 Manual Testing Instructions</h3>
+            <div class="status-item status-pending">
+                1. Open the application in your browser
+            </div>
+            <div class="status-item status-pending">
+                2. Login with admin credentials
+            </div>
+            <div class="status-item status-pending">
+                3. Navigate to Payments section
+            </div>
+            <div class="status-item status-pending">
+                4. Click on "Payment Accounts" tab
+            </div>
+            <div class="status-item status-pending">
+                5. Follow each test scenario above
+            </div>
+            <div class="status-item status-pending">
+                6. Verify all expected results match
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showManualInstructions() {
+            const statusBox = document.getElementById('statusBox');
+            statusBox.classList.toggle('active');
+        }
+
+        // Auto-open app in new tab on load
+        console.log('Payment Accounts Test Suite Loaded');
+        console.log('Navigate to: http://localhost:5173/payments');
+        console.log('Then click on the "Payment Accounts" tab');
+    </script>
+</body>
+</html>
+

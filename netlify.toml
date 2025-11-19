@@ -1,0 +1,46 @@
+[build]
+  command = "npm run build:prod"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+  NODE_ENV = "production"
+  VITE_APP_ENV = "production"
+
+# Production environment variables (will use .env.production values)
+[context.production.environment]
+  NODE_ENV = "production"
+  VITE_APP_ENV = "production"
+
+# Deploy preview environment (use development database)
+[context.deploy-preview.environment]
+  NODE_ENV = "development"
+  VITE_APP_ENV = "development"
+
+# Branch deploys (use development database)
+[context.branch-deploy.environment]
+  NODE_ENV = "development"
+  VITE_APP_ENV = "development"
+
+# Headers for proper MIME types on static assets
+[[headers]]
+  for = "/assets/*.js"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*.mjs"
+  [headers.values]
+    Content-Type = "application/javascript; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/assets/*.css"
+  [headers.values]
+    Content-Type = "text/css; charset=utf-8"
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Redirects are now handled by public/_redirects file
+# This provides better control over asset file serving
+

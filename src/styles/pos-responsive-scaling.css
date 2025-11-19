@@ -1,0 +1,246 @@
+/* POS Responsive Scaling for Different Screen Resolutions */
+/* Ensures consistent visual appearance across different pixel densities */
+
+/* Base scaling variables */
+:root {
+  --pos-scale-2048: 1.476; /* Scale factor for 2048x1536 to match 3024x1964 */
+  --pos-scale-1920: 1.575; /* Scale factor for 1920x1080 to match 3024x1964 */
+}
+
+/* ===== 2048x1536 SCREEN SCALING ===== */
+/* This makes UI elements appear the same size as on 3024x1964 screens */
+
+@media (width: 2048px) and (height: 1536px),
+       (min-width: 2040px) and (max-width: 2056px) and (min-height: 1530px) and (max-height: 1542px) {
+  
+  /* Method 1: CSS Zoom (Best browser support) */
+  .pos-scale-container {
+    zoom: var(--pos-scale-2048);
+  }
+  
+  /* Method 2: Transform scale (Fallback) */
+  .pos-scale-transform {
+    transform: scale(var(--pos-scale-2048));
+    transform-origin: top left;
+    width: calc(100% / var(--pos-scale-2048));
+    height: calc(100% / var(--pos-scale-2048));
+  }
+  
+  /* Method 3: Root font size scaling */
+  html.pos-scaled {
+    font-size: calc(16px * var(--pos-scale-2048));
+  }
+}
+
+/* ===== GENERAL MEDIUM RESOLUTION SCALING (2000-2200px width) ===== */
+@media (min-width: 2000px) and (max-width: 2200px) {
+  
+  /* POS Page specific scaling */
+  .pos-page-container,
+  [data-pos-page="true"] {
+    font-size: 1.45em;
+  }
+  
+  /* Product cards scaling - responsive */
+  .pos-product-card {
+    /* Removed fixed scale to allow responsive Tailwind classes to work */
+  }
+  
+  /* Cart items scaling */
+  .pos-cart-item {
+    font-size: 1.4em;
+    padding: calc(0.75rem * 1.4);
+  }
+  
+  /* Buttons and interactive elements */
+  .pos-button {
+    font-size: 1.4em;
+    padding: calc(0.5rem * 1.4) calc(1rem * 1.4);
+    min-height: calc(44px * 1.4);
+  }
+  
+  /* Input fields */
+  .pos-input {
+    font-size: 1.4em;
+    padding: calc(0.75rem * 1.4);
+    min-height: calc(48px * 1.4);
+  }
+  
+  /* Icons */
+  .pos-icon {
+    width: calc(1em * 1.4) !important;
+    height: calc(1em * 1.4) !important;
+  }
+  
+  /* Grid adjustments */
+  .pos-product-grid {
+    gap: calc(1rem * 1.4);
+  }
+}
+
+/* ===== TABLET LANDSCAPE SCALING (2000-2100px) ===== */
+@media (min-width: 2000px) and (max-width: 2100px) and (orientation: landscape) {
+  
+  /* Full page scaling for POS */
+  body.pos-scaled-view {
+    zoom: 1.45;
+  }
+  
+  /* Alternative viewport-based scaling */
+  .pos-viewport-scaled {
+    font-size: calc(1vw + 0.5vh);
+  }
+}
+
+/* ===== HIGH DPI SCREENS (Retina, 4K) ===== */
+@media (-webkit-min-device-pixel-ratio: 2) and (min-width: 2000px),
+       (min-resolution: 192dpi) and (min-width: 2000px) {
+  
+  /* Compensate for high DPI rendering */
+  .pos-high-dpi {
+    font-size: 1.35em;
+  }
+  
+  /* Sharper text rendering */
+  .pos-text {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+}
+
+/* ===== UTILITY CLASSES ===== */
+
+/* Apply to POS page root container */
+.pos-responsive-scale {
+  font-size: clamp(14px, 1.4vw, 20px);
+}
+
+/* Smooth scaling for all child elements */
+.pos-smooth-scale * {
+  transition: font-size 0.2s ease, padding 0.2s ease, margin 0.2s ease;
+}
+
+/* Prevent scaling for specific elements */
+.pos-no-scale {
+  font-size: 1rem !important;
+  transform: none !important;
+  zoom: 1 !important;
+}
+
+/* ===== SPECIFIC COMPONENT SCALING ===== */
+
+/* Top bar scaling */
+@media (min-width: 2000px) and (max-width: 2200px) {
+  .pos-top-bar {
+    height: calc(64px * 1.4);
+    padding: calc(1rem * 1.4);
+  }
+  
+  .pos-top-bar button {
+    font-size: 1.4em;
+    padding: calc(0.5rem * 1.4) calc(1rem * 1.4);
+  }
+}
+
+/* Product grid scaling - responsive, controlled by Tailwind grid-cols */
+@media (min-width: 2000px) and (max-width: 2200px) {
+  .pos-product-grid {
+    /* Grid columns now controlled by responsive Tailwind classes */
+  }
+}
+
+/* Cart section scaling */
+@media (min-width: 2000px) and (max-width: 2200px) {
+  .pos-cart-section {
+    font-size: 1.4em;
+    padding: calc(1.5rem * 1.4);
+  }
+  
+  .pos-cart-total {
+    font-size: 1.6em;
+  }
+}
+
+/* Modal scaling */
+@media (min-width: 2000px) and (max-width: 2200px) {
+  .pos-modal {
+    transform: scale(1.4);
+    transform-origin: center;
+  }
+  
+  .pos-modal-content {
+    max-width: calc(100% / 1.4);
+    max-height: calc(100% / 1.4);
+  }
+}
+
+/* ===== BROWSER-SPECIFIC FIXES ===== */
+
+/* Safari specific scaling */
+@supports (-webkit-appearance: none) {
+  @media (min-width: 2000px) and (max-width: 2200px) {
+    .pos-safari-scale {
+      -webkit-text-size-adjust: 140%;
+    }
+  }
+}
+
+/* Firefox specific scaling */
+@-moz-document url-prefix() {
+  @media (min-width: 2000px) and (max-width: 2200px) {
+    .pos-firefox-scale {
+      font-size: 1.4em;
+    }
+  }
+}
+
+/* Chrome/Edge specific scaling */
+@media (min-width: 2000px) and (max-width: 2200px) {
+  .pos-chrome-scale {
+    zoom: 1.4;
+  }
+}
+
+/* ===== PREVENT LAYOUT SHIFT ===== */
+
+@media (min-width: 2000px) and (max-width: 2200px) {
+  /* Maintain aspect ratios during scaling */
+  .pos-maintain-ratio {
+    aspect-ratio: auto;
+  }
+  
+  /* Prevent text reflow */
+  .pos-no-reflow {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* ===== VIEWPORT-BASED SCALING (RECOMMENDED) ===== */
+
+/* Use this class on the main POS container for automatic scaling */
+.pos-auto-scale {
+  font-size: calc(0.8vw + 0.4vh);
+  
+  /* Ensure minimum readable size */
+  font-size: max(calc(0.8vw + 0.4vh), 14px);
+  
+  /* Ensure maximum size on very large screens */
+  font-size: min(max(calc(0.8vw + 0.4vh), 14px), 24px);
+}
+
+/* Alternative: Container query based scaling (modern browsers) */
+@supports (container-type: inline-size) {
+  .pos-container-scale {
+    container-type: inline-size;
+  }
+  
+  @container (min-width: 2000px) and (max-width: 2200px) {
+    .pos-container-item {
+      font-size: 1.4em;
+    }
+  }
+}
+

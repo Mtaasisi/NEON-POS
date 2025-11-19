@@ -1,0 +1,1593 @@
+@import './styles/touch-friendly.css';
+@import './styles/general-settings.css';
+@import './styles/mobile.css';
+@import './styles/mobile-responsive.css';
+@import './styles/mobile-auto-responsive.css';
+@import './styles/pos-responsive-scaling.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dialog Animations */
+@keyframes scale-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+/* Transparent Scrollbar Styles */
+.scrollbar-transparent {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+.scrollbar-transparent::-webkit-scrollbar {
+  display: none; /* WebKit */
+}
+
+/* Custom POS Products Scrollbar - Minimal and Smooth */
+.pos-products-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.pos-products-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.pos-products-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pos-products-scroll::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.pos-products-scroll::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+/* Custom CSS Variables */
+:root {
+  /* Font Size Setting - Default is 16px (medium) */
+  font-size: 16px;
+  
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  
+  /* LATS Module CSS Variables */
+  --lats-primary: hsl(220, 100%, 50%);
+  --lats-primary-hover: hsl(220, 100%, 45%);
+  --lats-surface: rgba(255, 255, 255, 0.1);
+  --lats-surface-hover: rgba(255, 255, 255, 0.15);
+  --lats-glass-border: rgba(255, 255, 255, 0.2);
+  --lats-glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --lats-text: rgba(255, 255, 255, 0.9);
+  --lats-text-secondary: rgba(255, 255, 255, 0.7);
+  --lats-success: hsl(142, 76%, 36%);
+  --lats-warning: hsl(48, 96%, 53%);
+  --lats-error: hsl(0, 84%, 60%);
+  --lats-info: hsl(199, 89%, 48%);
+  --lats-spacing-xs: 0.25rem;
+  --lats-spacing-sm: 0.5rem;
+  --lats-spacing-md: 1rem;
+  --lats-spacing-lg: 1.5rem;
+  --lats-spacing-xl: 2rem;
+  --lats-spacing-2xl: 3rem;
+  --lats-radius-sm: 0.375rem;
+  --lats-radius-md: 0.5rem;
+  --lats-radius-lg: 0.75rem;
+  --lats-radius-xl: 1rem;
+  --lats-font-family: Inter, system-ui, sans-serif;
+  --lats-font-size-xs: 0.75rem;
+  --lats-font-size-sm: 0.875rem;
+  --lats-font-size-base: 1rem;
+  --lats-font-size-lg: 1.125rem;
+  --lats-font-size-xl: 1.25rem;
+  --lats-font-size-2xl: 1.5rem;
+}
+
+/* Font Size Classes - Applied by settings */
+html {
+  /* Default font size - will be overridden by settings */
+  font-size: 16px;
+  transition: font-size 0.2s ease;
+}
+
+/* These classes can be applied programmatically */
+html.font-tiny {
+  font-size: 11px; /* Polished: More readable than 10px */
+}
+
+html.font-extra-small {
+  font-size: 12px;
+}
+
+html.font-small {
+  font-size: 14px;
+}
+
+html.font-medium {
+  font-size: 16px;
+}
+
+html.font-large {
+  font-size: 18px;
+}
+
+/* Theme Variables */
+.theme-light {
+  --bg-primary: radial-gradient(ellipse at center, #e0f7fa 0%, #b3e5fc 40%, #039be5 80%, #01579b 100%);
+  --bg-secondary: #ffffff;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --card-border: rgba(0, 0, 0, 0.1);
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --glass-bg: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+}
+
+.theme-dark {
+  --bg-primary: radial-gradient(ellipse at center, #0f172a 0%, #1e293b 40%, #334155 80%, #475569 100%);
+  --bg-secondary: #1e293b;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --card-bg: rgba(30, 41, 59, 0.9);
+  --card-border: rgba(148, 163, 184, 0.2);
+  --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5);
+  --glass-bg: rgba(30, 41, 59, 0.5);
+  --glass-border: rgba(148, 163, 184, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6);
+  --sidebar-bg: rgba(15, 23, 42, 0.95);
+  --topbar-bg: rgba(15, 23, 42, 0.9);
+  --hover-bg: rgba(59, 130, 246, 0.1);
+  --active-bg: rgba(59, 130, 246, 0.15);
+  --border-color: rgba(148, 163, 184, 0.15);
+}
+
+.theme-dark-cards {
+  --bg-primary: radial-gradient(ellipse at center, #0a0f1e 0%, #0f172a 40%, #1e293b 80%, #334155 100%);
+  --bg-secondary: #0f172a;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --card-bg: rgba(51, 65, 85, 0.98);
+  --card-border: rgba(148, 163, 184, 0.25);
+  --card-shadow: 0 12px 40px -8px rgba(0, 0, 0, 0.6);
+  --glass-bg: rgba(51, 65, 85, 0.6);
+  --glass-border: rgba(148, 163, 184, 0.25);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.7);
+  --sidebar-bg: rgba(10, 15, 30, 0.98);
+  --topbar-bg: rgba(10, 15, 30, 0.95);
+  --hover-bg: rgba(59, 130, 246, 0.12);
+  --active-bg: rgba(59, 130, 246, 0.2);
+  --border-color: rgba(148, 163, 184, 0.2);
+}
+
+/* Dark Theme Specific Utilities */
+.theme-dark .text-gray-900,
+.theme-dark-cards .text-gray-900 {
+  color: #f8fafc !important;
+}
+
+.theme-dark .text-gray-800,
+.theme-dark-cards .text-gray-800 {
+  color: #f1f5f9 !important;
+}
+
+.theme-dark .text-gray-700,
+.theme-dark-cards .text-gray-700 {
+  color: #e2e8f0 !important;
+}
+
+.theme-dark .text-gray-600,
+.theme-dark-cards .text-gray-600 {
+  color: #cbd5e1 !important;
+}
+
+.theme-dark .text-gray-500,
+.theme-dark-cards .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+.theme-dark .text-gray-400,
+.theme-dark-cards .text-gray-400 {
+  color: #64748b !important;
+}
+
+/* Fix black text colors in dark mode */
+.theme-dark .text-black,
+.theme-dark-cards .text-black {
+  color: #f8fafc !important;
+}
+
+/* Fix slate text colors in dark mode */
+.theme-dark .text-slate-900,
+.theme-dark-cards .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+.theme-dark .text-slate-800,
+.theme-dark-cards .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+
+.theme-dark .text-slate-700,
+.theme-dark-cards .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+
+/* Background colors */
+.theme-dark .bg-white,
+.theme-dark-cards .bg-white {
+  background-color: rgba(30, 41, 59, 0.9) !important;
+}
+
+.theme-dark .bg-gray-50,
+.theme-dark-cards .bg-gray-50 {
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+.theme-dark .bg-gray-100,
+.theme-dark-cards .bg-gray-100 {
+  background-color: rgba(30, 41, 59, 0.6) !important;
+}
+
+.theme-dark .bg-gray-200,
+.theme-dark-cards .bg-gray-200 {
+  background-color: rgba(51, 65, 85, 0.6) !important;
+}
+
+/* Border colors */
+.theme-dark .border-gray-300,
+.theme-dark-cards .border-gray-300 {
+  border-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+.theme-dark .border-gray-200,
+.theme-dark-cards .border-gray-200 {
+  border-color: rgba(148, 163, 184, 0.15) !important;
+}
+
+.theme-dark .border-gray-100,
+.theme-dark-cards .border-gray-100 {
+  border-color: rgba(148, 163, 184, 0.1) !important;
+}
+
+.theme-dark .border-white\/20,
+.theme-dark .border-white\/30,
+.theme-dark-cards .border-white\/20,
+.theme-dark-cards .border-white\/30 {
+  border-color: rgba(148, 163, 184, 0.25) !important;
+}
+
+/* Sidebar Dark Theme Styling */
+.theme-dark .sidebar-bg,
+.theme-dark-cards .sidebar-bg {
+  background: var(--sidebar-bg) !important;
+  backdrop-filter: blur(20px);
+}
+
+/* Topbar Dark Theme Styling */
+.theme-dark .topbar,
+.theme-dark-cards .topbar {
+  background: var(--topbar-bg) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+/* Glass Card Dark Theme */
+.theme-dark .glass,
+.theme-dark-cards .glass {
+  background: var(--glass-bg) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Input and Form Elements in Dark Mode */
+.theme-dark input,
+.theme-dark textarea,
+.theme-dark select,
+.theme-dark-cards input,
+.theme-dark-cards textarea,
+.theme-dark-cards select {
+  background-color: rgba(30, 41, 59, 0.6) !important;
+  color: #f1f5f9 !important;
+  border-color: rgba(148, 163, 184, 0.3) !important;
+}
+
+.theme-dark input::placeholder,
+.theme-dark textarea::placeholder,
+.theme-dark-cards input::placeholder,
+.theme-dark-cards textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Dropdown and Select Options */
+.theme-dark option,
+.theme-dark-cards option {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* Table elements in dark mode */
+.theme-dark table,
+.theme-dark-cards table {
+  color: #e2e8f0 !important;
+}
+
+.theme-dark th,
+.theme-dark-cards th {
+  color: #f1f5f9 !important;
+  background-color: rgba(30, 41, 59, 0.8) !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+}
+
+.theme-dark td,
+.theme-dark-cards td {
+  color: #e2e8f0 !important;
+  border-color: rgba(148, 163, 184, 0.15) !important;
+}
+
+/* Links in dark mode */
+.theme-dark a:not(.btn),
+.theme-dark-cards a:not(.btn) {
+  color: #60a5fa !important;
+}
+
+.theme-dark a:not(.btn):hover,
+.theme-dark-cards a:not(.btn):hover {
+  color: #93c5fd !important;
+}
+
+/* Paragraph and span elements */
+.theme-dark p,
+.theme-dark span:not([class*="bg-"]):not([class*="text-white"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-red"]):not([class*="text-yellow"]),
+.theme-dark-cards p,
+.theme-dark-cards span:not([class*="bg-"]):not([class*="text-white"]):not([class*="text-blue"]):not([class*="text-green"]):not([class*="text-red"]):not([class*="text-yellow"]) {
+  color: inherit;
+}
+
+/* Headings in dark mode */
+.theme-dark h1,
+.theme-dark h2,
+.theme-dark h3,
+.theme-dark h4,
+.theme-dark h5,
+.theme-dark h6,
+.theme-dark-cards h1,
+.theme-dark-cards h2,
+.theme-dark-cards h3,
+.theme-dark-cards h4,
+.theme-dark-cards h5,
+.theme-dark-cards h6 {
+  color: #f8fafc;
+}
+
+/* Label elements in dark mode */
+.theme-dark label,
+.theme-dark-cards label {
+  color: #e2e8f0 !important;
+}
+
+/* Ensure modals and overlays work in dark mode */
+.theme-dark .modal,
+.theme-dark .overlay,
+.theme-dark-cards .modal,
+.theme-dark-cards .overlay {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  color: #f1f5f9 !important;
+}
+
+/* Global Styles */
+* {
+  box-sizing: border-box;
+}
+
+/* ===== GLOBAL MINIMAL SCROLLBAR STYLES ===== */
+/* Apply minimal scrollbar to all scrollable elements */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+/* Modal Scrolling Improvements */
+.modal-scrollable {
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain; /* Prevent scroll chaining to body */
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+.modal-scrollable::-webkit-scrollbar {
+  width: 4px;
+}
+
+.modal-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-scrollable::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 10px;
+}
+
+.modal-scrollable::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+/* Prevent scroll chaining on all modal elements */
+.fixed[class*="z-"], 
+[class*="fixed"][class*="inset"],
+[class*="modal"] {
+  overscroll-behavior: contain;
+}
+
+/* When body is locked, ensure modals can still scroll */
+body[style*="position: fixed"] .modal-scrollable,
+body[style*="position: fixed"] [class*="overflow-y-auto"] {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Ensure modals work well on mobile */
+@media (max-width: 768px) {
+  .modal-scrollable {
+    -webkit-overflow-scrolling: touch;
+    max-height: 80vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  
+  /* Mobile-specific body adjustments */
+  body {
+    width: 100vw;
+    overflow-x: hidden;
+    position: relative;
+  }
+  
+  /* Prevent bounce scrolling on locked body */
+  body[style*="position: fixed"] {
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+  
+  /* But allow scrolling within modals */
+  body[style*="position: fixed"] .modal-scrollable,
+  body[style*="position: fixed"] [class*="overflow-y-auto"] {
+    touch-action: pan-y !important;
+    overscroll-behavior: contain !important;
+  }
+  
+  /* Mobile viewport fixes */
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  input, textarea, select, button {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-primary, radial-gradient(ellipse at center, #e0f7fa 0%, #b3e5fc 40%, #039be5 80%, #01579b 100%));
+  color: var(--text-primary, #1e293b);
+  min-height: 100vh;
+  width: 100vw;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+  position: relative;
+  transition: background 0.5s ease, color 0.3s ease;
+}
+
+/* Dark Theme Background Wallpapers */
+.theme-dark {
+  background: radial-gradient(ellipse at center, #0f172a 0%, #1e293b 30%, #334155 60%, #1e293b 100%);
+}
+
+.theme-dark-cards {
+  background: radial-gradient(ellipse at center, #020617 0%, #0f172a 30%, #1e293b 60%, #0f172a 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 50% 20%, 
+    rgba(255, 255, 255, 0.3) 0%, 
+    rgba(255, 255, 255, 0.1) 30%, 
+    transparent 70%
+  );
+  pointer-events: none;
+  animation: highlight-pulse 4s ease-in-out infinite;
+}
+
+/* Dark theme overlay with subtle highlights */
+.theme-dark body::before,
+.theme-dark-cards body::before {
+  background: radial-gradient(circle at 50% 20%, 
+    rgba(59, 130, 246, 0.1) 0%, 
+    rgba(99, 102, 241, 0.05) 30%, 
+    transparent 70%
+  );
+}
+
+/* Add subtle animated stars/particles for dark mode */
+.theme-dark::after,
+.theme-dark-cards::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: 
+    radial-gradient(2px 2px at 20% 30%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(2px 2px at 60% 70%, rgba(255, 255, 255, 0.2), transparent),
+    radial-gradient(1px 1px at 50% 50%, rgba(255, 255, 255, 0.25), transparent),
+    radial-gradient(1px 1px at 80% 10%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(2px 2px at 90% 60%, rgba(255, 255, 255, 0.15), transparent),
+    radial-gradient(1px 1px at 33% 80%, rgba(255, 255, 255, 0.2), transparent),
+    radial-gradient(1px 1px at 15% 90%, rgba(255, 255, 255, 0.25), transparent);
+  background-size: 200% 200%;
+  pointer-events: none;
+  opacity: 0.4;
+  animation: drift 20s ease-in-out infinite;
+  z-index: 1;
+}
+
+@keyframes drift {
+  0%, 100% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Glass Effect */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Animations */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 215, 0, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.8); }
+}
+
+@keyframes confetti {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+@keyframes progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes highlight-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+  20%, 40%, 60%, 80% { transform: translateX(10px); }
+}
+
+/* Animation Classes */
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 2s ease-in-out infinite;
+}
+
+.animate-glow {
+  animation: glow 2s ease-in-out infinite;
+}
+
+.animate-confetti {
+  animation: confetti 3s ease-out forwards;
+}
+
+.animate-progress {
+  animation: progress 2s ease-out;
+}
+
+.animate-gradient-shift {
+  animation: gradient-shift 15s ease infinite;
+}
+
+.animate-highlight-pulse {
+  animation: highlight-pulse 4s ease-in-out infinite;
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Hide scrollbars for horizontal swipe */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Safari and Chrome */
+}
+
+/* Minimal Sidebar Scrollbar */
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #d1d5db;
+}
+
+/* Firefox scrollbar styles for sidebar */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e7eb transparent;
+}
+
+/* Dark Mode - Slightly lighter for visibility */
+.theme-dark .sidebar-scrollbar::-webkit-scrollbar-thumb,
+.theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+.theme-dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover,
+.theme-dark-cards .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+.theme-dark .sidebar-scrollbar,
+.theme-dark-cards .sidebar-scrollbar {
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+/* Custom Order List Scrollbar */
+.order-list-scroll {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af transparent;
+}
+
+.order-list-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.order-list-scroll::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 10px;
+}
+
+.order-list-scroll::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.order-list-scroll::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Custom Expanded Order Content Scrollbar */
+.order-expanded-scroll {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #60a5fa #dbeafe;
+}
+
+.order-expanded-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.order-expanded-scroll::-webkit-scrollbar-track {
+  background: #dbeafe;
+  border-radius: 10px;
+}
+
+.order-expanded-scroll::-webkit-scrollbar-thumb {
+  background: #60a5fa;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.order-expanded-scroll::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+
+/* Order Items Grid Scrollbar */
+.order-items-scroll {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #e5e7eb;
+}
+
+.order-items-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.order-items-scroll::-webkit-scrollbar-track {
+  background: #e5e7eb;
+  border-radius: 10px;
+}
+
+.order-items-scroll::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.order-items-scroll::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
+/* Glassy Assign Button Styles */
+.glassy-assign-btn {
+  background: rgba(255, 255, 255, 0.05) !important;
+  backdrop-filter: blur(10px) saturate(180%);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.08);
+  color: #2563eb !important; /* blue-600 */
+  transition: background 0.3s, color 0.3s, box-shadow 0.3s;
+}
+.glassy-assign-btn:hover {
+  background: rgba(37, 99, 235, 0.12) !important; /* blue-600 with more opacity */
+  color: #fff !important;
+  box-shadow: 0 6px 32px 0 rgba(37,99,235,0.12);
+}
+
+/* Sidebar hover effect for desktop */
+@media (min-width: 768px) {
+  .sidebar-hover {
+    cursor: pointer;
+    box-shadow: 0 8px 32px 0 rgba(37,99,235,0.10);
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s;
+  }
+  .sidebar-hover:hover {
+    box-shadow: 0 12px 48px 0 rgba(37,99,235,0.16);
+  }
+}
+
+/* ===== BACKGROUND WALLPAPER CODES ===== */
+
+/* 1. DEFAULT MAIN BACKGROUND */
+body {
+  background: radial-gradient(ellipse at center, #e0f7fa 0%, #b3e5fc 40%, #039be5 80%, #01579b 100%);
+  min-height: 100vh;
+  width: 100vw;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+/* 2. S-CURVE RED-BLUE WALLPAPER */
+.s-curve-red-blue {
+  background: 
+    radial-gradient(ellipse at 20% 80%, #ff4757 0%, #ff6b6b 25%, #ee5a52 50%, #c44569 75%, #2f3542 100%),
+    radial-gradient(ellipse at 80% 20%, #00d2d3 0%, #00b894 25%, #00a8ff 50%, #0984e3 75%, #0652dd 100%);
+  background-blend-mode: soft-light;
+}
+
+/* 3. WARM GRADIENT WALLPAPER */
+.warm-gradient {
+  background: linear-gradient(135deg, 
+    #ff6b35 0%, 
+    #f7931e 15%, 
+    #ffb3ba 30%, 
+    #87ceeb 50%, 
+    #dda0dd 70%, 
+    #e6e6fa 85%, 
+    #f0f8ff 100%
+  );
+}
+
+/* 4. COOL GRADIENT WALLPAPER */
+.cool-gradient {
+  background: linear-gradient(135deg, 
+    #667eea 0%, 
+    #764ba2 25%, 
+    #f093fb 50%, 
+    #f5576c 75%, 
+    #4facfe 100%
+  );
+}
+
+/* 5. SUNSET WALLPAPER */
+.sunset {
+  background: linear-gradient(135deg, 
+    #ff9a9e 0%, 
+    #fecfef 25%, 
+    #fecfef 50%, 
+    #ffc3a0 75%, 
+    #ffafbd 100%
+  );
+}
+
+/* 6. OCEAN WALLPAPER */
+.ocean {
+  background: linear-gradient(135deg, 
+    #667db6 0%, 
+    #0082c8 25%, 
+    #0082c8 50%, 
+    #667db6 75%, 
+    #0082c8 100%
+  );
+}
+
+/* 7. FOREST WALLPAPER */
+.forest {
+  background: linear-gradient(135deg, 
+    #134e5e 0%, 
+    #71b280 25%, 
+    #71b280 50%, 
+    #134e5e 75%, 
+    #71b280 100%
+  );
+}
+
+/* 8. ANIMATED GRADIENT WALLPAPER */
+.animated-gradient {
+  background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+  background-size: 400% 400%;
+  animation: gradient 15s ease infinite;
+}
+
+@keyframes gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* 9. GLASS MORPHISM OVERLAY */
+.glass-overlay {
+  background: 
+    radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 40% 60%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
+}
+
+/* 10. DARK MODE WALLPAPER */
+.dark-mode {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+}
+
+/* 11. POS PAGE WALLPAPER */
+.pos-wallpaper {
+  background-color: #668CB5;
+}
+
+/* 12. DATABASE SETUP WALLPAPER */
+.database-wallpaper {
+  background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+}
+
+/* 13. ADMIN DASHBOARD WALLPAPER */
+.admin-wallpaper {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #4facfe 100%);
+}
+
+/* 14. MOBILE OPTIMIZED WALLPAPER */
+@media (max-width: 768px) {
+  .mobile-wallpaper {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  }
+}
+
+/* ===== DASHBOARD RESPONSIVE COMPONENTS ===== */
+
+/* Dashboard Cards - Responsive Grid Layout */
+.dashboard-cards {
+  display: grid;
+  gap: 16px;
+}
+
+@media (max-width: 767px) {
+  .dashboard-cards {
+    grid-template-columns: 1fr !important;
+    gap: 12px;
+  }
+  .dashboard-card {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .dashboard-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Quick Actions - Flexbox Responsive Layout */
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+@media (max-width: 767px) {
+  .quick-actions {
+    flex-direction: column !important;
+    gap: 12px !important;
+  }
+}
+
+/* ===== COMPREHENSIVE MOBILE RESPONSIVENESS FIXES ===== */
+
+/* Mobile-first responsive design */
+@media (max-width: 768px) {
+  /* Container adjustments */
+  .container {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+  }
+  
+  /* Grid system adjustments */
+  .grid {
+    gap: 12px;
+  }
+  
+  .grid-cols-1 {
+    grid-template-columns: 1fr;
+  }
+  
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  
+  .grid-cols-3 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  
+  .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  
+  /* Flex adjustments */
+  .flex-wrap {
+    flex-wrap: wrap;
+  }
+  
+  /* Text sizing */
+  .text-xs { font-size: 0.75rem; }
+  .text-sm { font-size: 0.875rem; }
+  .text-base { font-size: 1rem; }
+  .text-lg { font-size: 1.125rem; }
+  .text-xl { font-size: 1.25rem; }
+  .text-2xl { font-size: 1.5rem; }
+  .text-3xl { font-size: 1.875rem; }
+  
+  /* Padding adjustments */
+  .p-1 { padding: 4px; }
+  .p-2 { padding: 8px; }
+  .p-3 { padding: 12px; }
+  .p-4 { padding: 16px; }
+  .p-6 { padding: 24px; }
+  .p-8 { padding: 32px; }
+  
+  /* Margin adjustments */
+  .m-1 { margin: 4px; }
+  .m-2 { margin: 8px; }
+  .m-3 { margin: 12px; }
+  .m-4 { margin: 16px; }
+  .m-6 { margin: 24px; }
+  
+  /* Button adjustments */
+  .btn, button {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 16px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+  
+  /* Input adjustments */
+  input, textarea, select {
+    min-height: 48px;
+    padding: 12px 16px;
+    font-size: 16px;
+    border-radius: 8px;
+  }
+  
+  /* Card adjustments */
+  .card {
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  
+  /* Navigation adjustments */
+  .nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    padding: 8px 0;
+  }
+  
+  /* Modal adjustments */
+  .modal {
+    width: 95vw;
+    max-width: 95vw;
+    margin: 20px auto;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  /* Sidebar adjustments */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: -100%;
+    width: 80vw;
+    height: 100vh;
+    z-index: 1000;
+    transition: left 0.3s ease;
+  }
+  
+  .sidebar.open {
+    left: 0;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .grid-cols-3,
+  .grid-cols-4 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  
+  .p-4 { padding: 12px; }
+  .p-6 { padding: 16px; }
+  .p-8 { padding: 20px; }
+  
+  .text-lg { font-size: 1rem; }
+  .text-xl { font-size: 1.125rem; }
+  .text-2xl { font-size: 1.25rem; }
+  .text-3xl { font-size: 1.5rem; }
+}
+
+/* Landscape mobile adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+  .modal {
+    max-height: 95vh;
+  }
+  
+  .nav {
+    padding: 4px 0;
+  }
+}
+
+/* High DPI displays */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .text-xs { font-size: 0.75rem; }
+  .text-sm { font-size: 0.875rem; }
+  .text-base { font-size: 1rem; }
+}
+
+/* ===== RESPONSIVE SCALING FOR DIFFERENT SCREEN RESOLUTIONS ===== */
+
+/* Scale for 2048x1536 screens to match 3024x1964 appearance */
+/* BUT ONLY for POS pages, not for login/auth pages */
+@media (min-width: 2000px) and (max-width: 2100px) and (min-height: 1500px) and (max-height: 1600px) {
+  /* Only apply scaling to POS pages */
+  body.pos-page {
+    zoom: 1.476; /* Scale entire body */
+    transform-origin: top left;
+  }
+  
+  /* Alternative: use transform scale if zoom doesn't work */
+  #root.pos-page {
+    transform: scale(1.476);
+    transform-origin: top left;
+    width: calc(100% / 1.476);
+    height: calc(100% / 1.476);
+  }
+  
+  /* Prevent scaling on login and auth pages */
+  body.login-page,
+  body.auth-page,
+  .login-page,
+  .auth-page {
+    zoom: 1 !important;
+    transform: none !important;
+  }
+  
+  .login-page #root,
+  .auth-page #root {
+    transform: none !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+/* Medium resolution tablets and displays (2048x1536) */
+@media (min-width: 2000px) and (max-width: 2100px) {
+  /* Scale up UI elements proportionally - BUT ONLY for POS pages */
+  .pos-container,
+  .pos-page,
+  [class*="POS"] {
+    font-size: 1.4em;
+  }
+  
+  /* Scale buttons and inputs - BUT NOT on login/auth pages */
+  .pos-page button, 
+  .pos-page .btn,
+  .pos-container button,
+  .pos-container .btn {
+    font-size: 1.4em;
+    padding: calc(0.5rem * 1.4) calc(1rem * 1.4);
+  }
+  
+  .pos-page input, 
+  .pos-page select, 
+  .pos-page textarea,
+  .pos-container input,
+  .pos-container select,
+  .pos-container textarea {
+    font-size: 1.4em;
+    padding: calc(0.75rem * 1.4) calc(1rem * 1.4);
+  }
+  
+  /* Scale cards and containers - BUT NOT on login/auth pages */
+  .pos-page .card, 
+  .pos-page [class*="card"],
+  .pos-container .card,
+  .pos-container [class*="card"] {
+    font-size: 1.4em;
+  }
+  
+  /* Scale icons - BUT NOT on login/auth pages */
+  .pos-page svg, 
+  .pos-page [class*="icon"],
+  .pos-container svg,
+  .pos-container [class*="icon"] {
+    width: calc(100% * 1.4);
+    height: calc(100% * 1.4);
+  }
+  
+  /* Override scaling for login and auth pages */
+  .login-page,
+  .auth-page,
+  body.login-page,
+  body.auth-page {
+    font-size: 1rem !important;
+  }
+  
+  .login-page button,
+  .login-page .btn,
+  .auth-page button,
+  .auth-page .btn {
+    font-size: 1rem !important;
+    padding: 0.5rem 1rem !important;
+  }
+  
+  .login-page input,
+  .login-page select,
+  .login-page textarea,
+  .auth-page input,
+  .auth-page select,
+  .auth-page textarea {
+    font-size: 1rem !important;
+    padding: 0.75rem 1rem !important;
+  }
+  
+  .login-page svg,
+  .login-page [class*="icon"],
+  .auth-page svg,
+  .auth-page [class*="icon"] {
+    width: auto !important;
+    height: auto !important;
+  }
+}
+
+/* High resolution displays (3024x1964 and similar) */
+@media (min-width: 3000px) {
+  /* Normal sizing for high resolution displays */
+  html {
+    font-size: 100%;
+  }
+}
+
+/* Universal viewport-based scaling */
+@media (min-width: 1920px) {
+  /* Use viewport units for consistent sizing */
+  :root {
+    --scale-factor: calc(100vw / 3024);
+    --base-font-size: calc(16px * var(--scale-factor));
+  }
+  
+  body {
+    font-size: var(--base-font-size);
+  }
+}
+
+/* TopBar Styles */
+.topbar {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.8);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.topbar-dropdown {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+/* TopBar animations */
+.topbar-enter {
+  animation: topbar-slide-down 0.3s ease-out;
+}
+
+@keyframes topbar-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Notification badge animation */
+.notification-badge {
+  animation: pulse-notification 2s infinite;
+}
+
+@keyframes pulse-notification {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+/* Inventory Alerts Notification Animations */
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.animate-shrink {
+  animation: shrink 10s linear;
+}
+
+/* ===== SCALING OVERRIDE UTILITIES ===== */
+
+/* Completely disable scaling for specific elements */
+.no-scale,
+.no-scale * {
+  zoom: 1 !important;
+  transform: none !important;
+  font-size: 1rem !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+/* Disable scaling for login and auth pages */
+.login-page,
+.auth-page,
+.login-page *,
+.auth-page * {
+  zoom: 1 !important;
+  transform: none !important;
+}
+
+/* Specific overrides for icons in login/auth pages */
+.login-page svg,
+.auth-page svg,
+.login-page [class*="icon"],
+.auth-page [class*="icon"] {
+  width: 1em !important;
+  height: 1em !important;
+  max-width: 24px !important;
+  max-height: 24px !important;
+}
+
+/* ============================================
+   CUSTOM LOGIN PAGE ANIMATIONS
+   ============================================ */
+
+/* Blob Animation - Floating Circles */
+@keyframes blob {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* Fade In Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.8s ease-out forwards;
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.8s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
+
+/* Gradient Animation for Text */
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient-shift 3s ease infinite;
+}
+
+/* Pulse Glow Effect */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(255, 255, 255, 0.4);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Shake Animation for Error */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s;
+}
+
+/* Floating Animation */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Spin Slow */
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+

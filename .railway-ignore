@@ -1,0 +1,55 @@
+# Railway Ignore File
+# Files and directories to ignore during Railway deployment
+
+# Node modules (we're using Docker, don't need these)
+node_modules/
+package-lock.json
+
+# Development files
+.env
+.env.*
+*.log
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+
+# Test files
+test-*
+*test.html
+*test.mjs
+comprehensive-test.mjs
+
+# Build artifacts
+dist/
+build/
+*.map
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Scripts (except what we need)
+*.sh
+!start-postgrest.sh
+
+# Documentation
+docs/
+migrations/
+
+# Android
+android/
+
+# Other
+dukani_logos/
+dukani_pro_logos/
+test-results/
+test-screenshots/
+

@@ -1,0 +1,14 @@
+# Prevent redirecting asset files - serve them directly with correct MIME types
+/assets/*.js        /assets/:splat       200!
+/assets/*.mjs       /assets/:splat       200!
+/assets/*.css       /assets/:splat       200!
+/assets/*           /assets/:splat       200!
+
+# Prevent redirecting favicon and other static files
+/*.svg  /:splat  200!
+/*.png  /:splat  200!
+/*.ico  /:splat  200!
+
+# SPA fallback for all routes (only for non-asset files)
+/*       /index.html       200
+

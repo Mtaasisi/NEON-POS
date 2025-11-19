@@ -1,0 +1,8 @@
+// Admin Feature Module
+export * from './pages/AdminSettingsPage';
+export * from './pages/DatabaseSetupPage';
+
+export * from './components/AdminFeedbackModal';
+export * from './components/AdminGoalsManagement';
+export * from './components/UserGoalsManagement';
+export * from './components/UserRoleDebug';
