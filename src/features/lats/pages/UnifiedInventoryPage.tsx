@@ -18,7 +18,7 @@ import CategoryFormModal from '../components/inventory/CategoryFormModal';
 import ProductExcelImportModal from '../components/ProductExcelImportModal';
 
 import SupplierForm from '../components/inventory/SupplierForm';
-import EditProductModal from '../components/inventory/EditProductModal';
+import EditProductModal from '../components/product/EditProductModal';
 import { useProductModals } from '../hooks/useProductModals';
 import AddProductModal from '../components/product/AddProductModal';
 
@@ -1225,7 +1225,7 @@ const UnifiedInventoryPage: React.FC = () => {
           isOpen={productModals.showEditModal}
           onClose={productModals.closeEditModal}
           productId={productModals.editingProductId || ''}
-          onProductUpdated={() => {
+          onSuccess={() => {
             toast.success('Product updated successfully!');
             loadProducts({ page: 1, limit: 50 });
           }}

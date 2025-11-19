@@ -15,12 +15,12 @@ import { ErrorBoundary } from '../features/shared/components/ErrorBoundary';
 
 import ActivityCounter from '../features/shared/components/ui/ActivityCounter';
 import {
-  LayoutDashboard, 
-  LogOut, 
-  Smartphone, 
+  LayoutDashboard,
+  LogOut,
+  Smartphone,
   Settings,
   Users,
-  User, 
+  User,
   ChevronRight as ChevronRightIcon,
   ChevronDown,
   ChevronUp,
@@ -45,7 +45,8 @@ import {
   ClipboardList,
   MessageSquare,
   Shield,
-  Globe
+  Globe,
+  FileText
 } from 'lucide-react';
 
 import GlassButton from '../features/shared/components/ui/GlassButton';
@@ -305,6 +306,13 @@ const AppLayout: React.FC = () => {
         path: '/lats/unified-inventory',
         label: 'Inventory',
         icon: <Package size={20} strokeWidth={1.5} />,
+        roles: ['admin'],
+        count: 0
+      },
+      {
+        path: '/lats/products/edit-modal',
+        label: 'Edit Product',
+        icon: <FileText size={20} strokeWidth={1.5} />,
         roles: ['admin'],
         count: 0
       },

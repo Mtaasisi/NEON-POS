@@ -163,6 +163,7 @@ const ShippedItemsPage = lazy(() => import('./features/lats/pages/ShippedItemsPa
 const UnifiedInventoryPage = lazy(() => import('./features/lats/pages/UnifiedInventoryPage'));
 const AddProductPage = lazy(() => import('./features/lats/pages/AddProductPage'));
 const EditProductPage = lazy(() => import('./features/lats/pages/EditProductPage'));
+const EditProductModalPage = lazy(() => import('./features/lats/pages/EditProductModalPage'));
 const BulkImportPage = lazy(() => import('./features/lats/pages/BulkImportPage'));
 
 const POSPage = createSafeLazyComponent(() => import('./features/lats/pages/POSPageOptimized'), 'POSPage');
@@ -824,6 +825,26 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
               <RoleProtectedRoute allowedRoles={['admin']}>
                 <Suspense fallback={<DynamicPageLoader />}>
                   <EditProductPage />
+                </Suspense>
+              </RoleProtectedRoute>
+            </UrlValidatedRoute>
+          } />
+
+          {/* Edit Product Modal Route */}
+          <Route path="/lats/products/edit-modal" element={
+            <UrlValidatedRoute enableImageUrlValidation={true} enableUrlLogging={false}>
+              <RoleProtectedRoute allowedRoles={['admin']}>
+                <Suspense fallback={<DynamicPageLoader />}>
+                  <EditProductModalPage />
+                </Suspense>
+              </RoleProtectedRoute>
+            </UrlValidatedRoute>
+          } />
+          <Route path="/lats/products/:productId/edit-modal" element={
+            <UrlValidatedRoute enableImageUrlValidation={true} enableUrlLogging={false}>
+              <RoleProtectedRoute allowedRoles={['admin']}>
+                <Suspense fallback={<DynamicPageLoader />}>
+                  <EditProductModalPage />
                 </Suspense>
               </RoleProtectedRoute>
             </UrlValidatedRoute>

@@ -1,6 +1,6 @@
 import { supabase } from '../../../lib/supabaseClient';
 import { getAccountBalanceBeforeStorage, validateBalanceBeforeTransaction, FinanceAccount } from '../../../lib/financeAccountService';
-import { addBranchFilter } from '../../../lib/branchAwareApi';
+import { addBranchFilter, getCurrentBranchId } from '../../../lib/branchAwareApi';
 
 export interface PurchaseOrderPayment {
   id: string;
@@ -433,10 +433,10 @@ class PurchaseOrderPaymentService {
       try {
         console.log(`📊 Creating account transaction for PO payment...`);
         
-        // Get PO details including currency and exchange rate
+        // Get PO details including currency, exchange rate, and branch_id
         const { data: poData } = await supabase
           .from('lats_purchase_orders')
-          .select('po_number, supplier_id, currency, exchange_rate, base_currency, total_amount, total_amount_base_currency')
+          .select('po_number, supplier_id, currency, exchange_rate, base_currency, total_amount, total_amount_base_currency, branch_id')
           .eq('id', data.purchaseOrderId)
           .single();
         
@@ -451,6 +451,19 @@ class PurchaseOrderPaymentService {
           if (supplierData) {
             supplierName = supplierData.name;
           }
+        }
+        
+        // Get branch_id from PO, payment account, or current branch (in that order)
+        let branchId: string | null = poData?.branch_id || null;
+        
+        // If PO doesn't have branch_id, try to get from payment account
+        if (!branchId) {
+          branchId = paymentAccount.branch_id || null;
+        }
+        
+        // If still no branch_id, get from current branch selection
+        if (!branchId) {
+          branchId = getCurrentBranchId();
         }
         
         const poReference = poData?.po_number || `PO-${data.purchaseOrderId.substring(0, 8)}`;
@@ -478,7 +491,7 @@ class PurchaseOrderPaymentService {
           console.log(`💰 Same currency transaction - Payment: ${expenseAmountBaseCurrency} ${poBaseCurrency}`);
         }
         
-        // Create account transaction record with proper currency information
+        // Create account transaction record with proper currency information and branch_id
         const { error: transactionError } = await supabase
           .from('account_transactions')
           .insert({
@@ -491,6 +504,7 @@ class PurchaseOrderPaymentService {
             reference_number: data.reference || `PO-PAY-${paymentRecord.id.substring(0, 8)}`,
             related_entity_type: 'purchase_order_payment',
             related_entity_id: paymentRecord.id,
+            branch_id: branchId, // ✅ ADDED: Include branch_id for proper expense tracking and branch isolation
             metadata: {
               purchase_order_id: data.purchaseOrderId,
               po_reference: poReference,
@@ -515,7 +529,7 @@ class PurchaseOrderPaymentService {
         if (transactionError) {
           console.warn('⚠️ Failed to create account transaction:', transactionError);
         } else {
-          console.log(`✅ Account transaction created - Spending tracked in base currency: ${expenseAmountBaseCurrency} ${poBaseCurrency}`);
+          console.log(`✅ Account transaction created with branch_id ${branchId} - Spending tracked in base currency: ${expenseAmountBaseCurrency} ${poBaseCurrency}`);
         }
       } catch (transErr) {
         console.warn('⚠️ Error creating account transaction:', transErr);

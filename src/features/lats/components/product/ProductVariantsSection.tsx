@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { Layers, Plus, Trash2, Package, Move, Check } from 'lucide-react';
+import { Layers, Plus, Trash2, Package, Move, Check, DollarSign } from 'lucide-react';
 import { specificationCategories, getSpecificationsByCategory } from '../../../../data/specificationCategories';
 
 interface ProductVariant {
   name: string;
   sku: string;
+  costPrice: number;
+  price: number;
+  stockQuantity: number;
+  minStockLevel: number;
   attributes?: Record<string, any>;
 }
 
@@ -40,10 +44,14 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
   const addVariant = () => {
     // Get the last variant to duplicate its specifications
     const lastVariant = variants.length > 0 ? variants[variants.length - 1] : null;
-    
+
     const newVariant: ProductVariant = {
       name: `Variant ${variants.length + 1}`,
       sku: generateVariantSKU(variants.length + 1),
+      costPrice: lastVariant?.costPrice || 0,
+      price: lastVariant?.price || 0,
+      stockQuantity: 0,
+      minStockLevel: 2,
       // Duplicate the previous variant's attributes/specifications
       attributes: lastVariant?.attributes ? { ...lastVariant.attributes } : {}
     };
@@ -312,7 +320,118 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                   </div>
                 </div>
 
+                {/* SKU Field - Hidden/Automatic */}
+                {/* <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">SKU</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={variant.sku}
+                      onChange={(e) => updateVariant(index, 'sku', e.target.value)}
+                      className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-purple-500 text-gray-900 font-mono"
+                      placeholder="Enter variant SKU"
+                      autoComplete="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <svg className="absolute left-4 top-1/2 -translate-y-1/2 text-purple-600" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
+                  </div>
+                </div> */}
 
+                {/* Pricing and Stock Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                  {/* Cost Price */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={variant.costPrice || ''}
+                        onChange={(e) => updateVariant(index, 'costPrice', parseFloat(e.target.value) || 0)}
+                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium"
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                      />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 font-bold">$</span>
+                    </div>
+                  </div>
+
+                  {/* Selling Price */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Selling Price</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={variant.price || ''}
+                        onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value) || 0)}
+                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium"
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                      />
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 font-bold">$</span>
+                    </div>
+                  </div>
+
+                  {/* Stock Quantity */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={variant.stockQuantity || ''}
+                        onChange={(e) => updateVariant(index, 'stockQuantity', Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600" size={16} />
+                    </div>
+                  </div>
+
+                  {/* Minimum Stock Level */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Min Stock Level</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={variant.minStockLevel || ''}
+                        onChange={(e) => updateVariant(index, 'minStockLevel', Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Profit Display for Variant */}
+                {variant.price > 0 && variant.costPrice > 0 && (
+                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-xs font-medium text-green-600 mb-1">Cost</p>
+                        <p className="text-sm font-bold text-green-700">${variant.costPrice.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-green-600 mb-1">Selling</p>
+                        <p className="text-sm font-bold text-green-700">${variant.price.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-green-600 mb-1">Profit</p>
+                        <p className={`text-sm font-bold ${variant.price - variant.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          ${(variant.price - variant.costPrice).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Specifications Button */}
                 <div className="mt-4">

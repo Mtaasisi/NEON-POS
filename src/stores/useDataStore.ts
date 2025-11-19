@@ -358,7 +358,6 @@ export const useDataStore = create<DataState>()(
         attendanceRecords: [],
         purchaseOrders: [],
         stockMovements: [],
-        sales: [],
 
         // Initial cache metadata
         cache: {
