@@ -48,6 +48,7 @@ interface ProductVariant {
   price: number;
   stockQuantity: number;
   minStockLevel: number;
+  specification?: string;
   attributes?: Record<string, any>;
 }
 
@@ -95,18 +96,37 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
   const [selectedProductSpecCategory, setSelectedProductSpecCategory] = useState<string>('laptop');
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    sku: string;
+    categoryId: string;
+    condition: string;
+    description: string;
+    specification: string;
+    price: number;
+    costPrice: number;
+    stockQuantity: number;
+    minStockLevel: number;
+    storageRoomId: string;
+    shelfId: string;
+    metadata: Record<string, any>;
+    variants: ProductVariant[];
+  }>({
     name: '',
-    sku: generateSKU(),
+    sku: '',
+    categoryId: '',  // ✅ FIXED: Changed from null to empty string to match schema
+
+    condition: 'new',  // ✅ FIXED: Changed from empty string to valid enum value 'new'
     description: '',
-    categoryId: '',
+    specification: '', // Ensure this is always a string
+    price: 0,
     costPrice: 0,
-    sellingPrice: 0,
     stockQuantity: 0,
-    minStockLevel: 0,
-    condition: 'new',
-    specification: '',
-    isActive: true
+    minStockLevel: 2, // Set default min stock level to 2 pcs like AddProductPage
+    storageRoomId: '',
+    shelfId: '',
+    metadata: {},
+    variants: []
   });
 
   // Helper function to format numbers with comma separators
@@ -211,29 +231,94 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     }
   };
 
-  // Variant management functions
-  const handleUseVariantsToggle = (enabled: boolean) => {
-    setUseVariants(enabled);
+  // Function to create a variant from current form data
+  const createVariantFromFormData = (): ProductVariant => {
+    return {
+      name: 'Variant 1',
+      sku: `${formData.sku}-V01`,
+      costPrice: formData.costPrice,
+      price: formData.price,
+      stockQuantity: formData.stockQuantity,
+      minStockLevel: formData.minStockLevel,
+      specification: formData.specification,
+      attributes: {
+        specification: formData.specification || null
+      }
+    };
+  };
 
+  // Handle variants toggle - automatically create variant from form data
+  const handleUseVariantsToggle = (enabled: boolean) => {
+    console.log('🔄 [DEBUG] handleUseVariantsToggle called with enabled:', enabled);
+    console.log('🔄 [DEBUG] Current variants count:', variants.length);
+    
+    setUseVariants(enabled);
+    
     if (enabled && variants.length === 0) {
+      console.log('📦 [DEBUG] Creating variant from form data...');
       // Create a variant from current form data
-      const autoVariant: ProductVariant = {
-        name: 'Variant 1',
-        sku: `${generateSKU()}-V01`,
-        costPrice: formData.costPrice,
-        price: formData.sellingPrice,
-        stockQuantity: formData.stockQuantity,
-        minStockLevel: formData.minStockLevel,
-        attributes: {}
-      };
+      const autoVariant = createVariantFromFormData();
+      console.log('📦 [DEBUG] Auto-created variant:', autoVariant);
       setVariants([autoVariant]);
       setShowVariants(true);
     } else if (!enabled) {
+      console.log('📦 [DEBUG] Clearing variants...');
       // Clear variants when disabling
       setVariants([]);
       setShowVariants(false);
     }
+    
+    console.log('🔄 [DEBUG] useVariants toggled. New state:', enabled);
   };
+
+  // Update the first variant when form data changes (if variants are enabled)
+  // Use ref to track if this is an initial load to prevent update loops
+  const isInitialLoadRef = React.useRef(true);
+  const prevFormDataRef = React.useRef({
+    costPrice: formData.costPrice,
+    price: formData.price,
+    stockQuantity: formData.stockQuantity,
+    minStockLevel: formData.minStockLevel,
+    specification: formData.specification
+  });
+
+  useEffect(() => {
+    // Skip on initial load
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      prevFormDataRef.current = {
+        costPrice: formData.costPrice,
+        price: formData.price,
+        stockQuantity: formData.stockQuantity,
+        minStockLevel: formData.minStockLevel,
+        specification: formData.specification
+      };
+      return;
+    }
+
+    // Only update if values actually changed
+    const hasChanged =
+      prevFormDataRef.current.costPrice !== formData.costPrice ||
+      prevFormDataRef.current.price !== formData.price ||
+      prevFormDataRef.current.stockQuantity !== formData.stockQuantity ||
+      prevFormDataRef.current.minStockLevel !== formData.minStockLevel ||
+      prevFormDataRef.current.specification !== formData.specification;
+
+    if (useVariants && variants.length > 0 && hasChanged) {
+      const updatedVariant = createVariantFromFormData();
+      setVariants(prev => prev.map((variant, index) =>
+        index === 0 ? { ...variant, ...updatedVariant } : variant
+      ));
+
+      prevFormDataRef.current = {
+        costPrice: formData.costPrice,
+        price: formData.price,
+        stockQuantity: formData.stockQuantity,
+        minStockLevel: formData.minStockLevel,
+        specification: formData.specification
+      };
+    }
+  }, [formData.costPrice, formData.price, formData.stockQuantity, formData.minStockLevel, formData.specification, useVariants, variants.length]);
 
   const updateVariant = (index: number, field: keyof ProductVariant, value: any) => {
     setVariants(prevVariants =>
@@ -246,9 +331,9 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
   const addVariant = () => {
     const newVariant: ProductVariant = {
       name: `Variant ${variants.length + 1}`,
-      sku: `${generateSKU()}-V${(variants.length + 1).toString().padStart(2, '0')}`,
+      sku: `${formData.sku}-V${(variants.length + 1).toString().padStart(2, '0')}`,
       costPrice: formData.costPrice,
-      price: formData.sellingPrice,
+      price: formData.price,
       stockQuantity: 0,
       minStockLevel: 0,
       specification: '',
@@ -316,12 +401,13 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
       console.log('✅ [EditProductModal] Product loaded successfully:', productOnly.name);
 
-      // Load variants separately
-      console.log('📥 [EditProductModal] Fetching variants from database...');
+      // Load variants separately - ONLY parent variants (exclude child IMEI variants)
+      console.log('📥 [EditProductModal] Fetching parent variants from database...');
       const { data: variants, error: variantsError } = await supabase!
         .from('lats_product_variants')
         .select('*')
-        .eq('product_id', productId!);
+        .eq('product_id', productId!)
+        .is('parent_variant_id', null); // ✅ FIX: Only load parent variants, exclude children
 
       console.log('📊 [EditProductModal] Variants query result:', { variants, variantsError });
 
@@ -329,10 +415,42 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         console.warn('⚠️ [EditProductModal] Could not load variants:', variantsError);
         console.warn('⚠️ [EditProductModal] Variants error code:', variantsError.code);
         // Continue without variants
-        product = productOnly ? { ...productOnly, variants: [] } : null;
+        product = productOnly ? { ...productOnly, variants: [] as ProductVariant[] } : null;
       } else {
-        console.log('✅ [EditProductModal] Loaded variants successfully. Count:', variants?.length || 0);
-        product = productOnly ? { ...productOnly, variants: variants || [] } : null;
+        console.log('✅ [EditProductModal] Loaded parent variants successfully. Count:', variants?.length || 0);
+        
+        // For each parent variant, calculate stock from children if it's a parent variant
+        const variantsWithStock = await Promise.all(
+          (variants || []).map(async (variant: any) => {
+            let actualStock = variant.quantity || 0;
+            
+            // If this is a parent variant with children, recalculate stock from children
+            if (variant.is_parent || variant.variant_type === 'parent') {
+              try {
+                const { data: children, error: childError } = await supabase!
+                  .from('lats_product_variants')
+                  .select('quantity, is_active')
+                  .eq('parent_variant_id', variant.id)
+                  .eq('variant_type', 'imei_child')
+                  .eq('is_active', true);
+                
+                if (!childError && children) {
+                  actualStock = children.reduce((sum: number, child: any) => sum + (child.quantity || 0), 0);
+                  console.log(`📦 [EditProductModal] Parent variant "${variant.variant_name || variant.name}" has ${children.length} children, total stock: ${actualStock}`);
+                }
+              } catch (e) {
+                console.warn('⚠️ [EditProductModal] Could not calculate stock from children:', e);
+              }
+            }
+            
+            return {
+              ...variant,
+              quantity: actualStock // Use calculated stock
+            };
+          })
+        );
+        
+        product = productOnly ? { ...productOnly, variants: variantsWithStock || ([] as ProductVariant[]) } : null;
       }
 
       if (product) {
@@ -347,14 +465,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
         const processedFormData = {
           name: product.name || '',
-          sku: product.sku || product.barcode || generateSKU(),
           description: product.description || '',
-          categoryId: product.category_id || '',
-          costPrice: product.cost_price || 0,
-          sellingPrice: product.selling_price || 0,
-          stockQuantity: product.stock_quantity || 0,
-          minStockLevel: product.min_stock_level || 0,
-          condition: product.condition || 'new',
           specification: (() => {
             try {
               if (product.specification) {
@@ -374,7 +485,19 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               return '';
             }
           })(),
-          isActive: product.is_active !== undefined ? product.is_active : true
+          sku: product.sku || product.barcode || generateSKU(),
+          categoryId: product.category_id || '',  // ✅ FIXED: Use empty string instead of null
+
+          condition: product.condition || 'new',  // ✅ FIXED: Default to 'new' instead of empty string
+          
+          price: product.selling_price || 0,
+          costPrice: product.cost_price || 0,
+          stockQuantity: product.stock_quantity || 0,
+          minStockLevel: product.min_stock_level || 0,
+          storageRoomId: product.storage_room_id || '',
+          shelfId: product.shelf_id || '',
+          metadata: product.attributes || {},
+          variants: [] as ProductVariant[]
         };
 
         console.log('📝 [EditProductModal] Processed form data:', processedFormData);
@@ -443,14 +566,15 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
             console.log(`📦 [EditProductModal] Variant ${index + 1} selected name: "${variantName}"`);
 
             return {
-              id: variant.id,
-              name: variantName,  // Now matches getVariantDisplayName priority
+              id: variant.id, // ✅ Include variant ID for tracking existing variants
+              name: variantName,  // ✅ FIXED: Now matches getVariantDisplayName priority
               sku: variant.sku || '',
               costPrice: variant.cost_price || 0,
               price: variant.selling_price || 0,
               stockQuantity: variant.quantity || 0,
               minStockLevel: variant.min_quantity || 0,
-              attributes: variant.attributes || variant.variant_attributes || {}  // Prioritize 'attributes'
+              specification: variant.attributes?.specification || variant.variant_attributes?.specification || '',  // 🔧 FIX: Prioritize 'attributes'
+              attributes: variant.attributes || variant.variant_attributes || {}  // 🔧 FIX: Prioritize 'attributes'
             };
           });
 
@@ -522,8 +646,8 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
     // Only validate product-level pricing/stock when NOT using variants
     if (!useVariants) {
-      if (formData.sellingPrice < 0) {
-        newErrors.sellingPrice = 'Selling price cannot be negative';
+      if (formData.price < 0) {
+        newErrors.price = 'Price cannot be negative';
       }
 
       if (formData.costPrice < 0) {
@@ -579,12 +703,12 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         categoryId: formData.categoryId,
         condition: formData.condition,
         costPrice: formData.costPrice,
-        price: formData.sellingPrice,
-        sellingPrice: formData.sellingPrice,
+        price: formData.price,
+        selling_price: formData.price,
         stockQuantity: formData.stockQuantity,
         minStockLevel: formData.minStockLevel,
         specification: formData.specification.trim() || null,
-        isActive: formData.isActive
+        isActive: true
       };
 
       // Include variants if enabled
@@ -594,7 +718,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
           sku: variant.sku,
           name: variant.name,
           costPrice: variant.costPrice,
-          sellingPrice: variant.price,
+          selling_price: variant.price,
           quantity: variant.stockQuantity,
           minStockLevel: variant.minStockLevel,
           attributes: variant.attributes || {}
@@ -645,21 +769,13 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                 {isLoadingProduct ? 'Loading Product...' : 'Edit Product'}
               </h3>
 
-              {/* Status Indicator */}
+              {/* Status Indicator - All Products Are Automatically Active */}
               <div className="flex items-center gap-4">
                 {productData && (
-                  <div className={`flex items-center gap-2 px-4 py-2 rounded-lg border ${
-                    formData.isActive
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-red-50 border-red-200'
-                  }`}>
-                    <div className={`w-3 h-3 rounded-full ${
-                      formData.isActive ? 'bg-green-500' : 'bg-red-500'
-                    }`} />
-                    <span className={`text-sm font-bold ${
-                      formData.isActive ? 'text-green-700' : 'text-red-700'
-                    }`}>
-                      {formData.isActive ? 'Active' : 'Inactive'}
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-green-50 border-green-200">
+                    <div className="w-3 h-3 rounded-full bg-green-500" />
+                    <span className="text-sm font-bold text-green-700">
+                      Active (Automatic)
                     </span>
                   </div>
                 )}
@@ -778,20 +894,20 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                     </label>
                     <input
                       type="text"
-                      value={formatPrice(formData.sellingPrice)}
+                      value={formatPrice(formData.price)}
                       onChange={(e) => {
                         const value = e.target.value.replace(/,/g, '');
                         const numValue = parseFloat(value) || 0;
-                        setFormData(prev => ({ ...prev, sellingPrice: numValue }));
+                        setFormData(prev => ({ ...prev, price: numValue }));
                       }}
                       className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 text-gray-900 font-bold text-lg ${
-                        errors.sellingPrice
+                        errors.price
                           ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
                           : 'border-gray-300 focus:border-green-500 focus:ring-green-200'
                       }`}
                       placeholder="0"
                     />
-                    {errors.sellingPrice && <p className="text-red-600 text-sm mt-1">{errors.sellingPrice}</p>}
+                    {errors.price && <p className="text-red-600 text-sm mt-1">{errors.price}</p>}
                   </div>
 
                   <div>
@@ -834,7 +950,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                 </div>
 
                 {/* Profit Calculation Display - Only show when NOT using variants */}
-                {!useVariants && formData.sellingPrice > 0 && formData.costPrice > 0 && (
+                {!useVariants && formData.price > 0 && formData.costPrice > 0 && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                       <div>
@@ -843,40 +959,23 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                       </div>
                       <div>
                         <p className="text-xs font-medium text-blue-600 mb-1">Selling Price</p>
-                        <p className="text-lg font-bold text-blue-700">{formatPrice(formData.sellingPrice)}</p>
+                        <p className="text-lg font-bold text-blue-700">{formatPrice(formData.price)}</p>
                       </div>
                       <div>
                         <p className="text-xs font-medium text-blue-600 mb-1">Profit</p>
-                        <p className={`text-lg font-bold ${formData.sellingPrice - formData.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatPrice(formData.sellingPrice - formData.costPrice)}
+                        <p className={`text-lg font-bold ${formData.price - formData.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatPrice(formData.price - formData.costPrice)}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs font-medium text-blue-600 mb-1">Margin</p>
-                        <p className={`text-lg font-bold ${formData.sellingPrice - formData.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formData.costPrice > 0 ? `${((formData.sellingPrice - formData.costPrice) / formData.costPrice * 100).toFixed(1)}%` : 'N/A'}
+                        <p className={`text-lg font-bold ${formData.price - formData.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formData.costPrice > 0 ? `${((formData.price - formData.costPrice) / formData.costPrice * 100).toFixed(1)}%` : 'N/A'}
                         </p>
                       </div>
                     </div>
                   </div>
                 )}
-                </div>
-              )}
-
-              {/* Show message when variants are enabled */}
-              {useVariants && (
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                      <Package className="w-4 h-4 text-orange-600" />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-orange-800">Pricing & Stock Managed Per Variant</h4>
-                      <p className="text-sm text-orange-700 mt-1">
-                        When using product variants, pricing and stock levels are configured individually for each variant below.
-                      </p>
-                    </div>
-                  </div>
                 </div>
               )}
 
@@ -951,35 +1050,6 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
               </div>
 
 
-              {/* Status Toggle */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-lg font-bold text-gray-900">Product Status</h4>
-                    <p className="text-sm text-gray-600 mt-1">
-                      Control whether this product is active and available for sale
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-sm font-medium ${formData.isActive ? 'text-green-600' : 'text-red-600'}`}>
-                      {formData.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, isActive: !prev.isActive }))}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        formData.isActive ? 'bg-green-600' : 'bg-gray-400'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          formData.isActive ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
-              </div>
             </div>
           ) : (
             <div className="flex items-center justify-center py-12">

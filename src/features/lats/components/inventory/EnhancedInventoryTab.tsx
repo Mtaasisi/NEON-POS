@@ -53,6 +53,7 @@ interface EnhancedInventoryTabProps {
   handleBulkAction: (action: string) => Promise<void>;
   setShowStockAdjustModal: (show: boolean) => void;
   setSelectedProductForHistory: (productId: string | null) => void;
+  onAddProduct?: () => void; // Optional callback to open add product modal
   setShowDeleteConfirmation: (show: boolean) => void;
   toggleProductSelection: (productId: string) => void;
   toggleSelectAll: () => void;
@@ -266,9 +267,13 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
         }))
       };
       
-      // Store in sessionStorage and navigate
+      // Store in sessionStorage and open modal
       sessionStorage.setItem('duplicateProductData', JSON.stringify(duplicateData));
-      navigate('/lats/add-product?duplicate=true');
+      if (onAddProduct) {
+        onAddProduct();
+      } else {
+        navigate('/lats/add-product?duplicate=true');
+      }
       toast.success('Opening duplicate product form with new SKUs...', { duration: 2000 });
     } catch (error) {
       console.error('Failed to duplicate product:', error);
@@ -948,7 +953,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                                   <button
                                     onClick={(e) => { 
                                       e.stopPropagation(); 
-                                      navigate(`/lats/products/${product.id}/edit`);
+                                      productModals.openEditModal(product.id);
                                       setOpenDropdownId(null);
                                     }}
                                     className="w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-blue-50 flex items-center gap-3 transition-all duration-200 group"
@@ -1229,7 +1234,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   }
                 }}
                 onEdit={(product) => {
-                  navigate(`/lats/products/${product.id}/edit`);
+                  productModals.openEditModal(product.id);
                 }}
                 onDelete={(product) => {
                   if (confirm('Are you sure you want to delete this product?')) {
@@ -1257,7 +1262,13 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           <p className="text-gray-600 mb-4">Try adjusting your search or filter criteria</p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <GlassButton
-              onClick={() => navigate('/lats/add-product')}
+              onClick={() => {
+                if (onAddProduct) {
+                  onAddProduct();
+                } else {
+                  navigate('/lats/add-product');
+                }
+              }}
               icon={<Package size={18} />}
             >
               Add Your First Product
@@ -1291,7 +1302,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
           onEdit={(product) => {
             setShowProductDetailModal(false);
             setSelectedProductForDetail(null);
-            navigate(`/lats/products/${product.id}/edit`);
+            productModals.openEditModal(product.id);
           }}
         />
       )}

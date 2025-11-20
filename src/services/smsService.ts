@@ -60,7 +60,8 @@ class SMSService {
   private async initializeService() {
     // Load SMS configuration from integrations
     try {
-      console.log('🔧 Initializing SMS service from integrations...');
+      // Use debug level for initialization message to reduce console noise
+      console.debug('🔧 Initializing SMS service from integrations...');
       
       // Get full integration (not just credentials) to access config
       // Add timeout to prevent blocking app startup
@@ -76,7 +77,7 @@ class SMSService {
       const integration = await Promise.race([integrationPromise, timeoutPromise]);
       
       if (!integration || !integration.is_enabled) {
-        console.warn('⚠️ SMS integration not configured. Please set up SMS in Admin Settings → Integrations');
+        console.debug('ℹ️ SMS integration not configured. SMS features will be disabled until configured in Admin Settings → Integrations');
         this.initialized = true;
         return;
       }
@@ -88,16 +89,15 @@ class SMSService {
       // Set API URL from config field (not credentials)
       this.apiUrl = integration.config?.api_url || 'https://mshastra.com/sendurl.aspx'; // Correct MShastra URL
       
-      console.log('✅ SMS credentials loaded from integrations');
-      console.log('🔑 API Key:', this.apiKey ? '✅ Configured' : '❌ Missing');
-      console.log('🌐 API URL:', this.apiUrl ? '✅ Configured' : '❌ Missing');
-      console.log('🔐 Password:', this.apiPassword ? '✅ Configured' : '❌ Missing');
+      console.debug('✅ SMS credentials loaded from integrations');
+      console.debug('🔑 API Key:', this.apiKey ? '✅ Configured' : '❌ Missing');
+      console.debug('🌐 API URL:', this.apiUrl ? '✅ Configured' : '❌ Missing');
+      console.debug('🔐 Password:', this.apiPassword ? '✅ Configured' : '❌ Missing');
       
       if (!this.apiKey || !this.apiUrl) {
-        console.warn('⚠️ SMS service not fully configured. SMS notifications will fail.');
-        console.warn('💡 To configure SMS in Admin Settings → Integrations');
+        console.debug('ℹ️ SMS service not fully configured. SMS notifications will fail until configured in Admin Settings → Integrations');
       } else {
-        console.log('✅ SMS service initialized successfully');
+        console.debug('✅ SMS service initialized successfully');
       }
       
       this.initialized = true;
@@ -106,9 +106,10 @@ class SMSService {
       
       // Check if it's a timeout error
       if (errorMsg.includes('timeout')) {
-        console.warn('⏱️ SMS service initialization timed out - will retry on first use');
-        console.warn('   This is normal during database cold starts or slow connections');
+        // Use debug level for timeout - this is expected during cold starts
+        console.debug('ℹ️ SMS service initialization timed out (normal during cold starts) - will retry on first use');
       } else {
+        // Only warn for actual errors, not timeouts
         console.warn('❌ SMS service configuration error:', errorMsg);
       }
       

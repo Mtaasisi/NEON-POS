@@ -86,7 +86,12 @@ const getBranchSettings = async (branchId: string | null) => {
       .single();
 
     if (error) {
-      console.error('❌ Error fetching branch settings:', error);
+      // PGRST116 means "No rows found" - this is a valid state when branch settings don't exist yet
+      if (error.code === 'PGRST116') {
+        console.log('ℹ️ No branch settings found, using defaults');
+      } else {
+        console.error('❌ Error fetching branch settings:', error);
+      }
       // Fallback to safe defaults (all isolated)
       return {
         data_isolation_mode: 'isolated',
@@ -840,17 +845,38 @@ const supabaseProvider = {
     try {
       
       // Map the product data to the format expected by latsProductApi
-      const updateData = {
-        name: data.name,
-        description: data.description,
-        sku: data.sku,
-        barcode: data.barcode,
-        categoryId: data.categoryId,
-        supplierId: data.supplierId || undefined,
-        tags: data.tags || [],
-        isActive: data.isActive !== undefined ? data.isActive : true,
-        // Handle variants if provided
-        variants: data.variants ? data.variants.map((v: any, index: number) => {
+      const updateData: any = {};
+      
+      // Basic fields
+      if (data.name !== undefined) updateData.name = data.name;
+      if (data.description !== undefined) updateData.description = data.description;
+      if (data.sku !== undefined) updateData.sku = data.sku;
+      if (data.barcode !== undefined) updateData.barcode = data.barcode;
+      if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
+      if (data.supplierId !== undefined) updateData.supplierId = data.supplierId;
+      // ✅ FIX: Only include tags if it's defined and not empty, otherwise set to null to avoid PostgreSQL empty array error
+      if (data.tags !== undefined) {
+        updateData.tags = Array.isArray(data.tags) && data.tags.length > 0 
+          ? data.tags 
+          : null;
+      }
+      if (data.isActive !== undefined) updateData.isActive = data.isActive;
+      
+      // Handle pricing and stock fields - prioritize selling_price over price
+      if (data.costPrice !== undefined) updateData.costPrice = data.costPrice;
+      if (data.selling_price !== undefined) {
+        updateData.sellingPrice = data.selling_price;
+      } else if (data.price !== undefined) {
+        updateData.sellingPrice = data.price;
+      }
+      if (data.stockQuantity !== undefined) updateData.stockQuantity = data.stockQuantity;
+      if (data.minStockLevel !== undefined) updateData.minStockLevel = data.minStockLevel;
+      if (data.condition !== undefined) updateData.condition = data.condition;
+      if (data.specification !== undefined) updateData.specification = data.specification;
+      
+      // Handle variants if provided
+      if (data.variants && Array.isArray(data.variants) && data.variants.length > 0) {
+        updateData.variants = data.variants.map((v: any, index: number) => {
           return {
             id: v?.id, // ✅ Include ID for existing variants
             sku: v?.sku,
@@ -861,8 +887,8 @@ const supabaseProvider = {
             quantity: typeof v?.quantity === 'number' ? v.quantity : (v?.stockQuantity ?? 0),
             minQuantity: typeof v?.minQuantity === 'number' ? v.minQuantity : (v?.minStockLevel ?? 0)
           };
-        }) : undefined
-      };
+        });
+      }
 
       // Call the latsProductApi updateProduct function
       const { updateProduct: apiUpdateProduct } = await import('../../../../lib/latsProductApi');

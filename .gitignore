@@ -109,6 +109,8 @@ crm_system/database/crm.db
 crm_system/
 archive/
 .playwright-mcp/
+playwright-report/
+test-results/
 
 # Workspace files (keep in root only)
 **/.code-workspace

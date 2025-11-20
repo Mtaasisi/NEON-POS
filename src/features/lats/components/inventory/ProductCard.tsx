@@ -165,7 +165,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
 
   // Handle actions
   const handleEdit = () => {
-    navigate(`/lats/products/${product.id}/edit`);
+    if (onEdit) {
+      onEdit(product);
+    } else {
+      navigate(`/lats/products/${product.id}/edit`);
+    }
   };
   const handleView = () => {
     // Product detail page removed - no action needed

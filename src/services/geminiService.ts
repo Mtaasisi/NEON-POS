@@ -42,6 +42,9 @@ class GeminiService {
   private requestQueue: Array<() => Promise<any>> = [];
   private isProcessingQueue: boolean = false;
 
+  // Static flag to track if warning has been shown
+  private static hasShownApiKeyWarning: boolean = false;
+
   constructor() {
     // Initialize with environment variable
     this.apiKey = import.meta.env.VITE_GEMINI_API_KEY || null;
@@ -68,11 +71,17 @@ class GeminiService {
       if (integration && integration.is_enabled && integration.credentials?.api_key) {
         this.apiKey = integration.credentials.api_key;
         console.log('✅ Gemini API key loaded from database');
-      } else if (!this.apiKey) {
-        console.warn('⚠️ Gemini API key not found in database or environment');
+      } else if (!this.apiKey && !GeminiService.hasShownApiKeyWarning) {
+        // Only show warning once to reduce console noise
+        console.debug('ℹ️ Gemini API key not found in database or environment. AI features will be disabled until configured.');
+        GeminiService.hasShownApiKeyWarning = true;
       }
     } catch (error) {
-      console.warn('⚠️ Error fetching Gemini credentials from database:', error);
+      // Only log error if we haven't shown the warning yet
+      if (!GeminiService.hasShownApiKeyWarning) {
+        console.debug('ℹ️ Error fetching Gemini credentials from database (this is normal if not configured):', error);
+        GeminiService.hasShownApiKeyWarning = true;
+      }
     }
   }
 

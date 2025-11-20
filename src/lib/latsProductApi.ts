@@ -872,10 +872,25 @@ export async function updateProduct(
     
     if (productWithoutImages.name !== undefined) updateData.name = productWithoutImages.name;
     if (productWithoutImages.description !== undefined) updateData.description = productWithoutImages.description;
+    if (productWithoutImages.sku !== undefined) updateData.sku = productWithoutImages.sku;
     if (productWithoutImages.categoryId !== undefined) updateData.category_id = productWithoutImages.categoryId;
     if (productWithoutImages.supplierId !== undefined) updateData.supplier_id = productWithoutImages.supplierId;
-    if (productWithoutImages.tags !== undefined) updateData.tags = productWithoutImages.tags;
+    // ✅ FIX: Only include tags if it's defined and not empty, otherwise set to null to avoid PostgreSQL empty array error
+    if (productWithoutImages.tags !== undefined) {
+      updateData.tags = Array.isArray(productWithoutImages.tags) && productWithoutImages.tags.length > 0 
+        ? productWithoutImages.tags 
+        : null;
+    }
     if (productWithoutImages.isActive !== undefined) updateData.is_active = productWithoutImages.isActive;
+    
+    // Handle pricing and stock fields
+    if (productWithoutImages.costPrice !== undefined) updateData.cost_price = productWithoutImages.costPrice;
+    if (productWithoutImages.sellingPrice !== undefined) updateData.selling_price = productWithoutImages.sellingPrice;
+    if (productWithoutImages.price !== undefined) updateData.selling_price = productWithoutImages.price; // Alias for sellingPrice
+    if (productWithoutImages.stockQuantity !== undefined) updateData.stock_quantity = productWithoutImages.stockQuantity;
+    if (productWithoutImages.minStockLevel !== undefined) updateData.min_stock_level = productWithoutImages.minStockLevel;
+    if (productWithoutImages.condition !== undefined) updateData.condition = productWithoutImages.condition;
+    if (productWithoutImages.specification !== undefined) updateData.specification = productWithoutImages.specification;
     
     // Update the product (without .select() to avoid RLS issues)
     const { error: productError } = await supabase
@@ -905,7 +920,7 @@ export async function updateProduct(
         sku: updateData.sku || '',
         categoryId: updateData.category_id || '',
         supplierId: updateData.supplier_id,
-        tags: updateData.tags || [],
+        tags: updateData.tags && Array.isArray(updateData.tags) && updateData.tags.length > 0 ? updateData.tags : [],
         isActive: updateData.is_active ?? true,
         isFeatured: false,
         isDigital: false,

@@ -18,6 +18,7 @@ import StoreLocationsTab from '../components/inventory-management/StoreLocations
 import StorageRoomManagementPage from './StorageRoomManagementPage';
 import SpecificationsTab from '../components/inventory-management/SpecificationsTab';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import AddProductModal from '../components/product/AddProductModal';
 
 type TabType = 'categories' | 'suppliers' | 'store-locations' | 'storage-room' | 'specifications';
 
@@ -82,6 +83,7 @@ const InventoryManagementPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<TabType>('categories');
   const [isLoading, setIsLoading] = useState(false);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
 
   // Check user permissions and handle URL parameters
   useEffect(() => {
@@ -160,7 +162,7 @@ const InventoryManagementPage: React.FC = () => {
                 Stock Transfers
               </GlassButton>
               <GlassButton
-                onClick={() => navigate('/lats/add-product')}
+                onClick={() => setShowAddProductModal(true)}
                 icon={<Plus size={18} />}
                 className="bg-gradient-to-r from-green-500 to-green-600 text-white"
               >
@@ -201,6 +203,16 @@ const InventoryManagementPage: React.FC = () => {
           {renderTabContent()}
         </div>
       </div>
+
+      {/* Add Product Modal */}
+      <AddProductModal
+        isOpen={showAddProductModal}
+        onClose={() => setShowAddProductModal(false)}
+        onProductCreated={() => {
+          setShowAddProductModal(false);
+          toast.success('Product created successfully');
+        }}
+      />
     </PageErrorBoundary>
   );
 };

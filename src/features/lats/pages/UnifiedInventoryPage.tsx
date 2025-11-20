@@ -377,7 +377,7 @@ const UnifiedInventoryPage: React.FC = () => {
         products.map(product => {
           const category = categories.find(c => c.id === product.categoryId);
           const mainVariant = product.variants?.[0];
-          return `"${product.name}","${mainVariant?.sku || 'N/A'}","${category?.name || 'Uncategorized'}","${mainVariant?.sellingPrice || 0}","${product.totalQuantity || 0}","${product.isActive ? 'Active' : 'Inactive'}","${product.description || ''}"`;
+          return `"${product.name}","${mainVariant?.sku || 'N/A'}","${category?.name || 'Uncategorized'}","${mainVariant?.sellingPrice || 0}","${product.totalQuantity || 0}","Active","${product.description || ''}"`;
         }).join("\n");
       
       const encodedUri = encodeURI(csvContent);
@@ -406,7 +406,7 @@ const UnifiedInventoryPage: React.FC = () => {
       // Ctrl/Cmd + N: Add new product
       if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
         e.preventDefault();
-        navigate('/lats/add-product');
+        setShowAddProductModal(true);
       }
       
       // Ctrl/Cmd + I: Bulk import
@@ -496,7 +496,7 @@ const UnifiedInventoryPage: React.FC = () => {
       }, 0) || 0;
       return sum + productRetailValue;
     }, 0);
-    const activeProducts = products.filter(p => p.isActive).length;
+    const activeProducts = products.length; // All products are automatically active
     const featuredProducts = products.filter(p => p.isFeatured).length;
 
 
@@ -566,7 +566,8 @@ const UnifiedInventoryPage: React.FC = () => {
     } else {
       // Inventory tab status filter
       if (selectedStatus !== 'all') {
-        filtered = filtered.filter(product => product.isActive === (selectedStatus === 'active'));
+        // All products are automatically active - no status filtering needed
+        // filtered = filtered.filter(product => product.isActive === (selectedStatus === 'active'));
       }
     }
 
@@ -656,7 +657,7 @@ const UnifiedInventoryPage: React.FC = () => {
               if (!product) return '';
               const category = categories.find(c => c.id === product.categoryId);
               const mainVariant = product.variants?.[0];
-              return `${product.name},${mainVariant?.sku || 'N/A'},${category?.name || 'Uncategorized'},${mainVariant?.sellingPrice || 0},${product.totalQuantity || 0},${product.isActive ? 'Active' : 'Inactive'}`;
+              return `${product.name},${mainVariant?.sku || 'N/A'},${category?.name || 'Uncategorized'},${mainVariant?.sellingPrice || 0},${product.totalQuantity || 0},Active`;
             }).filter(row => row !== '').join("\n");
           
           const encodedUri = encodeURI(csvContent);
@@ -722,35 +723,6 @@ const UnifiedInventoryPage: React.FC = () => {
         }
         break;
       
-      case 'activate':
-        try {
-          const activatePromises = selectedProducts.map(async (productId) => {
-            await updateProduct(productId, { isActive: true });
-          });
-          
-          await Promise.all(activatePromises);
-          toast.success(`Successfully activated ${selectedProducts.length} product${selectedProducts.length !== 1 ? 's' : ''}`);
-          setSelectedProducts([]);
-        } catch (error) {
-          console.error('Activate error:', error);
-          toast.error('Failed to activate products');
-        }
-        break;
-      
-      case 'deactivate':
-        try {
-          const deactivatePromises = selectedProducts.map(async (productId) => {
-            await updateProduct(productId, { isActive: false });
-          });
-          
-          await Promise.all(deactivatePromises);
-          toast.success(`Successfully deactivated ${selectedProducts.length} product${selectedProducts.length !== 1 ? 's' : ''}`);
-          setSelectedProducts([]);
-        } catch (error) {
-          console.error('Deactivate error:', error);
-          toast.error('Failed to deactivate products');
-        }
-        break;
       
       case 'duplicate':
         try {
@@ -1198,6 +1170,7 @@ const UnifiedInventoryPage: React.FC = () => {
             navigate={navigate}
             productModals={productModals}
             deleteProduct={deleteProduct}
+            onAddProduct={() => setShowAddProductModal(true)}
           />
         )}
 

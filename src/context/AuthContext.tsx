@@ -1,21 +1,12 @@
-import * as React from 'react';
-import { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import type { FC, ReactNode } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { retryWithBackoff } from '../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { POSSettingsAPI } from '../lib/posSettingsApi';
 import { logInfo, logError, logWarn, trackInit } from '../lib/debugUtils';
 import { clearAuthState, isSessionValid, handle403Error } from '../lib/authUtils';
-import { 
-  hasPermission, 
-  hasAnyPermission, 
-  hasAllPermissions, 
-  canAccessRoute, 
-  getUserPermissions,
-  hasRole,
-  checkAccess,
-  Permission
-} from '../lib/permissionUtils';
+import { hasPermission, hasAnyPermission, hasAllPermissions, canAccessRoute, getUserPermissions, hasRole, checkAccess, Permission } from '../lib/permissionUtils';
 
 // Import the inventory store for automatic product loading
 import { useInventoryStore } from '../features/lats/stores/useInventoryStore';
@@ -49,11 +40,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Expose context for HMR compatibility
-if (import.meta.hot) {
-  import.meta.hot.accept();
-}
-
 export { AuthContext };
 
 export const useAuth = () => {
@@ -69,15 +55,15 @@ export const useAuth = () => {
       originalUser: null,
       isImpersonating: false,
       login: async () => false,
-      logout: async () => {},
+      logout: async () => { },
       isAuthenticated: false,
       error: null,
-      clearError: () => {},
+      clearError: () => { },
       loading: true,
       refreshSession: async () => false,
       handleAuthError: async () => false,
       impersonateUser: async () => false,
-      stopImpersonation: () => {},
+      stopImpersonation: () => { },
       getAvailableTestUsers: async () => [],
       hasPermission: () => false,
       hasAnyPermission: () => false,
@@ -122,15 +108,15 @@ function mapUserFromSupabase(user: any): any {
     twoFactorEnabled: user.two_factor_enabled || false,
     twoFactorSecret: user.two_factor_secret,
     lastLogin: user.last_login,
-    permissions: user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0 
-      ? user.permissions 
+    permissions: user.permissions && Array.isArray(user.permissions) && user.permissions.length > 0
+      ? user.permissions
       : getRolePermissions(user.role),
     assignedDevices: [],
     assignedCustomers: [],
   };
 }
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [originalUser, setOriginalUser] = useState<any>(() => {
     // Initialize from localStorage to persist impersonation across page reloads
@@ -167,7 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const initializedRef = useRef(false);
   const authProviderMountCount = useRef(0);
   const dataLoadedRef = useRef(false);
-  
+
   // Helper function to persist impersonation state
   const saveImpersonationState = (isImpersonating: boolean, originalUser: any = null, impersonatedUser: any = null) => {
     if (typeof window !== 'undefined') {
@@ -197,18 +183,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('📦 Data already loaded, skipping...');
       return;
     }
-    
+
     try {
       console.log('🚀 Starting comprehensive data preload...');
       dataLoadedRef.current = true;
-      
+
       // Small delay to ensure UI is fully loaded first
       await new Promise(resolve => setTimeout(resolve, 300));
-      
+
       // Use the new preload service for comprehensive data loading
       const { dataPreloadService } = await import('../services/dataPreloadService');
       const result = await dataPreloadService.preloadAllData();
-      
+
       if (result.success) {
         console.log('✅ All data preloaded successfully');
         console.log(`   Duration: ${result.duration}ms`);
@@ -218,7 +204,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log(`   Loaded: ${result.loaded.join(', ')}`);
         console.log(`   Failed: ${result.failed.join(', ')}`);
       }
-      
+
       // Get preload summary
       const summary = dataPreloadService.getSummary();
       console.log('📊 Preload Summary:', {
@@ -242,7 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Add retry logic for customer loading
       let retryCount = 0;
       const maxRetries = 3;
-      
+
       while (retryCount < maxRetries) {
         try {
           // Import dynamically to avoid circular dependencies
@@ -262,7 +248,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       }
-      
+
       return [];
     } catch (error) {
       console.error('❌ Error loading customers:', error);
@@ -328,7 +314,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           .single();
 
         console.log(`📊 Profile data by email:`, authProfileByEmail, 'Error:', emailError);
-        
+
         if (!emailError && authProfileByEmail) {
           profileData = authProfileByEmail;
           console.log(`✅ Found profile by email:`, profileData);
@@ -340,9 +326,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check if this is admin@pos.com or care@care.com and set admin role
         const isAdmin = user.email === 'admin@pos.com' || user.email === 'care@care.com';
         const defaultRole = isAdmin ? 'admin' : 'technician';
-        
+
         console.log(`Creating default profile for ${user.email} with role: ${defaultRole}`);
-        
+
         // Create a default user profile in the users table
         const defaultProfile = {
           id: user.id,
@@ -373,9 +359,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Check if this is admin@pos.com or care@care.com and set admin role
         const isAdmin = user.email === 'admin@pos.com' || user.email === 'care@care.com';
         const defaultRole = isAdmin ? 'admin' : 'technician';
-        
+
         console.log(`Using fallback user for ${user.email} with role: ${defaultRole}`);
-        
+
         // Set user with appropriate default role
         const defaultUser = {
           ...user,
@@ -386,7 +372,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
         setCurrentUser(defaultUser);
         setLoading(false);
-        
+
         // Start background data loading after successful authentication
         loadInitialDataInBackground();
         return;
@@ -399,7 +385,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setCurrentUser(mappedUser);
       setLoading(false);
-      
+
       // Start background data loading after successful authentication
       // Moved to separate useEffect to avoid initialization issues
     } catch (err) {
@@ -407,9 +393,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Check if this is admin@pos.com or care@care.com and set admin role
       const isAdmin = user.email === 'admin@pos.com' || user.email === 'care@care.com';
       const defaultRole = isAdmin ? 'admin' : 'technician';
-      
+
       console.log(`Error fallback for ${user.email} with role: ${defaultRole}`);
-      
+
       // Set user with appropriate default role if there's an error
       const fallbackUser = {
         ...user,
@@ -420,7 +406,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       setCurrentUser(fallbackUser);
       setLoading(false);
-      
+
       // Start background data loading after successful authentication
       // Moved to separate useEffect to avoid initialization issues
     }
@@ -433,14 +419,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const result = await retryWithBackoff(async () => {
         return await supabase.auth.refreshSession();
       });
-      
+
       const { data, error } = result;
-      
+
       if (error) {
         console.error('❌ Session refresh failed:', error);
         return false;
       }
-      
+
       if (data.session) {
 
         await fetchAndSetUserProfile(data.session.user);
@@ -457,14 +443,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Add automatic session refresh on 401/403 errors
   const handleAuthError = async (error: any) => {
-    if (error?.status === 401 || 
-        error?.status === 403 ||
-        error?.message?.includes('401') || 
-        error?.message?.includes('403') ||
-        error?.message?.includes('Unauthorized') ||
-        error?.message?.includes('Forbidden') ||
-        error?.message?.includes('bad_jwt') ||
-        error?.message?.includes('missing sub claim')) {
+    if (error?.status === 401 ||
+      error?.status === 403 ||
+      error?.message?.includes('401') ||
+      error?.message?.includes('403') ||
+      error?.message?.includes('Unauthorized') ||
+      error?.message?.includes('Forbidden') ||
+      error?.message?.includes('bad_jwt') ||
+      error?.message?.includes('missing sub claim')) {
 
       const refreshed = await refreshSession();
       if (!refreshed) {
@@ -498,107 +484,107 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logInfo('AuthProvider', `Initializing (mount #${authProviderMountCount.current})`);
 
     const initializeAuth = async () => {
-        try {
-          setLoading(true);
-          logInfo('AuthProvider', 'Checking for existing session...');
-          
-          // Check if session is valid first
-          const isValid = await isSessionValid();
-          if (!isValid) {
-            logInfo('AuthProvider', 'No valid session found, clearing auth state');
-            await clearAuthState();
-            setCurrentUser(null);
-            setLoading(false);
-            initializedRef.current = true;
-            return;
-          }
-          
-          // Get current session
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-          
-          if (sessionError) {
-            logError('AuthProvider', 'Session error:', sessionError);
-            
-            // Handle 403 errors specifically
-            if (sessionError.message?.includes('403') || 
-                sessionError.message?.includes('Forbidden') ||
-                sessionError.message?.includes('bad_jwt')) {
-              logInfo('AuthProvider', '403 error detected, clearing auth state');
-              await handle403Error();
-            }
-            
-            setCurrentUser(null);
-            setLoading(false);
-            return;
-          }
-          
-          if (session?.user) {
-            logInfo('AuthProvider', `Found existing session for user: ${session.user.email}`);
-            await fetchAndSetUserProfile(session.user);
+      try {
+        setLoading(true);
+        logInfo('AuthProvider', 'Checking for existing session...');
 
-            // Check if there's an active impersonation session to restore
-            if (typeof window !== 'undefined') {
-              const stored = localStorage.getItem('admin_impersonation_state');
-              if (stored && isImpersonating) {
-                try {
-                  const { impersonatedUser } = JSON.parse(stored);
-                  if (impersonatedUser) {
-                    logInfo('AuthProvider', `Restoring impersonation as: ${impersonatedUser.full_name} (${impersonatedUser.role})`);
-                    setCurrentUser(impersonatedUser);
-                  }
-                } catch (e) {
-                  logWarn('AuthProvider', 'Failed to restore impersonation state:', e);
-                  // Clear corrupted state
-                  localStorage.removeItem('admin_impersonation_state');
-                  setIsImpersonating(false);
-                  setOriginalUser(null);
-                }
-              }
-            }
-          } else {
-            logInfo('AuthProvider', 'No existing session found');
-            setCurrentUser(null);
-            // Clear impersonation state if no session
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('admin_impersonation_state');
-            }
-            setIsImpersonating(false);
-            setOriginalUser(null);
-          }
-          
-          setLoading(false);
-          initializedRef.current = true;
-          logInfo('AuthProvider', 'Auth initialization complete');
-        } catch (err) {
-          logError('AuthProvider', 'Error initializing auth:', err);
-          
-          // Handle 403 errors in catch block too
-          if (err?.message?.includes('403') || 
-              err?.message?.includes('Forbidden') ||
-              err?.message?.includes('bad_jwt')) {
-            logInfo('AuthProvider', '403 error in catch block, clearing auth state');
-            await handle403Error();
-          }
-          
+        // Check if session is valid first
+        const isValid = await isSessionValid();
+        if (!isValid) {
+          logInfo('AuthProvider', 'No valid session found, clearing auth state');
+          await clearAuthState();
           setCurrentUser(null);
           setLoading(false);
           initializedRef.current = true;
+          return;
         }
-      };
+
+        // Get current session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          logError('AuthProvider', 'Session error:', sessionError);
+
+          // Handle 403 errors specifically
+          if (sessionError.message?.includes('403') ||
+            sessionError.message?.includes('Forbidden') ||
+            sessionError.message?.includes('bad_jwt')) {
+            logInfo('AuthProvider', '403 error detected, clearing auth state');
+            await handle403Error();
+          }
+
+          setCurrentUser(null);
+          setLoading(false);
+          return;
+        }
+
+        if (session?.user) {
+          logInfo('AuthProvider', `Found existing session for user: ${session.user.email}`);
+          await fetchAndSetUserProfile(session.user);
+
+          // Check if there's an active impersonation session to restore
+          if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem('admin_impersonation_state');
+            if (stored && isImpersonating) {
+              try {
+                const { impersonatedUser } = JSON.parse(stored);
+                if (impersonatedUser) {
+                  logInfo('AuthProvider', `Restoring impersonation as: ${impersonatedUser.full_name} (${impersonatedUser.role})`);
+                  setCurrentUser(impersonatedUser);
+                }
+              } catch (e) {
+                logWarn('AuthProvider', 'Failed to restore impersonation state:', e);
+                // Clear corrupted state
+                localStorage.removeItem('admin_impersonation_state');
+                setIsImpersonating(false);
+                setOriginalUser(null);
+              }
+            }
+          }
+        } else {
+          logInfo('AuthProvider', 'No existing session found');
+          setCurrentUser(null);
+          // Clear impersonation state if no session
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('admin_impersonation_state');
+          }
+          setIsImpersonating(false);
+          setOriginalUser(null);
+        }
+
+        setLoading(false);
+        initializedRef.current = true;
+        logInfo('AuthProvider', 'Auth initialization complete');
+      } catch (err) {
+        logError('AuthProvider', 'Error initializing auth:', err);
+
+        // Handle 403 errors in catch block too
+        if (err?.message?.includes('403') ||
+          err?.message?.includes('Forbidden') ||
+          err?.message?.includes('bad_jwt')) {
+          logInfo('AuthProvider', '403 error in catch block, clearing auth state');
+          await handle403Error();
+        }
+
+        setCurrentUser(null);
+        setLoading(false);
+        initializedRef.current = true;
+      }
+    };
 
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       logInfo('AuthProvider', `Auth state change: ${event}`, session?.user?.email);
-      
+
       if (event === 'SIGNED_IN' && session?.user) {
         logInfo('AuthProvider', `User signed in: ${session.user.email}`);
         fetchAndSetUserProfile(session.user);
       } else if (event === 'SIGNED_OUT') {
         logInfo('AuthProvider', 'User signed out');
-        
+
         // Clear POS settings user cache
         // POSSettingsAPI.clearUserCache(); // Removed to avoid circular dependency
-        
+
         setCurrentUser(null);
         setLoading(false);
         dataLoadedRef.current = false; // Reset data loaded flag
@@ -711,7 +697,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const userCanAccessRoute = (path: string) => canAccessRoute(currentUser, path);
   const userGetPermissions = () => getUserPermissions(currentUser);
   const userHasRole = (roles: string | string[]) => hasRole(currentUser, roles);
-  const userCheckAccess = (options: { roles?: string[]; permissions?: string[]; requireAll?: boolean }) => 
+  const userCheckAccess = (options: { roles?: string[]; permissions?: string[]; requireAll?: boolean }) =>
     checkAccess(currentUser, options);
 
   // User impersonation methods (admin only)

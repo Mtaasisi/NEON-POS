@@ -395,7 +395,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     
     if (hasAll || userPermissions.includes('add_products') || currentUser.role === 'admin') {
       actions.push(
-        { label: 'Add Product', icon: <Plus size={16} />, action: () => navigate('/lats/add-product') }
+        { label: 'Add Product', icon: <Plus size={16} />, action: () => setShowAddProductModal(true) }
       );
     }
     

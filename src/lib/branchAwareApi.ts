@@ -37,7 +37,14 @@ export const getBranchSettings = async (branchId: string) => {
       .eq('id', branchId)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // PGRST116 means "No rows found" - this is a valid state when branch settings don't exist yet
+      if (error.code === 'PGRST116') {
+        console.log('ℹ️ No branch settings found for branch:', branchId);
+        return null;
+      }
+      throw error;
+    }
     
     // Update cache
     branchSettingsCache.set(branchId, data);
@@ -45,7 +52,10 @@ export const getBranchSettings = async (branchId: string) => {
     
     return data;
   } catch (error) {
-    console.error('Error fetching branch settings:', error);
+    // Only log non-PGRST116 errors as actual errors
+    if ((error as any)?.code !== 'PGRST116') {
+      console.error('Error fetching branch settings:', error);
+    }
     return null;
   }
 };

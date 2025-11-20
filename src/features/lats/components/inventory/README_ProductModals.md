@@ -36,7 +36,7 @@ interface AddProductModalProps {
 
 ### EditProductModal
 
-**Location**: `src/features/lats/components/inventory/EditProductModal.tsx`
+**Location**: `src/features/lats/components/product/EditProductModal.tsx`
 
 **Features**:
 - Loads existing product data
@@ -61,7 +61,7 @@ interface EditProductModalProps {
 
 ```typescript
 import AddProductModal from '../components/inventory/AddProductModal';
-import EditProductModal from '../components/inventory/EditProductModal';
+import EditProductModal from '../components/product/EditProductModal';
 import { useProductModals } from '../hooks/useProductModals';
 ```
 

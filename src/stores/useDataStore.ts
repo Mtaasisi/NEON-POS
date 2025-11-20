@@ -379,7 +379,6 @@ export const useDataStore = create<DataState>()(
           attendanceRecords: createCacheMetadata(),
           purchaseOrders: createCacheMetadata(),
           stockMovements: createCacheMetadata(),
-          sales: createCacheMetadata(),
         },
 
         // Initial loading states
@@ -484,11 +483,6 @@ export const useDataStore = create<DataState>()(
         setStockMovements: (stockMovements) => {
           set({ stockMovements });
           get().updateCacheTimestamp('stockMovements');
-        },
-
-        setSales: (sales) => {
-          set({ sales });
-          get().updateCacheTimestamp('sales');
         },
 
         // Preload actions
@@ -675,7 +669,6 @@ export const useDataStore = create<DataState>()(
             attendanceRecords: [],
             purchaseOrders: [],
             stockMovements: [],
-            sales: [],
             isLoaded: false,
             preloadProgress: 0,
             preloadStatus: 'Not started',

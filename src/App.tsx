@@ -161,9 +161,6 @@ const ShippedItemsPage = lazy(() => import('./features/lats/pages/ShippedItemsPa
 
 
 const UnifiedInventoryPage = lazy(() => import('./features/lats/pages/UnifiedInventoryPage'));
-const AddProductPage = lazy(() => import('./features/lats/pages/AddProductPage'));
-const EditProductPage = lazy(() => import('./features/lats/pages/EditProductPage'));
-const EditProductModalPage = lazy(() => import('./features/lats/pages/EditProductModalPage'));
 const BulkImportPage = lazy(() => import('./features/lats/pages/BulkImportPage'));
 
 const POSPage = createSafeLazyComponent(() => import('./features/lats/pages/POSPageOptimized'), 'POSPage');
@@ -813,42 +810,8 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* Keep product detail route for individual product views */}
           
-          {/* Add Product Route */}
-          <Route path="/lats/add-product" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><AddProductPage /></Suspense></RoleProtectedRoute>} />
-          
           {/* Bulk Import Route */}
           <Route path="/lats/bulk-import" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><BulkImportPage /></Suspense></RoleProtectedRoute>} />
-          
-          {/* Edit Product Route */}
-          <Route path="/lats/products/:productId/edit" element={
-            <UrlValidatedRoute enableImageUrlValidation={true} enableUrlLogging={false}>
-              <RoleProtectedRoute allowedRoles={['admin']}>
-                <Suspense fallback={<DynamicPageLoader />}>
-                  <EditProductPage />
-                </Suspense>
-              </RoleProtectedRoute>
-            </UrlValidatedRoute>
-          } />
-
-          {/* Edit Product Modal Route */}
-          <Route path="/lats/products/edit-modal" element={
-            <UrlValidatedRoute enableImageUrlValidation={true} enableUrlLogging={false}>
-              <RoleProtectedRoute allowedRoles={['admin']}>
-                <Suspense fallback={<DynamicPageLoader />}>
-                  <EditProductModalPage />
-                </Suspense>
-              </RoleProtectedRoute>
-            </UrlValidatedRoute>
-          } />
-          <Route path="/lats/products/:productId/edit-modal" element={
-            <UrlValidatedRoute enableImageUrlValidation={true} enableUrlLogging={false}>
-              <RoleProtectedRoute allowedRoles={['admin']}>
-                <Suspense fallback={<DynamicPageLoader />}>
-                  <EditProductModalPage />
-                </Suspense>
-              </RoleProtectedRoute>
-            </UrlValidatedRoute>
-          } />
 
           <Route path="/lats/sales-reports" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SalesReportsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/admin/reports" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><ReportsPage /></Suspense></RoleProtectedRoute>} />

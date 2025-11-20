@@ -341,70 +341,70 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                 </div> */}
 
                 {/* Pricing and Stock Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
                   {/* Cost Price */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Cost Price</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Cost Price</label>
                     <div className="relative">
                       <input
                         type="number"
                         value={variant.costPrice || ''}
                         onChange={(e) => updateVariant(index, 'costPrice', parseFloat(e.target.value) || 0)}
-                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium"
+                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium text-sm"
                         placeholder="0.00"
                         min="0"
                         step="0.01"
                       />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 font-bold">$</span>
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-600 font-bold text-xs">$</span>
                     </div>
                   </div>
 
                   {/* Selling Price */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Selling Price</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Selling Price *</label>
                     <div className="relative">
                       <input
                         type="number"
                         value={variant.price || ''}
                         onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value) || 0)}
-                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium"
+                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium text-sm"
                         placeholder="0.00"
                         min="0"
                         step="0.01"
                       />
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-600 font-bold">$</span>
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-600 font-bold text-xs">$</span>
                     </div>
                   </div>
 
                   {/* Stock Quantity */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Stock Quantity</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Stock Qty</label>
                     <div className="relative">
                       <input
                         type="number"
                         value={variant.stockQuantity || ''}
                         onChange={(e) => updateVariant(index, 'stockQuantity', Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium"
+                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium text-sm"
                         placeholder="0"
                         min="0"
                       />
-                      <Package className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600" size={16} />
+                      <Package className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-600" size={12} />
                     </div>
                   </div>
 
                   {/* Minimum Stock Level */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Min Stock Level</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Min Stock</label>
                     <div className="relative">
                       <input
                         type="number"
                         value={variant.minStockLevel || ''}
                         onChange={(e) => updateVariant(index, 'minStockLevel', Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full py-3 pl-8 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium"
+                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium text-sm"
                         placeholder="0"
                         min="0"
                       />
-                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-600" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-600" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                       </svg>
                     </div>
@@ -413,22 +413,16 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
 
                 {/* Profit Display for Variant */}
                 {variant.price > 0 && variant.costPrice > 0 && (
-                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div>
-                        <p className="text-xs font-medium text-green-600 mb-1">Cost</p>
-                        <p className="text-sm font-bold text-green-700">${variant.costPrice.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-green-600 mb-1">Selling</p>
-                        <p className="text-sm font-bold text-green-700">${variant.price.toFixed(2)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-green-600 mb-1">Profit</p>
-                        <p className={`text-sm font-bold ${variant.price - variant.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-green-700 font-medium">
+                        Profit: <span className={`font-bold ${variant.price - variant.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           ${(variant.price - variant.costPrice).toFixed(2)}
-                        </p>
-                      </div>
+                        </span>
+                      </span>
+                      <span className="text-green-600">
+                        {variant.costPrice > 0 ? `${(((variant.price - variant.costPrice) / variant.costPrice) * 100).toFixed(1)}%` : 'N/A'}
+                      </span>
                     </div>
                   </div>
                 )}
