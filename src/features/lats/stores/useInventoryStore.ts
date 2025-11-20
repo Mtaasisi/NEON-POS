@@ -134,6 +134,7 @@ interface InventoryState {
   getProduct: (id: string) => Promise<ApiResponse<Product>>;
   createProduct: (product: any) => Promise<ApiResponse<Product>>;
   updateProduct: (id: string, product: any) => Promise<ApiResponse<Product>>;
+  updateProductInStore: (updatedProduct: Product) => void;
   deleteProduct: (id: string) => Promise<void>;
   searchProducts: (query: string) => Promise<ApiResponse<Product[]>>;
 
@@ -1147,6 +1148,38 @@ export const useInventoryStore = create<InventoryState>()(
           return { ok: false, message: error?.message || errorMsg };
         } finally {
           set({ isUpdating: false });
+        }
+      },
+
+      updateProductInStore: (updatedProduct: Product) => {
+        const state = get();
+        const productIndex = state.products.findIndex(p => p.id === updatedProduct.id);
+        
+        if (productIndex >= 0) {
+          // Update existing product in the array
+          const updatedProducts = [...state.products];
+          updatedProducts[productIndex] = updatedProduct;
+          
+          set({ 
+            products: updatedProducts,
+            dataCache: {
+              ...state.dataCache,
+              products: updatedProducts
+            }
+          });
+          
+          console.log(`✅ [Store] Updated product ${updatedProduct.id} in store without reloading all products`);
+        } else {
+          // Product not found, add it to the array
+          set({ 
+            products: [...state.products, updatedProduct],
+            dataCache: {
+              ...state.dataCache,
+              products: [...state.products, updatedProduct]
+            }
+          });
+          
+          console.log(`✅ [Store] Added product ${updatedProduct.id} to store`);
         }
       },
 

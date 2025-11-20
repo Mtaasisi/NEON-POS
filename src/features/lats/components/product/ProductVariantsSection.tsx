@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Layers, Plus, Trash2, Package, Move, Check, DollarSign } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Layers, Plus, Trash2, Package, Move, Check, DollarSign, ChevronDown, ChevronUp, Minus } from 'lucide-react';
 import { specificationCategories, getSpecificationsByCategory } from '../../../../data/specificationCategories';
 
 interface ProductVariant {
@@ -227,98 +227,212 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
     return value;
   };
 
+  const [expandedVariantIndex, setExpandedVariantIndex] = useState<number | null>(null);
+
+  // Auto-expand first variant when variants are added
+  useEffect(() => {
+    setExpandedVariantIndex(current => {
+      // If we have variants but no expanded variant, expand the first one
+      if (variants.length > 0 && current === null) {
+        return 0;
+      }
+      // If all variants are removed, reset expanded index
+      if (variants.length === 0) {
+        return null;
+      }
+      // If the currently expanded variant is removed, expand the first one (or null if none)
+      if (current !== null && current >= variants.length) {
+        return variants.length > 0 ? 0 : null;
+      }
+      // Otherwise, keep current state
+      return current;
+    });
+  }, [variants.length]); // Only depend on variants.length to avoid unnecessary re-renders
+
+  // Helper function to format numbers with comma separators
+  const formatPrice = (price: number | string): string => {
+    const num = typeof price === 'string' ? parseFloat(price) : price;
+    if (num % 1 === 0) {
+      return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   return (
-    <div className="border-b border-gray-200 pb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-          <Layers size={20} className="text-green-600" />
-          Product Variants
-        </h3>
-        
-        <div className="flex items-center gap-3">
-          {variants.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setIsReorderingVariants(!isReorderingVariants)}
-              className={`text-xs px-3 py-1 rounded ${
-                isReorderingVariants 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-              }`}
-              title="Toggle reorder mode"
-            >
-              <Move size={14} className="inline mr-1" />
-              {isReorderingVariants ? 'Done' : 'Reorder'}
-            </button>
-          )}
+    <div className="mb-6">
+      {/* Product Variants Card */}
+      <div className="border-2 rounded-2xl bg-white shadow-sm border-gray-200 mb-6">
+        {/* Header */}
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Layers className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Product Variants</h3>
+                {variants.length > 0 && (
+                  <p className="text-xs text-gray-600 mt-1">{variants.length} variant{variants.length !== 1 ? 's' : ''} added</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {variants.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsReorderingVariants(!isReorderingVariants)}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors ${
+                    isReorderingVariants 
+                      ? 'bg-blue-500 text-white' 
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                  }`}
+                  title="Toggle reorder mode"
+                >
+                  <Move size={14} className="inline mr-1" />
+                  {isReorderingVariants ? 'Done' : 'Reorder'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-      
-      {showVariants && (
-        <div className="space-y-4">
-          {/* Variants List */}
-          <div className="space-y-3">
-            {variants.map((variant, index) => (
-              <div
-                key={index}
-                className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm"
-                draggable={isReorderingVariants}
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-                onDragEnd={() => setDraggedVariantIndex(null)}
-                style={{ cursor: isReorderingVariants ? 'grabbing' : 'grab' }}
-              >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    {isReorderingVariants && (
-                      <div className="w-6 h-6 flex items-center justify-center text-gray-400">
-                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M8 6h8v2H8V6zm0 5h8v2H8v-2zm0 5h8v2H8v-2z"/>
-                        </svg>
+        
+        {/* Variants List */}
+        {showVariants && (
+          <div className="p-6 space-y-4">
+            {variants.length === 0 ? (
+              <div className="text-center py-8">
+                <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+                <p className="text-gray-600">No variants added yet</p>
+              </div>
+            ) : (
+              variants.map((variant, index) => {
+                const isExpanded = expandedVariantIndex === index;
+                const isComplete = variant.name && variant.price > 0;
+                const profit = variant.price - variant.costPrice;
+                const isProfitable = profit > 0;
+
+                return (
+                  <div
+                    key={index}
+                    className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 ${
+                      isExpanded 
+                        ? 'border-blue-500 shadow-xl' 
+                        : isComplete
+                          ? 'border-green-200 hover:border-green-300 hover:shadow-md'
+                          : 'border-orange-300 hover:border-orange-400 hover:shadow-md'
+                    }`}
+                    draggable={isReorderingVariants}
+                    onDragStart={(e) => handleDragStart(e, index)}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, index)}
+                    onDragEnd={() => setDraggedVariantIndex(null)}
+                    style={{ cursor: isReorderingVariants ? 'grabbing' : 'default' }}
+                  >
+                    {/* Variant Header - Clickable */}
+                    <div 
+                      className="flex items-start justify-between p-6 cursor-pointer"
+                      onClick={() => setExpandedVariantIndex(isExpanded ? null : index)}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          {isReorderingVariants && (
+                            <div className="w-6 h-6 flex items-center justify-center text-gray-400">
+                              <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M8 6h8v2H8V6zm0 5h8v2H8v-2zm0 5h8v2H8v-2z"/>
+                              </svg>
+                            </div>
+                          )}
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
+                            isExpanded ? 'bg-blue-500' : 'bg-gray-200'
+                          }`}>
+                            <svg 
+                              className={`w-4 h-4 text-white transition-transform duration-200 ${
+                                isExpanded ? 'rotate-180' : ''
+                              }`} 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="text-lg font-bold text-gray-900">
+                                {variant.name || `Variant ${index + 1}`}
+                              </h4>
+                              {/* Status Badge */}
+                              {isComplete ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-500 text-white shadow-sm">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Done
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-orange-500 text-white shadow-sm animate-pulse">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  Pending
+                                </span>
+                              )}
+                            </div>
+                            {variant.price > 0 && (
+                              <p className="text-sm text-gray-600 mt-1">Price: {formatPrice(variant.price)} TZS</p>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    )}
-                    <h4 className="font-medium text-gray-900">
-                      {variant.name || `Variant ${index + 1}`}
-                    </h4>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!isReorderingVariants && (
-                      <button
-                        type="button"
-                        onClick={() => removeVariant(index)}
-                        disabled={variants.length === 1}
-                        className={`p-1 rounded transition-colors ${
-                          variants.length === 1
-                            ? 'text-gray-300 cursor-not-allowed'
-                            : 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                        }`}
-                        aria-label="Remove variant"
-                        title={variants.length === 1 ? 'Cannot delete the last variant. At least one variant is required.' : 'Remove variant'}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Variant Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Variant Name</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={variant.name}
-                      onChange={(e) => updateVariant(index, 'name', e.target.value)}
-                      className="w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500"
-                      placeholder="Enter variant name (e.g., 256GB - Space Black)"
-                      autoComplete="off"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                    <Package className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                  </div>
-                </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {/* Profit Badge */}
+                        {isComplete && variant.costPrice > 0 && (
+                          <div className={`px-4 py-2 rounded-xl text-base font-bold shadow-sm ${
+                            isProfitable ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'
+                          }`}>
+                            {isProfitable ? `+${formatPrice(profit)} TZS` : 'Loss'}
+                          </div>
+                        )}
+                        {!isReorderingVariants && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeVariant(index);
+                            }}
+                            disabled={variants.length === 1}
+                            className={`p-2 rounded-xl transition-colors ${
+                              variants.length === 1
+                                ? 'text-gray-300 cursor-not-allowed'
+                                : 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                            }`}
+                            aria-label="Remove variant"
+                            title={variants.length === 1 ? 'Cannot delete the last variant. At least one variant is required.' : 'Remove variant'}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded Content - Only show when variant is expanded */}
+                    {isExpanded && (
+                      <div className="px-6 pb-6">
+                        {/* Variant Name */}
+                        <div className="mb-4">
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Variant Name *</label>
+                          <input
+                            type="text"
+                            value={variant.name}
+                            onChange={(e) => updateVariant(index, 'name', e.target.value)}
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium"
+                            placeholder="Enter variant name (e.g., 256GB - Space Black)"
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                          />
+                        </div>
 
                 {/* SKU Field - Hidden/Automatic */}
                 {/* <div className="mt-4">
@@ -340,158 +454,172 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                   </div>
                 </div> */}
 
-                {/* Pricing and Stock Fields */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
-                  {/* Cost Price */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Cost Price</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={variant.costPrice || ''}
-                        onChange={(e) => updateVariant(index, 'costPrice', parseFloat(e.target.value) || 0)}
-                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium text-sm"
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                      />
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-600 font-bold text-xs">$</span>
-                    </div>
-                  </div>
-
-                  {/* Selling Price */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Selling Price *</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={variant.price || ''}
-                        onChange={(e) => updateVariant(index, 'price', parseFloat(e.target.value) || 0)}
-                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-green-500 text-gray-900 font-medium text-sm"
-                        placeholder="0.00"
-                        min="0"
-                        step="0.01"
-                      />
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-600 font-bold text-xs">$</span>
-                    </div>
-                  </div>
-
-                  {/* Stock Quantity */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Stock Qty</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={variant.stockQuantity || ''}
-                        onChange={(e) => updateVariant(index, 'stockQuantity', Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium text-sm"
-                        placeholder="0"
-                        min="0"
-                      />
-                      <Package className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-600" size={12} />
-                    </div>
-                  </div>
-
-                  {/* Minimum Stock Level */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Min Stock</label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={variant.minStockLevel || ''}
-                        onChange={(e) => updateVariant(index, 'minStockLevel', Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full py-2 pl-6 pr-3 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none transition-colors border-gray-300 focus:border-blue-500 text-gray-900 font-medium text-sm"
-                        placeholder="0"
-                        min="0"
-                      />
-                      <svg className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-600" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Profit Display for Variant */}
-                {variant.price > 0 && variant.costPrice > 0 && (
-                  <div className="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-green-700 font-medium">
-                        Profit: <span className={`font-bold ${variant.price - variant.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ${(variant.price - variant.costPrice).toFixed(2)}
-                        </span>
-                      </span>
-                      <span className="text-green-600">
-                        {variant.costPrice > 0 ? `${(((variant.price - variant.costPrice) / variant.costPrice) * 100).toFixed(1)}%` : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Specifications Button */}
-                <div className="mt-4">
-                  <button
-                    type="button"
-                    onClick={() => onVariantSpecificationsClick(index)}
-                    className="w-full bg-white border-2 border-gray-200 rounded-xl hover:border-purple-400 hover:shadow-lg transition-all p-5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="relative">
-                          <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-md">
-                            <Layers className="w-6 h-6 text-white" />
+                        {/* Pricing and Stock Fields */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          {/* Cost Price */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Cost Price</label>
+                            <input
+                              type="text"
+                              value={variant.costPrice ? formatPrice(variant.costPrice) : ''}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/,/g, '');
+                                updateVariant(index, 'costPrice', parseFloat(value) || 0);
+                              }}
+                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900 text-lg font-bold"
+                              placeholder="0"
+                              min="0"
+                            />
                           </div>
-                          {variant.attributes && Object.keys(variant.attributes).length > 0 && (
-                            <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-md">
-                              <Check className="w-3 h-3 text-white" />
+
+                          {/* Selling Price */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Selling Price *</label>
+                            <input
+                              type="text"
+                              value={variant.price ? formatPrice(variant.price) : ''}
+                              onChange={(e) => {
+                                const value = e.target.value.replace(/,/g, '');
+                                updateVariant(index, 'price', parseFloat(value) || 0);
+                              }}
+                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold"
+                              placeholder="0"
+                              min="0"
+                            />
+                          </div>
+
+                          {/* Stock Quantity */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Stock Qty</label>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => updateVariant(index, 'stockQuantity', Math.max(0, (variant.stockQuantity || 0) - 1))}
+                                className="w-14 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border-2 border-gray-300 rounded-xl transition-colors text-gray-700 font-bold"
+                                aria-label="Decrease stock quantity"
+                              >
+                                <Minus className="w-5 h-5" />
+                              </button>
+                              <input
+                                type="number"
+                                value={variant.stockQuantity || ''}
+                                onChange={(e) => updateVariant(index, 'stockQuantity', Math.max(0, parseInt(e.target.value) || 0))}
+                                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold text-center"
+                                placeholder="0"
+                                min="0"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => updateVariant(index, 'stockQuantity', (variant.stockQuantity || 0) + 1)}
+                                className="w-14 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border-2 border-gray-300 rounded-xl transition-colors text-gray-700 font-bold"
+                                aria-label="Increase stock quantity"
+                              >
+                                <Plus className="w-5 h-5" />
+                              </button>
                             </div>
-                          )}
-                        </div>
-                        
-                        <div className="text-left flex-1">
-                          <h4 className="text-base font-bold text-gray-900">
-                            Specifications
-                          </h4>
-                          <p className="text-sm text-gray-600 mt-0.5">
-                            {variant.attributes && Object.keys(variant.attributes).length > 0 
-                              ? `${Object.keys(variant.attributes).length} spec${Object.keys(variant.attributes).length !== 1 ? 's' : ''} added`
-                              : 'Add variant specifications'}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-3">
-                        {variant.attributes && Object.keys(variant.attributes).length > 0 && (
-                          <div className="px-3 py-1.5 bg-purple-600 text-white text-sm font-bold rounded-full shadow-md">
-                            {Object.keys(variant.attributes).length}
                           </div>
-                        )}
-                        
-                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
+
+                          {/* Minimum Stock Level */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-2">Min Stock</label>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => updateVariant(index, 'minStockLevel', Math.max(0, (variant.minStockLevel || 0) - 1))}
+                                className="w-14 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border-2 border-gray-300 rounded-xl transition-colors text-gray-700 font-bold"
+                                aria-label="Decrease minimum stock level"
+                              >
+                                <Minus className="w-5 h-5" />
+                              </button>
+                              <input
+                                type="number"
+                                value={variant.minStockLevel || ''}
+                                onChange={(e) => updateVariant(index, 'minStockLevel', Math.max(0, parseInt(e.target.value) || 0))}
+                                className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold text-center"
+                                placeholder="0"
+                                min="0"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => updateVariant(index, 'minStockLevel', (variant.minStockLevel || 0) + 1)}
+                                className="w-14 h-12 flex items-center justify-center bg-gray-100 hover:bg-gray-200 border-2 border-gray-300 rounded-xl transition-colors text-gray-700 font-bold"
+                                aria-label="Increase minimum stock level"
+                              >
+                                <Plus className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Specifications Button */}
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => onVariantSpecificationsClick(index)}
+                            className="w-full bg-white border-2 border-gray-300 rounded-xl hover:border-purple-500 hover:shadow-lg transition-all p-5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className="relative">
+                                  <div className="w-12 h-12 bg-purple-600 rounded-xl flex items-center justify-center shadow-md">
+                                    <Layers className="w-6 h-6 text-white" />
+                                  </div>
+                                  {variant.attributes && Object.keys(variant.attributes).length > 0 && (
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center shadow-md">
+                                      <Check className="w-3 h-3 text-white" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                <div className="text-left flex-1">
+                                  <h4 className="text-base font-bold text-gray-900">
+                                    Specifications
+                                  </h4>
+                                  <p className="text-sm text-gray-600 mt-0.5">
+                                    {variant.attributes && Object.keys(variant.attributes).length > 0 
+                                      ? `${Object.keys(variant.attributes).length} spec${Object.keys(variant.attributes).length !== 1 ? 's' : ''} added`
+                                      : 'Add variant specifications'}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
+                                {variant.attributes && Object.keys(variant.attributes).length > 0 && (
+                                  <div className="px-3 py-1.5 bg-purple-600 text-white text-sm font-bold rounded-full shadow-md">
+                                    {Object.keys(variant.attributes).length}
+                                  </div>
+                                )}
+                                
+                                <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+                                  <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                  </svg>
+                                </div>
+                              </div>
+                            </div>
+                          </button>
                         </div>
                       </div>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            ))}
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
+        )}
 
-          {/* Add Variant Button */}
+        {/* Add Variant Button */}
+        <div className="p-6 pt-0">
           <button
             type="button"
             onClick={addVariant}
-            className="w-full p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all flex items-center justify-center gap-2 text-gray-600 hover:text-blue-600"
+            className="w-full p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-green-500 hover:bg-green-50 transition-all flex items-center justify-center gap-2 text-gray-600 hover:text-green-600 font-semibold"
           >
             <Plus size={20} />
             Add New Variant
           </button>
         </div>
-      )}
-      
-
+      </div>
     </div>
   );
 };

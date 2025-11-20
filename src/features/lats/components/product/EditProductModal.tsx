@@ -1,45 +1,33 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Package, Save, AlertTriangle, Plus, Check, Layers, FileText } from 'lucide-react';
+import { z } from 'zod';
 import { toast } from 'react-hot-toast';
-import { getLatsProvider } from '../../lib/data/provider';
+import { X, Layers, Package } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
-import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
+import { useAuth } from '../../../../context/AuthContext';
+import { useBranch } from '../../../../context/BranchContext';
+import { retryWithBackoff } from '../../../../lib/supabaseClient';
+
 import { getActiveCategories, Category } from '../../../../lib/categoryApi';
-import { specificationCategories, getSpecificationsByType, getTypeDisplayName } from '../../../../data/specificationCategories';
+import { getProduct } from '../../../../lib/latsProductApi';
+
 import { generateSKU } from '../../lib/skuUtils';
-import { validateProductData } from '../../lib/productUtils';
-import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
+import { useInventoryStore } from '../../stores/useInventoryStore';
+import { productCacheService } from '../../../../lib/productCacheService';
 
 // Extracted components
+import ProductInformationForm from './ProductInformationForm';
 import ProductVariantsSection from './ProductVariantsSection';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
-interface ProductData {
-  id: string;
-  name: string;
-  sku: string;
-  description?: string;
-  category_id: string;
-  cost_price: number;
-  selling_price: number;
-  stock_quantity: number;
-  min_stock_level: number;
-  condition: string;
-  specification?: string;
-  barcode?: string;
-  brand?: string;
-  model?: string;
-  warranty_period?: number;
-  is_active: boolean;
-  category?: {
-    id: string;
-    name: string;
-  };
-  supplier?: {
-    id: string;
-    name: string;
-  };
+interface EditProductModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  productId: string;
+  onProductUpdated?: () => void;
+  onSuccess?: () => void;
 }
 
+// ProductVariant type matching AddProductModal
 interface ProductVariant {
   id?: string;
   name: string;
@@ -52,33 +40,68 @@ interface ProductVariant {
   attributes?: Record<string, any>;
 }
 
-interface EditProductModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  productId: string;
-  onSuccess?: () => void;
-}
+// Validation schema for product form (same as AddProductModal)
+const productFormSchema = z.object({
+  name: z.string().min(1, 'Product name must be provided').max(100, 'Product name must be less than 100 characters'),
+  description: z.string().max(200, 'Description must be less than 200 characters').optional(),
+  specification: z.string().max(1000, 'Specification must be less than 1000 characters').optional().refine((val) => {
+    if (!val) return true;
+    try {
+      JSON.parse(val);
+      return true;
+    } catch {
+      return false;
+    }
+  }, {
+    message: "Specification must be valid JSON"
+  }),
+  sku: z.string().max(50, 'SKU must be less than 50 characters').optional(),
+  categoryId: z.string().min(1, 'Category must be selected'),
+  condition: z.enum(['new', 'used', 'refurbished'], {
+    errorMap: () => ({ message: 'Please select a condition' })
+  }),
+  metadata: z.record(z.string(), z.any()).optional().default({}),
+  variants: z.array(z.any()).optional().default([])
+});
 
 const EditProductModal: React.FC<EditProductModalProps> = ({
   isOpen,
   onClose,
   productId,
+  onProductUpdated,
   onSuccess
 }) => {
-  const [productData, setProductData] = useState<ProductData | null>(null);
+  const { currentBranch } = useBranch();
+  const { loadProducts } = useInventoryStore();
   const [categories, setCategories] = useState<Category[]>([]);
+  const [currentErrors, setCurrentErrors] = useState<Record<string, string>>({});
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
-  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+
+  // Generate auto SKU using utility function
+  const generateAutoSKU = () => {
+    return generateSKU();
+  };
+
+  // Initial form data
+  const [formData, setFormData] = useState({
+    name: '',
+    sku: '',
+    categoryId: '',
+    condition: 'new' as 'new' | 'used' | 'refurbished',
+    description: '',
+    specification: '',
+    metadata: {},
+    variants: []
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Variants state - Start with empty array, user can add variants manually
   const [variants, setVariants] = useState<ProductVariant[]>([]);
-  const [showVariants, setShowVariants] = useState(true);
+  const [showVariants, setShowVariants] = useState(true); // ✅ Always show variants section by default
   const [useVariants, setUseVariants] = useState(false);
   const [isReorderingVariants, setIsReorderingVariants] = useState(false);
   const [draggedVariantIndex, setDraggedVariantIndex] = useState<number | null>(null);
-  const [originallyHadVariants, setOriginallyHadVariants] = useState(false);
 
   // Variant specifications modal state
   const [showVariantSpecificationsModal, setShowVariantSpecificationsModal] = useState(false);
@@ -89,97 +112,34 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
   const [variantSpecStep, setVariantSpecStep] = useState(0);
   const [showAllVariantSpecs, setShowAllVariantSpecs] = useState(false);
 
-  // Product specifications modal state
-  const [showProductSpecificationsModal, setShowProductSpecificationsModal] = useState(false);
-  const [showProductCustomInput, setShowProductCustomInput] = useState(false);
-  const [productCustomAttributeInput, setProductCustomAttributeInput] = useState('');
-  const [selectedProductSpecCategory, setSelectedProductSpecCategory] = useState<string>('laptop');
-
-  // Form state
-  const [formData, setFormData] = useState<{
-    name: string;
-    sku: string;
-    categoryId: string;
-    condition: string;
-    description: string;
-    specification: string;
-    price: number;
-    costPrice: number;
-    stockQuantity: number;
-    minStockLevel: number;
-    storageRoomId: string;
-    shelfId: string;
-    metadata: Record<string, any>;
-    variants: ProductVariant[];
-  }>({
-    name: '',
-    sku: '',
-    categoryId: '',  // ✅ FIXED: Changed from null to empty string to match schema
-
-    condition: 'new',  // ✅ FIXED: Changed from empty string to valid enum value 'new'
-    description: '',
-    specification: '', // Ensure this is always a string
-    price: 0,
-    costPrice: 0,
-    stockQuantity: 0,
-    minStockLevel: 2, // Set default min stock level to 2 pcs like AddProductPage
-    storageRoomId: '',
-    shelfId: '',
-    metadata: {},
-    variants: []
-  });
-
-  // Helper function to format numbers with comma separators
-  const formatPrice = (price: number | string): string => {
-    const num = typeof price === 'string' ? parseFloat(price) : price;
-    // Remove .00 for whole numbers
-    if (num % 1 === 0) {
-      return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    }
-    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  // Block body scroll when modal is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen]);
-
-  // Load categories
-  const loadCategories = useCallback(async () => {
-    setIsLoadingCategories(true);
-    try {
-      const categoriesData = await getActiveCategories();
-      setCategories(categoriesData || []);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-      toast.error('Failed to load categories');
-    } finally {
-      setIsLoadingCategories(false);
-    }
-  }, []);
-
-  // Load categories when modal opens
-  useEffect(() => {
-    if (isOpen) {
-      loadCategories();
-    }
-  }, [isOpen, loadCategories]);
-
   // Prevent body scroll when modals are open
-  useBodyScrollLock(showProductSpecificationsModal || showVariantSpecificationsModal);
+  useBodyScrollLock(isOpen || showVariantSpecificationsModal);
+
+  // Name checking
+  const [isCheckingName, setIsCheckingName] = useState(false);
+  const [nameExists, setNameExists] = useState(false);
+  const [originalProductName, setOriginalProductName] = useState<string>('');
+
+  const { currentUser } = useAuth();
+
+  // Handle variants toggle - Actually toggle the variants visibility
+  const handleUseVariantsToggle = (enabled: boolean) => {
+    setUseVariants(enabled);
+    setShowVariants(enabled || variants.length > 0); // Show if enabled OR if variants exist
+  };
+  
+  // ✅ CRITICAL: Auto-enable useVariants when variants are added
+  useEffect(() => {
+    if (variants.length > 0) {
+      setUseVariants(true);
+      setShowVariants(true);
+    }
+  }, [variants.length]);
 
   // Auto-update variant SKUs when base SKU changes
   useEffect(() => {
     if (variants.length > 0 && formData.sku) {
-      setVariants(prevVariants =>
+      setVariants(prevVariants => 
         prevVariants.map((variant, index) => ({
           ...variant,
           sku: `${formData.sku}-V${(index + 1).toString().padStart(2, '0')}`
@@ -188,41 +148,124 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     }
   }, [formData.sku]);
 
-  // Handle name check with debouncing
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (formData.name) {
-        checkProductName(formData.name);
+  // Load product data when modal opens
+  const loadProductData = useCallback(async () => {
+    if (!isOpen || !productId) return;
+
+    setIsLoadingProduct(true);
+    try {
+      const product = await getProduct(productId, { forceRefresh: true });
+      
+      // Extract condition from attributes or use default
+      const condition = (product as any).attributes?.condition || 
+                       (product as any).condition || 
+                       'new';
+
+      // Extract specification from attributes or direct field
+      const specification = (product as any).attributes?.specification || 
+                           (product as any).specification || 
+                           '';
+
+      // Set form data
+      setFormData({
+        name: product.name || '',
+        sku: product.sku || generateAutoSKU(),
+        categoryId: product.categoryId || '',
+        condition: condition as 'new' | 'used' | 'refurbished',
+        description: product.description || '',
+        specification: typeof specification === 'string' ? specification : JSON.stringify(specification),
+        metadata: (product as any).metadata || {},
+        variants: []
+      });
+
+      setOriginalProductName(product.name || '');
+
+      // Load variants
+      if (product.variants && product.variants.length > 0) {
+        const loadedVariants: ProductVariant[] = product.variants.map((v: any) => ({
+          id: v.id,
+          name: v.name || v.variant_name || 'Default',
+          sku: v.sku || '',
+          costPrice: v.costPrice || v.cost_price || 0,
+          price: v.price || v.sellingPrice || v.selling_price || 0,
+          stockQuantity: v.stockQuantity || v.quantity || 0,
+          minStockLevel: v.minStockLevel || v.minQuantity || 0,
+          specification: v.specification || '',
+          attributes: v.attributes || v.variant_attributes || {}
+        }));
+        setVariants(loadedVariants);
+        setUseVariants(true);
+        setShowVariants(true);
+      } else {
+        setVariants([]);
+        setUseVariants(false);
       }
-    }, 500);
+    } catch (error: any) {
+      console.error('Error loading product:', error);
+      toast.error(error.message || 'Failed to load product data');
+      onClose();
+    } finally {
+      setIsLoadingProduct(false);
+    }
+  }, [isOpen, productId, onClose]);
 
-    return () => clearTimeout(timeoutId);
-  }, [formData.name]);
+  // Load categories when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const fetchCategories = async () => {
+        try {
+          const data = await getActiveCategories();
+          setCategories(data);
+        } catch (error) {
+          console.error('Error loading categories:', error);
+          toast.error('Failed to load categories');
+        }
+      };
+      fetchCategories();
+      loadProductData();
+    } else {
+      // Reset form when modal closes
+      setFormData({
+        name: '',
+        sku: '',
+        categoryId: '',
+        condition: 'new',
+        description: '',
+        specification: '',
+        metadata: {},
+        variants: []
+      });
+      setVariants([]);
+      setCurrentErrors({});
+      setUseVariants(false);
+      setShowVariants(true);
+      setOriginalProductName('');
+    }
+  }, [isOpen, loadProductData]);
 
-  // Name checking (same as EditProductPage)
+  // Check if product name exists (excluding current product)
   const checkProductName = async (name: string) => {
     if (!name.trim()) {
       setNameExists(false);
       return;
     }
 
-    // Don't check if the name hasn't changed from the original
-    if (originalProductName && name.trim() === originalProductName.trim()) {
+    // Don't show warning if name hasn't changed
+    if (name.trim() === originalProductName.trim()) {
       setNameExists(false);
       return;
     }
 
     setIsCheckingName(true);
     try {
-      const { data, error } = await supabase!
+      const { data, error } = await supabase
         .from('lats_products')
         .select('id')
-        .ilike('name', name.trim()) // Exact match (case-insensitive)
-        .neq('id', productId || '') // Exclude current product when editing
+        .ilike('name', name.trim())
+        .neq('id', productId)
         .limit(1);
 
       if (error) throw error;
-
       setNameExists(data && data.length > 0);
     } catch (error) {
       console.error('Error checking product name:', error);
@@ -231,512 +274,153 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     }
   };
 
-  // Function to create a variant from current form data
-  const createVariantFromFormData = (): ProductVariant => {
-    return {
-      name: 'Variant 1',
-      sku: `${formData.sku}-V01`,
-      costPrice: formData.costPrice,
-      price: formData.price,
-      stockQuantity: formData.stockQuantity,
-      minStockLevel: formData.minStockLevel,
-      specification: formData.specification,
-      attributes: {
-        specification: formData.specification || null
-      }
-    };
-  };
-
-  // Handle variants toggle - automatically create variant from form data
-  const handleUseVariantsToggle = (enabled: boolean) => {
-    console.log('🔄 [DEBUG] handleUseVariantsToggle called with enabled:', enabled);
-    console.log('🔄 [DEBUG] Current variants count:', variants.length);
-    
-    setUseVariants(enabled);
-    
-    if (enabled && variants.length === 0) {
-      console.log('📦 [DEBUG] Creating variant from form data...');
-      // Create a variant from current form data
-      const autoVariant = createVariantFromFormData();
-      console.log('📦 [DEBUG] Auto-created variant:', autoVariant);
-      setVariants([autoVariant]);
-      setShowVariants(true);
-    } else if (!enabled) {
-      console.log('📦 [DEBUG] Clearing variants...');
-      // Clear variants when disabling
-      setVariants([]);
-      setShowVariants(false);
-    }
-    
-    console.log('🔄 [DEBUG] useVariants toggled. New state:', enabled);
-  };
-
-  // Update the first variant when form data changes (if variants are enabled)
-  // Use ref to track if this is an initial load to prevent update loops
-  const isInitialLoadRef = React.useRef(true);
-  const prevFormDataRef = React.useRef({
-    costPrice: formData.costPrice,
-    price: formData.price,
-    stockQuantity: formData.stockQuantity,
-    minStockLevel: formData.minStockLevel,
-    specification: formData.specification
-  });
-
-  useEffect(() => {
-    // Skip on initial load
-    if (isInitialLoadRef.current) {
-      isInitialLoadRef.current = false;
-      prevFormDataRef.current = {
-        costPrice: formData.costPrice,
-        price: formData.price,
-        stockQuantity: formData.stockQuantity,
-        minStockLevel: formData.minStockLevel,
-        specification: formData.specification
-      };
-      return;
-    }
-
-    // Only update if values actually changed
-    const hasChanged =
-      prevFormDataRef.current.costPrice !== formData.costPrice ||
-      prevFormDataRef.current.price !== formData.price ||
-      prevFormDataRef.current.stockQuantity !== formData.stockQuantity ||
-      prevFormDataRef.current.minStockLevel !== formData.minStockLevel ||
-      prevFormDataRef.current.specification !== formData.specification;
-
-    if (useVariants && variants.length > 0 && hasChanged) {
-      const updatedVariant = createVariantFromFormData();
-      setVariants(prev => prev.map((variant, index) =>
-        index === 0 ? { ...variant, ...updatedVariant } : variant
-      ));
-
-      prevFormDataRef.current = {
-        costPrice: formData.costPrice,
-        price: formData.price,
-        stockQuantity: formData.stockQuantity,
-        minStockLevel: formData.minStockLevel,
-        specification: formData.specification
-      };
-    }
-  }, [formData.costPrice, formData.price, formData.stockQuantity, formData.minStockLevel, formData.specification, useVariants, variants.length]);
-
-  const updateVariant = (index: number, field: keyof ProductVariant, value: any) => {
-    setVariants(prevVariants =>
-      prevVariants.map((variant, i) =>
-        i === index ? { ...variant, [field]: value } : variant
-      )
-    );
-  };
-
-  const addVariant = () => {
-    const newVariant: ProductVariant = {
-      name: `Variant ${variants.length + 1}`,
-      sku: `${formData.sku}-V${(variants.length + 1).toString().padStart(2, '0')}`,
-      costPrice: formData.costPrice,
-      price: formData.price,
-      stockQuantity: 0,
-      minStockLevel: 0,
-      specification: '',
-      attributes: {}
-    };
-    setVariants([...variants, newVariant]);
-  };
-
-  const removeVariant = (index: number) => {
-    setVariants(prevVariants => prevVariants.filter((_, i) => i !== index));
-  };
-
-  const updateVariantSpecification = (variantIndex: number, specKey: string, value: string | boolean) => {
-    const variant = variants[variantIndex];
-    const newAttributes = { ...variant.attributes, [specKey]: value };
-    updateVariant(variantIndex, 'attributes', newAttributes);
-  };
-
-  const updateProductSpecification = (specKey: string, value: string | boolean) => {
-    const currentSpecs = formData.specification ? JSON.parse(formData.specification) : {};
-    const newSpecs = { ...currentSpecs, [specKey]: value };
-    setFormData(prev => ({ ...prev, specification: JSON.stringify(newSpecs) }));
-  };
-
-  // Name checking state (like EditProductPage)
-  const [isCheckingName, setIsCheckingName] = useState(false);
-  const [nameExists, setNameExists] = useState(false);
-  const [originalProductName, setOriginalProductName] = useState<string>('');
-  const [productBranchId, setProductBranchId] = useState<string | null>(null);
-
-  // Fetch product data (same approach as EditProductPage)
-  const fetchProductData = useCallback(async () => {
-    if (!productId) return;
-
-    setIsLoadingProduct(true);
-    try {
-      console.log('🔄 [EditProductModal] Loading product data for ID:', productId);
-
-      // Use the same approach as EditProductPage - direct Supabase queries
-      let product: any = null;
-
-      // Load product without variants first
-      console.log('📥 [EditProductModal] Fetching product from database...');
-      const { data: productOnly, error: productError } = await supabase!
-        .from('lats_products')
-        .select('*')
-        .eq('id', productId!)
-        .single();
-
-      console.log('📊 [EditProductModal] Product query result:', { productOnly, productError });
-
-      if (productError) {
-        console.error('❌ [EditProductModal] Product query failed:', productError);
-        console.error('❌ [EditProductModal] Error code:', (productError as any).code);
-        console.error('❌ [EditProductModal] Error message:', (productError as any).message);
-        throw productError;
-      }
-
-      if (!productOnly) {
-        console.error('❌ [EditProductModal] No product found with ID:', productId);
-        toast.error(`Product with ID ${productId} not found`);
-        onClose();
-        return;
-      }
-
-      console.log('✅ [EditProductModal] Product loaded successfully:', productOnly.name);
-
-      // Load variants separately - ONLY parent variants (exclude child IMEI variants)
-      console.log('📥 [EditProductModal] Fetching parent variants from database...');
-      const { data: variants, error: variantsError } = await supabase!
-        .from('lats_product_variants')
-        .select('*')
-        .eq('product_id', productId!)
-        .is('parent_variant_id', null); // ✅ FIX: Only load parent variants, exclude children
-
-      console.log('📊 [EditProductModal] Variants query result:', { variants, variantsError });
-
-      if (variantsError) {
-        console.warn('⚠️ [EditProductModal] Could not load variants:', variantsError);
-        console.warn('⚠️ [EditProductModal] Variants error code:', variantsError.code);
-        // Continue without variants
-        product = productOnly ? { ...productOnly, variants: [] as ProductVariant[] } : null;
-      } else {
-        console.log('✅ [EditProductModal] Loaded parent variants successfully. Count:', variants?.length || 0);
-        
-        // For each parent variant, calculate stock from children if it's a parent variant
-        const variantsWithStock = await Promise.all(
-          (variants || []).map(async (variant: any) => {
-            let actualStock = variant.quantity || 0;
-            
-            // If this is a parent variant with children, recalculate stock from children
-            if (variant.is_parent || variant.variant_type === 'parent') {
-              try {
-                const { data: children, error: childError } = await supabase!
-                  .from('lats_product_variants')
-                  .select('quantity, is_active')
-                  .eq('parent_variant_id', variant.id)
-                  .eq('variant_type', 'imei_child')
-                  .eq('is_active', true);
-                
-                if (!childError && children) {
-                  actualStock = children.reduce((sum: number, child: any) => sum + (child.quantity || 0), 0);
-                  console.log(`📦 [EditProductModal] Parent variant "${variant.variant_name || variant.name}" has ${children.length} children, total stock: ${actualStock}`);
-                }
-              } catch (e) {
-                console.warn('⚠️ [EditProductModal] Could not calculate stock from children:', e);
-              }
-            }
-            
-            return {
-              ...variant,
-              quantity: actualStock // Use calculated stock
-            };
-          })
-        );
-        
-        product = productOnly ? { ...productOnly, variants: variantsWithStock || ([] as ProductVariant[]) } : null;
-      }
-
-      if (product) {
-        console.log('📝 [EditProductModal] Processing product data...');
-        console.log('📝 [EditProductModal] Product raw data:', product);
-
-        // Store the original product name for comparison
-        setOriginalProductName(product.name || '');
-
-        // Store the product's branch_id for variant operations
-        setProductBranchId(product.branch_id || null);
-
-        const processedFormData = {
-          name: product.name || '',
-          description: product.description || '',
-          specification: (() => {
-            try {
-              if (product.specification) {
-                // If it's already a string, validate it's JSON
-                if (typeof product.specification === 'string') {
-                  JSON.parse(product.specification);
-                  return product.specification;
-                }
-                // If it's an object, stringify it
-                if (typeof product.specification === 'object') {
-                  return JSON.stringify(product.specification);
-                }
-              }
-              return '';
-            } catch {
-              // If JSON parsing fails, return empty string
-              return '';
-            }
-          })(),
-          sku: product.sku || product.barcode || generateSKU(),
-          categoryId: product.category_id || '',  // ✅ FIXED: Use empty string instead of null
-
-          condition: product.condition || 'new',  // ✅ FIXED: Default to 'new' instead of empty string
-          
-          price: product.selling_price || 0,
-          costPrice: product.cost_price || 0,
-          stockQuantity: product.stock_quantity || 0,
-          minStockLevel: product.min_stock_level || 0,
-          storageRoomId: product.storage_room_id || '',
-          shelfId: product.shelf_id || '',
-          metadata: product.attributes || {},
-          variants: [] as ProductVariant[]
-        };
-
-        console.log('📝 [EditProductModal] Processed form data:', processedFormData);
-        console.log('📝 [EditProductModal] Category ID from product:', product.category_id);
-        console.log('📝 [EditProductModal] Category ID in form data:', processedFormData.categoryId);
-        console.log('📝 [EditProductModal] Available categories:', categories.map(c => ({ id: c.id, name: c.name })));
-
-        // Check if category exists in categories array (same as EditProductPage)
-        if (processedFormData.categoryId && categories.length > 0) {
-          const categoryExists = categories.find(cat => cat.id === processedFormData.categoryId);
-          if (!categoryExists) {
-            console.warn('⚠️ [EditProductModal] Category ID does not match any available category!');
-            console.warn('⚠️ [EditProductModal] Category ID:', processedFormData.categoryId);
-            console.warn('⚠️ [EditProductModal] Available category IDs:', categories.map(c => c.id));
-          } else {
-            console.log('✅ [EditProductModal] Category matched:', categoryExists.name);
-          }
-        } else if (!processedFormData.categoryId) {
-          console.warn('⚠️ [EditProductModal] Product has NO category set in database!');
-        }
-
-        setFormData(processedFormData);
-        setProductData(product);
-
-        // Determine if product originally had variants (same logic as EditProductPage)
-        const hadVariantsOriginally = (
-          // Check metadata first (most reliable)
-          product.metadata?.useVariants === true ||
-          // Check if product was designed for variants by looking for:
-          // 1. Multiple variants, OR
-          // 2. Any variant with meaningful data, OR
-          // 3. A has_variants flag if it exists in the product
-          product.has_variants === true ||
-          (product.variants && product.variants.length > 1) ||
-          (product.variants && product.variants.some((variant: any) =>
-            variant.name || variant.variant_name ||  // Prioritize 'name' (user-defined)
-            (variant.sku && variant.sku !== product.sku) ||
-            (variant.attributes && Object.keys(variant.attributes).length > 0) ||  // Check attributes first
-            (variant.variant_attributes && Object.keys(variant.variant_attributes).length > 0)
-          ))
-        );
-
-        setOriginallyHadVariants(hadVariantsOriginally);
-        console.log('🔍 [EditProductModal] Product variant analysis:', {
-          productId: product.id,
-          variantCount: product.variants?.length || 0,
-          hadVariantsOriginally,
-          hasVariantsFlag: product.has_variants,
-          metadataUseVariants: product.metadata?.useVariants
-        });
-
-        // Load variants if they exist (same processing as EditProductPage)
-        if (product.variants && product.variants.length > 0) {
-          console.log('📦 [EditProductModal] Processing variants...');
-          console.log('📦 [EditProductModal] Raw variants from database:', product.variants);
-          const processedVariants = product.variants.map((variant: any, index: number) => {
-            console.log(`📦 [EditProductModal] Variant ${index + 1} raw:`, {
-              name: variant.name,
-              variant_name: variant.variant_name,
-              sku: variant.sku,
-              id: variant.id
-            });
-
-            // Match ProductModal's logic - prioritize variant_name (database field) over name
-            const variantName = variant.variant_name || variant.name || '';
-            console.log(`📦 [EditProductModal] Variant ${index + 1} selected name: "${variantName}"`);
-
-            return {
-              id: variant.id, // ✅ Include variant ID for tracking existing variants
-              name: variantName,  // ✅ FIXED: Now matches getVariantDisplayName priority
-              sku: variant.sku || '',
-              costPrice: variant.cost_price || 0,
-              price: variant.selling_price || 0,
-              stockQuantity: variant.quantity || 0,
-              minStockLevel: variant.min_quantity || 0,
-              specification: variant.attributes?.specification || variant.variant_attributes?.specification || '',  // 🔧 FIX: Prioritize 'attributes'
-              attributes: variant.attributes || variant.variant_attributes || {}  // 🔧 FIX: Prioritize 'attributes'
-            };
-          });
-
-          console.log('📦 [EditProductModal] Processed variants:', processedVariants);
-          setVariants(processedVariants);
-
-          // Respect the original intention - if product originally had variants, keep them enabled
-          console.log('📦 [EditProductModal] Setting useVariants and showVariants to:', hadVariantsOriginally);
-          setUseVariants(hadVariantsOriginally);
-          setShowVariants(hadVariantsOriginally);
-        } else {
-          console.log('📦 [EditProductModal] No variants found in database');
-          // No variants in database
-          setOriginallyHadVariants(false);
-          setUseVariants(false);
-          setShowVariants(false);
-        }
-
-        setErrors({});
-      }
-    } catch (error: any) {
-      console.error('❌ [EditProductModal] Error loading product:', error);
-
-      // Provide more specific error messages (same as EditProductPage)
-      let errorMessage = 'Failed to load product data';
-
-      if (error?.code === 'PGRST116') {
-        errorMessage = `Product with ID "${productId}" not found in database`;
-      } else if (error?.code === 'PGRST301') {
-        errorMessage = 'Database connection error. Please check your internet connection.';
-      } else if (error?.message) {
-        errorMessage = `Database error: ${error.message}`;
-      }
-
-      toast.error(errorMessage);
-      console.error('❌ [EditProductModal] Detailed error info:', {
-        code: error?.code,
-        message: error?.message,
-        details: error?.details,
-        hint: error?.hint,
-        productId
-      });
-      onClose();
-    } finally {
-      setIsLoadingProduct(false);
-    }
-  }, [productId, onClose, categories]);
-
-  // Load product data when modal opens
-  useEffect(() => {
-    if (isOpen && productId) {
-      fetchProductData();
-    }
-  }, [isOpen, productId, fetchProductData]);
-
-  // Form validation
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Product name is required';
-    }
-
-    if (!formData.categoryId) {
-      newErrors.categoryId = 'Category is required';
-    }
-
-    // Note: SKU validation removed - SKUs are auto-generated
-
-    // Only validate product-level pricing/stock when NOT using variants
-    if (!useVariants) {
-      if (formData.price < 0) {
-        newErrors.price = 'Price cannot be negative';
-      }
-
-      if (formData.costPrice < 0) {
-        newErrors.costPrice = 'Cost price cannot be negative';
-      }
-
-      if (formData.stockQuantity < 0) {
-        newErrors.stockQuantity = 'Stock quantity cannot be negative';
-      }
-
-      if (formData.minStockLevel < 0) {
-        newErrors.minStockLevel = 'Minimum stock level cannot be negative';
-      }
-    } else {
-      // When using variants, validate that variants exist and have basic data
-      if (variants.length === 0) {
-        newErrors.variants = 'At least one variant is required when using product variants';
-      } else {
-        // Check if any variant is missing required data (SKU is auto-generated)
-        const invalidVariants = variants.filter(v =>
-          !v.name.trim() || v.price <= 0 || v.costPrice < 0 || v.stockQuantity < 0
-        );
-        if (invalidVariants.length > 0) {
-          newErrors.variants = 'Some variants are missing required information (name, SKU, or pricing)';
-        }
-      }
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  // Handle variant specifications click
+  const handleVariantSpecificationsClick = (index: number) => {
+    setCurrentVariantIndex(index);
+    setShowVariantSpecificationsModal(true);
   };
 
   // Handle form submission
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      toast.error('Please fix the errors in the form');
-      return;
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
+    // Validation
+    try {
+      productFormSchema.parse(formData);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        const errors: Record<string, string> = {};
+        error.errors.forEach(err => {
+          if (err.path.length > 0) {
+            errors[err.path[0]] = err.message;
+          }
+        });
+        setCurrentErrors(errors);
+        toast.error('Please fix the validation errors');
+        return;
+      }
     }
 
-    if (!productData) {
-      toast.error('Product data not loaded');
+    if (!currentBranch?.id) {
+      toast.error('No branch selected');
       return;
     }
 
     setIsSubmitting(true);
-    try {
-      const dataProvider = getLatsProvider();
 
-      const updateData: any = {
-        name: formData.name.trim(),
-        sku: formData.sku.trim(),
-        description: formData.description.trim() || null,
-        categoryId: formData.categoryId,
-        condition: formData.condition,
-        costPrice: formData.costPrice,
-        price: formData.price,
-        selling_price: formData.price,
-        stockQuantity: formData.stockQuantity,
-        minStockLevel: formData.minStockLevel,
-        specification: formData.specification.trim() || null,
-        isActive: true
+    try {
+      // Prepare attributes with specification and condition if available
+      const productAttributes = {
+        ...(formData.metadata || {}),
+        ...(formData.specification ? { specification: formData.specification } : {}),
+        ...(formData.condition ? { condition: formData.condition } : {})
       };
 
-      // Include variants if enabled
-      if (useVariants && variants.length > 0) {
-        updateData.variants = variants.map(variant => ({
-          id: variant.id || undefined, // Include ID for existing variants
-          sku: variant.sku,
+      // Prepare product update data
+      const productUpdateData: any = {
+        name: formData.name,
+        description: formData.description || null,
+        sku: formData.sku,
+        categoryId: formData.categoryId || null,
+        condition: formData.condition,
+        attributes: productAttributes,
+        metadata: {
+          ...(formData.metadata || {}),
+          useVariants: useVariants,
+          variantCount: useVariants ? variants.length : 0,
+          updatedBy: currentUser?.id,
+          updatedAt: new Date().toISOString()
+        }
+      };
+
+      // Prepare variants if any
+      if (variants.length > 0) {
+        console.log('🔄 [EditProductModal] Preparing variants for product:', productId);
+        
+        const variantsToUpdate = variants.map((variant) => ({
+          id: variant.id, // Include ID for existing variants
+          sku: variant.sku || `${formData.sku}-V${variants.indexOf(variant) + 1}`,
           name: variant.name,
-          costPrice: variant.costPrice,
-          selling_price: variant.price,
-          quantity: variant.stockQuantity,
-          minStockLevel: variant.minStockLevel,
+          costPrice: variant.costPrice || 0,
+          sellingPrice: variant.price || 0,
+          price: variant.price || 0, // Alias
+          quantity: variant.stockQuantity || 0,
+          stockQuantity: variant.stockQuantity || 0, // Alias
+          minQuantity: variant.minStockLevel || 0,
+          minStockLevel: variant.minStockLevel || 0, // Alias
           attributes: variant.attributes || {}
         }));
+
+        productUpdateData.variants = variantsToUpdate;
       }
 
-      const response = await dataProvider.updateProduct(productId, updateData);
+      console.log('🔄 [EditProductModal] Updating product with data:', productUpdateData);
 
-      if (response.ok) {
-        toast.success('Product updated successfully');
-        onSuccess?.();
-        onClose();
+      // Update product using latsProductApi (includes variants if any)
+      const { updateProduct } = await import('../../../../lib/latsProductApi');
+      await updateProduct(productId, productUpdateData, currentUser?.id || '');
+
+      // Clear all caches
+      console.log('🔄 [EditProductModal] Clearing product caches...');
+      productCacheService.clearProducts();
+      
+      // Clear query cache and deduplication cache
+      const { invalidateCachePattern } = await import('../../../../lib/queryCache');
+      invalidateCachePattern('products:*');
+      
+      // Clear enhanced cache manager
+      const { smartCache } = await import('../../../../lib/enhancedCacheManager');
+      smartCache.invalidateCache('products');
+      
+      // Optimized: Update only the edited product in the store instead of reloading all products
+      // This avoids slow database response warnings during cold starts
+      try {
+        const { getProduct: getProductFromStore } = useInventoryStore.getState();
+        const productResponse = await getProductFromStore(productId);
+        
+        if (productResponse.ok && productResponse.data) {
+          const { updateProductInStore } = useInventoryStore.getState();
+          updateProductInStore(productResponse.data);
+          console.log('✅ [EditProductModal] Product updated in store without full reload');
+        } else {
+          throw new Error(productResponse.message || 'Failed to fetch updated product');
+        }
+      } catch (error) {
+        console.warn('⚠️ [EditProductModal] Failed to update product in store, falling back to full reload:', error);
+        // Fallback to full reload if single product update fails
+        // @ts-ignore - loadProducts accepts force parameter but type definition doesn't include it
+        await loadProducts(null, true);
+      }
+      
+      // Optionally refresh in background without blocking (non-blocking)
+      // This ensures data consistency without causing slow response warnings
+      setTimeout(async () => {
+        try {
+          // @ts-ignore
+          await loadProducts(null, true);
+          console.log('✅ [EditProductModal] Background product refresh completed');
+        } catch (error) {
+          console.warn('⚠️ [EditProductModal] Background refresh failed (non-critical):', error);
+        }
+      }, 1000);
+
+      toast.success('Product updated successfully!');
+      
+      // Call callbacks
+      if (onProductUpdated) onProductUpdated();
+      if (onSuccess) onSuccess();
+      
+      onClose();
+    } catch (error: any) {
+      console.error('❌ [EditProductModal] Error updating product:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Provide more helpful error messages
+      if (error.code === '23505') {
+        toast.error('A product with this SKU already exists.');
       } else {
-        toast.error(response.message || 'Failed to update product');
+        toast.error(error.message || 'Failed to update product. Please try again.');
       }
-    } catch (error) {
-      console.error('Error updating product:', error);
-      toast.error('Failed to update product');
     } finally {
       setIsSubmitting(false);
     }
@@ -744,242 +428,113 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Calculate completion stats (same as AddProductModal)
+  const completedScalarFields = [
+    formData.name,
+    formData.categoryId,
+    formData.condition
+  ].filter(Boolean).length;
+  
+  const completedVariants = variants.filter(v => v.name && v.price > 0).length;
+  
+  const completedFields = completedScalarFields + completedVariants;
+  const totalFields = 3 + variants.length;
+  const pendingFields = totalFields - completedFields;
+
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]" role="dialog" aria-modal="true" aria-labelledby="edit-product-modal-title">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/60 z-[99999]"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      
+      {/* Modal Container */}
+      <div 
+        className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
+      >
+        <div 
+          className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-product-modal-title"
+        >
         {/* Close Button */}
         <button
           onClick={onClose}
           className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+          disabled={isSubmitting || isLoadingProduct}
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Icon Header - Fixed */}
-        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
-            {/* Icon */}
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-              <Package className="w-8 h-8 text-white" />
+        {/* Loading State */}
+        {isLoadingProduct && (
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-sm text-gray-600">Loading product data...</p>
             </div>
+          </div>
+        )}
 
-            {/* Text and Status */}
-            <div>
-              <h3 id="edit-product-modal-title" className="text-2xl font-bold text-gray-900 mb-3">
-                {isLoadingProduct ? 'Loading Product...' : 'Edit Product'}
-              </h3>
-
-              {/* Status Indicator - All Products Are Automatically Active */}
-              <div className="flex items-center gap-4">
-                {productData && (
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-lg border bg-green-50 border-green-200">
-                    <div className="w-3 h-3 rounded-full bg-green-500" />
-                    <span className="text-sm font-bold text-green-700">
-                      Active (Automatic)
-                    </span>
-                  </div>
-                )}
-
-                {isLoadingProduct && (
-                  <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-sm font-bold text-blue-700">Loading...</span>
-                  </div>
-                )}
+        {/* Icon Header - Fixed (same as AddProductModal) */}
+        {!isLoadingProduct && (
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <Package className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text and Progress */}
+              <div>
+                <h3 id="edit-product-modal-title" className="text-2xl font-bold text-gray-900 mb-3">Edit Product</h3>
+                
+                {/* Progress Indicator */}
+                <div className="flex items-center gap-4">
+                  {completedFields > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="text-sm font-bold text-green-700">{completedFields} Complete</span>
+                    </div>
+                  )}
+                  {pendingFields > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-lg animate-pulse">
+                      <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm font-bold text-orange-700">{pendingFields} Pending</span>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Scrollable Form Content */}
-        <div className="flex-1 overflow-y-auto">
-          {isLoadingProduct ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                <p className="text-gray-600">Loading product data...</p>
-              </div>
-            </div>
-          ) : productData ? (
-            <div className="p-6 space-y-6">
-              {/* Basic Information Section */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h4 className="text-lg font-bold text-gray-900 mb-4">Basic Information</h4>
-                <div className="space-y-4">
-                  {/* Product Name - Full Width */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Product Name *
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 text-gray-900 ${
-                          errors.name
-                            ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-                        }`}
-                        placeholder="Enter product name"
-                      />
-                      {isCheckingName && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                        </div>
-                      )}
-                    </div>
-                    {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
-                    {nameExists && (
-                      <p className="mt-1 text-sm text-amber-600">⚠️ A product with this exact name already exists</p>
-                    )}
-                  </div>
+        {/* Scrollable Content */}
+        {!isLoadingProduct && (
+          <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+            <div className="py-4">
+              {/* Product Information */}
+              <ProductInformationForm
+                formData={formData}
+                setFormData={setFormData}
+                categories={categories}
+                currentErrors={currentErrors}
+                isCheckingName={isCheckingName}
+                nameExists={nameExists}
+                onNameCheck={checkProductName}
+                useVariants={useVariants}
+                onGenerateSKU={generateAutoSKU}
+              />
 
-                  {/* Specifications - Full Width */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Specifications
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => setShowProductSpecificationsModal(true)}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-medium rounded-lg transition-colors"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        Configure Specs
-                      </button>
-                    </div>
-                    <textarea
-                      value={formData.specification}
-                      onChange={(e) => setFormData(prev => ({ ...prev, specification: e.target.value }))}
-                      rows={3}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 resize-none"
-                      placeholder="Enter product specifications (optional)"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Pricing and Stock Section - Only show when NOT using variants */}
-              {!useVariants && (
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <h4 className="text-lg font-bold text-gray-900 mb-4">Pricing & Stock</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cost Price
-                    </label>
-                    <input
-                      type="text"
-                      value={formatPrice(formData.costPrice)}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/,/g, '');
-                        const numValue = parseFloat(value) || 0;
-                        setFormData(prev => ({ ...prev, costPrice: numValue }));
-                      }}
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 text-gray-900 font-bold text-lg ${
-                        errors.costPrice
-                          ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                          : 'border-gray-300 focus:border-green-500 focus:ring-green-200'
-                      }`}
-                      placeholder="0"
-                    />
-                    {errors.costPrice && <p className="text-red-600 text-sm mt-1">{errors.costPrice}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selling Price *
-                    </label>
-                    <input
-                      type="text"
-                      value={formatPrice(formData.price)}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/,/g, '');
-                        const numValue = parseFloat(value) || 0;
-                        setFormData(prev => ({ ...prev, price: numValue }));
-                      }}
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 text-gray-900 font-bold text-lg ${
-                        errors.price
-                          ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                          : 'border-gray-300 focus:border-green-500 focus:ring-green-200'
-                      }`}
-                      placeholder="0"
-                    />
-                    {errors.price && <p className="text-red-600 text-sm mt-1">{errors.price}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Stock Qty
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.stockQuantity}
-                      onChange={(e) => setFormData(prev => ({ ...prev, stockQuantity: parseInt(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 text-gray-900 font-bold text-lg ${
-                        errors.stockQuantity
-                          ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                          : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
-                      min="0"
-                      placeholder="0"
-                    />
-                    {errors.stockQuantity && <p className="text-red-600 text-sm mt-1">{errors.stockQuantity}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Min Stock
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.minStockLevel}
-                      onChange={(e) => setFormData(prev => ({ ...prev, minStockLevel: parseInt(e.target.value) || 0 }))}
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 text-gray-900 font-bold text-lg ${
-                        errors.minStockLevel
-                          ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                          : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
-                      min="0"
-                      placeholder="0"
-                    />
-                    {errors.minStockLevel && <p className="text-red-600 text-sm mt-1">{errors.minStockLevel}</p>}
-                  </div>
-                </div>
-
-                {/* Profit Calculation Display - Only show when NOT using variants */}
-                {!useVariants && formData.price > 0 && formData.costPrice > 0 && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                      <div>
-                        <p className="text-xs font-medium text-blue-600 mb-1">Cost Price</p>
-                        <p className="text-lg font-bold text-blue-700">{formatPrice(formData.costPrice)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-blue-600 mb-1">Selling Price</p>
-                        <p className="text-lg font-bold text-blue-700">{formatPrice(formData.price)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-blue-600 mb-1">Profit</p>
-                        <p className={`text-lg font-bold ${formData.price - formData.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formatPrice(formData.price - formData.costPrice)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-blue-600 mb-1">Margin</p>
-                        <p className={`text-lg font-bold ${formData.price - formData.costPrice >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {formData.costPrice > 0 ? `${((formData.price - formData.costPrice) / formData.costPrice * 100).toFixed(1)}%` : 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                </div>
-              )}
-
-              {/* Product Variants Section */}
+              {/* Product Variants */}
               <ProductVariantsSection
                 variants={variants}
                 setVariants={setVariants}
@@ -991,231 +546,232 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
                 setIsReorderingVariants={setIsReorderingVariants}
                 draggedVariantIndex={draggedVariantIndex}
                 setDraggedVariantIndex={setDraggedVariantIndex}
-                onVariantSpecificationsClick={(index) => {
-                  setCurrentVariantIndex(index);
-                  setShowVariantSpecificationsModal(true);
-                }}
-                baseSku={formData.sku || generateSKU()}
+                onVariantSpecificationsClick={handleVariantSpecificationsClick}
+                baseSku={formData.sku}
               />
-
-              {/* Additional Information Section */}
-              <div className="bg-gray-50 rounded-xl p-6">
-                <h4 className="text-lg font-bold text-gray-900 mb-4">Additional Information</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Category *
-                    </label>
-                    <select
-                      value={formData.categoryId}
-                      onChange={(e) => setFormData(prev => ({ ...prev, categoryId: e.target.value }))}
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 text-gray-900 ${
-                        errors.categoryId
-                          ? 'border-red-500 focus:border-red-500 focus:ring-red-200'
-                          : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
-                      }`}
-                      disabled={isLoadingCategories}
-                    >
-                      <option value="">
-                        {isLoadingCategories ? 'Loading categories...' : 'Select a category'}
-                      </option>
-                      {categories.map(category => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.categoryId && <p className="text-red-600 text-sm mt-1">{errors.categoryId}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Condition
-                    </label>
-                    <select
-                      value={formData.condition}
-                      onChange={(e) => setFormData(prev => ({ ...prev, condition: e.target.value }))}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900"
-                    >
-                      <option value="new">New</option>
-                      <option value="used">Used</option>
-                      <option value="refurbished">Refurbished</option>
-                    </select>
-                  </div>
-
-
-
-
-                </div>
-              </div>
-
-
             </div>
-          ) : (
-            <div className="flex items-center justify-center py-12">
-              <div className="text-center">
-                <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                <p className="text-gray-600 text-lg font-medium">Failed to load product data</p>
-                <p className="text-gray-500 text-sm mt-2">Please try again or contact support</p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Variant Specifications Modal */}
-        {showVariantSpecificationsModal && currentVariantIndex !== null && (
-          <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => {
-                setShowVariantSpecificationsModal(false);
-                setCurrentVariantIndex(null);
-              }}
-            />
-
-            {/* Modal Container */}
-            <div
-              className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none"
-            >
-              <div
-                className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative pointer-events-auto max-h-[90vh] flex flex-col"
-                role="dialog"
-                aria-modal="true"
-              >
-                {/* Close Button */}
-                <button
-                  onClick={() => {
-                    setShowVariantSpecificationsModal(false);
-                    setCurrentVariantIndex(null);
-                  }}
-                  className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-10"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-
-                {/* Header */}
-                <div className="p-6 text-center bg-gradient-to-br from-purple-50 to-purple-100">
-                  <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg bg-purple-600">
-                    <Layers className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 id="variant-specifications-modal-title" className="text-xl font-bold text-gray-900">
-                    Variant Specifications
-                  </h3>
-                  <p className="text-gray-600 mt-2">
-                    Configure specifications for {variants[currentVariantIndex]?.name || 'this variant'}
-                  </p>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 flex-1 overflow-y-auto">
-                  <p className="text-gray-600 text-center">
-                    Variant specifications modal content would go here.
-                    This is a placeholder for the full specifications functionality.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Product Specifications Modal */}
-        {showProductSpecificationsModal && (
-          <>
-            {/* Backdrop */}
-            <div
-              className="fixed inset-0 bg-black/50 z-40"
-              onClick={() => setShowProductSpecificationsModal(false)}
-            />
-
-            {/* Modal Container */}
-            <div
-              className="fixed inset-0 flex items-center justify-center z-50 p-4 pointer-events-none"
-            >
-              <div
-                className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative pointer-events-auto max-h-[90vh] flex flex-col"
-                role="dialog"
-                aria-modal="true"
-              >
-                {/* Close Button */}
-                <button
-                  onClick={() => setShowProductSpecificationsModal(false)}
-                  className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-10"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-
-                {/* Header */}
-                <div className="p-6 text-center bg-gradient-to-br from-blue-50 to-blue-100">
-                  <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg bg-blue-600">
-                    <FileText className="w-8 h-8 text-white" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900">
-                    Product Specifications
-                  </h3>
-                  <p className="text-gray-600 mt-2">
-                    Configure specifications for this product
-                  </p>
-                </div>
-
-                {/* Content */}
-                <div className="p-6 flex-1 overflow-y-auto">
-                  <p className="text-gray-600 text-center">
-                    Product specifications modal content would go here.
-                    This is a placeholder for the full specifications functionality.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </>
+          </div>
         )}
 
         {/* Fixed Action Buttons Footer */}
-        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
-          {/* Error Summary */}
-          {Object.keys(errors).length > 0 && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                <span className="text-sm font-semibold text-red-700">
-                  Please fix {Object.keys(errors).length} error{Object.keys(errors).length > 1 ? 's' : ''} before saving
+        {!isLoadingProduct && (
+          <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+            {pendingFields > 0 && (
+              <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-2">
+                <svg className="w-5 h-5 text-orange-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span className="text-sm font-semibold text-orange-700">
+                  Please complete all required fields before updating the product.
                 </span>
               </div>
-            </div>
-          )}
-
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all"
-              disabled={isSubmitting}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitting || isLoadingProduct}
-              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-            >
-              {isSubmitting ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Saving...
-                </span>
-              ) : (
-                <span className="flex items-center justify-center gap-2">
-                  <Save className="w-5 h-5" />
-                  Save Changes
-                </span>
-              )}
-            </button>
+            )}
+            <form onSubmit={handleSubmit}>
+              <button
+                type="submit"
+                disabled={isSubmitting || isCheckingName || !formData.name || !formData.categoryId || !formData.condition}
+                className="w-full px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+              >
+                {isSubmitting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Processing...
+                  </span>
+                ) : (
+                  'Update Product'
+                )}
+              </button>
+            </form>
           </div>
+        )}
         </div>
       </div>
-    </div>
+
+      {/* Variant Specifications Modal - Same as AddProductModal */}
+      {showVariantSpecificationsModal && currentVariantIndex !== null && (
+        <>
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/60 z-[100002]"
+            onClick={() => {
+              setShowVariantSpecificationsModal(false);
+              setVariantSpecStep(0);
+              setCustomAttributeInput('');
+              setCustomAttributeValue('');
+              setShowAllVariantSpecs(false);
+            }}
+          />
+          
+          {/* Modal Container */}
+          <div 
+            className="fixed inset-0 flex items-center justify-center z-[100003] p-4 pointer-events-none"
+          >
+            <div 
+              className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative pointer-events-auto max-h-[90vh] flex flex-col"
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setShowVariantSpecificationsModal(false);
+                  setVariantSpecStep(0);
+                  setCustomAttributeInput('');
+                  setCustomAttributeValue('');
+                  setShowAllVariantSpecs(false);
+                }}
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-10"
+                aria-label="Close modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Layers className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Variant Specifications</h3>
+                    <p className="text-sm text-purple-700 font-medium">
+                      {variants[currentVariantIndex]?.name || `Variant ${currentVariantIndex !== null ? currentVariantIndex + 1 : ''}`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                {currentVariantIndex !== null && variants[currentVariantIndex] && (
+                  <div className="py-4 space-y-4">
+                    {/* Current Attributes Display */}
+                    {variants[currentVariantIndex].attributes && Object.keys(variants[currentVariantIndex].attributes || {}).length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3">Current Specifications</h4>
+                        <div className="space-y-2">
+                          {Object.entries(variants[currentVariantIndex].attributes || {}).map(([key, value]) => (
+                            <div key={key} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                              <div className="flex-1">
+                                <span className="text-sm font-medium text-gray-700">{key.replace(/_/g, ' ')}:</span>
+                                <span className="text-sm text-gray-600 ml-2">{String(value)}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedAttributes = { ...variants[currentVariantIndex].attributes };
+                                  delete updatedAttributes[key];
+                                  setVariants(prev => prev.map((v, i) => 
+                                    i === currentVariantIndex 
+                                      ? { ...v, attributes: updatedAttributes }
+                                      : v
+                                  ));
+                                }}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add New Specification */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Add Specification</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Attribute Name</label>
+                          <input
+                            type="text"
+                            value={customAttributeInput}
+                            onChange={(e) => setCustomAttributeInput(e.target.value)}
+                            placeholder="e.g., Color, Size, Storage"
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Value</label>
+                          <input
+                            type="text"
+                            value={customAttributeValue}
+                            onChange={(e) => setCustomAttributeValue(e.target.value)}
+                            placeholder="e.g., Black, Large, 256GB"
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-sm"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter' && customAttributeInput && customAttributeValue) {
+                                const updatedAttributes = {
+                                  ...variants[currentVariantIndex].attributes,
+                                  [customAttributeInput]: customAttributeValue
+                                };
+                                setVariants(prev => prev.map((v, i) => 
+                                  i === currentVariantIndex 
+                                    ? { ...v, attributes: updatedAttributes }
+                                    : v
+                                ));
+                                setCustomAttributeInput('');
+                                setCustomAttributeValue('');
+                              }
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customAttributeInput && customAttributeValue) {
+                              const updatedAttributes = {
+                                ...variants[currentVariantIndex].attributes,
+                                [customAttributeInput]: customAttributeValue
+                              };
+                              setVariants(prev => prev.map((v, i) => 
+                                i === currentVariantIndex 
+                                  ? { ...v, attributes: updatedAttributes }
+                                  : v
+                              ));
+                              setCustomAttributeInput('');
+                              setCustomAttributeValue('');
+                            }
+                          }}
+                          disabled={!customAttributeInput || !customAttributeValue}
+                          className="w-full px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                        >
+                          Add Specification
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVariantSpecificationsModal(false);
+                    setVariantSpecStep(0);
+                    setCustomAttributeInput('');
+                    setCustomAttributeValue('');
+                    setShowAllVariantSpecs(false);
+                    toast.success('Specifications saved!');
+                  }}
+                  className="w-full px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all shadow-lg hover:shadow-xl text-lg"
+                >
+                  Save & Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </>
   );
 };
 
 export default EditProductModal;
+

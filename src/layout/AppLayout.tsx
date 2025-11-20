@@ -310,13 +310,6 @@ const AppLayout: React.FC = () => {
         count: 0
       },
       {
-        path: '/lats/products/edit-modal',
-        label: 'Edit Product',
-        icon: <FileText size={20} strokeWidth={1.5} />,
-        roles: ['admin'],
-        count: 0
-      },
-      {
         path: '/lats/spare-parts',
         label: 'Spare Parts',
         icon: <Wrench size={20} strokeWidth={1.5} />,

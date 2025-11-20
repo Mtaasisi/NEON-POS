@@ -483,8 +483,34 @@ const MobileProductDetail: React.FC = () => {
     if (!confirm(`Delete variant "${variantName}"?`)) return;
 
     try {
+      // Check if variant has stock movements before attempting deletion
+      const { data: stockMovements, error: checkError } = await supabase
+        .from('lats_stock_movements')
+        .select('id')
+        .eq('variant_id', variantId)
+        .limit(1);
+
+      if (checkError) {
+        console.error('Failed to check stock movements:', checkError);
+        toast.error('Failed to verify variant status');
+        return;
+      }
+
+      // Prevent deletion if variant has stock movements (preserve historical data)
+      if (stockMovements && stockMovements.length > 0) {
+        toast.error('Cannot delete variant: has stock movement history');
+        return;
+      }
+
       const { error } = await supabase.from('lats_product_variants').delete().eq('id', variantId);
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23503') {
+          toast.error('Cannot delete: variant is referenced by other records');
+        } else {
+          throw error;
+        }
+        return;
+      }
       toast.success('Variant deleted!');
       window.location.reload();
     } catch (error: any) {

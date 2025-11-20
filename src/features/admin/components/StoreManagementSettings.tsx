@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { 
   Building2, 
@@ -183,6 +183,11 @@ const StoreManagementSettings: React.FC = () => {
   useEffect(() => {
     loadStores();
   }, []);
+
+  // Memoize the store object passed to StoreForm to prevent unnecessary resets
+  const storeForForm = useMemo(() => {
+    return editingStore || emptyStore;
+  }, [editingStore?.id, showAddForm, emptyStore]); // Only change when store ID changes or switching between add/edit
 
   const loadStores = async () => {
     setLoading(true);
@@ -510,12 +515,17 @@ const StoreManagementSettings: React.FC = () => {
     onSave, 
     onCancel
   }) => {
-    const [formData, setFormData] = useState<Store>(store);
+    // Initialize formData with store prop, but never update it from store prop after mount
+    // Use lazy initialization with a copy to prevent reference issues
+    const [formData, setFormData] = useState<Store>(() => ({ ...store }));
     const [isSaving, setIsSaving] = useState(false);
     const [hasDraft, setHasDraft] = useState(false);
     const [lastSavedDraft, setLastSavedDraft] = useState<Date | null>(null);
     const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>([]);
     const [loadingUsers, setLoadingUsers] = useState(true);
+    const initializedStoreIdRef = useRef<string | undefined>(store.id);
+    const formInitializedRef = useRef(false); // Track if form has been initialized to prevent resets
+    const lastStoreIdRef = useRef<string | undefined>(store.id); // Track last store ID to detect actual changes
 
     const DRAFT_KEY = `store-draft-${store.id || 'new'}`;
 
@@ -541,45 +551,59 @@ const StoreManagementSettings: React.FC = () => {
       fetchUsers();
     }, []);
 
-    // Initialize form data when store prop changes
+    // Initialize form data ONLY once when component mounts or when switching to a DIFFERENT store
+    // COMPLETELY IGNORE store prop changes after initialization to prevent form resets
+    // This effect runs ONLY when store.id changes, and preserves form data when it doesn't
     useEffect(() => {
-      const savedDraft = localStorage.getItem(DRAFT_KEY);
-      if (savedDraft) {
-        try {
-          const draftData = JSON.parse(savedDraft);
-          setFormData(draftData.formData);
-          setHasDraft(true);
-          setLastSavedDraft(new Date(draftData.savedAt));
-          console.log('📝 Auto-restored draft from:', new Date(draftData.savedAt).toLocaleString());
-        } catch (error) {
-          console.error('Error loading draft:', error);
-          localStorage.removeItem(DRAFT_KEY);
-        }
-      } else {
-        // No draft found, use the store prop data
-        setFormData(store);
+      const currentStoreId = store.id;
+      const previousStoreId = lastStoreIdRef.current;
+      
+      // Only update formData if:
+      // 1. First mount (form not initialized), OR
+      // 2. Store ID actually changed (user switched to edit a different store)
+      if (!formInitializedRef.current) {
+        // First mount - initialize with store data
+        setFormData({ ...store }); // Create a copy to prevent reference issues
         setHasDraft(false);
         setLastSavedDraft(null);
+        initializedStoreIdRef.current = currentStoreId;
+        lastStoreIdRef.current = currentStoreId;
+        formInitializedRef.current = true;
+      } else if (previousStoreId !== currentStoreId) {
+        // Store ID changed - user is switching to edit a different store
+        // Only reset form in this case
+        setFormData({ ...store }); // Create a copy to prevent reference issues
+        setHasDraft(false);
+        setLastSavedDraft(null);
+        initializedStoreIdRef.current = currentStoreId;
+        lastStoreIdRef.current = currentStoreId;
       }
+      // If store.id is the same, DO NOTHING - formData remains unchanged
+      // If store.id is the same, DO NOTHING - preserve user's form input
+      // This prevents resets when parent re-renders with same store data
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [store.id, DRAFT_KEY]); // Re-run when switching between stores
+    }, [store.id]); // Only depend on store.id, not the entire store object
+    
+    // CRITICAL: Prevent form from resetting when store prop object reference changes
+    // This ensures formData is NEVER updated from store prop after initialization
+    // unless the store ID actually changes
 
-    // Auto-save draft when form data changes (faster, silent)
-    useEffect(() => {
-      const timeoutId = setTimeout(() => {
-        if (formData.name || formData.code || formData.address) {
-          const draftData = {
-            formData,
-            savedAt: new Date().toISOString()
-          };
-          localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
-          setHasDraft(true);
-          setLastSavedDraft(new Date());
-        }
-      }, 800); // Faster auto-save: 0.8 seconds
+    // Auto-save draft when form data changes (DISABLED - user requested to stop auto-refresh)
+    // useEffect(() => {
+    //   const timeoutId = setTimeout(() => {
+    //     if (formData.name || formData.code || formData.address) {
+    //       const draftData = {
+    //         formData,
+    //         savedAt: new Date().toISOString()
+    //       };
+    //       localStorage.setItem(DRAFT_KEY, JSON.stringify(draftData));
+    //       setHasDraft(true);
+    //       setLastSavedDraft(new Date());
+    //     }
+    //   }, 800); // Faster auto-save: 0.8 seconds
 
-      return () => clearTimeout(timeoutId);
-    }, [formData, DRAFT_KEY]);
+    //   return () => clearTimeout(timeoutId);
+    // }, [formData, DRAFT_KEY]);
 
     const clearDraft = () => {
       localStorage.removeItem(DRAFT_KEY);
@@ -1284,7 +1308,7 @@ const StoreManagementSettings: React.FC = () => {
       {(showAddForm || editingStore) && (
         <StoreForm
           key={editingStore?.id || 'new-store'}
-          store={editingStore || emptyStore}
+          store={storeForForm}
           onSave={handleSaveStore}
           onCancel={() => {
             setShowAddForm(false);
@@ -1386,7 +1410,10 @@ const StoreManagementSettings: React.FC = () => {
                       </button>
                     )}
                     <button
-                      onClick={() => setEditingStore(store)}
+                      onClick={() => {
+                        // Create a stable copy of the store object to prevent reference changes
+                        setEditingStore({ ...store });
+                      }}
                       className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Edit store"
                     >

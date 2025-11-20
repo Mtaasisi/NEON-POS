@@ -18,9 +18,9 @@ import CategoryFormModal from '../components/inventory/CategoryFormModal';
 import ProductExcelImportModal from '../components/ProductExcelImportModal';
 
 import SupplierForm from '../components/inventory/SupplierForm';
-import EditProductModal from '../components/product/EditProductModal';
 import { useProductModals } from '../hooks/useProductModals';
 import AddProductModal from '../components/product/AddProductModal';
+import EditProductModal from '../components/product/EditProductModal';
 
 // Import tab components
 import EnhancedInventoryTab from '../components/inventory/EnhancedInventoryTab';
@@ -1194,15 +1194,6 @@ const UnifiedInventoryPage: React.FC = () => {
         )}
 
         {/* Product Modals */}
-        <EditProductModal
-          isOpen={productModals.showEditModal}
-          onClose={productModals.closeEditModal}
-          productId={productModals.editingProductId || ''}
-          onSuccess={() => {
-            toast.success('Product updated successfully!');
-            loadProducts({ page: 1, limit: 50 });
-          }}
-        />
 
         {/* Enhanced Stock Adjustment Modal */}
         {showStockAdjustModal && selectedProductForHistory && (
@@ -1336,6 +1327,20 @@ const UnifiedInventoryPage: React.FC = () => {
           setShowAddProductModal(false);
           await loadProducts();
           toast.success('Product created successfully!');
+        }}
+      />
+
+      {/* Edit Product Modal */}
+      <EditProductModal
+        isOpen={productModals.showEditModal}
+        onClose={productModals.closeEditModal}
+        productId={productModals.editingProductId || ''}
+        onProductUpdated={async () => {
+          await loadProducts();
+          toast.success('Product updated successfully!');
+        }}
+        onSuccess={() => {
+          productModals.closeEditModal();
         }}
       />
     </PageErrorBoundary>

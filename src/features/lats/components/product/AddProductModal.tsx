@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
 import { toast } from 'react-hot-toast';
-import { X, Layers, Package } from 'lucide-react';
+import { X, Layers, Package, Plus } from 'lucide-react';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useAuth } from '../../../../context/AuthContext';
 import { useBranch } from '../../../../context/BranchContext';
@@ -160,6 +160,22 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
         ...prev,
         sku: generateAutoSKU()
       }));
+    } else {
+      // Reset form when modal closes
+      setFormData({
+        name: '',
+        sku: generateAutoSKU(),
+        categoryId: '',
+        condition: 'new',
+        description: '',
+        specification: '',
+        metadata: {},
+        variants: []
+      });
+      setVariants([]);
+      setCurrentErrors({});
+      setUseVariants(false);
+      setShowVariants(true);
     }
   }, [isOpen]);
 
@@ -343,11 +359,11 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
           name: variant.name || `Variant ${index + 1}`,  // ✅ 'name' column
           variant_name: variant.name || `Variant ${index + 1}`,  // ✅ 'variant_name' column (both needed)
           sku: variant.sku || `${formData.sku}-V${(index + 1).toString().padStart(2, '0')}`,
-          cost_price: 0,
-          unit_price: 0,  // ✅ Added missing column
-          selling_price: 0,
-          quantity: 0,  // ✅ Correct column name (not stock_quantity)
-          min_quantity: 0,  // ✅ Correct column name
+          cost_price: variant.costPrice || 0,  // ✅ FIX: Use variant costPrice from form
+          unit_price: variant.price || 0,  // ✅ FIX: Use variant price as unit_price
+          selling_price: variant.price || 0,  // ✅ FIX: Use variant price from form
+          quantity: variant.stockQuantity || 0,  // ✅ FIX: Use variant stockQuantity from form
+          min_quantity: variant.minStockLevel || 0,  // ✅ FIX: Use variant minStockLevel from form
           variant_attributes: {  // ✅ Save to 'variant_attributes' (correct column)
             ...variant.attributes,
             specification: variant.specification || null
@@ -421,136 +437,149 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Calculate completion stats
+  // Count scalar fields (name, categoryId, condition) separately from variant objects
+  const completedScalarFields = [
+    formData.name,
+    formData.categoryId,
+    formData.condition
+  ].filter(Boolean).length;
+  
+  // Count complete variants separately using .length property
+  const completedVariants = variants.filter(v => v.name && v.price > 0).length;
+  
+  // Sum the counts
+  const completedFields = completedScalarFields + completedVariants;
+  const totalFields = 3 + variants.length;
+  const pendingFields = totalFields - completedFields;
+
   return (
     <>
-      {/* Backdrop - respects sidebar and topbar */}
+      {/* Backdrop */}
       <div 
-        className="fixed bg-black/50"
+        className="fixed inset-0 bg-black/60 z-[99999]"
         onClick={onClose}
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 35
-        }}
+        aria-hidden="true"
       />
       
       {/* Modal Container */}
       <div 
-        className="fixed flex items-center justify-center p-2 sm:p-4"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none'
-        }}
+        className="fixed inset-0 flex items-center justify-center z-[100000] p-4 pointer-events-none"
       >
         <div 
-          className="bg-white rounded-lg shadow-xl w-full max-w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[95vh] overflow-hidden flex flex-col"
-          style={{ pointerEvents: 'auto' }}
+          className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative pointer-events-auto"
+          onClick={(e) => e.stopPropagation()}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-product-modal-title"
         >
-          {/* Header - Fixed */}
-          <div className="flex-shrink-0 p-4 sm:p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Package className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">Add New Product</h3>
-                  <p className="text-xs text-gray-500 hidden sm:block">Create new inventory item</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="text-gray-400 hover:text-gray-600 transition-colors p-1"
-              >
-                <X className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+          disabled={isSubmitting}
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <Package className="w-8 h-8 text-white" />
             </div>
-          </div>
-
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-4 sm:p-6">
-              {/* Product Information */}
-              <div className="mb-4 sm:mb-5">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Product Information</h4>
-                <ProductInformationForm
-                  formData={formData}
-                  setFormData={setFormData}
-                  categories={categories}
-                  currentErrors={currentErrors}
-                  isCheckingName={isCheckingName}
-                  nameExists={nameExists}
-                  onNameCheck={checkProductName}
-                  useVariants={useVariants}
-                  onGenerateSKU={generateAutoSKU}
-                />
-              </div>
-
-              {/* Product Variants */}
-              <div className="mb-4 sm:mb-5">
-                <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 sm:mb-3">Product Variants</h4>
-                <ProductVariantsSection
-                  variants={variants}
-                  setVariants={setVariants}
-                  useVariants={useVariants}
-                  setUseVariants={handleUseVariantsToggle}
-                  showVariants={showVariants}
-                  setShowVariants={setShowVariants}
-                  isReorderingVariants={isReorderingVariants}
-                  setIsReorderingVariants={setIsReorderingVariants}
-                  draggedVariantIndex={draggedVariantIndex}
-                  setDraggedVariantIndex={setDraggedVariantIndex}
-                  onVariantSpecificationsClick={handleVariantSpecificationsClick}
-                  baseSku={formData.sku}
-                />
+            
+            {/* Text and Progress */}
+            <div>
+              <h3 id="add-product-modal-title" className="text-2xl font-bold text-gray-900 mb-3">Add New Product</h3>
+              
+              {/* Progress Indicator */}
+              <div className="flex items-center gap-4">
+                {completedFields > 0 && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-sm font-bold text-green-700">{completedFields} Complete</span>
+                  </div>
+                )}
+                {pendingFields > 0 && (
+                  <div className="flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-lg animate-pulse">
+                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm font-bold text-orange-700">{pendingFields} Pending</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons - Fixed Footer */}
-          <div className="flex-shrink-0 border-t border-gray-200 bg-gray-50 p-4 sm:p-6">
-            <form onSubmit={handleSubmit}>
-              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  disabled={isSubmitting}
-                  className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 border-2 border-gray-200 bg-white rounded-lg text-sm sm:text-base text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || isCheckingName}
-                  className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg text-sm sm:text-base font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                      <span className="hidden sm:inline">Creating...</span>
-                      <span className="sm:hidden">...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="hidden sm:inline">Create Product</span>
-                      <span className="sm:hidden">Create</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="text-xs text-center text-gray-500 mt-2">
-                * Required fields must be filled
-              </p>
-            </form>
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+          <div className="py-4">
+            {/* Product Information */}
+            <ProductInformationForm
+              formData={formData}
+              setFormData={setFormData}
+              categories={categories}
+              currentErrors={currentErrors}
+              isCheckingName={isCheckingName}
+              nameExists={nameExists}
+              onNameCheck={checkProductName}
+              useVariants={useVariants}
+              onGenerateSKU={generateAutoSKU}
+            />
+
+            {/* Product Variants */}
+            <ProductVariantsSection
+              variants={variants}
+              setVariants={setVariants}
+              useVariants={useVariants}
+              setUseVariants={handleUseVariantsToggle}
+              showVariants={showVariants}
+              setShowVariants={setShowVariants}
+              isReorderingVariants={isReorderingVariants}
+              setIsReorderingVariants={setIsReorderingVariants}
+              draggedVariantIndex={draggedVariantIndex}
+              setDraggedVariantIndex={setDraggedVariantIndex}
+              onVariantSpecificationsClick={handleVariantSpecificationsClick}
+              baseSku={formData.sku}
+            />
           </div>
+        </div>
+
+        {/* Fixed Action Buttons Footer */}
+        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+          {pendingFields > 0 && (
+            <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-2">
+              <svg className="w-5 h-5 text-orange-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-sm font-semibold text-orange-700">
+                Please complete all required fields before creating the product.
+              </span>
+            </div>
+          )}
+          <form onSubmit={handleSubmit}>
+            <button
+              type="submit"
+              disabled={isSubmitting || isCheckingName || !formData.name || !formData.categoryId || !formData.condition}
+              className="w-full px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                'Create Product'
+              )}
+            </button>
+          </form>
+        </div>
         </div>
       </div>
 
@@ -559,7 +588,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
         <>
           {/* Backdrop */}
           <div 
-            className="fixed inset-0 bg-black/50 z-[60]"
+            className="fixed inset-0 bg-black/60 z-[100002]"
             onClick={() => {
               setShowVariantSpecificationsModal(false);
               setVariantSpecStep(0);
@@ -571,12 +600,13 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
           
           {/* Modal Container */}
           <div 
-            className="fixed inset-0 flex items-center justify-center z-[70] p-2 sm:p-4 pointer-events-none"
+            className="fixed inset-0 flex items-center justify-center z-[100003] p-4 pointer-events-none"
           >
             <div 
-              className="bg-white rounded-2xl w-full max-w-[95vw] sm:max-w-md md:max-w-2xl shadow-2xl overflow-hidden relative pointer-events-auto max-h-[95vh] flex flex-col"
+              className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden relative pointer-events-auto max-h-[90vh] flex flex-col"
               role="dialog"
               aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
             >
               {/* Close Button */}
               <button
@@ -587,42 +617,146 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
                   setCustomAttributeValue('');
                   setShowAllVariantSpecs(false);
                 }}
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-10"
+                className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-10"
                 aria-label="Close modal"
               >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                <X className="w-5 h-5" />
               </button>
 
-              {/* Header */}
-              <div className="p-4 sm:p-6 text-center bg-gradient-to-br from-purple-50 to-purple-100 flex-shrink-0">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg bg-purple-600">
-                  <Layers className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+              {/* Icon Header - Fixed */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Layers className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">Variant Specifications</h3>
+                    <p className="text-sm text-purple-700 font-medium">
+                      {variants[currentVariantIndex]?.name || `Variant ${currentVariantIndex !== null ? currentVariantIndex + 1 : ''}`}
+                    </p>
+                  </div>
                 </div>
-                <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
-                  Variant Specifications
-                </h3>
-                <p className="text-purple-700 text-xs sm:text-sm mt-2">
-                  {variants[currentVariantIndex]?.name || `Variant ${currentVariantIndex + 1}`}
-                </p>
               </div>
 
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-                <p className="text-xs sm:text-sm text-gray-600 text-center mb-4">
-                  Add specifications for this variant
-                </p>
-                {/* Add variant spec content here */}
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                {currentVariantIndex !== null && variants[currentVariantIndex] && (
+                  <div className="py-4 space-y-4">
+                    {/* Current Attributes Display */}
+                    {variants[currentVariantIndex].attributes && Object.keys(variants[currentVariantIndex].attributes || {}).length > 0 && (
+                      <div className="mb-4">
+                        <h4 className="text-sm font-semibold text-gray-700 mb-3">Current Specifications</h4>
+                        <div className="space-y-2">
+                          {Object.entries(variants[currentVariantIndex].attributes || {}).map(([key, value]) => (
+                            <div key={key} className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl">
+                              <div className="flex-1">
+                                <span className="text-sm font-medium text-gray-700">{key.replace(/_/g, ' ')}:</span>
+                                <span className="text-sm text-gray-600 ml-2">{String(value)}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedAttributes = { ...variants[currentVariantIndex].attributes };
+                                  delete updatedAttributes[key];
+                                  setVariants(prev => prev.map((v, i) => 
+                                    i === currentVariantIndex 
+                                      ? { ...v, attributes: updatedAttributes }
+                                      : v
+                                  ));
+                                }}
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add New Specification */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Add Specification</h4>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Attribute Name</label>
+                          <input
+                            type="text"
+                            value={customAttributeInput}
+                            onChange={(e) => setCustomAttributeInput(e.target.value)}
+                            placeholder="e.g., Color, Size, Storage"
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Value</label>
+                          <input
+                            type="text"
+                            value={customAttributeValue}
+                            onChange={(e) => setCustomAttributeValue(e.target.value)}
+                            placeholder="e.g., Black, Large, 256GB"
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-sm"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter' && customAttributeInput && customAttributeValue) {
+                                const updatedAttributes = {
+                                  ...variants[currentVariantIndex].attributes,
+                                  [customAttributeInput]: customAttributeValue
+                                };
+                                setVariants(prev => prev.map((v, i) => 
+                                  i === currentVariantIndex 
+                                    ? { ...v, attributes: updatedAttributes }
+                                    : v
+                                ));
+                                setCustomAttributeInput('');
+                                setCustomAttributeValue('');
+                              }
+                            }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customAttributeInput && customAttributeValue) {
+                              const updatedAttributes = {
+                                ...variants[currentVariantIndex].attributes,
+                                [customAttributeInput]: customAttributeValue
+                              };
+                              setVariants(prev => prev.map((v, i) => 
+                                i === currentVariantIndex 
+                                  ? { ...v, attributes: updatedAttributes }
+                                  : v
+                              ));
+                              setCustomAttributeInput('');
+                              setCustomAttributeValue('');
+                            }
+                          }}
+                          disabled={!customAttributeInput || !customAttributeValue}
+                          className="w-full px-4 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-colors text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                        >
+                          Add Specification
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Footer */}
-              <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex-shrink-0">
+              {/* Fixed Footer */}
+              <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => {
                     setShowVariantSpecificationsModal(false);
+                    setVariantSpecStep(0);
+                    setCustomAttributeInput('');
+                    setCustomAttributeValue('');
+                    setShowAllVariantSpecs(false);
                     toast.success('Specifications saved!');
                   }}
-                  className="w-full px-4 sm:px-5 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                  className="w-full px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all shadow-lg hover:shadow-xl text-lg"
                 >
                   Save & Close
                 </button>

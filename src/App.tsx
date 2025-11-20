@@ -129,7 +129,6 @@ const MobileDashboard = lazy(() => import('./features/mobile/pages/MobileDashboa
 const MobilePOS = lazy(() => import('./features/mobile/pages/MobilePOS'));
 const MobileInventory = lazy(() => import('./features/mobile/pages/MobileInventory'));
 const MobileAddProduct = lazy(() => import('./features/mobile/pages/MobileAddProduct'));
-const MobileEditProduct = lazy(() => import('./features/mobile/pages/MobileEditProduct'));
 const MobileClients = lazy(() => import('./features/mobile/pages/MobileClients'));
 const MobileEditClient = lazy(() => import('./features/mobile/pages/MobileEditClient'));
 const MobileMore = lazy(() => import('./features/mobile/pages/MobileMore'));
@@ -945,11 +944,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
               <MobileProductDetail />
             </Suspense>
           } />
-          <Route path="inventory/:productId/edit" element={
-            <Suspense fallback={<DynamicPageLoader />}>
-              <MobileEditProduct />
-            </Suspense>
-          } />
           <Route path="clients" element={
             <Suspense fallback={<DynamicPageLoader />}>
               <MobileClients />
@@ -1116,6 +1110,93 @@ function App() {
     
     return () => {
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  // Suppress browser extension errors in console
+  useEffect(() => {
+    const originalError = console.error;
+    const originalWarn = console.warn;
+
+    // Helper function to check if error is from extension
+    const isExtensionError = (message: string, source?: string, stack?: string): boolean => {
+      const text = `${message} ${source || ''} ${stack || ''}`.toLowerCase();
+      return !!(
+        text.includes('extension context invalidated') ||
+        text.includes('chrome-extension://') ||
+        text.includes('moz-extension://') ||
+        text.includes('content.js') ||
+        text.includes('extension context') ||
+        (source && (
+          source.includes('chrome-extension://') ||
+          source.includes('moz-extension://') ||
+          source.includes('content.js')
+        ))
+      );
+    };
+
+    console.error = (...args: any[]) => {
+      const message = args.join(' ');
+      // Check error object if present
+      const errorObj = args.find(arg => arg instanceof Error);
+      const stack = errorObj?.stack || '';
+      
+      // Filter out extension-related errors
+      if (isExtensionError(message, undefined, stack)) {
+        // Silently ignore extension errors
+        return;
+      }
+      originalError.apply(console, args);
+    };
+
+    console.warn = (...args: any[]) => {
+      const message = args.join(' ');
+      // Check error object if present
+      const errorObj = args.find(arg => arg instanceof Error);
+      const stack = errorObj?.stack || '';
+      
+      // Filter out extension-related warnings
+      if (isExtensionError(message, undefined, stack)) {
+        // Silently ignore extension warnings
+        return;
+      }
+      originalWarn.apply(console, args);
+    };
+
+    // Also suppress uncaught errors from browser extensions
+    const handleError = (event: ErrorEvent) => {
+      const errorMessage = event.message || '';
+      const errorSource = event.filename || '';
+      const errorStack = event.error?.stack || '';
+      
+      if (isExtensionError(errorMessage, errorSource, errorStack)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        return false;
+      }
+    };
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason?.toString() || '';
+      const errorStack = event.reason?.stack || '';
+      
+      if (isExtensionError(reason, undefined, errorStack)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      }
+    };
+
+    // Use capture phase to catch errors early
+    window.addEventListener('error', handleError, true);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection, true);
+
+    return () => {
+      console.error = originalError;
+      console.warn = originalWarn;
+      window.removeEventListener('error', handleError, true);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection, true);
     };
   }, []);
 

@@ -847,10 +847,10 @@ export async function updateProduct(
     // Invalidate product cache on update
     invalidateCachePattern('^products:');
     
-    // First, verify the product exists
+    // First, verify the product exists and get branch_id
     const { data: existingProduct, error: existError } = await supabase
       .from('lats_products')
-      .select('id, name')
+      .select('id, name, branch_id')
       .eq('id', productId)
       .single();
     
@@ -936,6 +936,16 @@ export async function updateProduct(
     // Handle variants if provided
     if (variants && Array.isArray(variants)) {
       
+      // 🔒 Get branch_id for new variants - try from updated product, then existing product, then localStorage
+      let branchIdForVariants: string | null = null;
+      if (product && product.branch_id) {
+        branchIdForVariants = product.branch_id;
+      } else if (existingProduct && existingProduct.branch_id) {
+        branchIdForVariants = existingProduct.branch_id;
+      } else {
+        branchIdForVariants = localStorage.getItem('current_branch_id');
+      }
+      
       // Get existing variants with full details
       const { data: existingVariants, error: fetchError } = await supabase
         .from('lats_product_variants')
@@ -1015,9 +1025,14 @@ export async function updateProduct(
               throw updateError;
             }
           } else {
-            // Create new variant - always include SKU for new variants
+            // Create new variant - always include SKU and branch_id for new variants
             if (!variantData.sku) {
               variantData.sku = variant.sku;
+            }
+            // 🔒 CRITICAL FIX: Include branch_id when creating new variants
+            variantData.branch_id = branchIdForVariants;
+            if (!branchIdForVariants) {
+              console.warn('⚠️ [API] Creating variant without branch_id - this may cause issues');
             }
             const { error: insertError } = await supabase
               .from('lats_product_variants')
@@ -1039,14 +1054,40 @@ export async function updateProduct(
         const variantsToDelete = safeExistingVariants
           .filter(v => v && v.sku && !variantsToKeep.includes(v.sku))
           .slice(0, Math.max(0, safeExistingVariants.length - 1)); // Keep at least one variant
+        
         for (const variantToDelete of variantsToDelete) {
           if (variantToDelete && variantToDelete.id) {
+            // Check if variant has stock movements before attempting deletion
+            const { data: stockMovements, error: checkError } = await supabase
+              .from('lats_stock_movements')
+              .select('id')
+              .eq('variant_id', variantToDelete.id)
+              .limit(1);
+
+            if (checkError) {
+              console.error('❌ Failed to check stock movements:', checkError);
+              // Continue to next variant instead of throwing
+              continue;
+            }
+
+            // Skip deletion if variant has stock movements (preserve historical data)
+            if (stockMovements && stockMovements.length > 0) {
+              console.warn(`⚠️ Skipping deletion of variant ${variantToDelete.id} (${variantToDelete.sku || variantToDelete.variant_name}): has ${stockMovements.length} stock movement(s)`);
+              continue;
+            }
+
+            // Safe to delete - no stock movements exist
             const { error: deleteError } = await supabase
               .from('lats_product_variants')
               .delete()
               .eq('id', variantToDelete.id);
 
             if (deleteError) {
+              // Check if it's a foreign key constraint error
+              if (deleteError.code === '23503') {
+                console.warn(`⚠️ Cannot delete variant ${variantToDelete.id} (${variantToDelete.sku || variantToDelete.variant_name}): referenced by other records`);
+                continue; // Skip this variant and continue with others
+              }
               console.error('❌ Delete failed:', deleteError);
               throw deleteError;
             }
