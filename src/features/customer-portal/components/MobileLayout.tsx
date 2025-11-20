@@ -7,7 +7,9 @@ import {
   User, 
   Package,
   Bell,
-  ArrowLeft
+  ArrowLeft,
+  Crown,
+  Award
 } from 'lucide-react';
 
 interface MobileLayoutProps {
@@ -30,7 +32,7 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({
     { icon: Home, label: 'Home', path: '/customer-portal/dashboard' },
     { icon: ShoppingBag, label: 'Shop', path: '/customer-portal/products' },
     { icon: Package, label: 'Orders', path: '/customer-portal/orders' },
-    { icon: Heart, label: 'Rewards', path: '/customer-portal/loyalty' },
+    { icon: Crown, label: 'Loyalty', path: '/customer-portal/loyalty' },
     { icon: User, label: 'Profile', path: '/customer-portal/profile' },
   ];
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Loader2, CreditCard, DollarSign, AlertCircle, CheckCircle2, Plus, Edit3, RefreshCw, QrCode } from 'lucide-react';
+import { X, Loader2, CreditCard, DollarSign, AlertCircle, CheckCircle2, Plus, Edit3, RefreshCw, QrCode, Lock, CheckCircle, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { usePaymentMethodsContext } from '../context/PaymentMethodsContext';
 import { usePaymentAccounts } from '../hooks/usePaymentAccounts';
@@ -146,6 +146,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
   const [isEditingAmount, setIsEditingAmount] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false); // Debounce flag
   const [processingStep, setProcessingStep] = useState<string>(''); // Current processing step
+  const [expandedMethodId, setExpandedMethodId] = useState<string | null>(null);
+  const [methodAmounts, setMethodAmounts] = useState<Record<string, number>>({}); // Track amounts for each method in single mode
 
   // Reset form when modal opens (balances refresh only when stale)
     useEffect(() => {
@@ -161,6 +163,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         setNewPrice('');
         setPriceEditReason('');
         setProcessingStep('');
+        setMethodAmounts({});
 
       // Only refresh balances if we don't have them or they're stale (older than 5 minutes)
       const shouldRefreshBalances = () => {
@@ -218,11 +221,36 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
   const showConversion = currency && currency !== 'TZS' && exchangeRate && exchangeRate > 1;
 
   // Calculate totals (now that amountInTZS is defined)
-  const totalPaid = paymentEntries.reduce((sum, entry) => sum + entry.amount, 0);
-  const customerPaymentAmount = customAmount ? Number(customAmount) : totalPaid;
+  // For multiple mode: convert all payment entries to TZS for accurate calculation
+  const totalPaidInTZS = isMultipleMode
+    ? paymentEntries.reduce((sum, entry) => {
+        // Convert each entry to TZS if needed
+        if (entry.currency === 'TZS' || !currency || !exchangeRate) {
+          return sum + entry.amount;
+        }
+        // If entry currency matches the purchase order currency, use the exchange rate
+        if (entry.currency === currency && exchangeRate) {
+          return sum + Math.round(entry.amount * exchangeRate);
+        }
+        // Otherwise, assume entry is already in TZS or use 1:1 conversion
+        return sum + entry.amount;
+      }, 0)
+    : paymentEntries.reduce((sum, entry) => sum + entry.amount, 0);
+  
+  const customerPaymentAmount = customAmount ? Number(customAmount) : totalPaidInTZS;
   // For remaining amount calculation, use TZS amount if available
   const baseAmount = amountInTZS || amount;
-  const remainingAmount = baseAmount - totalPaid;
+  
+  // Calculate total paid for both modes
+  const totalPaidForRemaining = isMultipleMode 
+    ? totalPaidInTZS
+    : (selectedMethod && methodAmounts[selectedMethod] && methodAmounts[selectedMethod] > 0
+        ? (currency && currency !== 'TZS' && exchangeRate 
+            ? Math.round(methodAmounts[selectedMethod] * exchangeRate) 
+            : methodAmounts[selectedMethod])
+        : 0);
+  
+  const remainingAmount = baseAmount - totalPaidForRemaining;
 
   // Get the currency for display
   const displayCurrency = currency || 'TZS';
@@ -311,7 +339,15 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
       }
       amount = parsed;
     } else {
-      amount = remainingAmount;
+      // Use remaining amount, but convert to selected currency if needed
+      if (selectedCurrency.code === 'TZS' || !currency || !exchangeRate) {
+        amount = remainingAmount;
+      } else if (selectedCurrency.code === currency) {
+        // Convert remaining amount from TZS to selected currency
+        amount = remainingAmount / exchangeRate;
+      } else {
+        amount = remainingAmount;
+      }
     }
     
     // Validate amount
@@ -320,8 +356,13 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
       return;
     }
 
-    if (amount > remainingAmount) {
-      toast.error(`Amount (${amount.toLocaleString()}) exceeds remaining balance (${remainingAmount.toLocaleString()})`);
+    // Convert amount to TZS for comparison with remaining amount
+    const amountInTZSForValidation = selectedCurrency.code === 'TZS' || !currency || !exchangeRate
+      ? amount
+      : (selectedCurrency.code === currency ? Math.round(amount * exchangeRate) : amount);
+
+    if (amountInTZSForValidation > remainingAmount) {
+      toast.error(`Amount (${amount.toLocaleString()} ${selectedCurrency.code}) exceeds remaining balance (${remainingAmount.toLocaleString()} ${displayCurrency})`);
       return;
     }
 
@@ -358,6 +399,15 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
     ));
   };
 
+  // Update amount for a specific payment method in single mode
+  const updateMethodAmount = (methodId: string, value: string) => {
+    const numericValue = parseFloat(value.replace(/,/g, '')) || 0;
+    setMethodAmounts(prev => ({
+      ...prev,
+      [methodId]: numericValue
+    }));
+  };
+
   const handlePayment = async () => {
     // Prevent double-clicks with debouncing
     if (isProcessingPayment || isProcessing) {
@@ -380,9 +430,26 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
       if (paymentType === 'cash_out') {
         for (const entry of paymentEntries) {
           const account = paymentAccounts.find(acc => acc.id === entry.accountId);
-          if (account && account.balance < entry.amount) {
-            toast.error(`Insufficient balance in ${account.name}. Available: ${account.balance.toLocaleString()}, Required: ${entry.amount.toLocaleString()}`);
-            return;
+          if (account) {
+            // Convert entry amount to account currency for comparison
+            let checkAmount = entry.amount;
+            const entryCurrency = entry.currency || currency || 'TZS';
+            const accountCurrency = account.currency || 'TZS';
+            
+            // If currencies don't match, convert entry amount to account currency
+            if (entryCurrency !== accountCurrency) {
+              if (entryCurrency === currency && accountCurrency === 'TZS' && exchangeRate) {
+                checkAmount = Math.round(entry.amount * exchangeRate);
+              } else if (entryCurrency === 'TZS' && accountCurrency === currency && exchangeRate) {
+                checkAmount = entry.amount / exchangeRate;
+              }
+              // If currencies don't match and we can't convert, assume 1:1 (shouldn't happen in practice)
+            }
+            
+            if (account.balance < checkAmount) {
+              toast.error(`Insufficient balance in ${account.name}. Available: ${account.balance.toLocaleString()} ${accountCurrency}, Required: ${checkAmount.toLocaleString()} ${accountCurrency}`);
+              return;
+            }
           }
         }
       }
@@ -395,7 +462,10 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
       // Check balance for single payment (cash_out only)
       if (paymentType === 'cash_out') {
         const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
-        const checkAmount = amountInTZS || amount;  // Use TZS amount if available
+        const methodSpecificAmount = methodAmounts[selectedMethod];
+        const checkAmount = methodSpecificAmount && methodSpecificAmount > 0
+          ? (currency && currency !== 'TZS' && exchangeRate ? Math.round(methodSpecificAmount * exchangeRate) : methodSpecificAmount)
+          : (amountInTZS || amount);  // Use TZS amount if available
         if (account && account.balance < checkAmount) {
           toast.error(`Insufficient balance in ${account.name}. Available: ${account.balance.toLocaleString()} ${account.currency || 'TZS'}, Required: ${checkAmount.toLocaleString()}`);
           return;
@@ -444,7 +514,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           amount: entry.amount
         })));
 
-        // Process multiple payments - validate amounts before sending
+        // Process multiple payments - validate amounts before sending and convert to TZS
         const paymentData = paymentEntries.map(entry => {
           const entryAmount = typeof entry.amount === 'number' ? entry.amount : parseFloat(String(entry.amount));
           
@@ -452,9 +522,20 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             throw new Error(`Invalid amount for payment method ${entry.method}: ${entry.amount}`);
           }
           
+          // Convert to TZS if needed
+          const entryCurrency = entry.currency || currency || 'TZS';
+          let amountInTZS = entryAmount;
+          if (entryCurrency !== 'TZS' && currency && exchangeRate && entryCurrency === currency) {
+            amountInTZS = Math.round(entryAmount * exchangeRate);
+          } else if (entryCurrency === 'TZS') {
+            amountInTZS = entryAmount;
+          }
+          
           return {
-            amount: entryAmount,
-            currency: entry.currency || currency || 'TZS',
+            amount: amountInTZS,  // Always in TZS
+            currency: 'TZS',  // Always process payments in TZS
+            originalCurrency: entryCurrency,  // Track original currency for reference
+            originalAmount: entryAmount,  // Track original amount for reference
             paymentMethod: entry.method,
             paymentMethodId: entry.methodId,
             paymentAccountId: entry.accountId,
@@ -466,7 +547,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         });
         
         console.log('📤 Sending payment data:', paymentData);
-        await onPaymentComplete(paymentData, totalPaid);
+        await onPaymentComplete(paymentData, totalPaidInTZS);
       } else {
         // Process single payment
         const method = paymentMethods.find(m => m.id === selectedMethod);
@@ -497,14 +578,22 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         }
 
         // Validate amount before sending
-        // Use TZS converted amount if available (for foreign currency), otherwise use original amount
-        const paymentAmount = amountInTZS || (typeof amount === 'number' ? amount : parseFloat(String(amount)));
+        // Use method-specific amount if set, otherwise use TZS converted amount if available (for foreign currency), otherwise use original amount
+        const methodSpecificAmount = methodAmounts[selectedMethod];
+        const baseAmount = methodSpecificAmount && methodSpecificAmount > 0 
+          ? methodSpecificAmount 
+          : (amountInTZS || (typeof amount === 'number' ? amount : parseFloat(String(amount))));
         
-        if (isNaN(paymentAmount) || paymentAmount <= 0) {
-          toast.error(`Invalid payment amount: ${amount}. Please refresh and try again.`);
+        if (isNaN(baseAmount) || baseAmount <= 0) {
+          toast.error(`Invalid payment amount: ${baseAmount}. Please refresh and try again.`);
           setIsProcessing(false);
           return;
         }
+
+        // For method-specific amounts, convert to TZS if needed
+        const paymentAmount = methodSpecificAmount && methodSpecificAmount > 0
+          ? (currency && currency !== 'TZS' && exchangeRate ? Math.round(methodSpecificAmount * exchangeRate) : methodSpecificAmount)
+          : baseAmount;
 
         setProcessingStep('Processing payment...');
 
@@ -553,79 +642,114 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Calculate completed payments count for progress indicator
+  const completedCount = isMultipleMode 
+    ? paymentEntries.length 
+    : (selectedMethod && (methodAmounts[selectedMethod] && methodAmounts[selectedMethod] > 0) ? 1 : 0);
+
+  // Calculate total paid
+  const totalPaidCalculated = isMultipleMode 
+    ? totalPaidInTZS
+    : (selectedMethod 
+        ? (methodAmounts[selectedMethod] && methodAmounts[selectedMethod] > 0
+            ? (currency && currency !== 'TZS' && exchangeRate 
+                ? Math.round(methodAmounts[selectedMethod] * exchangeRate) 
+                : methodAmounts[selectedMethod])
+            : (amountInTZS || amount))
+        : 0);
+
   return createPortal(
-    <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 99999 }}>
-      <div 
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      
-      <div 
-        className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100 bg-white">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-              paymentType === 'cash_out'
-                ? 'bg-red-500'
-                : 'bg-blue-500'
+    <div
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="payment-modal-title"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center shadow-lg ${
+              paymentType === 'cash_out' ? 'bg-red-600' : 'bg-green-600'
             }`}>
-              <CreditCard className="w-6 h-6 text-white" />
+              <Lock className="w-8 h-8 text-white" />
             </div>
+
+            {/* Text and Progress */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900">
+              <h3 id="payment-modal-title" className="text-2xl font-bold text-gray-900 mb-3">
                 {paymentType === 'cash_out' ? 'Make Payment' : 'Complete Your Payment'}
-              </h2>
-              <p className="text-sm text-gray-600">
-                {paymentType === 'cash_out' 
-                  ? (customerName ? `Payment to ${customerName}` : 'Process outgoing payment')
-                  : (customerName ? `Thank you, ${customerName}!` : 'Secure payment processing')
-                }
-              </p>
+              </h3>
+
+              {/* Progress Indicator */}
+              <div className="flex items-center gap-4">
+                <div className={`flex items-center gap-2 px-4 py-2 border rounded-lg ${
+                  completedCount > 0 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
+                  <CheckCircle className={`w-4 h-4 ${
+                    completedCount > 0 ? 'text-green-600' : 'text-gray-400'
+                  }`} />
+                  <span className={`text-sm font-bold ${
+                    completedCount > 0 ? 'text-green-700' : 'text-gray-600'
+                  }`}>
+                    {completedCount} Done
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white/50 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
-        {/* Content - Scrollable */}
-        <div className="flex-1 p-6 overflow-y-auto">
-          {/* Payment Summary */}
-          <div className="mb-6 p-6 rounded-xl border bg-white border-gray-200">
-            <div className="text-center">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                paymentType === 'cash_out'
-                  ? 'bg-red-500'
-                  : 'bg-green-500'
-              }`}>
-                <DollarSign className="w-8 h-8 text-white" />
+        {/* Fixed Summary Section */}
+        <div className="p-6 pb-0 flex-shrink-0">
+          {/* Payment Summary for Entire Order */}
+          <div className="mb-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">
+                  Total Amount: <span className="font-bold text-lg text-gray-900">
+                    {(amountInTZS || amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
+                  </span>
+                </p>
+                {showConversion && amountInTZS && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Original: {currency} {amount.toLocaleString()} • Exchange Rate: {exchangeRate?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                )}
               </div>
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <h3 className="text-lg font-bold text-gray-900">
-                  {paymentType === 'cash_out' ? 'Amount to Pay' : 'Total Amount Due'}
-                </h3>
-                <button
-                  onClick={() => {
-                    setIsEditingAmount(true);
-                  }}
-                  className="p-1 hover:bg-green-100 rounded-full transition-colors"
-                  title="Edit amount"
-                >
-                  <Edit3 className="w-4 h-4 text-green-600" />
-                </button>
-              </div>
-              {isEditingAmount ? (
+              <button
+                onClick={() => setIsEditingAmount(true)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Edit amount"
+              >
+                <Edit3 className="w-4 h-4 text-gray-600" />
+              </button>
+            </div>
+            {isEditingAmount ? (
+              <div className="mb-4 p-4 bg-gray-50 border border-gray-300 rounded-lg">
                 <div className="space-y-4">
-                  <div className="max-w-sm mx-auto">
-                    <div className="flex items-center bg-white border border-gray-300 rounded-lg focus-within:border-orange-500 transition-colors h-16">
-                      {/* Currency Selector */}
-                      <div className="flex items-center gap-2 px-4 py-4 border-r border-gray-200 h-full">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Amount
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
                         <span className="text-lg">{selectedCurrency.flag}</span>
                         <select
                           value={selectedCurrency.code}
@@ -635,39 +759,34 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                               setSelectedCurrency(newCurrency);
                             }
                           }}
-                          className="bg-transparent border-none text-gray-700 text-base focus:outline-none focus:ring-0 cursor-pointer"
+                          className="bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer"
                         >
                           {SUPPORTED_CURRENCIES.map(currencyOption => (
                             <option key={currencyOption.code} value={currencyOption.code}>
-                              {currencyOption.flag} {currencyOption.code}
+                              {currencyOption.code}
                             </option>
                           ))}
                         </select>
                       </div>
-                      
-                      {/* Amount Input */}
-                      <div className="flex-1 px-4 py-4 h-full">
-                        <input
-                          type="text"
-                          value={customAmount ? Number(customAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/,/g, '');
-                            if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
-                              setCustomAmount(value);
-                            }
-                          }}
-                          className="w-full border-0 focus:outline-none focus:ring-0 text-3xl font-bold text-gray-900 placeholder-gray-400 bg-transparent h-full"
-                          placeholder="0"
-                          autoFocus
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        value={customAmount ? Number(customAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/,/g, '');
+                          if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                            setCustomAmount(value);
+                          }
+                        }}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold"
+                        placeholder="0"
+                        autoFocus
+                      />
                     </div>
                   </div>
-                  
-                  <div className="flex gap-2 justify-center">
+                  <div className="flex gap-2">
                     <button
                       onClick={() => setIsEditingAmount(false)}
-                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors"
+                      className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                     >
                       Save
                     </button>
@@ -676,757 +795,654 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                         setCustomAmount('');
                         setIsEditingAmount(false);
                       }}
-                      className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg text-sm font-medium transition-colors"
+                      className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
                     >
                       Cancel
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div>
-                  <p className="text-3xl font-bold text-green-600 mb-2">
-                    {currencySymbol} {(customAmount ? Number(customAmount) : amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                  </p>
-                  <p className="text-sm text-gray-600 mb-2">
-                    {displayCurrency} • Amount to Pay
-                  </p>
-                  
-                  {/* Show TZS Conversion for foreign currencies */}
-                  {showConversion && amountInTZS && (
-                    <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="flex items-center justify-center gap-2 text-blue-700 mb-2">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">Currency Conversion</span>
-                      </div>
-                      <div className="text-center space-y-1">
-                        <p className="text-xs text-blue-600">
-                          Exchange Rate: 1 {currency} = {exchangeRate?.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} TZS
-                        </p>
-                        <p className="text-lg font-bold text-blue-900">
-                          ≈ TZS {amountInTZS.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                        </p>
-                        <p className="text-xs text-blue-600 italic">
-                          Payment will be processed in TZS
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  
-                  {paymentType === 'cash_out' && (
-                    <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                      <div className="flex items-center gap-2 text-orange-700">
-                        <AlertCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">Account Balance Will Be Deducted</span>
-                      </div>
-                      <p className="text-xs text-orange-600 mt-1">
-                        The payment amount will be deducted from your selected payment account
-                      </p>
-                    </div>
-                  )}
+              </div>
+            ) : null}
 
-                  {/* Supplier Payment QR Codes for Chinese Suppliers */}
-                  {supplierPaymentInfo && paymentType === 'cash_out' && (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowPaymentQR(!showPaymentQR)}
-                        className="w-full p-3 bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-200 rounded-lg hover:from-red-100 hover:to-red-200 transition-all"
+          </div>
+        </div>
+
+        {/* Scrollable Payment Methods List Section */}
+        <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+          {/* Quick Pay Buttons - Single Payment Method */}
+          {!isMultipleMode && totalPaidCalculated === 0 && !isLoading && displayPaymentMethods.length > 0 && (
+            <div className="py-4 border-b border-gray-200 mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium text-gray-700">
+                  Quick Pay - Full Amount: <span className="font-bold text-green-600">
+                    {(amountInTZS || amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
+                  </span>
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {displayPaymentMethods.slice(0, 3).map((method, idx) => {
+                  const colors = ['bg-green-600 hover:bg-green-700', 'bg-purple-600 hover:bg-purple-700', 'bg-blue-600 hover:bg-blue-700'];
+                  const icons = [DollarSign, CreditCard, CreditCard];
+                  const Icon = icons[idx] || CreditCard;
+                  const labels = ['Cash', 'Mobile', 'Card'];
+                  return (
+                    <button
+                      key={method.id}
+                      onClick={() => {
+                        setSelectedMethod(method.id);
+                        setExpandedMethodId(method.id);
+                        // Set the method amount to the full amount when using quick pay
+                        const quickPayAmount = amountInTZS || amount;
+                        setMethodAmounts(prev => ({
+                          ...prev,
+                          [method.id]: quickPayAmount
+                        }));
+                      }}
+                      disabled={paymentType === 'cash_out' && (() => {
+                        const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
+                        const checkAmount = amountInTZS || amount;
+                        return account && account.balance < checkAmount;
+                      })()}
+                      className={`px-4 py-3 ${colors[idx]} disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-xl font-semibold transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      Pay {labels[idx] || method.name.split(' ')[0]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Clear Payments Button - Show when payments are set */}
+          {totalPaidCalculated > 0 && (
+            <div className="py-3 mb-4 border-b border-gray-200">
+              <button
+                onClick={() => {
+                  if (isMultipleMode) {
+                    setPaymentEntries([]);
+                  } else {
+                    setSelectedMethod('');
+                    setMethodAmounts({});
+                  }
+                  setExpandedMethodId(null);
+                }}
+                className="w-full px-6 py-3 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border-2 border-orange-200 hover:border-orange-300 text-orange-700 rounded-xl font-semibold transition-all duration-200 text-sm flex items-center justify-center gap-2 shadow-sm hover:shadow-md group"
+              >
+                <div className="w-8 h-8 rounded-full bg-orange-100 group-hover:bg-orange-200 flex items-center justify-center transition-colors">
+                  <X className="w-4 h-4 text-orange-600" />
+                </div>
+                <span className="font-bold">Clear Payment & Switch to {isMultipleMode ? 'Single' : 'Split'} Mode</span>
+                <ChevronDown className="w-4 h-4 text-orange-600 group-hover:translate-y-0.5 transition-transform" />
+              </button>
+            </div>
+          )}
+
+          {/* Payment Methods List */}
+          <div className="space-y-4 py-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span className="ml-2 text-gray-600">Loading payment methods...</span>
+              </div>
+            ) : displayPaymentMethods.length === 0 ? (
+              <div className="text-center py-8">
+                <AlertCircle className="w-12 h-12 text-orange-500 mx-auto mb-4" />
+                <p className="text-gray-600 font-medium">No payment methods available</p>
+                <p className="text-sm text-gray-500 mt-2">Please contact administrator to set up payment methods</p>
+              </div>
+            ) : isMultipleMode ? (
+              /* Multiple Payment Mode - Card Style */
+              <div className="space-y-4">
+                {paymentEntries.map((entry, index) => {
+                  const method = displayPaymentMethods.find(m => m.id === entry.methodId);
+                  const currency = SUPPORTED_CURRENCIES.find(c => c.code === entry.currency) || DEFAULT_CURRENCY;
+                  const isExpanded = expandedMethodId === entry.id;
+                  const account = paymentAccounts.find(acc => acc.id === entry.accountId);
+                  
+                  return (
+                    <div
+                      key={entry.id}
+                      className="border-2 rounded-2xl bg-white shadow-sm border-green-200 hover:border-green-300 transition-all duration-300 hover:shadow-md"
+                    >
+                      <div 
+                        className="flex items-start justify-between p-6 cursor-pointer"
+                        onClick={() => setExpandedMethodId(isExpanded ? null : entry.id)}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <QrCode className="w-4 h-4 text-red-600" />
-                            <span className="text-sm font-semibold text-red-900">
-                              🇨🇳 Supplier Payment QR Codes
-                            </span>
-                          </div>
-                          <span className="text-xs text-red-600">
-                            {showPaymentQR ? 'Hide' : 'Show'}
-                          </span>
-                        </div>
-                      </button>
-
-                      {showPaymentQR && (
-                        <div className="mt-2 p-4 bg-white border-2 border-red-200 rounded-lg space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {/* WeChat Pay QR */}
-                            {supplierPaymentInfo.wechat_qr_code && (
-                              <div className="text-center">
-                                <div className="mb-2 flex items-center justify-center gap-2">
-                                  <div className="w-4 h-4 bg-[#09B83E] rounded flex items-center justify-center">
-                                    <svg viewBox="0 0 24 24" className="w-3 h-3" fill="white">
-                                      <path d="M8.5 6c-2.8 0-5 1.9-5 4.3 0 1.4.7 2.6 1.8 3.4l-.5 1.5 1.7-.9c.6.2 1.3.3 2 .3 2.8 0 5-1.9 5-4.3S11.3 6 8.5 6zm-1 5.8c-.4 0-.8-.3-.8-.8s.3-.8.8-.8.8.3.8.8-.4.8-.8.8zm2.5 0c-.4 0-.8-.3-.8-.8s.3-.8.8-.8.8.3.8.8-.4.8-.8.8z"/>
-                                      <path d="M15.5 11c-.3 0-.5 0-.8.1 0 .1 0 .3 0 .4 0 2.9-2.6 5.2-5.7 5.2-.4 0-.7 0-1.1-.1 1 1.3 2.8 2.2 4.9 2.2.5 0 1-.1 1.5-.2l1.3.7-.4-1.2c.9-.6 1.5-1.6 1.5-2.7 0-1.8-1.5-3.4-3.2-4.4z"/>
-                                    </svg>
-                                  </div>
-                                  <span className="text-xs font-semibold text-gray-700">WeChat Pay</span>
-                                </div>
-                                <img 
-                                  src={supplierPaymentInfo.wechat_qr_code} 
-                                  alt="WeChat QR" 
-                                  className="w-32 h-32 mx-auto border-2 border-green-300 rounded-lg"
-                                />
-                                {supplierPaymentInfo.wechat && (
-                                  <p className="text-xs text-gray-600 mt-1">{supplierPaymentInfo.wechat}</p>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Alipay QR */}
-                            {supplierPaymentInfo.alipay_qr_code && (
-                              <div className="text-center">
-                                <div className="mb-2 flex items-center justify-center gap-2">
-                                  <div className="w-4 h-4 bg-[#1677FF] rounded flex items-center justify-center">
-                                    <span className="text-white text-[8px] font-bold">支</span>
-                                  </div>
-                                  <span className="text-xs font-semibold text-gray-700">Alipay</span>
-                                </div>
-                                <img 
-                                  src={supplierPaymentInfo.alipay_qr_code} 
-                                  alt="Alipay QR" 
-                                  className="w-32 h-32 mx-auto border-2 border-blue-300 rounded-lg"
-                                />
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Bank Account */}
-                          {supplierPaymentInfo.bank_account_details && (
-                            <div className="pt-3 border-t border-gray-200">
-                              <p className="text-xs font-semibold text-gray-700 mb-1">Bank Account:</p>
-                              <pre className="text-xs text-gray-600 whitespace-pre-wrap font-mono">
-                                {supplierPaymentInfo.bank_account_details}
-                              </pre>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-gray-200">
+                              <ChevronDown
+                                className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${
+                                  isExpanded ? 'rotate-180' : ''
+                                }`}
+                              />
                             </div>
-                          )}
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="text-lg font-bold text-gray-900">{entry.method}</h4>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shadow-sm bg-green-500 text-white">
+                                  <CheckCircle className="w-3 h-3" />
+                                  Done
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-600 mt-1">
+                                {entry.account} • {entry.currency}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="px-4 py-2 rounded-xl text-base font-bold shadow-sm border bg-green-100 text-green-700 border-green-200">
+                          {formatCurrencyWithFlag(entry.amount, currency)}
+                        </div>
+                      </div>
+                      
+                      {/* Expanded Content - Edit Amount */}
+                      {isExpanded && (
+                        <div className="px-6 pb-6 border-t border-gray-100">
+                          <div className="mt-4 space-y-4">
+                            {/* Amount Input Field */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Edit {entry.method} Amount
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                  <span className="text-lg">{currency.flag}</span>
+                                  <select
+                                    value={entry.currency}
+                                    onChange={(e) => {
+                                      const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
+                                      if (newCurrency) {
+                                        updatePaymentEntry(index, 'currency', newCurrency.code);
+                                      }
+                                    }}
+                                    className="bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer"
+                                  >
+                                    {SUPPORTED_CURRENCIES.map(currencyOption => (
+                                      <option key={currencyOption.code} value={currencyOption.code}>
+                                        {currencyOption.code}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={entry.amount > 0 ? entry.amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/,/g, '');
+                                    if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                                      updatePaymentEntry(index, 'amount', value === '' ? 0 : parseFloat(value));
+                                    }
+                                  }}
+                                  placeholder="Enter amount"
+                                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
+                                />
+                              </div>
+                            </div>
+                            
+                            {/* Account Details */}
+                            {account && (
+                              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                  <div>
+                                    <span className="text-gray-600">Current Balance:</span>
+                                    <p className="font-bold text-gray-900">{account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}</p>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Amount to {paymentType === 'cash_out' ? 'Pay' : 'Receive'}:</span>
+                                    <p className="font-bold text-gray-900">
+                                      {entry.amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {entry.currency}
+                                    </p>
+                                  </div>
+                                  <div className="col-span-2 pt-2 border-t border-gray-200">
+                                    <span className="text-gray-600">Balance After Payment:</span>
+                                    <p className={`font-bold ${Math.max(0, account.balance - entry.amount) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                      {Math.max(0, account.balance - entry.amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Remove Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removePayment(index);
+                                setExpandedMethodId(null);
+                              }}
+                              className="w-full px-4 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg font-medium transition-colors"
+                            >
+                              Remove This Payment
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
-                  )}
-                </div>
-              )}
-              {isMultipleMode && (
-                <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-xl border border-blue-200">
-                  <h4 className="text-lg font-semibold text-blue-900 mb-4 flex items-center gap-2">
-                    <CreditCard className="w-5 h-5" />
-                    Payment Breakdown
-                  </h4>
-                  <div className="space-y-4">
-                    {paymentEntries.length > 0 && (
-                      <div className="space-y-3">
-                        {paymentEntries.map((entry, index) => {
-                          const currency = SUPPORTED_CURRENCIES.find(c => c.code === entry.currency) || DEFAULT_CURRENCY;
-                          return (
-                            <div key={index} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200 shadow-sm">
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                      <CreditCard className="w-4 h-4 text-blue-600" />
-                                    </div>
-                                    <p className="font-semibold text-gray-900 text-lg">
-                                      {entry.method ? 
-                                        entry.method.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 
-                                        'Unknown Method'
-                                      }
-                                    </p>
-                                  </div>
-                                  <div className="space-y-1">
-                                    {entry.reference && (
-                                      <p className="text-sm text-gray-600">
-                                        <span className="font-medium">Reference:</span> {entry.reference}
-                                      </p>
-                                    )}
-                                    {entry.notes && (
-                                      <p className="text-sm text-gray-600">
-                                        <span className="font-medium">Note:</span> {entry.notes}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-xl font-bold text-green-600 mb-2">
-                                    {formatCurrencyWithFlag(entry.amount, currency)}
-                                  </p>
-                                  <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                                    READY
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                    
-                    {/* Payment Summary */}
-                    <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-                      <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-green-600" />
-                        Payment Summary
-                      </h5>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="text-center">
-                          <div className="text-sm text-gray-600">Total Payments</div>
-                          <div className="text-lg font-semibold text-blue-900">
-                            {paymentEntries.length}
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-sm text-gray-600">Paid Amount</div>
-                          <div className="text-lg font-semibold text-green-600">
-                            {formatCurrencyWithFlag(totalPaid, selectedCurrency)}
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-sm text-gray-600">Remaining</div>
-                          <div className="text-lg font-semibold text-orange-600">
-                            {formatCurrencyWithFlag(remainingAmount, selectedCurrency)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+                  );
+                })}
 
-
-          {/* Payment Mode Toggle */}
-          <div className="mb-6">
-            <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={() => setIsMultipleMode(false)}
-                className={`px-6 py-3 rounded-xl font-medium text-sm transition-all duration-200 border-2 ${
-                  !isMultipleMode 
-                    ? (paymentType === 'cash_out' ? 'bg-white border-red-500 ring-4 ring-red-200 shadow-xl' : 'bg-white border-blue-500 ring-4 ring-blue-200 shadow-xl')
-                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
-                }`}
-              >
-                💳 Single {paymentType === 'cash_out' ? 'Payment' : 'Payment'}
-              </button>
-              <button
-                onClick={() => setIsMultipleMode(true)}
-                className={`px-6 py-3 rounded-xl font-medium text-sm transition-all duration-200 border-2 ${
-                  isMultipleMode 
-                    ? (paymentType === 'cash_out' ? 'bg-white border-red-500 ring-4 ring-red-200 shadow-xl' : 'bg-white border-blue-500 ring-4 ring-blue-200 shadow-xl')
-                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-md'
-                }`}
-              >
-                💰 Split {paymentType === 'cash_out' ? 'Payment' : 'Payment'}
-              </button>
-            </div>
-          </div>
-
-
-          {/* Balance Refresh Indicator */}
-          {isRefreshingBalances && (
-            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-blue-700">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span className="text-sm font-medium">Refreshing account balances...</span>
-            </div>
-          )}
-
-          {/* Manual Balance Refresh Button */}
-          {!isRefreshingBalances && (
-            <div className="mb-4 flex justify-end">
-              <button
-                onClick={handleManualBalanceRefresh}
-                disabled={isRefreshingBalances}
-                className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg text-blue-700 hover:text-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span className="text-sm font-medium">Refresh Balances</span>
-              </button>
-            </div>
-          )}
-
-          {/* Payment Methods */}
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <span className="ml-2 text-gray-600">Loading payment methods...</span>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {!isMultipleMode ? (
-                /* Single Payment Mode */
-                <div className="space-y-4">
-                  <div className="text-center mb-4">
-                    <h5 className="text-md font-semibold text-gray-900 mb-2">How would you like to pay?</h5>
-                    {directPaymentMethods.length > 0 && paymentMethods.length === 0 && (
-                      <div className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full inline-block">
-                        ✅ Loaded payment methods
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {displayPaymentMethods && displayPaymentMethods.length > 0 ? displayPaymentMethods.map((method) => {
-                      const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
-                      // Use TZS amount if available (for foreign currency), otherwise use the amount passed
-                      const paymentAmount = amountInTZS || amount;
-                      const hasInsufficientBalance = paymentType === 'cash_out' && account && account.balance < paymentAmount;
-                      const hasSufficientBalance = paymentType === 'cash_out' && account && account.balance >= paymentAmount;
-                      
-                      return (
-                        <button
-                          key={method.id}
-                          onClick={() => {
-                            if (!hasInsufficientBalance) {
-                              setSelectedMethod(method.id);
-                            } else {
-                              toast.error(`Insufficient balance in ${account.name}. Please select another account or add funds.`);
-                            }
-                          }}
-                          disabled={hasInsufficientBalance}
-                          className={`p-4 rounded-xl border-2 transition-all duration-200 ${
-                            hasInsufficientBalance
-                              ? 'border-red-300 bg-red-50 opacity-60 cursor-not-allowed'
-                              : selectedMethod === method.id
-                                ? 'border-blue-500 bg-white ring-4 ring-blue-200 shadow-xl'
-                                : hasSufficientBalance
-                                  ? 'border-green-300 bg-green-50 hover:border-green-400 hover:shadow-md'
-                                  : 'border-gray-200 bg-white hover:border-blue-300 hover:shadow-md'
-                          }`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <PaymentMethodIcon 
-                              type={method.type} 
-                              name={method.name} 
-                              className="w-16 h-16" 
+                {/* Add Payment Method Card */}
+                {remainingAmount > 0 && (
+                  <div
+                    className="border-2 rounded-2xl bg-white shadow-sm border-orange-300 hover:border-orange-400 transition-all duration-300 hover:shadow-md cursor-pointer"
+                    onClick={() => setExpandedMethodId(expandedMethodId === 'add' ? null : 'add')}
+                  >
+                    <div className="flex items-start justify-between p-6">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-gray-200">
+                            <ChevronDown
+                              className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${
+                                expandedMethodId === 'add' ? 'rotate-180' : ''
+                              }`}
                             />
-                            <div className="flex-1 text-left">
-                              <p className="font-semibold text-gray-900">{method.name}</p>
-                              {account && (
-                                <div className="mt-1">
-                                  <div className={`text-xs ${hasInsufficientBalance ? 'text-red-700' : 'text-gray-600'}`}>
-                                    <span className="font-medium">Balance:</span> {account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
-                                  </div>
-                                  {paymentType === 'cash_out' && hasInsufficientBalance && (
-                                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600 font-medium">
-                                      <AlertCircle className="w-3 h-3" />
-                                      Insufficient (Need: {paymentAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })})
-                                    </div>
-                                  )}
-                                  {paymentType === 'cash_out' && hasSufficientBalance && (
-                                    <div className="mt-1 flex items-center gap-1 text-xs text-green-600 font-medium">
-                                      <CheckCircle2 className="w-3 h-3" />
-                                      Sufficient Funds
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {selectedMethod === method.id && !hasInsufficientBalance && (
-                              <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
-                                <CheckCircle2 className="w-3 h-3 text-white" />
-                              </div>
-                            )}
                           </div>
-                        </button>
-                      );
-                    }) : (
-                      <div className="col-span-2 text-center py-8">
-                        <div className="text-gray-500 mb-2">⚠️ No payment methods available</div>
-                        <div className="text-sm text-gray-400">Please contact administrator to set up payment methods</div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Selected Account Balance Display */}
-                  {selectedMethod && (() => {
-                    const method = displayPaymentMethods.find(m => m.id === selectedMethod);
-                    const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
-                    if (!method || !account) return null;
-                    
-                    // Use TZS amount if available, otherwise use the amount passed
-                    const paymentAmount = amountInTZS || amount;
-                    const newBalance = Math.max(0, account.balance - paymentAmount);
-                    
-                    return (
-                      <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl shadow-md">
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-gray-700">Selected Account:</span>
-                            <span className="text-base font-bold text-blue-900">{method.name}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-gray-700">Current Balance:</span>
-                            <span className="text-lg font-bold text-green-600">
-                              {account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-semibold text-gray-700">Amount to {paymentType === 'cash_out' ? 'Pay' : 'Receive'}:</span>
-                            <span className="text-lg font-bold text-orange-600">
-                              {paymentAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
-                            </span>
-                          </div>
-                          <div className="pt-2 border-t border-blue-200">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm font-semibold text-gray-700">Balance After Payment:</span>
-                              <span className={`text-xl font-bold ${newBalance >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                                {newBalance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
-                              </span>
-                            </div>
+                          <div className="flex-1">
+                            <h4 className="text-lg font-bold text-gray-900">Add Payment Method</h4>
+                            <p className="text-sm text-gray-600 mt-1">Select another payment method</p>
                           </div>
                         </div>
                       </div>
-                    );
-                  })()}
-                </div>
-              ) : (
-                /* Multiple Payment Mode */
-                <div className="space-y-4">
-                  <div className="text-center mb-4">
-                    <h5 className="text-md font-semibold text-gray-900 mb-2">Split Your Payment</h5>
-                    <p className="text-sm text-gray-600">Use multiple payment methods if needed</p>
-                  </div>
-                  
-                  {/* Add Payment Section */}
-                  <div className="p-5 bg-white rounded-xl border border-gray-200">
-                    <h4 className="text-sm font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                      <Plus className="w-4 h-4" />
-                      Add Another Payment Method
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-                        <input
-                          type="number"
-                          value={customAmount}
-                          onChange={(e) => setCustomAmount(e.target.value)}
-                          placeholder="Enter amount"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
-                        <select
-                          onChange={(e) => {
-                            if (e.target.value) {
-                              addPayment(e.target.value);
-                              e.target.value = '';
-                            }
-                          }}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                           <option value="">Choose method</option>
-                           {paymentMethods.map((method) => {
-                             const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
-                             return (
-                               <option key={method.id} value={method.id}>
-                                 {method.name} - Accept {method.currency} payments
-                                 {account ? ` (Balance: ${account.balance.toLocaleString()} ${account.currency || 'TZS'})` : ''}
-                               </option>
-                             );
-                           })}
-                        </select>
-                      </div>
-                      <div className="flex items-end">
-                        <button
-                          onClick={() => {
-                            if (selectedMethod) {
-                              addPayment(selectedMethod);
-                            }
-                          }}
-                          className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Add Method
-                        </button>
+                      <div className="px-4 py-2 rounded-xl text-base font-bold shadow-sm border bg-red-100 text-red-700 border-red-200">
+                        Amount Required
                       </div>
                     </div>
-                  </div>
 
-                  {/* Payment Entries - Hidden */}
-                  {false && paymentEntries.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-semibold text-gray-800 mb-3">Your Payment Methods</h4>
-                      {paymentEntries.map((entry, index) => (
-                        <div key={entry.id} className="p-4 bg-white border border-gray-200 rounded-xl shadow-sm">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                                <PaymentMethodIcon 
-                                  type={paymentMethods.find(m => m.id === entry.methodId)?.type || 'other'} 
-                                  name={entry.method} 
-                                  className="w-10 h-10"
-                                />
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-gray-900">{entry.method}</p>
-                                  <span className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                    {entry.currency}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-gray-600">{entry.account}</p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => removePayment(index)}
-                              className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {expandedMethodId === 'add' && (
+                      <div className="px-6 pb-6 border-t border-gray-100">
+                        <div className="mt-4 space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-                              <div className="flex gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                                  <span className="text-lg">{selectedCurrency.flag}</span>
+                                  <select
+                                    value={selectedCurrency.code}
+                                    onChange={(e) => {
+                                      const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
+                                      if (newCurrency) {
+                                        setSelectedCurrency(newCurrency);
+                                      }
+                                    }}
+                                    className="bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer"
+                                  >
+                                    {SUPPORTED_CURRENCIES.map(currencyOption => (
+                                      <option key={currencyOption.code} value={currencyOption.code}>
+                                        {currencyOption.code}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                                 <input
-                                  type="number"
-                                  value={entry.amount}
-                                  onChange={(e) => updatePaymentEntry(index, 'amount', parseFloat(e.target.value) || 0)}
-                                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                  type="text"
+                                  value={customAmount ? Number(customAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value.replace(/,/g, '');
+                                    if (value === '' || (!isNaN(Number(value)) && Number(value) >= 0)) {
+                                      setCustomAmount(value);
+                                    }
+                                  }}
+                                  placeholder="Enter amount"
+                                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
                                 />
-                                <select
-                                  value={entry.currency}
-                                  onChange={(e) => updatePaymentEntry(index, 'currency', e.target.value)}
-                                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
-                                >
-                                  {SUPPORTED_CURRENCIES.map(currency => (
-                                    <option key={currency.code} value={currency.code}>
-                                      {currency.flag} {currency.code}
-                                    </option>
-                                  ))}
-                                </select>
                               </div>
+                              {showConversion && customAmount && Number(customAmount) > 0 && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  ≈ {calculateTZSAmount(Number(customAmount), selectedCurrency.code, exchangeRate)?.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} TZS
+                                </p>
+                              )}
                             </div>
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Reference</label>
-                              <input
-                                type="text"
-                                value={entry.reference || ''}
-                                onChange={(e) => updatePaymentEntry(index, 'reference', e.target.value)}
-                                placeholder="Optional"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Notes</label>
-                              <input
-                                type="text"
-                                value={entry.notes || ''}
-                                onChange={(e) => updatePaymentEntry(index, 'notes', e.target.value)}
-                                placeholder="Optional"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                              />
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
+                              <select
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    const paymentAmount = customAmount ? Number(customAmount) : undefined;
+                                    addPayment(e.target.value, paymentAmount);
+                                    e.target.value = '';
+                                    setCustomAmount('');
+                                    setExpandedMethodId(null);
+                                  }
+                                }}
+                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 bg-white"
+                              >
+                                <option value="">Choose method</option>
+                                {displayPaymentMethods.map((method) => {
+                                  const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
+                                  return (
+                                    <option key={method.id} value={method.id}>
+                                      {method.name} {account ? `(Balance: ${account.balance.toLocaleString()} ${account.currency || 'TZS'})` : ''}
+                                    </option>
+                                  );
+                                })}
+                              </select>
                             </div>
                           </div>
+                          {remainingAmount > 0 && (
+                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-sm text-blue-700">
+                                <span className="font-semibold">Remaining:</span> {remainingAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
+                              </p>
+                            </div>
+                          )}
                         </div>
-                      ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Single Payment Mode - Card Style */
+              displayPaymentMethods.map((method) => {
+              const isExpanded = expandedMethodId === method.id;
+              const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
+              const methodSpecificAmount = methodAmounts[method.id];
+              const basePaymentAmount = amountInTZS || amount;
+              const paymentAmount = methodSpecificAmount && methodSpecificAmount > 0
+                ? (currency && currency !== 'TZS' && exchangeRate 
+                    ? Math.round(methodSpecificAmount * exchangeRate) 
+                    : methodSpecificAmount)
+                : basePaymentAmount;
+              const hasInsufficientBalance = paymentType === 'cash_out' && account && account.balance < paymentAmount;
+              const isSelected = selectedMethod === method.id;
+              const borderColor = isSelected
+                ? 'border-green-200 hover:border-green-300'
+                : isExpanded
+                  ? 'border-blue-500'
+                  : 'border-orange-300 hover:border-orange-400';
+
+              return (
+                <div
+                  key={method.id}
+                  className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 ${borderColor} hover:shadow-md`}
+                >
+                  {/* Item Header - Clickable */}
+                  <div
+                    onClick={() => {
+                      if (isExpanded) {
+                        setExpandedMethodId(null);
+                      } else {
+                        setExpandedMethodId(method.id);
+                        if (!hasInsufficientBalance) {
+                          setSelectedMethod(method.id);
+                        }
+                      }
+                    }}
+                    className="flex items-start justify-between p-6 cursor-pointer"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <div className="w-6 h-6 rounded-lg flex items-center justify-center transition-colors bg-gray-200">
+                          <ChevronDown
+                            className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${
+                              isExpanded ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h4 className="text-lg font-bold text-gray-900">{method.name}</h4>
+                            {(isSelected || (methodAmounts[method.id] && methodAmounts[method.id] > 0)) && (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold shadow-sm bg-green-500 text-white">
+                                <CheckCircle className="w-3 h-3" />
+                                Done
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {account ? (
+                              <>
+                                Balance: {account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                                {hasInsufficientBalance && (
+                                  <span className="text-red-600 ml-2">• Insufficient</span>
+                                )}
+                              </>
+                            ) : (
+                              'Select this payment method'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      {/* Amount Badge */}
+                      <div
+                        className={`px-4 py-2 rounded-xl text-base font-bold shadow-sm border ${
+                          isSelected || (methodAmounts[method.id] && methodAmounts[method.id] > 0)
+                            ? 'bg-green-100 text-green-700 border-green-200'
+                            : 'bg-red-100 text-red-700 border-red-200'
+                        }`}
+                      >
+                        {isSelected || (methodAmounts[method.id] && methodAmounts[method.id] > 0) ? (
+                          `${(methodAmounts[method.id] || paymentAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${displayCurrency}`
+                        ) : (
+                          'Amount Required'
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded Content - Account Details and Amount Input */}
+                  {isExpanded && (
+                    <div className="px-6 pb-6 border-t border-gray-100">
+                      <div className="mt-4 space-y-4">
+                        {/* Amount Input Field */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Enter {method.name} Amount
+                          </label>
+                          <input
+                            type="text"
+                            value={methodAmounts[method.id] > 0 ? methodAmounts[method.id].toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
+                            onChange={(e) => updateMethodAmount(method.id, e.target.value)}
+                            placeholder="Enter amount"
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
+                          />
+                        </div>
+                        {account && (
+                          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-gray-600">Current Balance:</span>
+                                <p className="font-bold text-gray-900">{account.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}</p>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Amount to {paymentType === 'cash_out' ? 'Pay' : 'Receive'}:</span>
+                                <p className="font-bold text-gray-900">
+                                  {(methodAmounts[method.id] || paymentAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
+                                </p>
+                              </div>
+                              <div className="col-span-2 pt-2 border-t border-gray-200">
+                                <span className="text-gray-600">Balance After Payment:</span>
+                                <p className={`font-bold ${Math.max(0, account.balance - (methodAmounts[method.id] || paymentAmount)) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                  {Math.max(0, account.balance - (methodAmounts[method.id] || paymentAmount)).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          )}
-
-
-          {/* Price Edit Section - Show when customer pays more than original amount */}
-          {allowPriceEdit && deviceId && customerPaymentAmount > amount && (
-            <div className="mt-6 p-5 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center">
-                  <Edit3 className="w-5 h-5 text-white" />
-                </div>
-                <h4 className="text-lg font-semibold text-amber-800">Customer Paid More</h4>
-              </div>
-              
-              <div className="space-y-4">
-                <div className="p-3 bg-white/50 rounded-lg">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Original Price:</span>
-                      <p className="font-semibold text-gray-700">{formatCurrencyWithFlag(amount, selectedCurrency)}</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Amount Paid:</span>
-                      <p className="font-semibold text-green-600">{formatCurrencyWithFlag(customerPaymentAmount, selectedCurrency)}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {!showPriceEdit ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-amber-700">
-                      Customer paid <span className="font-semibold">{formatCurrencyWithFlag(customerPaymentAmount - amount, selectedCurrency)}</span> more than the original price.
-                    </p>
-                    <button
-                      onClick={() => {
-                        setNewPrice(customerPaymentAmount.toString());
-                        setShowPriceEdit(true);
-                      }}
-                      className="w-full px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-medium transition-colors"
-                    >
-                      Update Price to Match Payment
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-amber-800 mb-2">
-                        New Repair Price
-                      </label>
-                      <input
-                        type="number"
-                        value={newPrice}
-                        onChange={(e) => setNewPrice(e.target.value)}
-                        className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                        placeholder="Enter new price"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-amber-800 mb-2">
-                        Reason for Price Change
-                      </label>
-                      <textarea
-                        value={priceEditReason}
-                        onChange={(e) => setPriceEditReason(e.target.value)}
-                        className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                        rows={2}
-                        placeholder="e.g., Customer paid more, additional services provided..."
-                      />
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        onClick={async () => {
-                          if (!deviceId || !currentUser?.id) return;
-                          
-                          try {
-                            await devicePriceService.updateDeviceRepairPrice({
-                              deviceId,
-                              repairPrice: parseFloat(newPrice),
-                              updatedBy: currentUser?.id,
-                              reason: priceEditReason || 'Price adjusted to match customer payment'
-                            });
-                            
-                            toast.success('Device price updated successfully');
-                            setShowPriceEdit(false);
-                          } catch (error) {
-                            console.error('Error updating device price:', error);
-                            toast.error('Failed to update device price');
-                          }
-                        }}
-                        className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg font-medium transition-colors"
-                      >
-                        Update Price
-                      </button>
-                      <button
-                        onClick={() => setShowPriceEdit(false)}
-                        className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
+              );
+              })
+            )}
+          </div>
         </div>
 
-        {/* Fixed Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-100 flex-shrink-0 bg-white">
-          <div className="text-sm text-gray-600">
-            {remainingAmount > 0 ? (
-              <span className="text-orange-600 flex items-center gap-1">
-                <AlertCircle className="w-4 h-4" />
-                {paymentType === 'cash_out' ? 'Amount to pay' : 'Amount remaining'}: {remainingAmount.toLocaleString()} TZS
-              </span>
-            ) : (
-              <span className="text-green-600 flex items-center gap-1">
-                <CheckCircle2 className="w-4 h-4" />
-                {paymentType === 'cash_out' ? 'Payment complete' : 'Payment complete'}
-              </span>
-            )}
-            {paymentType === 'cash_out' && selectedMethod && (
-              <div className="mt-1 text-xs text-gray-500">
-                {(() => {
-                  const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
-                  if (account) {
-                    const paymentAmount = isMultipleMode ? totalPaid : (amountInTZS || amount);
-                    const newBalance = Math.max(0, account.balance - paymentAmount);
-                    return (
-                      <span>
-                        Account balance: {account.balance.toLocaleString()} → {newBalance.toLocaleString()} {account.currency || 'TZS'}
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
+        {/* Price Edit Section - Show when customer pays more than original amount */}
+        {allowPriceEdit && deviceId && customerPaymentAmount > amount && (
+          <div className="px-6 mt-6 p-5 bg-white rounded-lg shadow-lg border border-gray-200">
+            <div className="flex items-center gap-2 mb-4">
+              <Edit3 className="w-5 h-5 text-gray-700" />
+              <h4 className="text-lg font-semibold text-gray-900">Customer Paid More</h4>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Original Price:</span>
+                    <p className="font-semibold text-gray-900">{formatCurrencyWithFlag(amount, selectedCurrency)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Amount Paid:</span>
+                    <p className="font-semibold text-gray-900">{formatCurrencyWithFlag(customerPaymentAmount, selectedCurrency)}</p>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="px-6 py-3 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-sm font-medium"
-            >
-              Cancel
-            </button>
-            <div className="flex flex-col items-center gap-3">
-              {/* Processing step indicator */}
-              {isProcessing && processingStep && (
-                <div className="flex items-center gap-2 text-blue-600 text-sm font-medium bg-blue-50 px-4 py-2 rounded-lg">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  {processingStep}
+
+              {!showPriceEdit ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-700">
+                    Customer paid <span className="font-semibold">{formatCurrencyWithFlag(customerPaymentAmount - amount, selectedCurrency)}</span> more than the original price.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setNewPrice(customerPaymentAmount.toString());
+                      setShowPriceEdit(true);
+                    }}
+                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    Update Price to Match Payment
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      New Repair Price
+                    </label>
+                    <input
+                      type="number"
+                      value={newPrice}
+                      onChange={(e) => setNewPrice(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter new price"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reason for Price Change
+                    </label>
+                    <textarea
+                      value={priceEditReason}
+                      onChange={(e) => setPriceEditReason(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      rows={2}
+                      placeholder="e.g., Customer paid more, additional services provided..."
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!deviceId || !currentUser?.id) return;
+                        
+                        try {
+                          await devicePriceService.updateDeviceRepairPrice({
+                            deviceId,
+                            repairPrice: parseFloat(newPrice),
+                            updatedBy: currentUser?.id,
+                            reason: priceEditReason || 'Price adjusted to match customer payment'
+                          });
+                          
+                          toast.success('Device price updated successfully');
+                          setShowPriceEdit(false);
+                        } catch (error) {
+                          console.error('Error updating device price:', error);
+                          toast.error('Failed to update device price');
+                        }
+                      }}
+                      className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      Update Price
+                    </button>
+                    <button
+                      onClick={() => setShowPriceEdit(false)}
+                      className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-medium transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               )}
-
-              <button
-                onClick={handlePayment}
-                disabled={
-                  isProcessing ||
-                  (isMultipleMode ? paymentEntries.length === 0 : !selectedMethod) ||
-                  // Disable if insufficient balance for cash_out
-                  (paymentType === 'cash_out' && !isMultipleMode && selectedMethod && (() => {
-                    const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
-                    const checkAmount = amountInTZS || amount;  // Use TZS amount if available
-                    return account && account.balance < checkAmount;
-                  })()) ||
-                  (paymentType === 'cash_out' && isMultipleMode && paymentEntries.some(entry => {
-                    const account = paymentAccounts.find(acc => acc.id === entry.accountId);
-                    return account && account.balance < entry.amount;
-                  }))
-                }
-                className={`px-8 py-3 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 text-sm font-semibold flex items-center gap-2 ${
-                  paymentType === 'cash_out'
-                    ? 'bg-red-600 hover:bg-red-700 shadow-lg disabled:hover:bg-gray-400'
-                    : 'bg-green-600 hover:bg-green-700 shadow-lg disabled:hover:bg-gray-400'
-                }`}
-                title={
-                  paymentType === 'cash_out' && !isMultipleMode && selectedMethod ? (() => {
-                    const account = paymentAccounts.find(acc => acc.payment_method_id === selectedMethod);
-                    const checkAmount = amountInTZS || amount;  // Use TZS amount if available
-                    if (account && account.balance < checkAmount) {
-                      return `Insufficient balance: ${account.balance.toLocaleString()} available, ${checkAmount.toLocaleString()} required`;
-                    }
-                    return '';
-                  })() : ''
-                }
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="w-4 h-4" />
-                    {paymentType === 'cash_out' ? 'Make Payment' : 'Complete Payment'}
-                  </>
-                )}
-              </button>
             </div>
           </div>
+        )}
+
+        {/* Fixed Action Buttons Footer */}
+        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+          {/* Status Messages */}
+          {remainingAmount > 0 && (
+            <div className="mb-3 p-3 bg-orange-50 border border-orange-200 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-orange-600 flex-shrink-0" />
+              <span className="text-sm font-semibold text-orange-700">
+                {paymentType === 'cash_out' ? 'Amount to pay' : 'Amount remaining'}: {remainingAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
+              </span>
+            </div>
+          )}
+          {remainingAmount <= 0 && (isMultipleMode ? paymentEntries.length > 0 : selectedMethod) && (
+            <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <span className="text-sm font-semibold text-green-700">
+                Payment ready! Full amount ({(amountInTZS || amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}) will be processed.
+              </span>
+            </div>
+          )}
+
+          {/* Processing step indicator */}
+          {isProcessing && processingStep && (
+            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+              <Loader2 className="w-5 h-5 text-blue-600 flex-shrink-0 animate-spin" />
+              <span className="text-sm font-semibold text-blue-700">
+                {processingStep}
+              </span>
+            </div>
+          )}
+
+          {/* Main Action Button */}
+          <button
+            onClick={handlePayment}
+            disabled={
+              isProcessing ||
+              (remainingAmount > 0 &&
+                !isMultipleMode &&
+                !selectedMethod) ||
+              (remainingAmount > 0 &&
+                isMultipleMode &&
+                paymentEntries.length === 0)
+            }
+            className={`w-full px-6 py-3.5 rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl text-lg flex items-center justify-center gap-2 ${
+              !isProcessing &&
+              (isMultipleMode ? paymentEntries.length > 0 : selectedMethod) &&
+              remainingAmount <= 0
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+            }`}
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Processing...
+              </>
+            ) : !(isMultipleMode ? paymentEntries.length > 0 : selectedMethod) || remainingAmount > 0 ? (
+              <>
+                <Lock className="w-5 h-5" />
+                {!selectedMethod && !isMultipleMode ? 'Select Payment Method First' : remainingAmount > 0 ? 'Complete All Payments First' : 'Set Payment Amount'}
+              </>
+            ) : (
+              <>
+                <CheckCircle className="w-5 h-5" />
+                {paymentType === 'cash_out' ? 'Make Payment' : 'Complete Payment'}
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>,

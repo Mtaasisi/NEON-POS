@@ -1184,7 +1184,12 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
   }
 
   not(column: string, operator: string, value: any) {
-    this.whereConditions.push(`NOT (${column} ${operator} ${this.formatValue(value)})`);
+    // ✅ FIX: Handle IS NULL specially for NOT (column IS NULL) = column IS NOT NULL
+    if (operator === 'is' && (value === null || value === undefined)) {
+      this.whereConditions.push(`${this.qualifyColumn(column)} IS NOT NULL`);
+    } else {
+      this.whereConditions.push(`NOT (${this.qualifyColumn(column)} ${operator} ${this.formatValue(value)})`);
+    }
     return this;
   }
 

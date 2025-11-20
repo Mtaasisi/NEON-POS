@@ -476,18 +476,29 @@ Respond in JSON format:
       }
     } catch (error) {
       // Check if it's a connection refused error (expected when proxy server is down)
-      const errorMessage = error instanceof Error ? error.message : 'Unknown network error';
-      const isConnectionError = errorMessage.includes('Failed to fetch') || 
-                               errorMessage.includes('ERR_CONNECTION_REFUSED') ||
-                               errorMessage.includes('ECONNREFUSED');
+      // Fetch errors can be TypeError (connection refused) or other network errors
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorString = String(error);
+      
+      const isConnectionError = 
+        errorMessage.includes('Failed to fetch') || 
+        errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+        errorMessage.includes('ECONNREFUSED') ||
+        errorString.includes('ERR_CONNECTION_REFUSED') ||
+        errorString.includes('ECONNREFUSED') ||
+        (error instanceof TypeError && errorMessage.includes('fetch')) ||
+        (error instanceof TypeError && errorMessage.includes('network'));
       
       if (isConnectionError) {
         // Silently handle connection errors in dev - this is expected when backend proxy isn't running
-        console.log('ℹ️  SMS proxy server not available (expected in dev - backend server not running)');
+        // Use console.debug instead of console.log to reduce noise in dev console
+        // Note: Browser network errors will still appear in console, but this reduces duplicate warnings
+        console.debug('ℹ️  SMS proxy server not available (expected in dev - backend server not running)');
         // Return success=false but don't treat it as a critical error
         return { success: false, error: 'SMS proxy server not running - this is normal in development mode' };
       }
       
+      // Only log actual SMS provider errors, not connection errors
       console.error('📱 SMS Network Error:', error);
       return { success: false, error: `Network error: ${errorMessage}` };
     }

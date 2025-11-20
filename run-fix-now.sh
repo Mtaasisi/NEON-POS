@@ -13,7 +13,7 @@ echo "============================================"
 echo ""
 
 # Your Neon database connection string
-DATABASE_URL='postgresql://neondb_owner:npg_vABqUKk73tEW@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
+DATABASE_URL='postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-falling-silence-adknpy1h-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 
 echo "✅ Connecting to Neon database..."
 echo ""

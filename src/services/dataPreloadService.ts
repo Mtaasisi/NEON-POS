@@ -118,6 +118,31 @@ class DataPreloadService {
         fn: async () => {
           const products = await fetchProducts(currentBranchId, forceRefresh);
           dataStore.setProducts(products);
+          
+          // ⚡ IMMEDIATELY cache products in productCacheService for instant access
+          if (products && products.length > 0) {
+            try {
+              const { productCacheService } = await import('../lib/productCacheService');
+              productCacheService.saveProducts(products);
+              console.log(`✅ [Preload] Cached ${products.length} products in productCacheService`);
+            } catch (cacheError) {
+              console.warn('⚠️ [Preload] Could not populate productCacheService:', cacheError);
+            }
+          }
+          
+          // ⚡ Preload child variants IMMEDIATELY when products are loaded
+          if (products && products.length > 0) {
+            try {
+              console.log('🚀 [Preload] Starting child variants preload...');
+              const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
+              await childVariantsCacheService.preloadAllChildVariants(products);
+              console.log('✅ [Preload] Child variants preloaded successfully');
+            } catch (error) {
+              console.warn('⚠️ [Preload] Child variants preload failed (non-critical):', error);
+              // Don't throw - continue with other preloads
+            }
+          }
+          
           return products;
         }
       },
@@ -126,6 +151,18 @@ class DataPreloadService {
         fn: async () => {
           const customers = await fetchCustomers(currentBranchId, forceRefresh);
           dataStore.setCustomers(customers);
+          
+          // ⚡ IMMEDIATELY cache customers in customerCacheService for instant access
+          if (customers && customers.length > 0) {
+            try {
+              const { customerCacheService } = await import('../lib/customerCacheService');
+              customerCacheService.saveCustomers(customers);
+              console.log(`✅ [Preload] Cached ${customers.length} customers in customerCacheService`);
+            } catch (cacheError) {
+              console.warn('⚠️ [Preload] Could not populate customerCacheService:', cacheError);
+            }
+          }
+          
           return customers;
         }
       },
@@ -428,6 +465,31 @@ class DataPreloadService {
     // Check cache first
     if (dataStore.isCacheValid('products') && dataStore.products && dataStore.products.length > 0) {
       console.log('📦 Using cached products');
+      
+      // ⚡ IMMEDIATELY cache products in productCacheService when using cached products
+      const products = dataStore.products;
+      if (products && products.length > 0) {
+        try {
+          const { productCacheService } = await import('../lib/productCacheService');
+          productCacheService.saveProducts(products);
+          console.log(`✅ [Preload] Cached ${products.length} products in productCacheService`);
+        } catch (cacheError) {
+          console.warn('⚠️ [Preload] Could not populate productCacheService:', cacheError);
+        }
+      }
+      
+      // ⚡ Preload child variants IMMEDIATELY when using cached products
+      if (products && products.length > 0) {
+        try {
+          console.log('🚀 [Preload] Starting child variants preload for cached products...');
+          const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
+          await childVariantsCacheService.preloadAllChildVariants(products);
+          console.log('✅ [Preload] Child variants preloaded for cached products');
+        } catch (error) {
+          console.warn('⚠️ [Preload] Child variants preload failed (non-critical):', error);
+        }
+      }
+      
       return;
     }
 
@@ -440,6 +502,30 @@ class DataPreloadService {
       const products = inventoryStore.products;
       dataStore.setProducts(products);
       console.log(`✅ Preloaded ${products.length} products`);
+      
+      // ⚡ IMMEDIATELY cache products in productCacheService for instant access
+      if (products && products.length > 0) {
+        try {
+          const { productCacheService } = await import('../lib/productCacheService');
+          productCacheService.saveProducts(products);
+          console.log(`✅ [Preload] Cached ${products.length} products in productCacheService`);
+        } catch (cacheError) {
+          console.warn('⚠️ [Preload] Could not populate productCacheService:', cacheError);
+        }
+      }
+      
+      // ⚡ Preload child variants IMMEDIATELY after products are loaded
+      if (products && products.length > 0) {
+        try {
+          console.log('🚀 [Preload] Starting child variants preload...');
+          const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
+          await childVariantsCacheService.preloadAllChildVariants(products);
+          console.log('✅ [Preload] Child variants preloaded successfully');
+        } catch (error) {
+          console.warn('⚠️ [Preload] Child variants preload failed (non-critical):', error);
+          // Don't throw - continue even if child variants preload fails
+        }
+      }
     } catch (error: any) {
       console.error('❌ Error preloading products:', error);
       dataStore.setError('products', error.message);

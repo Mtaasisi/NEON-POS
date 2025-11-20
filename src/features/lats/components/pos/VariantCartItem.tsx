@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Trash2, Package, Tag, Minus, Plus, Edit, X, AlertTriangle } from 'lucide-react';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
@@ -30,6 +30,9 @@ interface VariantCartItemProps {
   showStockInfo?: boolean;
   variant?: 'default' | 'compact';
   className?: string;
+  autoExpand?: boolean; // Auto-expand this item (e.g., for newly added items)
+  isExpanded?: boolean; // Whether this item is expanded (controlled by parent)
+  onToggleExpand?: (itemId: string) => void; // Callback to toggle expansion
 }
 
 // Helper function to convert old image format to new format
@@ -57,7 +60,10 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   availableVariants = [],
   showStockInfo = true,
   variant = 'default',
-  className = ''
+  className = '',
+  autoExpand = false,
+  isExpanded: controlledIsExpanded,
+  onToggleExpand
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editQuantity, setEditQuantity] = useState(item.quantity);
@@ -66,7 +72,33 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
   const [newTag, setNewTag] = useState('');
   const [requiresIMEI, setRequiresIMEI] = useState(false);
   const [checkingIMEI, setCheckingIMEI] = useState(false);
+  const [internalIsExpanded, setInternalIsExpanded] = useState(autoExpand);
   const { playClickSound, playDeleteSound } = usePOSClickSounds();
+
+  // Use controlled state if provided, otherwise use internal state
+  const isExpanded = controlledIsExpanded !== undefined ? controlledIsExpanded : internalIsExpanded;
+
+  // Auto-expand on mount if autoExpand prop is true
+  useEffect(() => {
+    if (autoExpand && variant === 'compact' && controlledIsExpanded === undefined) {
+      setInternalIsExpanded(true);
+      // If parent provides toggle callback, notify it
+      if (onToggleExpand) {
+        onToggleExpand(item.id);
+      }
+    }
+  }, [autoExpand, variant, item.id, controlledIsExpanded, onToggleExpand]);
+
+  // Handle toggle expand
+  const handleToggleExpand = () => {
+    if (onToggleExpand) {
+      // Controlled mode - let parent handle it
+      onToggleExpand(item.id);
+    } else {
+      // Uncontrolled mode - handle internally
+      setInternalIsExpanded(!internalIsExpanded);
+    }
+  };
 
   // Calculate totals
   const subtotal = item.unitPrice * item.quantity;
@@ -231,40 +263,73 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
 
   if (variant === 'compact') {
     return (
-      <div className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 ${className}`}>
-        {/* Main Content - Two Row Layout */}
-        <div className="space-y-3">
-          {/* Top Row - Product Info and Remove Button */}
-          <div className="flex items-start justify-between gap-3">
-            {/* Left Section - Product Info */}
-            <div className="flex items-center space-x-3 flex-1 min-w-0">
-              {/* Product Icon */}
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+      <div className={`bg-white border-2 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 ${className} ${
+        isExpanded
+          ? 'border-blue-500 shadow-xl'
+          : stockStatus === 'insufficient' 
+            ? 'border-red-300' 
+            : stockStatus === 'low'
+              ? 'border-orange-300'
+              : 'border-gray-200 hover:border-gray-300'
+      }`}>
+        {/* Item Header - Clickable */}
+        <div 
+          className="flex items-start justify-between p-4 cursor-pointer"
+          onClick={handleToggleExpand}
+        >
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              {/* Chevron Icon - Styled like SetPricingModal */}
+              <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
+                isExpanded ? 'bg-blue-500' : 'bg-gray-200'
+              }`}>
+                <svg 
+                  className={`w-4 h-4 text-white transition-transform duration-200 ${
+                    isExpanded ? 'rotate-180' : ''
+                  }`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+              
+              {/* Product Icon - Styled like SetPricingModal */}
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
                 {thumbnail ? (
                   <SafeImage
                     images={convertToProductImages([thumbnail])}
                     productName={item.productName}
                     size="sm"
-                    className="w-full h-full rounded-lg"
+                    className="w-full h-full rounded-xl"
                   />
                 ) : (
-                  <Package className="w-5 h-5 text-blue-600" />
+                  <Package className="w-6 h-6 text-white" />
                 )}
               </div>
               
               {/* Product Details */}
               <div className="flex-1 min-w-0">
-                <h3 className="font-medium text-gray-900 truncate text-sm">
-                  {item.productName}
-                </h3>
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-bold text-gray-900 truncate text-base">
+                    {item.productName}
+                  </h3>
+                </div>
                 {item.variantName !== 'Default' && (
                   <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
-                    <span className="text-blue-600">{item.variantName}</span>
+                    <span className="text-blue-600 font-semibold">{item.variantName}</span>
                   </div>
+                )}
+                {/* Total Price - Show when collapsed, below variant name - Simple */}
+                {!isExpanded && (
+                  <p className="text-base font-bold text-emerald-600 mt-1.5">
+                    {format.money(subtotal)}
+                  </p>
                 )}
                 {/* IMEI Selection Status */}
                 {item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0 ? (
-                  <div className="flex items-center gap-1 text-xs text-green-600 mt-1">
+                  <div className="flex items-center gap-1 text-xs text-green-600 mt-1 font-medium">
                     <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full"></span>
                     <span>IMEI: {item.selectedSerialNumbers.map((sn: any) => sn.imei || sn.serial_number).join(', ')}</span>
                   </div>
@@ -276,7 +341,10 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                     </GlassBadge>
                     {onIMEISelect && (
                       <GlassButton
-                        onClick={() => onIMEISelect(item)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onIMEISelect(item);
+                        }}
                         variant="primary"
                         size="sm"
                         className="text-xs px-2 py-1"
@@ -286,13 +354,9 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                     )}
                   </div>
                 ) : null}
-                {/* Stock Info */}
-                <div className="text-xs text-gray-500 mt-1">
-                  Available: <span className="font-medium">{availableStock} units</span>
-                </div>
                 {/* Product Tags */}
                 {item.tags && item.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
+                  <div className="flex flex-wrap gap-1 mt-2">
                     {item.tags.map((tag, index) => (
                       <span
                         key={index}
@@ -306,58 +370,83 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                 )}
               </div>
             </div>
-            
-            {/* Remove Button */}
-            <button
-              type="button"
-              onClick={onRemove}
-              className="flex-shrink-0 inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors duration-200"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
           </div>
           
-          {/* Bottom Row - Price and Quantity Controls */}
-          <div className="flex items-center justify-between gap-4 pt-2 border-t border-gray-100">
-            {/* Total Price */}
-            <div className="flex-shrink-0">
-              <div className="text-xs text-gray-500 mb-0.5">Total</div>
-              <div className="font-bold text-lg text-gray-900">{format.money(subtotal)}</div>
-            </div>
-            
-            {/* Quantity Controls */}
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-gray-700">Quantity:</label>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleQuantityChange(item.quantity - 1)}
-                  disabled={item.quantity <= 1}
-                  className="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <span className="w-12 text-center font-semibold text-base px-2 py-1.5 bg-gray-50 rounded-md border border-gray-200">
-                  {item.quantity}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleQuantityChange(item.quantity + 1)}
-                  disabled={item.quantity >= availableStock}
-                  className="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
+          {/* Remove Button - Styled like SetPricingModal */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            className="flex-shrink-0 inline-flex items-center justify-center w-9 h-9 text-sm font-medium text-white bg-red-500 hover:bg-red-600 border border-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors duration-200 shadow-lg"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Expanded Content - Only show when item is expanded */}
+        {isExpanded && (
+          <div className="px-4 pb-4">
+            {/* Price and Quantity Controls - Styled like SetPricingModal */}
+            <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200">
+              <div className="flex items-center justify-between gap-4">
+                {/* Total Price - Styled like SetPricingModal */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">Total</p>
+                  <p className="text-base font-bold text-emerald-600 truncate">
+                    {format.money(subtotal)}
+                  </p>
+                </div>
+                
+                {/* Divider */}
+                <div className="h-14 w-px bg-gray-300"></div>
+                
+                {/* Quantity Controls - Styled like SetPricingModal */}
+                <div className="flex items-center gap-2.5 flex-shrink-0">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-500 mb-0.5">Quantity</p>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuantityChange(item.quantity - 1);
+                        }}
+                        disabled={item.quantity <= 1}
+                        className="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <span className="w-14 text-center font-bold text-base px-3 py-1.5 bg-white rounded-xl border-2 border-gray-300 shadow-sm">
+                        {item.quantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuantityChange(item.quantity + 1);
+                        }}
+                        disabled={item.quantity >= availableStock}
+                        className="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
         
-        {/* Stock Warning */}
+        {/* Stock Warning - Styled like SetPricingModal */}
         {stockStatus === 'insufficient' && (
-          <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-lg">
-            <div className="text-sm text-red-800">
-              <strong>Warning:</strong> Requested quantity ({item.quantity}) exceeds available stock ({availableStock})
+          <div className="mx-4 mb-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+            <div className="flex items-center gap-2 text-sm text-red-800">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              <span className="font-semibold">Warning:</span>
+              <span>Requested quantity ({item.quantity}) exceeds available stock ({availableStock})</span>
             </div>
           </div>
         )}

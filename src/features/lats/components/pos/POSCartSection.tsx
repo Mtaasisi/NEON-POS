@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantCartItem from './VariantCartItem';
@@ -80,6 +80,25 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   // Calculate total item count
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const { playClickSound, playPaymentSound, playDeleteSound } = usePOSClickSounds();
+  
+  // Track which item is expanded (only one at a time)
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  
+  // Reverse cart items so latest added appears at top
+  const reversedCartItems = [...cartItems].reverse();
+  
+  // Auto-expand the latest added item (first item in reversed array)
+  useEffect(() => {
+    if (reversedCartItems.length > 0) {
+      const latestItem = reversedCartItems[0];
+      setExpandedItemId(latestItem.id);
+    }
+  }, [cartItems.length]);
+  
+  // Handle toggle expand - close previous item when opening a new one
+  const handleToggleExpand = (itemId: string) => {
+    setExpandedItemId(prev => prev === itemId ? null : itemId);
+  };
 
   return (
     <div className="lg:w-[450px] flex-shrink-0 pos-cart-section">
@@ -207,7 +226,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
 
               {/* Cart Items */}
               <div className="space-y-3 mb-6">
-                {cartItems.map((item) => (
+                {reversedCartItems.map((item, index) => (
                   <VariantCartItem
                     key={item.id}
                     item={item}
@@ -216,6 +235,9 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                     onTagsChange={onUpdateCartItemTags ? (tags) => onUpdateCartItemTags(item.id, tags) : undefined}
                     onIMEISelect={onIMEISelect}
                     variant="compact"
+                    autoExpand={index === 0} // Auto-expand the latest added item (first in reversed array)
+                    isExpanded={expandedItemId === item.id}
+                    onToggleExpand={handleToggleExpand}
                   />
                 ))}
               </div>
@@ -223,141 +245,126 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
           )}
         </div>
 
-        {/* Cart Summary */}
+        {/* Cart Summary - Compact Redesign with Larger Touch Targets */}
         {cartItems.length > 0 && (
-          <div className="flex-shrink-0 border-t border-gray-200 pt-4 space-y-3">
-            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-              {/* Quantity */}
-              <div className="flex justify-between items-center py-2">
-                <span className="text-sm font-medium text-gray-600">Quantity:</span>
-                <span className="text-sm font-semibold text-gray-900">{totalItems}</span>
-              </div>
-              
-              {/* Subtotal with item count */}
-              <div className="flex justify-between items-center py-2 border-t border-gray-100">
-                <span className="text-sm font-medium text-gray-600">Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'}):</span>
-                <span className="text-sm font-semibold text-gray-900">TZS {totalAmount.toLocaleString()}</span>
-              </div>
-              
-              {/* Discount Section */}
-              <div className="py-1">
+          <div className="flex-shrink-0 border-t border-gray-200 pt-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              {/* Summary Row - Larger Text */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3 text-base">
+                  <span className="text-gray-600 font-medium">{totalItems} {totalItems === 1 ? 'item' : 'items'}</span>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-600 font-medium">Subtotal:</span>
+                  <span className="font-bold text-gray-900">TZS {totalAmount.toLocaleString()}</span>
+                </div>
+                {/* Discount Button - Larger */}
                 {discountAmount > 0 ? (
-                  <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Percent className="w-4 h-4 text-green-600" />
-                      <div>
-                        <div className="text-sm font-medium text-green-900">
-                          Discount {discountPercentage > 0 && `(${discountPercentage}%)`}
-                        </div>
-                        <div className="text-sm font-semibold text-green-700">-TZS {discountAmount.toLocaleString()}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => {
-                          playClickSound();
-                          onShowDiscountModal();
-                        }}
-                        className="p-1.5 text-green-700 hover:bg-green-100 rounded-lg transition-colors"
-                        title="Edit Discount"
-                      >
-                        <Edit3 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          playDeleteSound();
-                          onClearDiscount();
-                        }}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Remove Discount"
-                      >
-                        <XCircle className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      onShowDiscountModal();
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 hover:bg-green-100 transition-colors"
+                    title="Edit Discount"
+                  >
+                    <Percent className="w-4 h-4" />
+                    <span className="text-sm font-semibold">-{discountAmount.toLocaleString()}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playDeleteSound();
+                        onClearDiscount();
+                      }}
+                      className="ml-1 p-1 text-red-600 hover:bg-red-50 rounded"
+                      title="Remove Discount"
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </button>
+                  </button>
                 ) : (
                   <button
                     onClick={() => {
                       playClickSound();
                       onShowDiscountModal();
                     }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all duration-200"
+                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                   >
-                    <Percent className="w-4 h-4" />
-                    <span className="text-sm font-medium">Add Discount</span>
+                    <Percent className="w-5 h-5" />
+                    <span className="text-sm font-medium">Discount</span>
                   </button>
                 )}
               </div>
 
-              {/* Tax/VAT Line - Only show if tax is enabled */}
+              {/* Tax - Larger Text */}
               {isTaxEnabled && (
-                <div className="flex justify-between items-center py-2 border-t border-gray-100">
-                  <span className="text-sm font-medium text-gray-600">Tax (VAT {taxRate}%):</span>
-                  <span className="text-sm font-semibold text-gray-900">TZS {taxAmount.toLocaleString()}</span>
+                <div className="flex justify-between items-center text-sm text-gray-600 mb-3">
+                  <span className="font-medium">Tax (VAT {taxRate}%):</span>
+                  <span className="font-bold text-gray-900">TZS {taxAmount.toLocaleString()}</span>
                 </div>
               )}
               
-              {/* Total */}
-              <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
-                <span className="text-base font-semibold text-gray-900">Total:</span>
-                <span className="text-lg font-bold text-green-600">TZS {finalAmount.toLocaleString()}</span>
+              {/* Total - Prominent & Larger */}
+              <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
+                <span className="text-lg font-bold text-gray-900">Total:</span>
+                <span className="text-2xl font-bold text-green-600">TZS {finalAmount.toLocaleString()}</span>
               </div>
-            </div>
 
-            {/* Customer Selection Warning */}
-            {!selectedCustomer && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-amber-900">
+              {/* Customer Warning - Larger */}
+              {!selectedCustomer && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg mb-4">
                   <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                  <span className="font-medium">Please select a customer to proceed</span>
+                  <span className="text-sm font-medium text-amber-900">Please select a customer to proceed</span>
                 </div>
+              )}
+
+              {/* Action Buttons - Grid Layout with Larger Touch Targets */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Installment Plan Button */}
+                {onShowInstallmentModal && (
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      onShowInstallmentModal();
+                    }}
+                    disabled={cartItems.length === 0 || !selectedCustomer}
+                    className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
+                    title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Create installment plan"}
+                  >
+                    <CreditCard className="w-5 h-5" />
+                    <span className="truncate">Installment</span>
+                  </button>
+                )}
+
+                {/* Trade-In Button */}
+                {onShowTradeInModal && (
+                  <button
+                    onClick={() => {
+                      playClickSound();
+                      onShowTradeInModal();
+                    }}
+                    disabled={cartItems.length === 0 || !selectedCustomer}
+                    className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2 text-base"
+                    title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Add trade-in device"}
+                  >
+                    <Repeat className="w-5 h-5" />
+                    <span className="truncate">Trade-In</span>
+                  </button>
+                )}
               </div>
-            )}
 
-            {/* Installment Plan Button */}
-            {onShowInstallmentModal && (
+              {/* Process Payment Button - Full Width, Prominent & Larger */}
               <button
                 onClick={() => {
-                  playClickSound();
-                  onShowInstallmentModal();
+                  playPaymentSound();
+                  onProcessPayment();
                 }}
                 disabled={cartItems.length === 0 || !selectedCustomer}
-                className="w-full bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Create installment plan"}
+                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl mt-3 text-lg"
+                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Process payment"}
               >
-                <CreditCard className="w-5 h-5" />
-                Installment Plan
+                Process Payment
               </button>
-            )}
-
-            {/* Trade-In Button */}
-            {onShowTradeInModal && (
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onShowTradeInModal();
-                }}
-                disabled={cartItems.length === 0 || !selectedCustomer}
-                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Add trade-in device"}
-              >
-                <Repeat className="w-5 h-5" />
-                Add Trade-In
-              </button>
-            )}
-
-            {/* Process Payment Button */}
-            <button
-              onClick={() => {
-                playPaymentSound();
-                onProcessPayment();
-              }}
-              disabled={cartItems.length === 0 || !selectedCustomer}
-              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl"
-              title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Process payment"}
-            >
-              Process Payment
-            </button>
+            </div>
           </div>
         )}
       </GlassCard>

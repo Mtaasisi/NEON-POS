@@ -1936,18 +1936,19 @@ export class PurchaseOrderService {
         }
 
         // Check if any item has IMEI - if so, use new IMEI variant system
+        // ✅ FIX: Check if any item has IMEI (allows items with only serial number or only IMEI)
         const hasIMEI = receivedItem.serialNumbers.some(s => s.imei && s.imei.trim() !== '');
 
         if (hasIMEI) {
           // ✅ NEW SYSTEM: Parent-Child IMEI Variant System
           console.log(`✅ Using Parent-Child IMEI variant system for ${receivedItem.serialNumbers.length} devices`);
 
-          // Prepare variant data
+          // ✅ FIX: Process items with IMEI (serial_number is optional)
           const variants = receivedItem.serialNumbers
             .filter(serial => serial.imei && serial.imei.trim() !== '')
             .map(serial => ({
               imei: serial.imei!,
-              serial_number: serial.serial_number,
+              serial_number: serial.serial_number || '', // ✅ Allow empty serial_number if only IMEI provided
               mac_address: serial.mac_address,
               condition: serial.condition || 'new',
               cost_price: serial.cost_price || orderItem.unit_cost || 0,
@@ -2003,9 +2004,11 @@ export class PurchaseOrderService {
             }
           }
 
-          // Handle items without IMEI (if any) - fall back to old system
+          // ✅ FIX: Handle items without IMEI (only serial numbers) - use legacy system
+          // Items with only serial_number (no IMEI) go to legacy inventory_items
           const itemsWithoutIMEI = receivedItem.serialNumbers.filter(
-            serial => !serial.imei || serial.imei.trim() === ''
+            serial => (!serial.imei || serial.imei.trim() === '') && 
+                      (serial.serial_number && serial.serial_number.trim() !== '')
           );
 
           if (itemsWithoutIMEI.length > 0) {
@@ -2035,6 +2038,80 @@ export class PurchaseOrderService {
           } catch (error) {
             console.error(`❌ Failed to create legacy inventory items:`, error);
             throw error; // Re-throw to fail the entire operation
+          }
+          
+          // ✅ FIX: If fewer serial numbers provided than received quantity, create items for the difference
+          const serialNumbersCount = receivedItem.serialNumbers.length;
+          const receivedQuantity = receivedItem.receivedQuantity;
+          
+          if (serialNumbersCount < receivedQuantity) {
+            const itemsWithoutSerial = receivedQuantity - serialNumbersCount;
+            console.log(`⚠️ Received ${receivedQuantity} items but only ${serialNumbersCount} serial numbers provided. Creating ${itemsWithoutSerial} items without serial numbers.`);
+            
+            try {
+              const inventoryItemsToCreate = [];
+              for (let i = 0; i < itemsWithoutSerial; i++) {
+                inventoryItemsToCreate.push({
+                  product_id: orderItem.product_id,
+                  variant_id: orderItem.variant_id,
+                  status: 'available' as const,
+                  purchase_order_id: purchaseOrderId,
+                  purchase_order_item_id: orderItem.id,
+                  cost_price: orderItem.unit_cost || 0,
+                  selling_price: null,
+                  notes: `Received from purchase order ${purchaseOrderId} - item without serial number ${i + 1}`,
+                  metadata: {
+                    purchase_order_id: purchaseOrderId,
+                    purchase_order_item_id: orderItem.id,
+                    received_by: userId,
+                    received_at: new Date().toISOString(),
+                    no_serial_number: true,
+                    item_index: serialNumbersCount + i + 1
+                  }
+                });
+              }
+
+              const { error: insertError } = await supabase
+                .from('inventory_items')
+                .insert(inventoryItemsToCreate);
+
+              if (insertError) {
+                console.error(`Error creating inventory items without serial numbers:`, insertError);
+              } else {
+                console.log(`✅ Created ${itemsWithoutSerial} inventory items without serial numbers`);
+                
+                // Update variant quantity for items without serial numbers
+                if (orderItem.variant_id && itemsWithoutSerial > 0) {
+                  try {
+                    const { data: variant, error: variantError } = await supabase
+                      .from('lats_product_variants')
+                      .select('quantity')
+                      .eq('id', orderItem.variant_id)
+                      .single();
+
+                    if (!variantError && variant) {
+                      const currentQuantity = variant.quantity || 0;
+                      const { error: updateError } = await supabase
+                        .from('lats_product_variants')
+                        .update({
+                          quantity: currentQuantity + itemsWithoutSerial,
+                          updated_at: new Date().toISOString()
+                        })
+                        .eq('id', orderItem.variant_id);
+
+                      if (!updateError) {
+                        console.log(`✅ Updated variant quantity: ${currentQuantity} -> ${currentQuantity + itemsWithoutSerial} (+${itemsWithoutSerial})`);
+                      }
+                    }
+                  } catch (updateErr) {
+                    console.warn(`Warning: Error updating variant quantity for items without serial numbers:`, updateErr);
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`❌ Failed to create inventory items without serial numbers:`, error);
+              // Don't throw - we already created items with serial numbers
+            }
           }
         }
 
@@ -2071,62 +2148,31 @@ export class PurchaseOrderService {
         return;
       }
 
-      // Extract serial numbers for validation
-      const serialNumberValues = serialNumbers
-        .map(s => s.serial_number)
-        .filter(sn => sn && sn.trim() !== '');
-
-      if (serialNumberValues.length === 0) {
-        console.log('No valid serial numbers found');
-        return;
-      }
-
-      console.log(`🔍 Checking for existing serial numbers: ${serialNumberValues.join(', ')}`);
-
-      // Check for existing serial numbers to prevent duplicates
-      const { data: existingItems, error: checkError } = await supabase
-        .from('inventory_items')
-        .select('serial_number')
-        .in('serial_number', serialNumberValues);
-
-      if (checkError) {
-        console.error('Error checking existing serial numbers:', checkError);
-        throw checkError;
-      }
-
-      // Get set of existing serial numbers for fast lookup
-      const existingSerialNumbers = new Set(
-        (existingItems || []).map(item => item.serial_number).filter(Boolean)
-      );
-
-      console.log(`Found ${existingSerialNumbers.size} existing serial numbers`);
-
-      // Filter out serial numbers that already exist
-      const newSerialNumbers = serialNumbers.filter(serial => {
-        const exists = existingSerialNumbers.has(serial.serial_number);
-        if (exists) {
-          console.warn(`⚠️ Skipping duplicate serial number: ${serial.serial_number}`);
-        }
-        return !exists;
+      // ✅ FIX: Filter to keep items with EITHER serial_number OR IMEI (at least one required)
+      const validSerialNumbers = serialNumbers.filter(serial => {
+        const hasSerialNumber = serial.serial_number && serial.serial_number.trim() !== '';
+        const hasIMEI = serial.imei && serial.imei.trim() !== '';
+        return hasSerialNumber || hasIMEI; // At least one is required
       });
 
-      if (newSerialNumbers.length === 0) {
-        console.log('All serial numbers already exist, skipping insertion');
+      if (validSerialNumbers.length === 0) {
+        console.log('No serial numbers provided');
         return;
       }
 
-      console.log(`✅ Creating ${newSerialNumbers.length} new inventory items`);
+      console.log(`✅ Creating ${validSerialNumbers.length} inventory items with serial numbers (accepting all as-is)`);
 
-      // Create inventory items only for non-duplicate serial numbers
-      const inventoryItems = newSerialNumbers.map(serial => ({
+      // ✅ FIX: Create inventory items - allow either serial_number OR IMEI (or both)
+      const inventoryItems = validSerialNumbers.map(serial => ({
         product_id: orderItem.product_id,
         variant_id: orderItem.variant_id,
-        serial_number: serial.serial_number,
-        imei: serial.imei || null,
+        serial_number: serial.serial_number || null, // ✅ Allow null if only IMEI provided
+        imei: serial.imei || null, // ✅ Allow null if only serial_number provided
         mac_address: serial.mac_address || null,
         barcode: serial.barcode || null,
         status: 'available' as const,
         purchase_order_id: purchaseOrderId,
+        purchase_order_item_id: orderItem.id, // ✅ FIX: Set purchase_order_item_id
         location: serial.location || null,
         warranty_start: serial.warranty_start || null,
         warranty_end: serial.warranty_end || null,
@@ -2149,17 +2195,130 @@ export class PurchaseOrderService {
 
       if (insertError) {
         console.error(`Error inserting legacy inventory items:`, insertError);
-        // If it's still a duplicate key error, log more details
+        // If duplicate key error, try to insert items one by one to handle duplicates gracefully
         if (insertError.code === '23505' && insertError.message?.includes('serial_number')) {
-          console.error('Duplicate serial number error details:', {
-            attemptedSerialNumbers: newSerialNumbers.map(s => s.serial_number),
-            existingSerialNumbers: Array.from(existingSerialNumbers)
-          });
+          console.warn(`⚠️ Some serial numbers may be duplicates. Attempting to insert individually...`);
+          
+          // Try inserting items one by one to handle duplicates
+          let successCount = 0;
+          for (const item of inventoryItems) {
+            try {
+              const { error: singleError } = await supabase
+                .from('inventory_items')
+                .insert(item);
+              
+              if (!singleError) {
+                successCount++;
+              } else {
+                console.warn(`⚠️ Skipped duplicate/invalid serial number: ${item.serial_number}`, singleError);
+              }
+            } catch (err) {
+              console.warn(`⚠️ Error inserting item with serial ${item.serial_number}:`, err);
+            }
+          }
+          
+          if (successCount === 0) {
+            throw new Error(`Failed to insert any inventory items. All serial numbers may be duplicates or invalid.`);
+          }
+          
+          console.log(`✅ Successfully inserted ${successCount} out of ${inventoryItems.length} inventory items`);
+          
+          // Update variant quantity based on successfully inserted items
+          if (orderItem.variant_id && successCount > 0) {
+            try {
+              const { data: variant, error: variantError } = await supabase
+                .from('lats_product_variants')
+                .select('quantity')
+                .eq('id', orderItem.variant_id)
+                .single();
+
+              if (!variantError && variant) {
+                const currentQuantity = variant.quantity || 0;
+                const { error: updateError } = await supabase
+                  .from('lats_product_variants')
+                  .update({
+                    quantity: currentQuantity + successCount,
+                    updated_at: new Date().toISOString()
+                  })
+                  .eq('id', orderItem.variant_id);
+
+                if (!updateError) {
+                  console.log(`✅ Updated variant ${orderItem.variant_id} quantity: ${currentQuantity} -> ${currentQuantity + successCount} (+${successCount})`);
+                }
+              }
+            } catch (updateErr) {
+              console.warn(`Warning: Error updating variant quantity:`, updateErr);
         }
+          }
+          
+          return; // Exit early since we handled the error
+        } else {
         throw insertError;
       }
+      }
 
-      console.log(`✅ Successfully created ${newSerialNumbers.length} legacy inventory items`);
+      // ✅ FIX: Update variant quantity after creating inventory items
+      if (orderItem.variant_id && validSerialNumbers.length > 0) {
+        try {
+          // Get current variant quantity
+          const { data: variant, error: variantError } = await supabase
+            .from('lats_product_variants')
+            .select('quantity')
+            .eq('id', orderItem.variant_id)
+            .single();
+
+          if (variantError) {
+            console.warn(`Warning: Could not get variant quantity for ${orderItem.variant_id}:`, variantError);
+          } else {
+            const currentQuantity = variant.quantity || 0;
+            const quantityToAdd = validSerialNumbers.length;
+
+            // Update variant quantity
+            const { error: updateError } = await supabase
+              .from('lats_product_variants')
+              .update({
+                quantity: currentQuantity + quantityToAdd,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', orderItem.variant_id);
+
+            if (updateError) {
+              console.warn(`Warning: Could not update variant quantity for ${orderItem.variant_id}:`, updateError);
+            } else {
+              console.log(`✅ Updated variant ${orderItem.variant_id} quantity: ${currentQuantity} -> ${currentQuantity + quantityToAdd} (+${quantityToAdd})`);
+            }
+
+            // Create stock movement record for tracking
+            try {
+              const { error: movementError } = await supabase
+                .from('lats_stock_movements')
+                .insert({
+                  product_id: orderItem.product_id,
+                  variant_id: orderItem.variant_id,
+                  movement_type: 'in',
+                  quantity: quantityToAdd,
+                  previous_quantity: currentQuantity,
+                  new_quantity: currentQuantity + quantityToAdd,
+                  reason: 'Purchase Order Receipt',
+                  reference: `PO-${purchaseOrderId}`,
+                  notes: `Received ${quantityToAdd} units with serial numbers from PO ${purchaseOrderId}`,
+                  created_by: userId,
+                  created_at: new Date().toISOString()
+                });
+
+              if (movementError) {
+                console.warn(`Warning: Could not create stock movement:`, movementError);
+              }
+            } catch (movementErr) {
+              console.warn(`Warning: Error creating stock movement:`, movementErr);
+            }
+          }
+        } catch (updateErr) {
+          console.warn(`Warning: Error updating variant quantity:`, updateErr);
+        }
+      }
+
+      console.log(`✅ Successfully created ${validSerialNumbers.length} legacy inventory items`);
     } catch (error) {
       console.error('Error creating legacy inventory items:', error);
       throw error; // Re-throw to let caller handle it

@@ -405,8 +405,10 @@ const VariantHierarchyDisplay: React.FC<VariantHierarchyDisplayProps> = ({
                         {/* Children Grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                           {filteredChildren.map((child, index) => {
-                            const imei = child.variant_attributes?.imei || 'N/A';
-                            const serialNumber = child.variant_attributes?.serial_number;
+                            // ✅ FIX: Treat IMEI and serial number as the same - use whichever is available
+                            const identifier = child.variant_attributes?.imei || child.variant_attributes?.serial_number || 'N/A';
+                            const imei = identifier;
+                            const serialNumber = identifier;
                             const macAddress = child.variant_attributes?.mac_address;
                             const condition = child.variant_attributes?.condition;
                             const location = child.variant_attributes?.location;
@@ -423,14 +425,14 @@ const VariantHierarchyDisplay: React.FC<VariantHierarchyDisplayProps> = ({
                                     : 'bg-gray-100 border-gray-300 opacity-60'
                                 }`}
                               >
-                                {/* Header with IMEI */}
+                                {/* Header with IMEI or Serial Number */}
                                 <div className="flex items-start justify-between mb-2">
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
                                     <Smartphone className={`w-4 h-4 flex-shrink-0 ${
                                       isAvailable ? 'text-blue-600' : 'text-gray-400'
                                     }`} />
                                     <span className="font-mono text-sm font-semibold text-gray-900 truncate">
-                                      {imei}
+                                      {identifier}
                                     </span>
                                   </div>
                                   {isAvailable ? (
@@ -442,12 +444,7 @@ const VariantHierarchyDisplay: React.FC<VariantHierarchyDisplayProps> = ({
 
                                 {/* Device Details */}
                                 <div className="space-y-1">
-                                  {serialNumber && (
-                                    <div className="flex items-center gap-2 text-xs text-gray-600">
-                                      <Hash className="w-3 h-3" />
-                                      <span className="truncate">S/N: {serialNumber}</span>
-                                    </div>
-                                  )}
+                                  {/* ✅ FIX: Removed separate S/N display since IMEI and serial number are the same */}
                                   
                                   {macAddress && (
                                     <div className="flex items-center gap-2 text-xs text-gray-600">

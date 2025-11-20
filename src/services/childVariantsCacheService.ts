@@ -84,49 +84,88 @@ class ChildVariantsCacheService {
         return;
       }
 
-      if (!allChildren || allChildren.length === 0) {
-        console.log('ℹ️  No child variants found in database');
+      // ✅ FIX: Also load legacy inventory_items for products that have these parent variants
+      // Get product IDs from parent variants
+      const { data: parentVariantsWithProducts } = await supabase
+        .from('lats_product_variants')
+        .select('id, product_id')
+        .in('id', allVariantIds);
+
+      const productIds = [...new Set((parentVariantsWithProducts || []).map((p: any) => p.product_id).filter(Boolean))];
+
+      let legacyItems: any[] = [];
+      if (productIds.length > 0) {
+        // ✅ FIX: Since IMEI and serial_number are synced in database, just query once
+        // Query for items that have either field (they're the same value due to trigger)
+        const { data: legacyItemsData, error: legacyError } = await supabase
+          .from('inventory_items')
+          .select('*')
+          .in('product_id', productIds)
+          .not('serial_number', 'is', null) // serial_number and imei are synced, so this gets all
+          .eq('status', 'available')
+          .order('created_at', { ascending: false })
+          .limit(500); // Limit to prevent too many items
+
+        legacyItems = legacyItemsData || [];
+
+        if (legacyError) {
+          console.warn('⚠️ Error loading legacy inventory items for cache:', legacyError);
+        }
+      }
+
+      if ((!allChildren || allChildren.length === 0) && legacyItems.length === 0) {
+        console.log('ℹ️  No child variants or legacy items found in database');
         this.lastPreloadTime = now;
         return;
       }
+
+      // ✅ FIX: Create a map of parent variant prices for fallback
+      const parentPriceMap = new Map<string, number>();
+      products.forEach(product => {
+        if (product.variants && Array.isArray(product.variants)) {
+          product.variants.forEach((variant: any) => {
+            if (variant.id) {
+              const parentPrice = variant.sellingPrice ?? variant.selling_price ?? variant.price ?? 0;
+              parentPriceMap.set(variant.id, parentPrice);
+            }
+          });
+        }
+      });
 
       // Group children by parent_variant_id and format them
       const newCache = new Map<string, FormattedChildVariant[]>();
       const parentCounts: { [key: string]: number } = {};
 
-      allChildren.forEach((child: any) => {
+      // Process IMEI children from lats_product_variants
+      (allChildren || []).forEach((child: any) => {
         const parentId = child.parent_variant_id;
         if (!parentId) return;
 
         // Format child variant
-        const imei =
-          child.variant_attributes?.imei ||
-          child.variant_attributes?.IMEI ||
-          child.imei ||
-          child.sku ||
-          'N/A';
+        // ✅ FIX: IMEI and serial_number are the same (synced by database trigger)
+        const identifier = child.variant_attributes?.imei || child.variant_attributes?.serial_number || child.imei || child.serial_number || child.sku || 'N/A';
+        const imei = identifier;
+        const serialNumber = identifier;
+        const condition = child.variant_attributes?.condition || child.condition || 'New';
 
-        const serialNumber =
-          child.variant_attributes?.serial_number ||
-          child.variant_attributes?.serialNumber ||
-          child.variant_attributes?.serial ||
-          child.serial_number ||
-          imei;
-
-        const condition =
-          child.variant_attributes?.condition || child.condition || 'New';
+        // ✅ FIX: Use parent variant's price as fallback if child doesn't have a price
+        const childPrice = child.selling_price || child.sellingPrice || child.price;
+        const parentPrice = parentPriceMap.get(parentId) || 0;
+        const finalPrice = childPrice && childPrice > 0 ? childPrice : parentPrice;
 
         const formattedChild: FormattedChildVariant = {
           id: child.id,
-          name: child.variant_name || `IMEI: ${imei}`,
-          sku: child.sku || imei,
+          name: child.variant_name || `IMEI: ${identifier}`,
+          sku: child.sku || identifier,
           quantity: child.quantity || 0,
-          sellingPrice: child.selling_price || child.sellingPrice || child.price || 0,
-          imei: imei,
-          serialNumber: serialNumber,
-          condition: condition,
+          sellingPrice: finalPrice,
+          price: finalPrice, // Also set price field for compatibility
+          imei,
+          serialNumber,
+          condition,
           variant_attributes: child.variant_attributes,
           is_imei_child: true,
+          is_legacy: false,
           parent_variant_id: parentId,
           ...child,
         };
@@ -140,13 +179,67 @@ class ChildVariantsCacheService {
         parentCounts[parentId]++;
       });
 
+      // ✅ FIX: Process legacy inventory_items and add them to cache
+      legacyItems.forEach((item: any) => {
+        // Match legacy item to parent variant by variant_id
+        const parentId = item.variant_id;
+        if (!parentId || !allVariantIds.includes(parentId)) return;
+
+        // ✅ FIX: IMEI and serial_number are the same (synced by database trigger)
+        const identifier = item.serial_number || item.imei || 'Unknown';
+        const imei = identifier;
+        const serialNumber = identifier;
+        const condition = item.condition || 'new';
+
+        // ✅ FIX: Use parent variant's price as fallback if legacy item doesn't have a price
+        const itemPrice = item.selling_price;
+        const parentPrice = parentPriceMap.get(parentId) || 0;
+        const finalPrice = itemPrice && itemPrice > 0 ? itemPrice : parentPrice;
+
+        const formattedLegacyChild: FormattedChildVariant = {
+          id: item.id,
+          name: identifier,
+          sku: identifier,
+          quantity: 1,
+          sellingPrice: finalPrice,
+          price: finalPrice, // Also set price field for compatibility
+          imei,
+          serialNumber,
+          condition,
+          variant_attributes: {
+            serial_number: identifier,
+            imei: identifier,
+            mac_address: item.mac_address || '',
+            condition: condition,
+            location: item.location || '',
+            status: item.status || 'available'
+          },
+          is_imei_child: true,
+          is_legacy: true,
+          variant_type: 'imei_child',
+          parent_variant_id: parentId,
+          product_id: item.product_id,
+          created_at: item.created_at,
+        };
+
+        if (!newCache.has(parentId)) {
+          newCache.set(parentId, []);
+          parentCounts[parentId] = 0;
+        }
+        newCache.get(parentId)!.push(formattedLegacyChild);
+        parentCounts[parentId]++;
+      });
+
       // Update the cache
       this.cache = newCache;
       this.lastPreloadTime = now;
 
       const loadTime = (performance.now() - startTime).toFixed(2);
-      console.log(`✅ [ChildVariantsCache] Preloaded ${allChildren.length} children for ${newCache.size} parents in ${loadTime}ms`, {
-        totalChildren: allChildren.length,
+      const totalChildren = (allChildren?.length || 0) + legacyItems.length;
+      console.log(`✅ [ChildVariantsCache] Preloaded ${totalChildren} children (${allChildren?.length || 0} IMEI + ${legacyItems.length} legacy) for ${newCache.size} parents in ${loadTime}ms`, {
+        totalChildren: totalChildren,
+        imeiChildren: allChildren?.length || 0,
+        legacyItems: legacyItems.length,
         parentsWithChildren: newCache.size,
         cacheSize: this.cache.size,
       });

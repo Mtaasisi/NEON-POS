@@ -21,7 +21,7 @@ function extractHost(url) {
 // Function to determine database type from host
 function getDatabaseType(host) {
   if (host.includes('ep-damp-fire-adtxvumr')) return '🔧 DEVELOPMENT';
-  if (host.includes('ep-young-firefly-adlvuhdv')) return '🚀 PRODUCTION';
+  if (host.includes('ep-falling-silence-adknpy1h')) return '🚀 PRODUCTION';
   return '⚠️  UNKNOWN';
 }
 
@@ -55,7 +55,7 @@ function checkEnvFile(filename, mode) {
       // Check if URL matches expected mode
       if (mode === 'DEVELOPMENT' && !host.includes('ep-damp-fire-adtxvumr')) {
         console.log('  ❌ WARNING: Expected DEVELOPMENT database but got different host!');
-      } else if (mode === 'PRODUCTION' && !host.includes('ep-young-firefly-adlvuhdv')) {
+      } else if (mode === 'PRODUCTION' && !host.includes('ep-falling-silence-adknpy1h')) {
         console.log('  ❌ WARNING: Expected PRODUCTION database but got different host!');
       } else {
         console.log('  ✅ Database configuration is correct');

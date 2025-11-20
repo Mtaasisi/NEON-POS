@@ -933,8 +933,58 @@ class SaleProcessingService {
       const currentStockMap = new Map(currentVariants.map(v => [v.id, v]));
 
       // Batch inventory updates and stock movements in parallel
-      const updatePromises = items.map(item => {
+      const updatePromises = items.map(async item => {
         const variantData = currentStockMap.get(item.variantId);
+        
+        // ✅ FIX: Check if this is a legacy item (inventory_items)
+        // Legacy items are identified by not being in lats_product_variants
+        if (!variantData) {
+          // Try to find in inventory_items
+          const { data: inventoryItem, error: inventoryError } = await supabase
+            .from('inventory_items')
+            .select('id, status, variant_id, product_id')
+            .eq('id', item.variantId)
+            .single();
+
+          if (inventoryItem) {
+            // ✅ FIX: Mark legacy item as sold
+            const { error: updateError } = await supabase
+              .from('inventory_items')
+              .update({
+                status: 'sold',
+                sold_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', item.variantId);
+
+            if (updateError) {
+              console.error('Error updating legacy inventory item:', updateError);
+              throw updateError;
+            }
+
+            // Create stock movement for legacy item
+            const { error: movementError } = await supabase
+              .from('lats_stock_movements')
+              .insert({
+                product_id: inventoryItem.product_id || null,
+                variant_id: inventoryItem.variant_id || null,
+                movement_type: 'sale',
+                quantity: -item.quantity,
+                reference_type: 'pos_sale',
+                notes: `Sold ${item.quantity} units of legacy item ${item.productName}`,
+                created_at: new Date().toISOString(),
+              });
+
+            if (movementError) {
+              console.warn('Failed to create stock movement for legacy item:', movementError);
+            }
+
+            return { success: true };
+          }
+
+          throw new Error(`Item ${item.variantId} not found in variants or inventory_items`);
+        }
+
         const currentQuantity = variantData?.quantity || 0;
         const newQuantity = Math.max(0, currentQuantity - item.quantity);
         
@@ -943,7 +993,14 @@ class SaleProcessingService {
           console.warn(`⚠️ Updating stock for parent variant ${item.variantId}. Consider selling specific child variants (IMEI children) instead.`);
         }
         
-        // Update with calculated quantity
+        // ✅ FIX: Handle IMEI children and legacy items the same way
+        // If it's an IMEI child or legacy item, mark as sold using markIMEIAsSold
+        if (variantData?.variant_type === 'imei_child' || item.is_legacy || item.is_imei_child) {
+          const { markIMEIAsSold } = await import('../features/lats/lib/imeiVariantService');
+          return markIMEIAsSold(item.variantId, item.saleId);
+        }
+        
+        // Update with calculated quantity for regular variants
         // Note: Database triggers will auto-update parent stock when children are updated
         return supabase
           .from('lats_product_variants')
@@ -974,8 +1031,8 @@ class SaleProcessingService {
         };
       });
 
-      // Execute inventory updates in parallel
-      const updateResults = await Promise.allSettled(updatePromises);
+      // Execute inventory updates in parallel (now handles async legacy items)
+      const updateResults = await Promise.allSettled(updatePromises.map(p => Promise.resolve(p)));
       
       // Check if any inventory updates failed
       for (let i = 0; i < updateResults.length; i++) {
@@ -1192,8 +1249,16 @@ class SaleProcessingService {
         if (result.success) {
           console.log('📱 SMS notification sent successfully for sale:', sale.saleNumber);
         } else {
-          // Only log SMS errors if they're not connection errors (which are expected in dev)
-          if (result.error && !result.error.includes('Network error') && !result.error.includes('Failed to fetch')) {
+          // Only log SMS errors if they're not connection errors or dev mode errors (which are expected in dev)
+          const isDevModeError = result.error && (
+            result.error.includes('SMS proxy server not running') ||
+            result.error.includes('this is normal in development mode') ||
+            result.error.includes('Network error') ||
+            result.error.includes('Failed to fetch') ||
+            result.error.includes('ERR_CONNECTION_REFUSED')
+          );
+          
+          if (!isDevModeError && result.error) {
             console.warn('⚠️ SMS notification failed:', result.error);
           }
         }

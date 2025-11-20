@@ -44,7 +44,7 @@ VITE_DATABASE_URL=postgresql://neondb_owner:npg_vABqUKk73tEW@ep-damp-fire-adtxvu
 # Production Configuration (uncomment for production)
 # NODE_ENV=production
 # VITE_APP_ENV=production
-# VITE_DATABASE_URL=postgresql://neondb_owner:****************@ep-young-firefly-adlvuhdv-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+# VITE_DATABASE_URL=postgresql://neondb_owner:npg_dMyv1cG4KSOR@ep-falling-silence-adknpy1h-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 
 # Optional: Custom API endpoints
 # VITE_API_BASE_URL=https://your-api-domain.com

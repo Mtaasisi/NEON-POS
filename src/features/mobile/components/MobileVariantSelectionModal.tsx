@@ -51,7 +51,10 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
       
       // If cache not ready, fallback to local query
       if (!childVariantsCacheService.isCacheValid()) {
-        console.warn("⚠️ Mobile: Global cache not ready, using fallback");
+        // Only log in development mode - fallback query works fine, this is expected behavior
+        if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+          console.log("ℹ️ Mobile: Global cache not ready, using fallback query (this is normal on first load)");
+        }
         await loadLocalFallback();
         return;
       }
@@ -84,6 +87,15 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
 
     console.log("🔄 Mobile: Fallback query...");
     
+    // ✅ FIX: Create parent price map for fallback
+    const parentPriceMap = new Map<string, number>();
+    product.variants.forEach((variant: any) => {
+      if (variant.id) {
+        const parentPrice = variant.sellingPrice ?? variant.selling_price ?? variant.price ?? 0;
+        parentPriceMap.set(variant.id, parentPrice);
+      }
+    });
+    
     const { data, error } = await supabase
       .from('lats_product_variants')
       .select('*')
@@ -103,7 +115,17 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
       if (!childrenByParent[parentId]) {
         childrenByParent[parentId] = [];
       }
-      childrenByParent[parentId].push(child);
+      
+      // ✅ FIX: Use parent variant's price as fallback if child doesn't have a price
+      const childPrice = child.selling_price || child.sellingPrice || child.price;
+      const parentPrice = parentPriceMap.get(parentId) || 0;
+      const finalPrice = childPrice && childPrice > 0 ? childPrice : parentPrice;
+      
+      childrenByParent[parentId].push({
+        ...child,
+        sellingPrice: finalPrice,
+        price: finalPrice, // Also set price field for compatibility
+      });
     });
 
     setChildVariants(childrenByParent);
@@ -147,6 +169,10 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
     setLoadingChildren(prev => new Set(prev).add(parentVariantId));
 
     try {
+      // ✅ FIX: Get parent variant price for fallback
+      const parentVariant = product?.variants?.find((v: any) => v.id === parentVariantId);
+      const parentPrice = parentVariant?.sellingPrice ?? parentVariant?.selling_price ?? parentVariant?.price ?? 0;
+
       const { data, error } = await supabase
         .from('lats_product_variants')
         .select('*')
@@ -156,9 +182,21 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
 
       if (error) throw error;
 
+      // ✅ FIX: Use parent variant's price as fallback if child doesn't have a price
+      const formattedChildren = (data || []).map((child: any) => {
+        const childPrice = child.selling_price || child.sellingPrice || child.price;
+        const finalPrice = childPrice && childPrice > 0 ? childPrice : parentPrice;
+        
+        return {
+          ...child,
+          sellingPrice: finalPrice,
+          price: finalPrice, // Also set price field for compatibility
+        };
+      });
+
       setChildVariants(prev => ({
         ...prev,
-        [parentVariantId]: data || []
+        [parentVariantId]: formattedChildren
       }));
     } catch (error) {
       console.error('Error loading child variants:', error);
@@ -374,7 +412,7 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
                             
                             <div className="flex items-center justify-between">
                               <span className="text-sm font-bold text-gray-900">
-                                {format.currency(child.selling_price || child.unit_price || 0)}
+                                {format.currency(child.sellingPrice || child.selling_price || child.price || child.unit_price || 0)}
                               </span>
                               <span className={`text-xs px-2 py-0.5 rounded-full ${
                                 childOutOfStock 

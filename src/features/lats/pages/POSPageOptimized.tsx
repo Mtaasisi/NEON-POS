@@ -594,7 +594,6 @@ const POSPageOptimized: React.FC = () => {
   }>>([]);
   const [alertsDismissed, setAlertsDismissed] = useState(false);
   const [alertsDismissedToday, setAlertsDismissedToday] = useState(false);
-  const [showAlertsAsNotification, setShowAlertsAsNotification] = useState(false);
 
   // Daily closure state
   const [isDailyClosed, setIsDailyClosed] = useState(false);
@@ -1134,16 +1133,7 @@ const POSPageOptimized: React.FC = () => {
           )
         );
         
-        // Show notification instead of blocking modal if dismissed today
-        if (alertsDismissedToday) {
-          setShowAlertsAsNotification(true);
-          // Auto-hide notification after 5 seconds
-          const timeoutId = setTimeout(() => {
-            setShowAlertsAsNotification(false);
-          }, 5000);
-          // Return cleanup function
-          return () => clearTimeout(timeoutId);
-        } else if (!alertsDismissed || hasNewAlerts) {
+        if (!alertsDismissed || hasNewAlerts) {
           setShowInventoryAlerts(true);
           if (hasNewAlerts) {
             setAlertsDismissed(false); // Reset dismissed state for new alerts
@@ -1521,12 +1511,24 @@ const POSPageOptimized: React.FC = () => {
         .eq('is_active', true)
         .gt('quantity', 0);
 
-      if (count && count > 0) {
-        console.log(`✅ Product has ${count} IMEI children across ${parentIds.length} parents`);
-        return true; // Has IMEI children - show selector
+      // ✅ FIX: Also check for legacy inventory_items (serial numbers)
+      // Since IMEI and serial_number are synced in database, just query once
+      const { count: legacyCount } = await supabase
+        .from('inventory_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', product.id)
+        .in('variant_id', parentIds)
+        .not('serial_number', 'is', null) // serial_number and imei are synced, so this gets all
+        .eq('status', 'available');
+
+      const totalCount = (count || 0) + (legacyCount || 0);
+
+      if (totalCount > 0) {
+        console.log(`✅ Product has ${totalCount} children (${count || 0} IMEI + ${legacyCount || 0} legacy) across ${parentIds.length} parents`);
+        return true; // Has children - show selector
       }
 
-      return false; // No IMEI children found
+      return false; // No children found
     } catch (error) {
       console.error('Error checking for IMEI variants:', error);
       return false; // On error, proceed with direct add
@@ -1653,7 +1655,8 @@ const POSPageOptimized: React.FC = () => {
           totalPrice: price * quantity,
           availableQuantity: availableStock,
           image: product.thumbnail_url || product.image,
-          selectedIMEIVariants: variant && variant.attributes?.imei ? [variant] : [] // Store IMEI variant if provided
+          // ✅ FIX: Treat legacy items as IMEI children
+          selectedIMEIVariants: variant && (variant.attributes?.imei || variant.is_legacy || variant.is_imei_child) ? [variant] : [] // Store IMEI variant or legacy item if provided
         };
         
         console.log('✅ Adding to cart:', newItem);
@@ -1797,8 +1800,15 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
+      // Normalize product data: ensure variants array exists
+      // Handle both 'variants' and 'product_variants' property names
+      const normalizedProduct = {
+        ...product,
+        variants: product.variants || product.product_variants || []
+      };
+
       // Set the product for variant selection
-      setSelectedProductForVariants(product);
+      setSelectedProductForVariants(normalizedProduct);
       setShowVariantSelectionModal(true);
       setCartItemForIMEIUpdate(item);
 
@@ -4048,44 +4058,6 @@ const POSPageOptimized: React.FC = () => {
         </div>
       )}
 
-      {/* Inventory Alerts Notification (Non-blocking) */}
-      {showAlertsAsNotification && (
-        <div className="fixed top-4 right-4 z-50 bg-orange-100 border border-orange-300 rounded-lg p-4 shadow-lg max-w-sm">
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
-              <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-medium text-orange-800">Low Stock Alert</h4>
-              <p className="text-sm text-orange-700 mt-1">
-                {inventoryAlerts.length} product{inventoryAlerts.length !== 1 ? 's' : ''} running low on stock
-              </p>
-              <button
-                onClick={() => {
-                  setShowAlertsAsNotification(false);
-                  setShowInventoryAlerts(true);
-                }}
-                className="text-sm text-orange-600 hover:text-orange-800 underline mt-1"
-              >
-                View Details
-              </button>
-            </div>
-            <button
-              onClick={() => {
-                playClickSound();
-                setShowAlertsAsNotification(false);
-              }}
-              className="flex-shrink-0 text-orange-400 hover:text-orange-600"
-            >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Stock Adjustment Modal */}
       {showStockAdjustment && (
@@ -4360,8 +4332,9 @@ const POSPageOptimized: React.FC = () => {
                 item.id === cartItemForIMEIUpdate.id
                   ? {
                       ...item,
-                      selectedSerialNumbers: variant && variant.attributes?.imei ? [variant] : [],
-                      selectedIMEIVariants: variant && variant.attributes?.imei ? [variant] : []
+                      // ✅ FIX: Treat legacy items as IMEI children
+                      selectedSerialNumbers: variant && (variant.attributes?.imei || variant.is_legacy || variant.is_imei_child) ? [variant] : [],
+                      selectedIMEIVariants: variant && (variant.attributes?.imei || variant.is_legacy || variant.is_imei_child) ? [variant] : []
                     }
                   : item
               ));

@@ -49,6 +49,22 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
   }>({});
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
+  const cacheWarningLoggedRef = React.useRef(false);
+  const preloadInProgressRef = React.useRef(false);
+
+  // Normalize product data: handle both 'variants' and 'product_variants' property names
+  const normalizedProduct = product ? {
+    ...product,
+    variants: product.variants || product.product_variants || []
+  } : null;
+
+  // Early return if product is invalid
+  if (!isOpen || !normalizedProduct || !normalizedProduct.variants) {
+    if (isOpen && normalizedProduct) {
+      console.error("❌ Modal opened with invalid product data (no variants):", normalizedProduct);
+    }
+    return null;
+  }
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -63,34 +79,49 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       setFocusedChildIndex({});
       setSelectedDevices(new Set());
       setExpandedVariants(new Set());
+      cacheWarningLoggedRef.current = false; // Reset warning flag when modal closes
+      preloadInProgressRef.current = false; // Reset preload flag when modal closes
     } else {
       // Focus first variant when opening
       setFocusedVariantIndex(0);
 
       // ✅ AUTO-EXPAND: If single parent variant with children, auto-expand it
       const autoExpandSingleParent = async () => {
-        if (product?.variants?.length === 1) {
-          const singleVariant = product.variants[0];
+        const productToUse = normalizedProduct;
+        if (productToUse?.variants?.length === 1) {
+          const singleVariant = productToUse.variants[0];
           const isParentByFlag =
             singleVariant.is_parent || singleVariant.variant_type === "parent";
 
-          // Check if has children (either by flag or database)
+          // Check if has children (either by flag, cache, or database)
           let hasChildren = isParentByFlag;
 
           if (!hasChildren) {
             try {
-              const { count } = await supabase
-                .from("lats_product_variants")
-                .select("id", { count: "exact", head: true })
-                .eq("parent_variant_id", singleVariant.id)
-                .eq("variant_type", "imei_child")
-                .eq("is_active", true)
-                .gt("quantity", 0);
+              // First check cache service (instant!)
+              const { childVariantsCacheService } = await import("../../../../services/childVariantsCacheService");
+              if (childVariantsCacheService.isCacheValid()) {
+                hasChildren = childVariantsCacheService.hasChildren(singleVariant.id);
+                if (hasChildren) {
+                  console.log(`🔍 Modal: Single variant has children (from cache): ${hasChildren}`);
+                }
+              }
+              
+              // Fallback to database query if cache not available
+              if (!hasChildren) {
+                const { count } = await supabase
+                  .from("lats_product_variants")
+                  .select("id", { count: "exact", head: true })
+                  .eq("parent_variant_id", singleVariant.id)
+                  .eq("variant_type", "imei_child")
+                  .eq("is_active", true)
+                  .gt("quantity", 0);
 
-              hasChildren = (count || 0) > 0;
-              console.log(
-                `🔍 Modal: Single variant has children: ${hasChildren}`,
-              );
+                hasChildren = (count || 0) > 0;
+                console.log(
+                  `🔍 Modal: Single variant has children: ${hasChildren}`,
+                );
+              }
             } catch (error) {
               console.error("Error checking for children in modal:", error);
             }
@@ -108,17 +139,25 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       };
 
       // Run after a short delay to ensure modal is rendered
-      setTimeout(() => {
+        setTimeout(() => {
         autoExpandSingleParent();
       }, 100);
     }
-  }, [isOpen, product]);
+  }, [isOpen, normalizedProduct]);
 
   // ⚡ SUPER OPTIMIZED: Use global cache that was preloaded with all products
   const preloadAllChildVariants = useCallback(async () => {
-    if (!product?.variants) return;
+    const productToUse = normalizedProduct;
+    if (!productToUse?.variants) return;
+
+    // Prevent concurrent preloads
+    if (preloadInProgressRef.current) {
+      console.log("⏳ Child variants preload already in progress, skipping...");
+      return;
+    }
 
     try {
+      preloadInProgressRef.current = true;
       console.log("⚡ Loading child variants from global cache...");
       
       // Import the global cache service
@@ -130,29 +169,37 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
       // If cache is not valid, fallback to local query
       if (!childVariantsCacheService.isCacheValid()) {
-        console.warn("⚠️ Global cache not ready, using fallback query");
+        // Only log in development mode - fallback query works fine, this is expected behavior
+        if (!cacheWarningLoggedRef.current && (import.meta.env.DEV || import.meta.env.MODE === 'development')) {
+          console.log("ℹ️ Global cache not ready, using fallback query (this is normal on first load)");
+          cacheWarningLoggedRef.current = true;
+        }
         await preloadLocalFallback();
         return;
       }
 
-      // Load from cache - INSTANT!
-      const variantIds = product.variants.map((v: any) => v.id);
+      // Load from cache - INSTANT! (Cache already includes legacy items)
+      const variantIds = productToUse.variants.map((v: any) => v.id);
       const childrenByParent: { [key: string]: any[] } = {};
       const counts: { [key: string]: number } = {};
 
-      variantIds.forEach((variantId: string) => {
-        const cachedChildren = childVariantsCacheService.getChildVariants(variantId);
-        if (cachedChildren && cachedChildren.length > 0) {
+      // ⚡ OPTIMIZED: Use cache data directly - no database queries needed!
+      // The cache service already includes both IMEI children and legacy items
+      for (const variantId of variantIds) {
+        const cachedChildren = childVariantsCacheService.getChildVariants(variantId) || [];
+        
+        if (cachedChildren.length > 0) {
+          // Cache already has formatted children with all necessary fields
           childrenByParent[variantId] = cachedChildren;
           counts[variantId] = cachedChildren.length;
         }
-      });
+      }
 
-      // Update state with cached data
+      // Update state with cached data + legacy items
       setChildVariants(childrenByParent);
       setVariantChildCounts(counts);
       
-      console.log("✅ Loaded from GLOBAL CACHE (instant!):", {
+      console.log("✅ Loaded from GLOBAL CACHE + legacy items:", {
         totalChildren: Object.values(childrenByParent).flat().length,
         parentsWithChildren: Object.keys(childrenByParent).length,
         counts,
@@ -160,28 +207,28 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
     } catch (error) {
       console.error("Error loading from cache:", error);
       await preloadLocalFallback();
+    } finally {
+      preloadInProgressRef.current = false;
     }
-  }, [product]);
+  }, [normalizedProduct]);
 
   // Fallback: Query directly if cache not ready
   const preloadLocalFallback = async () => {
-    if (!product?.variants) return;
+    const productToUse = normalizedProduct;
+    if (!productToUse?.variants) return;
 
-    const variantIds = product.variants.map((v: any) => v.id);
+    const variantIds = productToUse.variants.map((v: any) => v.id);
     if (variantIds.length === 0) return;
 
     console.log("🔄 Fallback: Querying child variants directly...");
     
-    const { data, error } = await supabase
-      .from("lats_product_variants")
-      .select("*")
-      .in("parent_variant_id", variantIds)
-      .eq("variant_type", "imei_child")
-      .eq("is_active", true)
-      .gt("quantity", 0)
-      .order("created_at", { ascending: false });
+    // ✅ FIX: Use loadChildIMEIs for each parent to include legacy items
+    const { loadChildIMEIs } = await import('../../lib/variantHelpers');
+    const allChildrenPromises = variantIds.map((parentId: string) => loadChildIMEIs(parentId));
+    const allChildrenArrays = await Promise.all(allChildrenPromises);
+    const allChildren = allChildrenArrays.flat();
 
-    if (error || !data || data.length === 0) {
+    if (!allChildren || allChildren.length === 0) {
       console.log("ℹ️ No child variants found");
       return;
     }
@@ -190,24 +237,45 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
     const childrenByParent: { [key: string]: any[] } = {};
     const counts: { [key: string]: number } = {};
 
-    data.forEach((child: any) => {
+    allChildren.forEach((child: any) => {
+      // ✅ FIX: loadChildIMEIs now sets parent_variant_id correctly for legacy items
       const parentId = child.parent_variant_id;
-      const imei = child.variant_attributes?.imei || child.imei || child.sku || "N/A";
-      const serialNumber = child.variant_attributes?.serial_number || child.serial_number || imei;
+      
+      // Skip if no parent or parent not in our variant list (shouldn't happen)
+      if (!parentId || !variantIds.includes(parentId)) {
+        console.warn('Child item has invalid parent association:', { childId: child.id, parentId, variantIds });
+        return;
+      }
+
+      // ✅ FIX: Get parent variant price to use as fallback for children
+      const parentVariant = productToUse.variants.find((v: any) => v.id === parentId);
+      const parentPrice = parentVariant?.sellingPrice ?? parentVariant?.selling_price ?? parentVariant?.price ?? 0;
+
+      // ✅ FIX: Treat IMEI and serial number as the same - use whichever is available
+      const imei = child.variant_attributes?.imei || child.imei || child.variant_attributes?.serial_number || child.serial_number || child.sku || "N/A";
+      const serialNumber = imei; // Same as IMEI
       const condition = child.variant_attributes?.condition || child.condition || "New";
+
+      // ✅ FIX: Use parent variant's price as fallback if child doesn't have a price
+      const childPrice = child.selling_price || child.sellingPrice || child.price;
+      const finalPrice = childPrice && childPrice > 0 ? childPrice : parentPrice;
 
       const formattedChild = {
         id: child.id,
-        name: child.variant_name || `IMEI: ${imei}`,
+        name: child.variant_name || child.name || `IMEI: ${imei}`,
         sku: child.sku || imei,
         quantity: child.quantity || 0,
-        sellingPrice: child.selling_price || 0,
+        sellingPrice: finalPrice,
+        price: finalPrice, // Also set price field for compatibility
         imei, serialNumber, condition,
         variant_attributes: child.variant_attributes,
-        is_imei_child: true,
-        parent_variant_id: parentId,
-        ...child,
-      };
+            // ✅ FIX: Treat legacy items as IMEI children
+            is_imei_child: true,
+            is_legacy: child.is_legacy || false,
+            variant_type: child.variant_type || 'imei_child', // Ensure variant_type is set
+            parent_variant_id: parentId,
+            ...child,
+          };
 
       if (!childrenByParent[parentId]) {
         childrenByParent[parentId] = [];
@@ -222,20 +290,28 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
   // Check for children and load from cache when modal opens
   useEffect(() => {
-    if (isOpen && product?.variants) {
-      preloadAllChildVariants();
+    if (isOpen && normalizedProduct?.variants && !preloadInProgressRef.current) {
+      // Use a stable reference to prevent unnecessary re-runs
+      const productId = normalizedProduct.id;
+      const variantCount = normalizedProduct.variants?.length || 0;
+      
+      // Only preload if we have a valid product with variants
+      if (productId && variantCount > 0) {
+        preloadAllChildVariants();
+      }
     }
-  }, [isOpen, product, preloadAllChildVariants]);
+  }, [isOpen, normalizedProduct?.id, normalizedProduct?.variants?.length, preloadAllChildVariants]);
 
   // Debug log all available variants (reduced verbosity)
   useEffect(() => {
-    if (isOpen && product && !isPurchaseOrderMode) {
+    const productToUse = normalizedProduct;
+    if (isOpen && productToUse && !isPurchaseOrderMode) {
       // Only log in non-PO mode for debugging
-      console.log("🎯 Modal opened for product:", product.name);
-      console.log("📦 Total variants:", product.variants?.length);
+      console.log("🎯 Modal opened for product:", productToUse.name);
+      console.log("📦 Total variants:", productToUse.variants?.length);
 
       const availableVariants =
-        product.variants?.filter((v: any) => {
+        productToUse.variants?.filter((v: any) => {
           const quantity =
             v.quantity ?? v.stockQuantity ?? v.stock_quantity ?? 0;
           const isActive = v.is_active !== false && v.isActive !== false;
@@ -246,15 +322,16 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
         availableVariants.length,
       );
     }
-  }, [isOpen, product, isPurchaseOrderMode]);
+  }, [isOpen, normalizedProduct, isPurchaseOrderMode]);
 
   // Keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      const productToUse = normalizedProduct;
       const availableVariants =
-        product.variants?.filter((v: any) => {
+        productToUse?.variants?.filter((v: any) => {
           const quantity =
             v.quantity ?? v.stockQuantity ?? v.stock_quantity ?? 0;
           const isActive = v.is_active !== false && v.isActive !== false;
@@ -291,9 +368,8 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, focusedVariantIndex, product, onClose]);
+  }, [isOpen, focusedVariantIndex, normalizedProduct, onClose]);
 
-  if (!isOpen || !product) return null;
 
   // Check if a variant is a parent variant (has children)
   const isParentVariant = (variant: any): boolean => {
@@ -319,62 +395,80 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
   // ⚡ OPTIMIZED: Load child variants for a parent (now instant with preloaded data)
   const loadChildVariants = async (parentVariantId: string) => {
-    // ✅ Children are already preloaded, so this is now instant!
+    // ✅ First check local state (already loaded)
     if (childVariants[parentVariantId]) {
       console.log(`⚡ Using preloaded children for parent: ${parentVariantId} (${childVariants[parentVariantId].length} children)`);
       return;
     }
 
-    // Fallback: Load if somehow not preloaded (shouldn't happen normally)
+    // ✅ Second check: Try global cache service (instant!)
+    try {
+      const { childVariantsCacheService } = await import("../../../../services/childVariantsCacheService");
+      const cachedChildren = childVariantsCacheService.getChildVariants(parentVariantId);
+      
+      if (cachedChildren && cachedChildren.length > 0) {
+        console.log(`⚡ Using cached children for parent: ${parentVariantId} (${cachedChildren.length} children)`);
+        setChildVariants((prev) => ({
+          ...prev,
+          [parentVariantId]: cachedChildren,
+        }));
+        return;
+      }
+    } catch (error) {
+      console.warn("Error checking cache service:", error);
+    }
+
+    // Fallback: Load from database if not in cache
     console.warn(`⚠️ Fallback loading for parent ${parentVariantId} - children not preloaded`);
     setLoadingChildren((prev) => new Set(prev).add(parentVariantId));
 
     try {
-      const { data, error } = await supabase
-        .from("lats_product_variants")
-        .select("*")
-        .eq("parent_variant_id", parentVariantId)
-        .eq("variant_type", "imei_child")
-        .eq("is_active", true)
-        .gt("quantity", 0)
-        .order("created_at", { ascending: false });
+      // ✅ FIX: Get parent variant price to use as fallback for children
+      const parentVariant = normalizedProduct?.variants?.find((v: any) => v.id === parentVariantId);
+      const parentPrice = parentVariant?.sellingPrice ?? parentVariant?.selling_price ?? parentVariant?.price ?? 0;
 
-      if (error) {
-        console.error("❌ Error loading child variants:", error);
-        throw error;
-      }
+      // ✅ FIX: Use loadChildIMEIs which includes legacy inventory items
+      const { loadChildIMEIs } = await import('../../lib/variantHelpers');
+      const allChildren = await loadChildIMEIs(parentVariantId);
 
-      if (data && data.length > 0) {
-        const formattedChildren = data.map((child) => {
+      if (allChildren && allChildren.length > 0) {
+        const formattedChildren = allChildren.map((child) => {
+          // ✅ FIX: Treat IMEI and serial number as the same - use whichever is available
           const imei =
             child.variant_attributes?.imei ||
             child.variant_attributes?.IMEI ||
             child.imei ||
-            child.sku ||
-            "N/A";
-
-          const serialNumber =
             child.variant_attributes?.serial_number ||
             child.variant_attributes?.serialNumber ||
             child.variant_attributes?.serial ||
             child.serial_number ||
-            imei;
+            child.sku ||
+            "N/A";
+
+          const serialNumber = imei; // Same as IMEI
 
           const condition =
             child.variant_attributes?.condition || child.condition || "New";
 
+          // ✅ FIX: Use parent variant's price as fallback if child doesn't have a price
+          const childPrice = child.selling_price || child.sellingPrice || child.price;
+          const finalPrice = childPrice && childPrice > 0 ? childPrice : parentPrice;
+
           return {
             id: child.id,
-            name: child.variant_name || `IMEI: ${imei}`,
+            name: child.variant_name || child.name || `IMEI: ${imei}`,
             sku: child.sku || imei,
             quantity: child.quantity || 0,
-            sellingPrice:
-              child.selling_price || child.sellingPrice || child.price || 0,
+            sellingPrice: finalPrice,
+            price: finalPrice, // Also set price field for compatibility
             imei: imei,
             serialNumber: serialNumber,
             condition: condition,
             variant_attributes: child.variant_attributes,
+            // ✅ FIX: Treat legacy items as IMEI children
             is_imei_child: true,
+            is_legacy: child.is_legacy || false,
+            variant_type: child.variant_type || 'imei_child', // Ensure variant_type is set
             parent_variant_id: parentVariantId,
             ...child,
           };
@@ -458,7 +552,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       console.log("✅ Adding child variant (IMEI):", variant.imei || variant.name);
     }
     
-    onSelectVariant(product, variant, quantity);
+    onSelectVariant(productToUse, variant, quantity);
     onClose();
   };
 
@@ -477,13 +571,12 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
     if (!query) return children;
 
     return children.filter((child) => {
-      const imei = (child.imei || "").toLowerCase();
-      const serialNumber = (child.serialNumber || "").toLowerCase();
+      // ✅ FIX: IMEI and serial number are the same - search both fields together
+      const identifier = ((child.imei || child.serialNumber || "")).toLowerCase();
       const condition = (child.condition || "").toLowerCase();
 
       return (
-        imei.includes(query) ||
-        serialNumber.includes(query) ||
+        identifier.includes(query) ||
         condition.includes(query)
       );
     });
@@ -503,15 +596,13 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
     }
   };
 
-  // Safety check: ensure product has variants array
-  if (!product || !product.variants) {
-    console.error("❌ Modal opened with invalid product data:", product);
-  }
+  // Use normalized product for all operations (already defined at top)
+  const productToUse = normalizedProduct;
 
   // Filter out inactive variants and those with no stock
   // Handle multiple possible field names for quantity (quantity, stockQuantity, stock_quantity)
   let availableVariants =
-    product?.variants?.filter((v: any) => {
+    productToUse?.variants?.filter((v: any) => {
       const quantity = v.quantity ?? v.stockQuantity ?? v.stock_quantity ?? 0;
       const isActive = v.is_active !== false && v.isActive !== false;
       return quantity > 0 && isActive;
@@ -521,8 +612,8 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
   // This is normal for purchase orders where items have zero stock
   if (
     availableVariants.length === 0 &&
-    product?.variants &&
-    product.variants.length > 0
+    productToUse?.variants &&
+    productToUse.variants.length > 0
   ) {
     if (!isPurchaseOrderMode) {
       console.warn(
@@ -530,7 +621,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       );
     }
     // In PO mode, showing zero-stock variants is expected behavior
-    availableVariants = product.variants.filter((v: any) => {
+    availableVariants = productToUse.variants.filter((v: any) => {
       const isActive = v.is_active !== false && v.isActive !== false;
       return isActive;
     });
@@ -539,15 +630,15 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
   // ULTIMATE FALLBACK: If still no variants, show ALL variants
   if (
     availableVariants.length === 0 &&
-    product?.variants &&
-    product.variants.length > 0
+    productToUse?.variants &&
+    productToUse.variants.length > 0
   ) {
     if (!isPurchaseOrderMode) {
       console.warn(
         "⚠️ No active variants found, showing ALL variants as fallback",
       );
     }
-    availableVariants = product.variants;
+    availableVariants = productToUse.variants;
   }
 
   return createPortal(
@@ -733,7 +824,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2 mb-1.5">
                                             <h4 className="text-xl font-bold text-gray-900 truncate">
-                                              {child.imei}
+                                              {child.imei || child.serialNumber}
                                             </h4>
                                             {child.condition && (
                                               <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
@@ -741,11 +832,6 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                               </span>
                                             )}
                                           </div>
-                                          {child.serialNumber && child.serialNumber !== child.imei && (
-                                            <p className="text-sm text-gray-500">
-                                              S/N: {child.serialNumber}
-                                            </p>
-                                          )}
                                         </div>
                                       </div>
                                       
@@ -986,7 +1072,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                           <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1.5">
                                               <h4 className="text-xl font-bold text-gray-900 truncate">
-                                                {child.imei}
+                                                {child.imei || child.serialNumber}
                                               </h4>
                                               {child.condition && (
                                                 <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
@@ -994,11 +1080,6 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                                 </span>
                                               )}
                                             </div>
-                                            {child.serialNumber && child.serialNumber !== child.imei && (
-                                              <p className="text-sm text-gray-500">
-                                                S/N: {child.serialNumber}
-                                              </p>
-                                            )}
                                           </div>
                                         </div>
                                         

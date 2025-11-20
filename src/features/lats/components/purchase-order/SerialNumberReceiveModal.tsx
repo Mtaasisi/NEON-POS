@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PackageCheck, X, AlertCircle, Package, MapPin, Zap, PlusCircle, RotateCcw, Plus, Minus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useStorageLocationPicker } from '../storage/StorageLocationPickerProvider';
+import { supabase } from '../../../../lib/supabaseClient';
 
 interface PurchaseOrderItem {
   id: string;
@@ -74,6 +75,12 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     serialNumbers: SerialNumberData[];
   }>>(new Map());
 
+  // Track duplicate status for each serial number (itemId -> index -> isDuplicate)
+  const [duplicateStatus, setDuplicateStatus] = useState<Map<string, Map<number, boolean>>>(new Map());
+  
+  // Debounce timers for duplicate checking
+  const debounceTimers = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
   // Global storage picker
   const { open: openStoragePicker } = useStorageLocationPicker();
 
@@ -83,10 +90,18 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
+      // Clear all debounce timers when modal closes
+      debounceTimers.current.forEach(timer => clearTimeout(timer));
+      debounceTimers.current.clear();
+      // Clear duplicate status
+      setDuplicateStatus(new Map());
     }
 
     return () => {
       document.body.style.overflow = '';
+      // Cleanup timers on unmount
+      debounceTimers.current.forEach(timer => clearTimeout(timer));
+      debounceTimers.current.clear();
     };
   }, [isOpen]);
 
@@ -170,6 +185,92 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     }
   };
 
+  // Check for duplicate serial number/IMEI in database
+  const checkDuplicate = useCallback(async (serialNumber: string, imei: string | undefined, itemId: string, index: number) => {
+    if (!serialNumber || !serialNumber.trim()) {
+      // Clear duplicate status if field is empty
+      setDuplicateStatus(prev => {
+        const newMap = new Map(prev);
+        const itemMap = newMap.get(itemId) || new Map();
+        itemMap.delete(index);
+        if (itemMap.size === 0) {
+          newMap.delete(itemId);
+        } else {
+          newMap.set(itemId, itemMap);
+        }
+        return newMap;
+      });
+      return;
+    }
+
+    try {
+      // Check both serial_number and imei fields
+      const queries = [];
+      
+      if (serialNumber.trim()) {
+        queries.push(
+          supabase
+            .from('inventory_items')
+            .select('id, serial_number, imei')
+            .eq('serial_number', serialNumber.trim())
+            .limit(1)
+        );
+      }
+      
+      if (imei && imei.trim()) {
+        queries.push(
+          supabase
+            .from('inventory_items')
+            .select('id, serial_number, imei')
+            .eq('imei', imei.trim())
+            .limit(1)
+        );
+      }
+
+      // Also check IMEI child variants
+      if (imei && imei.trim()) {
+        queries.push(
+          supabase
+            .from('lats_product_variants')
+            .select('id, variant_attributes')
+            .eq('variant_type', 'imei_child')
+            .filter("variant_attributes->>'imei'", 'eq', imei.trim())
+            .limit(1)
+        );
+      }
+
+      const results = await Promise.all(queries);
+      
+      // Check if any query found a duplicate
+      const isDuplicate = results.some(result => {
+        if (result.error) {
+          console.warn('Error checking duplicate:', result.error);
+          return false;
+        }
+        return result.data && result.data.length > 0;
+      });
+
+      // Update duplicate status
+      setDuplicateStatus(prev => {
+        const newMap = new Map(prev);
+        const itemMap = newMap.get(itemId) || new Map();
+        if (isDuplicate) {
+          itemMap.set(index, true);
+        } else {
+          itemMap.delete(index);
+        }
+        if (itemMap.size === 0) {
+          newMap.delete(itemId);
+        } else {
+          newMap.set(itemId, itemMap);
+        }
+        return newMap;
+      });
+    } catch (error) {
+      console.error('Error checking duplicate:', error);
+    }
+  }, []);
+
   const updateSerialNumber = (itemId: string, index: number, field: keyof SerialNumberData, value: string | number) => {
     setReceivedItems(prev => {
       const newMap = new Map(prev);
@@ -200,32 +301,54 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
           warranty_end: endDate.toISOString().split('T')[0]
         };
       }
-      // 🔧 SMART DETECTION: If serial_number is being updated, detect if it's an IMEI or serial number
+      // ✅ FIX: Save serial_number EXACTLY as entered - no auto-detection or changes
       else if (field === 'serial_number' && typeof value === 'string') {
-        // Remove spaces, dashes, and other common separators
-        const cleanValue = value.replace(/[\s\-_.]/g, '');
+        // ✅ SAVE EXACTLY AS ENTERED - no processing, no detection, no changes
+        const newSerial = {
+          ...currentSerial,
+          serial_number: value  // Save exactly as user typed it (e.g., "SDHJAGS" stays "SDHJAGS")
+          // IMEI field remains unchanged - user can enter it separately if needed
+        };
         
-        // Detect if it's an IMEI: exactly 15 digits
-        const isIMEI = /^\d{15}$/.test(cleanValue);
+        updatedSerialNumbers[index] = newSerial;
         
-        // Detect if it's primarily numeric (could be other ID format)
-        const isNumeric = /^\d+$/.test(cleanValue);
-        
-        if (isIMEI) {
-          // ✅ It's an IMEI: Populate both serial_number and imei fields
-          updatedSerialNumbers[index] = {
-            ...currentSerial,
-            serial_number: value,      // Keep original format (with spaces/dashes)
-            imei: cleanValue           // Clean version for IMEI field
-          };
-        } else {
-          // ⚠️ It's a serial number (not IMEI): Only populate serial_number
-          updatedSerialNumbers[index] = {
-            ...currentSerial,
-            serial_number: value,
-            imei: ''                   // Clear IMEI field if it was set before
-          };
+        // Debounce duplicate check (wait 500ms after user stops typing)
+        const timerKey = `${itemId}-${index}`;
+        const existingTimer = debounceTimers.current.get(timerKey);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
         }
+        
+        const timer = setTimeout(() => {
+          checkDuplicate(newSerial.serial_number, newSerial.imei, itemId, index);
+          debounceTimers.current.delete(timerKey);
+        }, 500);
+        
+        debounceTimers.current.set(timerKey, timer);
+      }
+      // ✅ Handle IMEI field separately
+      else if (field === 'imei' && typeof value === 'string') {
+        // ✅ SAVE IMEI EXACTLY AS ENTERED - no processing, no changes
+        const newSerial = {
+            ...currentSerial,
+          imei: value  // Save exactly as user typed it
+        };
+        
+        updatedSerialNumbers[index] = newSerial;
+        
+        // Debounce duplicate check for IMEI
+        const timerKey = `${itemId}-${index}-imei`;
+        const existingTimer = debounceTimers.current.get(timerKey);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+        }
+        
+        const timer = setTimeout(() => {
+          checkDuplicate(newSerial.serial_number, newSerial.imei, itemId, index);
+          debounceTimers.current.delete(timerKey);
+        }, 500);
+        
+        debounceTimers.current.set(timerKey, timer);
       }
       else {
         updatedSerialNumbers[index] = {
@@ -377,18 +500,22 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
 
   const handleConfirm = async () => {
     try {
-      // Validate all serial numbers are filled
+      // ✅ FIX: Validate that EITHER serial number OR IMEI is filled (at least one required)
       let hasErrors = false;
       receivedItems.forEach((data, itemId) => {
         data.serialNumbers.forEach((serial, index) => {
-          if (!serial.serial_number.trim()) {
+          const hasSerialNumber = serial.serial_number && serial.serial_number.trim() !== '';
+          const hasIMEI = serial.imei && serial.imei.trim() !== '';
+          
+          // Require at least one: serial number OR IMEI
+          if (!hasSerialNumber && !hasIMEI) {
             hasErrors = true;
           }
         });
       });
 
       if (hasErrors) {
-        toast.error('Please fill in Serial Number or IMEI for all items');
+        toast.error('Please fill in Serial Number OR IMEI (at least one required) for all items');
         return;
       }
 
@@ -695,8 +822,11 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                             <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
                               Product Name
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[250px]">
-                              Serial Number / IMEI *
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
+                              Serial Number <span className="text-gray-400 font-normal">(Optional)</span>
+                            </th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
+                              IMEI <span className="text-gray-400 font-normal">(Optional)</span>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[180px]">
                               Location
@@ -719,28 +849,70 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                               {productName}
                             </td>
                             
-                            {/* Serial Number / IMEI */}
+                            {/* Serial Number Field */}
                             <td className="px-4 py-3">
                               <input
                                 type="text"
-                                placeholder="Enter Serial Number or IMEI (auto-detects)"
+                                placeholder="Enter Serial Number (optional, e.g., SDHJAGS)"
                                 value={serial.serial_number}
                                 onChange={(e) => updateSerialNumber(item.id, index, 'serial_number', e.target.value)}
-                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                                  !serial.serial_number.trim() 
-                                    ? 'border-red-300 bg-red-50' 
-                                    : 'border-gray-300 bg-white'
+                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                                  duplicateStatus.get(item.id)?.get(index)
+                                    ? 'border-red-500 bg-red-50 focus:ring-red-500'
+                                    : (!serial.serial_number.trim() && !serial.imei?.trim())
+                                    ? 'border-orange-300 bg-orange-50 focus:ring-blue-500'
+                                    : 'border-gray-300 bg-white focus:ring-blue-500'
                                 }`}
-                                title="Enter either Serial Number or IMEI - system auto-detects IMEI (15 digits)"
+                                title="Enter Serial Number exactly as it appears (optional - at least Serial Number OR IMEI required)"
                               />
-                              {/* Show detection indicator */}
-                              {serial.serial_number && (
+                              {/* Show duplicate warning */}
+                              {serial.serial_number && duplicateStatus.get(item.id)?.get(index) && (
                                 <div className="text-xs mt-1">
-                                  {serial.imei ? (
-                                    <span className="text-green-600 font-medium">✓ IMEI detected</span>
-                                  ) : (
-                                    <span className="text-blue-600">Serial Number</span>
-                                  )}
+                                  <div className="flex items-center gap-1 text-red-600 font-medium">
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>⚠️ Duplicate serial number</span>
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                            
+                            {/* IMEI Field (Separate) */}
+                            <td className="px-4 py-3">
+                              <input
+                                type="text"
+                                placeholder="Enter IMEI (15 digits, optional)"
+                                value={serial.imei || ''}
+                                onChange={(e) => updateSerialNumber(item.id, index, 'imei', e.target.value)}
+                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                                  duplicateStatus.get(item.id)?.get(index)
+                                    ? 'border-red-500 bg-red-50 focus:ring-red-500'
+                                    : serial.imei && serial.imei.trim().length === 15
+                                    ? 'border-green-300 bg-green-50 focus:ring-green-500'
+                                    : serial.imei && serial.imei.trim().length > 0
+                                    ? 'border-orange-300 bg-orange-50 focus:ring-orange-500'
+                                    : (!serial.serial_number?.trim() && !serial.imei?.trim())
+                                    ? 'border-orange-300 bg-orange-50 focus:ring-blue-500'
+                                    : 'border-gray-300 bg-white focus:ring-blue-500'
+                                }`}
+                                title="Enter IMEI number (15 digits) - optional, at least Serial Number OR IMEI required"
+                                maxLength={15}
+                              />
+                              {/* Show IMEI status */}
+                              {serial.imei && (
+                                <div className="text-xs mt-1">
+                                  {serial.imei.trim().length === 15 ? (
+                                    <span className="text-green-600 font-medium">✓ Valid IMEI (15 digits)</span>
+                                  ) : serial.imei.trim().length > 0 ? (
+                                    <span className="text-orange-600">⚠️ IMEI should be 15 digits</span>
+                                  ) : null}
+                                </div>
+                              )}
+                              {serial.imei && duplicateStatus.get(item.id)?.get(index) && (
+                                <div className="text-xs mt-1">
+                                  <div className="flex items-center gap-1 text-red-600 font-medium">
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>⚠️ Duplicate IMEI</span>
+                                  </div>
                                 </div>
                               )}
                             </td>

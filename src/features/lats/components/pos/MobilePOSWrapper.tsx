@@ -143,6 +143,25 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
     return (saved === 'mobile' || saved === 'desktop') ? saved : 'mobile';
   });
 
+  // Track which item is expanded (only one at a time)
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  
+  // Reverse cart items so latest added appears at top
+  const reversedCartItems = [...cartItems].reverse();
+  
+  // Auto-expand the latest added item (first item in reversed array)
+  useEffect(() => {
+    if (reversedCartItems.length > 0) {
+      const latestItem = reversedCartItems[0];
+      setExpandedItemId(latestItem.id);
+    }
+  }, [cartItems.length]);
+  
+  // Handle toggle expand - close previous item when opening a new one
+  const handleToggleExpand = (itemId: string) => {
+    setExpandedItemId(prev => prev === itemId ? null : itemId);
+  };
+
   // Real customers state
   const [recentCustomers, setRecentCustomers] = useState<any[]>([]);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
@@ -599,12 +618,16 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
             </div>
           ) : (
             <div className="space-y-3 pb-32">
-              {cartItems.map((item) => (
+              {reversedCartItems.map((item, index) => (
                 <VariantCartItem
                   key={item.id}
                   item={item}
                   onQuantityChange={(quantity) => onUpdateCartItemQuantity(item.id, quantity)}
                   onRemove={() => onRemoveCartItem(item.id)}
+                  variant="compact"
+                  autoExpand={index === 0} // Auto-expand the latest added item (first in reversed array)
+                  isExpanded={expandedItemId === item.id}
+                  onToggleExpand={handleToggleExpand}
                 />
               ))}
             </div>

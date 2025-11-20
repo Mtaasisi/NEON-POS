@@ -23,7 +23,7 @@ git push
 | Mode | Database Host | Command |
 |------|--------------|---------|
 | **Development** 🔧 | `ep-damp-fire-adtxvumr` | `npm run dev` |
-| **Production** 🚀 | `ep-young-firefly-adlvuhdv` | `npm run build:prod` |
+| **Production** 🚀 | `ep-falling-silence-adknpy1h` | `npm run build:prod` |
 
 ---
 

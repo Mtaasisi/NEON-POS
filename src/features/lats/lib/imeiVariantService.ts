@@ -204,7 +204,7 @@ export const checkIMEIExists = async (imei: string): Promise<boolean> => {
     const { data, error } = await supabase
       .from('lats_product_variants')
       .select('id')
-      .eq('variant_attributes->>imei', imei)
+      .filter("variant_attributes->>'imei'", 'eq', imei)
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
@@ -377,63 +377,49 @@ export const addIMEIsToParentVariant = async (
 
 /**
  * Get all child IMEIs for a parent variant
+ * ✅ FIX: Also includes legacy inventory_items for the same product
  */
 export const getChildIMEIs = async (
   parent_variant_id: string
 ): Promise<ChildIMEIVariant[]> => {
   try {
-    const { data, error } = await supabase.rpc('get_child_imeis', {
-      parent_variant_id_param: parent_variant_id,
+    // ✅ FIX: Get parent variant price for fallback
+    const { data: parentVariant } = await supabase
+      .from('lats_product_variants')
+      .select('selling_price')
+      .eq('id', parent_variant_id)
+      .single();
+    
+    const parentPrice = parentVariant?.selling_price || 0;
+
+    // ✅ FIX: Use loadChildIMEIs which includes legacy inventory items
+    const { loadChildIMEIs } = await import('./variantHelpers');
+    const allChildren = await loadChildIMEIs(parent_variant_id);
+
+    return allChildren.map((child: any) => {
+      // ✅ FIX: Use parent variant's price as fallback if child doesn't have a price
+      const childPrice = child.selling_price || child.sellingPrice || child.price;
+      const finalPrice = childPrice && childPrice > 0 ? childPrice : parentPrice;
+      
+      return {
+        id: child.id,
+        parent_variant_id,
+        product_id: child.product_id || '',
+        imei: child.variant_attributes?.imei || '',
+        serial_number: child.variant_attributes?.serial_number || '',
+        condition: child.variant_attributes?.condition || 'new',
+        cost_price: child.cost_price || 0,
+        selling_price: finalPrice,
+        quantity: child.quantity || 0,
+        is_active: child.is_active !== false,
+        created_at: child.created_at,
+        variant_attributes: child.variant_attributes || {},
+        is_legacy: child.is_legacy || false,
+      };
     });
-
-    if (error) throw error;
-
-    return (data || []).map((item: any) => ({
-      id: item.child_id,
-      parent_variant_id,
-      product_id: '', // Will be filled from parent
-      imei: item.imei,
-      serial_number: item.serial_number,
-      condition: item.variant_attributes?.condition || 'new',
-      cost_price: item.cost_price,
-      selling_price: item.selling_price,
-      quantity: item.quantity,
-      is_active: item.status === 'available',
-      created_at: item.created_at,
-      variant_attributes: item.variant_attributes,
-    }));
   } catch (error) {
     console.error('Error getting child IMEIs:', error);
-    
-    // Fallback to direct query
-    try {
-      const { data, error: fallbackError } = await supabase
-        .from('lats_product_variants')
-        .select('*')
-        .eq('parent_variant_id', parent_variant_id)
-        .eq('variant_type', 'imei_child')
-        .order('created_at', { ascending: false });
-
-      if (fallbackError) throw fallbackError;
-
-      return (data || []).map((v: any) => ({
-        id: v.id,
-        parent_variant_id,
-        product_id: v.product_id,
-        imei: v.variant_attributes?.imei,
-        serial_number: v.variant_attributes?.serial_number,
-        condition: v.variant_attributes?.condition || 'new',
-        cost_price: v.cost_price,
-        selling_price: v.selling_price,
-        quantity: v.quantity,
-        is_active: v.is_active,
-        created_at: v.created_at,
-        variant_attributes: v.variant_attributes,
-      }));
-    } catch (fallbackError) {
-      console.error('Fallback query also failed:', fallbackError);
-      return [];
-    }
+    return [];
   }
 };
 
@@ -444,32 +430,43 @@ export const getAvailableIMEIsForPOS = async (
   parent_variant_id: string
 ): Promise<ChildIMEIVariant[]> => {
   try {
-    const { data, error } = await supabase.rpc('get_available_imeis_for_pos', {
-      parent_variant_id_param: parent_variant_id,
-    });
-
-    if (error) throw error;
-
-    return (data || []).map((item: any) => ({
-      id: item.child_id,
-      parent_variant_id,
-      product_id: '', // Will be filled from context
-      imei: item.imei,
-      serial_number: item.serial_number,
-      condition: item.condition || 'new',
-      cost_price: item.cost_price,
-      selling_price: item.selling_price,
-      quantity: 1,
-      is_active: true,
-      created_at: item.created_at,
-      variant_attributes: {},
-    }));
-  } catch (error) {
-    console.error('Error getting available IMEIs:', error);
+    // ✅ FIX: Get parent variant price for fallback
+    const { data: parentVariant } = await supabase
+      .from('lats_product_variants')
+      .select('selling_price')
+      .eq('id', parent_variant_id)
+      .single();
     
-    // Fallback: get all available children
-    const allChildren = await getChildIMEIs(parent_variant_id);
-    return allChildren.filter((child) => child.is_active && child.quantity > 0);
+    const parentPrice = parentVariant?.selling_price || 0;
+
+    // ✅ FIX: Use loadAvailableChildIMEIs which includes legacy inventory items
+    const { loadAvailableChildIMEIs } = await import('./variantHelpers');
+    const allChildren = await loadAvailableChildIMEIs(parent_variant_id);
+
+    return allChildren.map((child: any) => {
+      // ✅ FIX: Use parent variant's price as fallback if child doesn't have a price
+      const childPrice = child.selling_price || child.sellingPrice || child.price;
+      const finalPrice = childPrice && childPrice > 0 ? childPrice : parentPrice;
+      
+      return {
+        id: child.id,
+        parent_variant_id,
+        product_id: child.product_id || '',
+        imei: child.variant_attributes?.imei || '',
+        serial_number: child.variant_attributes?.serial_number || '',
+        condition: child.variant_attributes?.condition || 'new',
+        cost_price: child.cost_price || 0,
+        selling_price: finalPrice,
+        quantity: child.quantity || 0,
+        is_active: child.is_active !== false,
+        created_at: child.created_at,
+        variant_attributes: child.variant_attributes || {},
+        is_legacy: child.is_legacy || false,
+      };
+    });
+  } catch (error) {
+    console.error('Error getting available IMEIs for POS:', error);
+    return [];
   }
 };
 
@@ -481,6 +478,64 @@ export const markIMEIAsSold = async (
   sale_id?: string
 ) => {
   try {
+    // ✅ FIX: Check if this is a legacy item (inventory_items) or IMEI child (lats_product_variants)
+    // First, try to find it in lats_product_variants
+    const { data: variantData, error: variantError } = await supabase
+      .from('lats_product_variants')
+      .select('id, is_legacy')
+      .eq('id', child_variant_id)
+      .single();
+
+    // If not found in variants, check if it's a legacy inventory item
+    if (variantError || !variantData) {
+      // ✅ FIX: Handle legacy inventory_items
+      const { data: inventoryItem, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .select('id, status')
+        .eq('id', child_variant_id)
+        .single();
+
+      if (inventoryItem) {
+        // Mark legacy item as sold
+        const { error: updateError } = await supabase
+          .from('inventory_items')
+          .update({
+            status: 'sold',
+            sold_at: new Date().toISOString(),
+            sale_id: sale_id || null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', child_variant_id);
+
+        if (updateError) throw updateError;
+
+        // Create stock movement for legacy item
+        if (inventoryItem.id) {
+          const { error: movementError } = await supabase
+            .from('lats_stock_movements')
+            .insert({
+              product_id: inventoryItem.product_id || null,
+              variant_id: inventoryItem.variant_id || null,
+              movement_type: 'sale',
+              quantity: -1,
+              reference_type: 'pos_sale',
+              reference_id: sale_id || null,
+              notes: `Sold legacy item ${child_variant_id}`,
+              created_at: new Date().toISOString(),
+            });
+
+          if (movementError) {
+            console.warn('Failed to create stock movement for legacy item:', movementError);
+          }
+        }
+
+        return { success: true };
+      }
+
+      throw new Error('Item not found in variants or inventory_items');
+    }
+
+    // ✅ FIX: Handle IMEI child variant (existing logic)
     const { data, error } = await supabase.rpc('mark_imei_as_sold', {
       child_variant_id_param: child_variant_id,
       sale_id_param: sale_id,
@@ -495,7 +550,7 @@ export const markIMEIAsSold = async (
   } catch (error) {
     console.error('Error marking IMEI as sold:', error);
     
-    // Fallback to manual update
+    // Fallback to manual update for variants
     try {
       const { error: updateError } = await supabase
         .from('lats_product_variants')
@@ -570,7 +625,7 @@ export const getVariantByIMEI = async (imei: string): Promise<any | null> => {
           sku
         )
       `)
-      .eq('variant_attributes->>imei', imei)
+      .filter("variant_attributes->>'imei'", 'eq', imei)
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
@@ -609,7 +664,7 @@ export const searchIMEIVariants = async (
       `)
       .eq('variant_type', 'imei_child')
       .or(
-        `variant_attributes->>imei.ilike.%${searchTerm}%,variant_attributes->>serial_number.ilike.%${searchTerm}%`
+        `variant_attributes->>'imei'.ilike.%${searchTerm}%,variant_attributes->>'serial_number'.ilike.%${searchTerm}%`
       );
 
     if (branch_id) {

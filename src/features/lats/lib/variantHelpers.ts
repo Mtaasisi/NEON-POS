@@ -129,22 +129,133 @@ export const loadVariantsWithChildCount = async (product_id: string): Promise<an
 
 /**
  * Load child IMEIs for a parent variant
+ * ✅ FIX: Also includes legacy inventory_items for the same product
  */
 export const loadChildIMEIs = async (parent_variant_id: string): Promise<any[]> => {
   try {
-    const { data, error } = await supabase
+    // First, get the parent variant to find product_id
+    const { data: parentVariant, error: parentError } = await supabase
+      .from('lats_product_variants')
+      .select('product_id')
+      .eq('id', parent_variant_id)
+      .single();
+
+    if (parentError || !parentVariant) {
+      console.error('Error loading parent variant:', parentError);
+      return [];
+    }
+
+    const productId = parentVariant.product_id;
+
+    // Load IMEI child variants
+    const { data: imeiChildren, error: imeiError } = await supabase
       .from('lats_product_variants')
       .select('*')
       .eq('parent_variant_id', parent_variant_id)
       .eq('variant_type', 'imei_child')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error loading child IMEIs:', error);
-      return [];
+    if (imeiError) {
+      console.error('Error loading IMEI children:', imeiError);
     }
 
-    return data || [];
+    // ✅ FIX: Load legacy inventory_items for this product
+    // IMEI and serial_number are synced in database (same value), so just query once
+    const { data: inventoryItems, error: inventoryError } = await supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('product_id', productId)
+      .not('serial_number', 'is', null) // serial_number and imei are synced, so this gets all items
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (inventoryError) {
+      console.error('Error loading inventory items:', inventoryError);
+    }
+
+    // ✅ DEBUG: Log inventory items found
+    console.log(`[loadChildIMEIs] Found ${inventoryItems?.length || 0} inventory items for product ${productId}`);
+
+    // ✅ FIX: Get parent variant price to use as fallback for legacy items
+    const { data: parentVariantPrice } = await supabase
+      .from('lats_product_variants')
+      .select('selling_price')
+      .eq('id', parent_variant_id)
+      .single();
+    
+    const parentPrice = parentVariantPrice?.selling_price || 0;
+
+    // Convert inventory_items to variant-like format for display
+    // ✅ FIX: Only include legacy items that belong to this specific parent variant
+    const convertedItems = (inventoryItems || [])
+      .filter(item => item.variant_id === parent_variant_id) // Only items for this parent
+      .map(item => {
+        // ✅ FIX: Treat IMEI and serial number as the same - use whichever is available
+        const identifier = item.serial_number || item.imei || 'Unknown';
+        
+        // ✅ FIX: Use parent variant's price as fallback if legacy item doesn't have a price
+        const itemPrice = item.selling_price;
+        const finalPrice = itemPrice && itemPrice > 0 ? itemPrice : parentPrice;
+        
+        return {
+          id: item.id,
+          name: identifier,
+          selling_price: finalPrice,
+          sellingPrice: finalPrice,
+          price: finalPrice,
+          variant_attributes: {
+            // Store both but treat them as the same
+            serial_number: identifier,
+            imei: identifier,
+            mac_address: item.mac_address || '',
+            condition: item.condition || 'new',
+            location: item.location || '',
+            status: item.status || 'available'
+          },
+          quantity: 1,
+          is_active: item.status === 'available',
+          created_at: item.created_at,
+          // Mark as legacy item
+          is_legacy: true,
+          // ✅ FIX: Ensure variant_type is set so it displays correctly
+          variant_type: 'imei_child',
+          // ✅ FIX: Set parent_variant_id to match the parent
+          parent_variant_id: parent_variant_id
+        };
+      });
+
+    // ✅ DEBUG: Log converted items with details
+    console.log(`[loadChildIMEIs] Converted ${convertedItems.length} inventory items for parent ${parent_variant_id} (filtered from ${inventoryItems.length} total)`);
+    if (convertedItems.length > 0) {
+      console.log(`[loadChildIMEIs] Sample legacy items:`, convertedItems.slice(0, 3).map(item => ({
+        id: item.id,
+        serial: item.variant_attributes?.serial_number,
+        imei: item.variant_attributes?.imei,
+        is_active: item.is_active,
+        quantity: item.quantity,
+        parent_variant_id: item.parent_variant_id
+      })));
+    }
+
+    // Combine IMEI children and converted inventory items
+    const allChildren = [
+      ...(imeiChildren || []),
+      ...convertedItems
+    ];
+
+    // ✅ DEBUG: Log total children with breakdown
+    console.log(`[loadChildIMEIs] Total children: ${allChildren.length} (${imeiChildren?.length || 0} IMEI + ${convertedItems.length} legacy)`);
+    console.log(`[loadChildIMEIs] IMEI children IDs:`, (imeiChildren || []).map(c => c.id).slice(0, 3));
+    console.log(`[loadChildIMEIs] Legacy items IDs:`, convertedItems.map(c => c.id).slice(0, 3));
+
+    // Sort by created_at descending (most recent first)
+    const sorted = allChildren.sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return sorted;
   } catch (error) {
     console.error('Error loading child IMEIs:', error);
     return [];
@@ -153,10 +264,26 @@ export const loadChildIMEIs = async (parent_variant_id: string): Promise<any[]> 
 
 /**
  * Load available child IMEIs (only active, unsold ones)
+ * ✅ FIX: Also includes legacy inventory_items for the same product
  */
 export const loadAvailableChildIMEIs = async (parent_variant_id: string): Promise<any[]> => {
   try {
-    const { data, error } = await supabase
+    // First, get the parent variant to find product_id
+    const { data: parentVariant, error: parentError } = await supabase
+      .from('lats_product_variants')
+      .select('product_id')
+      .eq('id', parent_variant_id)
+      .single();
+
+    if (parentError || !parentVariant) {
+      console.error('Error loading parent variant:', parentError);
+      return [];
+    }
+
+    const productId = parentVariant.product_id;
+
+    // Load IMEI child variants (available only)
+    const { data: imeiChildren, error: imeiError } = await supabase
       .from('lats_product_variants')
       .select('*')
       .eq('parent_variant_id', parent_variant_id)
@@ -165,12 +292,58 @@ export const loadAvailableChildIMEIs = async (parent_variant_id: string): Promis
       .gt('quantity', 0)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error loading available child IMEIs:', error);
-      return [];
+    if (imeiError) {
+      console.error('Error loading IMEI children:', imeiError);
     }
 
-    return data || [];
+    // ✅ FIX: Also load legacy inventory_items for this product (available only)
+    // IMEI and serial_number are synced in database (same value), so just query once
+    const { data: inventoryItems, error: inventoryError } = await supabase
+      .from('inventory_items')
+      .select('*')
+      .eq('product_id', productId)
+      .not('serial_number', 'is', null) // serial_number and imei are synced, so this gets all items
+      .eq('status', 'available')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (inventoryError) {
+      console.error('Error loading inventory items:', inventoryError);
+    }
+
+    // Convert inventory_items to variant-like format for display
+    const convertedItems = (inventoryItems || []).map(item => ({
+      id: item.id,
+      name: item.serial_number || item.imei || 'Unknown',
+      variant_attributes: {
+        serial_number: item.serial_number || '',
+        imei: item.imei || '',
+        mac_address: item.mac_address || '',
+        condition: item.condition || 'new',
+        location: item.location || '',
+        status: item.status || 'available'
+      },
+      quantity: 1,
+      is_active: item.status === 'available',
+      created_at: item.created_at,
+      is_legacy: true,
+      variant_type: 'imei_child'
+    }));
+
+    // Combine IMEI children and converted inventory items
+    const allChildren = [
+      ...(imeiChildren || []),
+      ...convertedItems
+    ];
+
+    // Sort by created_at descending (most recent first)
+    const sorted = allChildren.sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateB - dateA;
+    });
+
+    return sorted;
   } catch (error) {
     console.error('Error loading available child IMEIs:', error);
     return [];

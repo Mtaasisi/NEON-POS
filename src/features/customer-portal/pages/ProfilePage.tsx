@@ -13,7 +13,8 @@ import {
   Lock,
   HelpCircle,
   FileText,
-  Shield
+  Shield,
+  Award
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import customerPortalService from '../services/customerPortalService';
@@ -110,6 +111,12 @@ const ProfilePage: React.FC = () => {
   };
 
   const menuItems = [
+    {
+      icon: Award,
+      label: 'Loyalty & Rewards',
+      value: 'View points and redeem rewards',
+      action: () => navigate('/customer-portal/loyalty')
+    },
     {
       icon: Bell,
       label: 'Notifications',

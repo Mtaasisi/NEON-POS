@@ -86,6 +86,25 @@ const EnhancedPOSComponent: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showDebug, setShowDebug] = useState(false);
 
+  // Track which item is expanded (only one at a time)
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  
+  // Reverse cart items so latest added appears at top
+  const reversedCartItems = [...cartItems].reverse();
+  
+  // Auto-expand the latest added item (first item in reversed array)
+  useEffect(() => {
+    if (reversedCartItems.length > 0) {
+      const latestItem = reversedCartItems[0];
+      setExpandedItemId(latestItem.id);
+    }
+  }, [cartItems.length]);
+  
+  // Handle toggle expand - close previous item when opening a new one
+  const handleToggleExpand = (itemId: string) => {
+    setExpandedItemId(prev => prev === itemId ? null : itemId);
+  };
+
   // Load products on mount
   useEffect(() => {
     loadProducts({ page: 1, limit: 100 }); // Increased from 50 to 100
@@ -533,7 +552,7 @@ const EnhancedPOSComponent: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {cartItems.map((item) => (
+              {reversedCartItems.map((item, index) => (
                 <VariantCartItem
                   key={item.id}
                   item={item}
@@ -543,6 +562,9 @@ const EnhancedPOSComponent: React.FC = () => {
                   availableVariants={getAvailableVariants(item)}
                   showStockInfo={true}
                   variant="compact"
+                  autoExpand={index === 0} // Auto-expand the latest added item (first in reversed array)
+                  isExpanded={expandedItemId === item.id}
+                  onToggleExpand={handleToggleExpand}
                 />
               ))}
             </div>
