@@ -182,10 +182,13 @@ const VariantHierarchyDisplay: React.FC<VariantHierarchyDisplayProps> = ({
     const children = childrenCache[parentId] || [];
     const available = children.filter(c => c.is_active && c.quantity > 0).length;
     const sold = children.filter(c => !c.is_active || c.quantity === 0).length;
-    // ✅ FIX: Use parent price as fallback if child price is 0
+    // ✅ FIX: Use parent price as fallback if child price is 0 or null
     const totalValue = children
       .filter(c => c.is_active && c.quantity > 0)
-      .reduce((sum, c) => sum + (c.selling_price || parentPrice), 0);
+      .reduce((sum, c) => {
+        const childPrice = (c.selling_price && c.selling_price > 0) ? c.selling_price : parentPrice;
+        return sum + childPrice;
+      }, 0);
     
     return { total: children.length, available, sold, totalValue };
   };
@@ -324,15 +327,18 @@ const VariantHierarchyDisplay: React.FC<VariantHierarchyDisplayProps> = ({
 
                       {/* Stats Summary */}
                       <div className="flex items-center gap-4 flex-shrink-0">
-                        {/* Stock */}
+                        {/* Stock - For parent variants, show calculated stock from children */}
                         <div className="text-center">
                           <div className="text-xs text-gray-500 font-medium">Stock</div>
                           <div className="text-lg font-bold text-gray-900">
-                            {variant.quantity || 0}
+                            {isParent && children.length > 0 
+                              ? stats.available  // Use calculated available count from children
+                              : (variant.quantity || 0)  // For non-parents, use variant quantity
+                            }
                           </div>
                         </div>
 
-                        {/* Children Count */}
+                        {/* Children Count - Show total devices for parent variants */}
                         {isParent && children.length > 0 && (
                           <div className="text-center">
                             <div className="text-xs text-gray-500 font-medium">Devices</div>
@@ -467,8 +473,12 @@ const VariantHierarchyDisplay: React.FC<VariantHierarchyDisplayProps> = ({
                                     
                                     {showFinancials && (
                                       <span className="text-xs font-bold text-green-600">
-                                        {/* ✅ FIX: Use parent price as fallback if child price is 0 */}
-                                        {format.money(child.selling_price || variant.selling_price || 0)}
+                                        {/* ✅ FIX: Use parent price as fallback if child price is 0 or null */}
+                                        {format.money(
+                                          (child.selling_price && child.selling_price > 0) 
+                                            ? child.selling_price 
+                                            : (variant.selling_price || 0)
+                                        )}
                                       </span>
                                     )}
                                   </div>

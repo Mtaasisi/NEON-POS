@@ -242,18 +242,54 @@ export const addIMEIToParentVariant = async (
     // 🔧 DEBUG: Prepare RPC call
     console.log('⏳ [DEBUG] Step 1: Preparing Supabase RPC call...');
     
-    const rpcParams = {
+    // ✅ FIX: Always send all parameters with proper types to avoid Supabase RPC type resolution issues
+    // Ensure numeric types are always numbers (not undefined/null) so Supabase can resolve the function signature
+    // Build params object explicitly to avoid any undefined values
+    const rpcParams: Record<string, any> = {
       parent_variant_id_param: parent_variant_id,
-      imei_param: imeiData.imei,
-      serial_number_param: imeiData.serial_number,
-      mac_address_param: imeiData.mac_address,
-      cost_price_param: imeiData.cost_price,
-      selling_price_param: imeiData.selling_price,
-      condition_param: imeiData.condition || 'new',
-      notes_param: imeiData.notes,
+      imei_param: imeiData.imei || '',
     };
     
+    // ✅ UNIFIED: Serial number and IMEI are the same - always use IMEI value
+    // Serial number is TEXT type and accepts any text value (no numeric validation)
+    // This ensures they are stored in a single field with the same relationship
+    rpcParams.serial_number_param = String(imeiData.imei || '');  // Explicitly convert to string/text
+    
+    if (imeiData.mac_address != null && imeiData.mac_address !== '') {
+      rpcParams.mac_address_param = imeiData.mac_address;
+    }
+    
+    // Always include numeric parameters with explicit defaults
+    rpcParams.cost_price_param = (typeof imeiData.cost_price === 'number' && !isNaN(imeiData.cost_price)) 
+      ? imeiData.cost_price 
+      : 0;
+    
+    rpcParams.selling_price_param = (typeof imeiData.selling_price === 'number' && !isNaN(imeiData.selling_price)) 
+      ? imeiData.selling_price 
+      : 0; // Always a number, never undefined
+    
+    rpcParams.condition_param = imeiData.condition || 'new';
+    
+    if (imeiData.notes != null && imeiData.notes !== '') {
+      rpcParams.notes_param = imeiData.notes;
+    }
+    
+    // ✅ CRITICAL: Final validation - ensure all numeric params are actually numbers
+    // This prevents Supabase from seeing 'unknown' type
+    if (typeof rpcParams.cost_price_param !== 'number') {
+      rpcParams.cost_price_param = 0;
+    }
+    if (typeof rpcParams.selling_price_param !== 'number') {
+      rpcParams.selling_price_param = 0;
+    }
+    
     console.log('📤 [DEBUG] RPC Parameters:', rpcParams);
+    console.log('📤 [DEBUG] Parameter types:', {
+      cost_price_type: typeof rpcParams.cost_price_param,
+      selling_price_type: typeof rpcParams.selling_price_param,
+      cost_price_value: rpcParams.cost_price_param,
+      selling_price_value: rpcParams.selling_price_param,
+    });
 
     // Use database function for atomic operation
     console.log('⏳ [DEBUG] Step 2: Calling supabase.rpc(add_imei_to_parent_variant)...');
@@ -482,7 +518,7 @@ export const markIMEIAsSold = async (
     // First, try to find it in lats_product_variants
     const { data: variantData, error: variantError } = await supabase
       .from('lats_product_variants')
-      .select('id, is_legacy')
+      .select('id')
       .eq('id', child_variant_id)
       .single();
 
@@ -491,18 +527,24 @@ export const markIMEIAsSold = async (
       // ✅ FIX: Handle legacy inventory_items
       const { data: inventoryItem, error: inventoryError } = await supabase
         .from('inventory_items')
-        .select('id, status')
+        .select('id, status, product_id, variant_id, metadata')
         .eq('id', child_variant_id)
         .single();
 
       if (inventoryItem) {
         // Mark legacy item as sold
+        // Note: inventory_items table doesn't have sold_at or sale_id columns, so we store them in metadata
+        const updatedMetadata = {
+          ...(inventoryItem.metadata || {}),
+          sold_at: new Date().toISOString(),
+          ...(sale_id ? { sale_id: sale_id } : {}),
+        };
+
         const { error: updateError } = await supabase
           .from('inventory_items')
           .update({
             status: 'sold',
-            sold_at: new Date().toISOString(),
-            sale_id: sale_id || null,
+            metadata: updatedMetadata,
             updated_at: new Date().toISOString(),
           })
           .eq('id', child_variant_id);
@@ -510,12 +552,26 @@ export const markIMEIAsSold = async (
         if (updateError) throw updateError;
 
         // Create stock movement for legacy item
+        // ✅ FIX: Verify variant_id exists in lats_product_variants before using it
+        // For legacy items, variant_id might not exist in lats_product_variants
         if (inventoryItem.id) {
+          let validVariantId = null;
+          if (inventoryItem.variant_id) {
+            // Check if variant exists in lats_product_variants
+            const { data: variantCheck } = await supabase
+              .from('lats_product_variants')
+              .select('id')
+              .eq('id', inventoryItem.variant_id)
+              .maybeSingle();
+            
+            validVariantId = variantCheck ? inventoryItem.variant_id : null;
+          }
+
           const { error: movementError } = await supabase
             .from('lats_stock_movements')
             .insert({
               product_id: inventoryItem.product_id || null,
-              variant_id: inventoryItem.variant_id || null,
+              variant_id: validVariantId, // NULL if variant doesn't exist in lats_product_variants
               movement_type: 'sale',
               quantity: -1,
               reference_type: 'pos_sale',
@@ -536,9 +592,10 @@ export const markIMEIAsSold = async (
     }
 
     // ✅ FIX: Handle IMEI child variant (existing logic)
+    // ✅ FIX: Convert undefined to null to prevent PostgreSQL from treating it as a column name
     const { data, error } = await supabase.rpc('mark_imei_as_sold', {
       child_variant_id_param: child_variant_id,
-      sale_id_param: sale_id,
+      sale_id_param: sale_id ?? null,
     });
 
     if (error) throw error;
@@ -552,16 +609,28 @@ export const markIMEIAsSold = async (
     
     // Fallback to manual update for variants
     try {
+      // Get current variant attributes
+      const { data: currentVariant, error: fetchError } = await supabase
+        .from('lats_product_variants')
+        .select('variant_attributes')
+        .eq('id', child_variant_id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Update variant attributes manually using JSONB merge
+      const updatedAttributes = {
+        ...(currentVariant?.variant_attributes || {}),
+        sold_at: new Date().toISOString(),
+        ...(sale_id ? { sale_id: sale_id } : {}),
+      };
+
       const { error: updateError } = await supabase
         .from('lats_product_variants')
         .update({
           quantity: 0,
           is_active: false,
-          variant_attributes: supabase.rpc('jsonb_set', {
-            target: supabase.sql`variant_attributes`,
-            path: '{sold_at}',
-            value: new Date().toISOString(),
-          }),
+          variant_attributes: updatedAttributes,
           updated_at: new Date().toISOString(),
         })
         .eq('id', child_variant_id);

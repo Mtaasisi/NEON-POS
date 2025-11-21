@@ -17,6 +17,7 @@ import customersRoutes from './routes/customers.js';
 import salesRoutes from './routes/sales.js';
 import cartRoutes from './routes/cart.js';
 import smsRoutes from './routes/sms.js';
+import backupRoutes from './routes/backup.js';
 import neonMigrationRouter from '../routes/neon-migration.mjs';
 
 // Load environment variables
@@ -39,7 +40,7 @@ app.use(helmet({
   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
 }));
 app.use(compression()); // Compress responses
-app.use(express.json({ limit: '10mb' })); // Parse JSON
+app.use(express.json({ limit: '1gb' })); // Parse JSON (increased for large backup file uploads)
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev')); // Logging
 
@@ -59,6 +60,7 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api', smsRoutes);
+app.use('/api/backup', backupRoutes);
 app.use('/api/neon', neonMigrationRouter);
 
 // 404 handler
@@ -80,6 +82,8 @@ app.listen(PORT, () => {
   console.log('  POST /api/cart/add');
   console.log('  POST /api/sales');
   console.log('  POST /api/sms-proxy');
+  console.log('  POST /api/backup/restore');
+  console.log('  GET  /api/backup/restore/formats');
   console.log('');
 });
 

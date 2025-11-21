@@ -185,9 +185,12 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     }
   };
 
-  // Check for duplicate serial number/IMEI in database
+  // Check for duplicate IMEI/Serial Number in database
   const checkDuplicate = useCallback(async (serialNumber: string, imei: string | undefined, itemId: string, index: number) => {
-    if (!serialNumber || !serialNumber.trim()) {
+    // ✅ FIX: IMEI and serial_number are the same - use whichever is available
+    const identifier = imei || serialNumber;
+    
+    if (!identifier || !identifier.trim()) {
       // Clear duplicate status if field is empty
       setDuplicateStatus(prev => {
         const newMap = new Map(prev);
@@ -204,40 +207,37 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
     }
 
     try {
-      // Check both serial_number and imei fields
+      // ✅ FIX: Check IMEI field in variant_attributes (which now contains both IMEI and serial number)
       const queries = [];
       
-      if (serialNumber.trim()) {
-        queries.push(
-          supabase
-            .from('inventory_items')
-            .select('id, serial_number, imei')
-            .eq('serial_number', serialNumber.trim())
-            .limit(1)
-        );
-      }
+      // Check IMEI child variants (IMEI field contains both IMEI and serial number)
+      queries.push(
+        supabase
+          .from('lats_product_variants')
+          .select('id, variant_attributes')
+          .eq('variant_type', 'imei_child')
+          .filter("variant_attributes->>'imei'", 'eq', identifier.trim())
+          .limit(1)
+      );
       
-      if (imei && imei.trim()) {
-        queries.push(
-          supabase
-            .from('inventory_items')
-            .select('id, serial_number, imei')
-            .eq('imei', imei.trim())
-            .limit(1)
-        );
-      }
-
-      // Also check IMEI child variants
-      if (imei && imei.trim()) {
-        queries.push(
-          supabase
-            .from('lats_product_variants')
-            .select('id, variant_attributes')
-            .eq('variant_type', 'imei_child')
-            .filter("variant_attributes->>'imei'", 'eq', imei.trim())
-            .limit(1)
-        );
-      }
+      // Also check serial_number field (should be same value, but check both for safety)
+      queries.push(
+        supabase
+          .from('lats_product_variants')
+          .select('id, variant_attributes')
+          .eq('variant_type', 'imei_child')
+          .filter("variant_attributes->>'serial_number'", 'eq', identifier.trim())
+          .limit(1)
+      );
+      
+      // Check legacy inventory_items
+      queries.push(
+        supabase
+          .from('inventory_items')
+          .select('id, serial_number, imei')
+          .or(`serial_number.eq.${identifier.trim()},imei.eq.${identifier.trim()}`)
+          .limit(1)
+      );
 
       const results = await Promise.all(queries);
       
@@ -278,8 +278,22 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
       const updatedSerialNumbers = [...current.serialNumbers];
       const currentSerial = updatedSerialNumbers[index];
       
+      // ✅ FIX: When updating IMEI or serial_number, sync them to the same value
+      if (field === 'imei' && typeof value === 'string') {
+        updatedSerialNumbers[index] = {
+          ...currentSerial,
+          imei: value,
+          serial_number: value, // Keep them in sync
+        };
+      } else if (field === 'serial_number' && typeof value === 'string') {
+        updatedSerialNumbers[index] = {
+          ...currentSerial,
+          imei: value, // Keep them in sync
+          serial_number: value,
+        };
+      }
       // If warranty_months changed, auto-calculate warranty_end
-      if (field === 'warranty_months' && typeof value === 'number' && currentSerial.warranty_start) {
+      else if (field === 'warranty_months' && typeof value === 'number' && currentSerial.warranty_start) {
         const startDate = new Date(currentSerial.warranty_start);
         const endDate = new Date(startDate);
         endDate.setMonth(endDate.getMonth() + value);
@@ -823,10 +837,7 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                               Product Name
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
-                              Serial Number <span className="text-gray-400 font-normal">(Optional)</span>
-                            </th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[200px]">
-                              IMEI <span className="text-gray-400 font-normal">(Optional)</span>
+                              IMEI / Serial Number <span className="text-gray-400 font-normal">(Required)</span>
                             </th>
                             <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 min-w-[180px]">
                               Location
@@ -849,72 +860,38 @@ const SerialNumberReceiveModal: React.FC<SerialNumberReceiveModalProps> = ({
                               {productName}
                             </td>
                             
-                            {/* Serial Number Field */}
-                            <td className="px-4 py-3">
+                            {/* IMEI / Serial Number Field (Single Field) */}
+                            <td className="px-4 py-3" colSpan={2}>
                               <input
                                 type="text"
-                                placeholder="Enter Serial Number (optional, e.g., SDHJAGS)"
-                                value={serial.serial_number}
-                                onChange={(e) => updateSerialNumber(item.id, index, 'serial_number', e.target.value)}
-                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
+                                placeholder="Enter IMEI or Serial Number (any value)"
+                                value={serial.imei || serial.serial_number || ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  // Update both fields to keep them in sync
+                                  updateSerialNumber(item.id, index, 'imei', value);
+                                }}
+                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 font-mono ${
                                   duplicateStatus.get(item.id)?.get(index)
                                     ? 'border-red-500 bg-red-50 focus:ring-red-500'
-                                    : (!serial.serial_number.trim() && !serial.imei?.trim())
-                                    ? 'border-orange-300 bg-orange-50 focus:ring-blue-500'
-                                    : 'border-gray-300 bg-white focus:ring-blue-500'
-                                }`}
-                                title="Enter Serial Number exactly as it appears (optional - at least Serial Number OR IMEI required)"
-                              />
-                              {/* Show duplicate warning */}
-                              {serial.serial_number && duplicateStatus.get(item.id)?.get(index) && (
-                                <div className="text-xs mt-1">
-                                  <div className="flex items-center gap-1 text-red-600 font-medium">
-                                    <AlertCircle className="w-3 h-3" />
-                                    <span>⚠️ Duplicate serial number</span>
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                            
-                            {/* IMEI Field (Separate) */}
-                            <td className="px-4 py-3">
-                              <input
-                                type="text"
-                                placeholder="Enter IMEI (15 digits, optional)"
-                                value={serial.imei || ''}
-                                onChange={(e) => updateSerialNumber(item.id, index, 'imei', e.target.value)}
-                                className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 ${
-                                  duplicateStatus.get(item.id)?.get(index)
-                                    ? 'border-red-500 bg-red-50 focus:ring-red-500'
-                                    : serial.imei && serial.imei.trim().length === 15
-                                    ? 'border-green-300 bg-green-50 focus:ring-green-500'
-                                    : serial.imei && serial.imei.trim().length > 0
-                                    ? 'border-orange-300 bg-orange-50 focus:ring-orange-500'
                                     : (!serial.serial_number?.trim() && !serial.imei?.trim())
                                     ? 'border-orange-300 bg-orange-50 focus:ring-blue-500'
                                     : 'border-gray-300 bg-white focus:ring-blue-500'
                                 }`}
-                                title="Enter IMEI number (15 digits) - optional, at least Serial Number OR IMEI required"
-                                maxLength={15}
+                                title="Enter any IMEI or Serial Number - no format restrictions"
                               />
-                              {/* Show IMEI status */}
-                              {serial.imei && (
-                                <div className="text-xs mt-1">
-                                  {serial.imei.trim().length === 15 ? (
-                                    <span className="text-green-600 font-medium">✓ Valid IMEI (15 digits)</span>
-                                  ) : serial.imei.trim().length > 0 ? (
-                                    <span className="text-orange-600">⚠️ IMEI should be 15 digits</span>
-                                  ) : null}
-                                </div>
-                              )}
-                              {serial.imei && duplicateStatus.get(item.id)?.get(index) && (
+                              {/* Show duplicate warning */}
+                              {(serial.imei || serial.serial_number) && duplicateStatus.get(item.id)?.get(index) && (
                                 <div className="text-xs mt-1">
                                   <div className="flex items-center gap-1 text-red-600 font-medium">
                                     <AlertCircle className="w-3 h-3" />
-                                    <span>⚠️ Duplicate IMEI</span>
+                                    <span>⚠️ Duplicate IMEI/Serial Number</span>
                                   </div>
                                 </div>
                               )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                Enter any IMEI or Serial Number - no format restrictions
+                              </p>
                             </td>
                             
                             {/* Location */}

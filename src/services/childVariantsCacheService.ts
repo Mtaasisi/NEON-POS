@@ -256,9 +256,8 @@ class ChildVariantsCacheService {
    */
   getChildVariants(parentVariantId: string): FormattedChildVariant[] | null {
     const children = this.cache.get(parentVariantId);
-    if (children) {
-      console.log(`⚡ Retrieved ${children.length} children for parent ${parentVariantId} from cache`);
-    }
+    // Removed per-call logging to prevent console spam when called in loops
+    // Summary logging is done at the caller level instead
     return children || null;
   }
 

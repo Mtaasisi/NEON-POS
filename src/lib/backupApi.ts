@@ -1,5 +1,46 @@
 import { supabase } from './supabaseClient';
 
+/**
+ * Create an AbortSignal with timeout
+ * Compatible with browsers that don't support AbortSignal.timeout()
+ */
+const createTimeoutSignal = (timeoutMs: number): AbortSignal => {
+  if (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal) {
+    // Use native timeout if available
+    return AbortSignal.timeout(timeoutMs);
+  }
+  
+  // Fallback: create manual abort controller
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), timeoutMs);
+  return controller.signal;
+};
+
+/**
+ * Get authentication token from Supabase session
+ */
+const getAuthToken = async (): Promise<string | null> => {
+  try {
+    // Try to get token from Supabase session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      return session.access_token;
+    }
+    
+    // Fallback to localStorage
+    return localStorage.getItem('authToken') || 
+           localStorage.getItem('auth_token') ||
+           localStorage.getItem('lats-app-auth-token') ||
+           null;
+  } catch (error) {
+    console.warn('Error getting auth token:', error);
+    // Fallback to localStorage
+    return localStorage.getItem('authToken') || 
+           localStorage.getItem('auth_token') ||
+           null;
+  }
+};
+
 export interface BackupFile {
   name: string;
   size: string;
@@ -510,45 +551,446 @@ export const downloadBackup = async (filename?: string): Promise<BackupResult> =
 };
 
 /**
- * Restore from backup
+ * Preview backup file contents without restoring
+ * Returns list of tables and record counts
  */
-export const restoreFromBackup = async (backupData: any): Promise<BackupResult> => {
+export const previewBackupFile = async (file: File): Promise<{
+  success: boolean;
+  data?: {
+    fileName: string;
+    format: string;
+    fileSize: number;
+    tables: Array<{ name: string; recordCount: number }>;
+    totalTables: number;
+    totalRecords: number;
+    timestamp?: string;
+  };
+  error?: string;
+}> => {
   try {
-    console.log('🔄 Restoring from backup...');
-    
-    // Validate backup data
-    if (!backupData.tables || !backupData.timestamp) {
+    if (!file) {
       return {
         success: false,
-        message: '❌ Invalid backup file format',
-        error: 'Backup file is missing required data'
+        error: 'No backup file provided'
+      };
+    }
+
+    // Get API base URL
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('backupFile', file);
+    
+    // Get auth token
+    const token = await getAuthToken();
+    const headers: HeadersInit = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Call preview API
+    const response = await fetch(`${apiBaseUrl}/api/backup/restore/preview`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      // Add timeout to prevent hanging
+      signal: createTimeoutSignal(30000) // 30 seconds for file processing
+    });
+    
+    if (!response.ok) {
+      // Try to extract error message from response
+      let errorMessage = `Server returned ${response.status}`;
+      const responseClone = response.clone();
+      
+      try {
+        const contentType = response.headers.get('content-type') || '';
+        
+        if (contentType.includes('application/json')) {
+          try {
+            const errorData = await responseClone.json();
+            const originalConsole = (window as any).__originalConsole || console;
+            originalConsole.log('🔍 Preview error response:', errorData);
+            errorMessage = errorData.error || errorData.message || errorMessage;
+          } catch (jsonError) {
+            const textResponse = await response.text();
+            if (textResponse && textResponse.trim()) {
+              errorMessage = textResponse.trim().split('\n')[0];
+            }
+          }
+        } else {
+          // Try to get text response
+          const textResponse = await responseClone.text();
+          if (textResponse && textResponse.trim()) {
+            errorMessage = textResponse.trim().split('\n')[0];
+          }
+        }
+      } catch (parseError: any) {
+        const originalConsole = (window as any).__originalConsole || console;
+        originalConsole.error('❌ Error parsing preview error response:', parseError);
+        if (response.status === 401) {
+          errorMessage = 'Authentication required';
+        } else if (response.status === 500) {
+          errorMessage = 'Internal server error - check server logs for details';
+        }
+      }
+      
+      throw new Error(errorMessage);
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      return {
+        success: true,
+        data: result.data
+      };
+    } else {
+      throw new Error(result.error || 'Preview failed');
+    }
+  } catch (error: any) {
+    // Handle connection errors gracefully
+    const isConnectionError = 
+      (error instanceof TypeError && error.message.includes('fetch')) ||
+      (error instanceof DOMException && error.name === 'AbortError') ||
+      error?.message?.includes('Failed to fetch') ||
+      error?.message?.includes('ERR_CONNECTION_REFUSED') ||
+      error?.message?.includes('NetworkError');
+    
+    if (isConnectionError) {
+      return {
+        success: false,
+        error: 'Could not connect to restore server. Please ensure the backend server is running.'
       };
     }
     
-    // This would normally restore the data to Supabase
-    // For now, simulate restore process
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const tableCount = Object.keys(backupData.tables).length;
-    const totalRecords = Object.values(backupData.tables).reduce((sum: number, table: any) => {
-      return sum + (table.rowCount || 0);
-    }, 0);
+    // Only log non-connection errors
+    console.error('Error previewing backup file:', error);
     
     return {
-      success: true,
-      message: `✅ Restore completed successfully!`,
-      data: {
-        tablesRestored: tableCount,
-        recordsRestored: totalRecords,
-        timestamp: backupData.timestamp
-      }
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
     };
-  } catch (error) {
+  }
+};
+
+/**
+ * Restore from backup file
+ * Supports both SQL and JSON formats
+ * SQL format is recommended as it's the easiest to restore
+ * @param file - The backup file to restore
+ * @param selectedTables - Optional array of table names to restore (if not provided, restores all)
+ */
+export const restoreFromBackup = async (file: File, selectedTables?: string[]): Promise<BackupResult> => {
+  try {
+    console.log('🔄 Restoring from backup file:', file.name);
+    
+    // Validate file
+    if (!file) {
+      return {
+        success: false,
+        message: '❌ No backup file provided',
+        error: 'Please select a backup file to restore'
+      };
+    }
+    
+    // Check file size (1GB limit)
+    if (file.size > 1024 * 1024 * 1024) {
+      return {
+        success: false,
+        message: '❌ File too large',
+        error: 'Backup file must be less than 1GB (1024MB)'
+      };
+    }
+    
+    // Check file format
+    const isSql = file.name.endsWith('.sql');
+    const isJson = file.name.endsWith('.json');
+    
+    if (!isSql && !isJson) {
+      return {
+        success: false,
+        message: '❌ Invalid file format',
+        error: 'Only .sql and .json backup files are supported'
+      };
+    }
+    
+    // Get API base URL (check for server endpoint)
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('backupFile', file);
+    
+    // Add selected tables if provided
+    if (selectedTables && selectedTables.length > 0) {
+      formData.append('selectedTables', JSON.stringify(selectedTables));
+    }
+    
+    // Get auth token
+    const token = await getAuthToken();
+    const headers: HeadersInit = {
+      // Don't set Content-Type - browser will set it with boundary for FormData
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    // Call restore API
+    const response = await fetch(`${apiBaseUrl}/api/backup/restore`, {
+      method: 'POST',
+      headers,
+      body: formData,
+      // Add timeout to prevent hanging (restore can take a while)
+      signal: createTimeoutSignal(300000) // 5 minutes for restore operations
+    });
+    
+    if (!response.ok) {
+      // Try to extract error message from response
+      let errorMessage = `Server returned ${response.status}`;
+      let fullErrorDetails: string | null = null;
+      let rawErrorData: any = null;
+      
+      // Clone response so we can read it without consuming the original
+      const responseClone = response.clone();
+      
+      try {
+        const contentType = response.headers.get('content-type') || '';
+        
+        // Try JSON first
+        if (contentType.includes('application/json')) {
+          try {
+            rawErrorData = await responseClone.json();
+            // Use original console to bypass filters
+            const originalConsole = (window as any).__originalConsole || console;
+            originalConsole.log('🔍 Server error response (JSON):', rawErrorData);
+            
+            // Try multiple fields that might contain the error
+            fullErrorDetails = rawErrorData.error || rawErrorData.message || rawErrorData.details || null;
+            
+            if (fullErrorDetails) {
+              // Extract first line for user-friendly message (remove stack traces)
+              const firstLine = String(fullErrorDetails).split('\n')[0].trim();
+              // Remove "Restore failed: " prefix if present
+              errorMessage = firstLine.replace(/^Restore failed:\s*/i, '');
+              
+              // Log full error details for debugging
+              if (String(fullErrorDetails) !== firstLine) {
+                originalConsole.error('📋 Full restore error details:', fullErrorDetails);
+              }
+            } else if (rawErrorData) {
+              // If no error field, try to construct message from the response
+              errorMessage = `Error: ${JSON.stringify(rawErrorData)}`;
+            }
+          } catch (jsonError) {
+            // If JSON parsing fails, try text
+            const originalConsole = (window as any).__originalConsole || console;
+            originalConsole.warn('⚠️ Failed to parse JSON error response, trying text:', jsonError);
+            const textResponse = await response.text();
+            if (textResponse && textResponse.trim()) {
+              const firstLine = textResponse.trim().split('\n')[0];
+              errorMessage = firstLine.replace(/^Restore failed:\s*/i, '');
+              fullErrorDetails = textResponse.trim();
+              originalConsole.log('🔍 Server error response (text):', textResponse.substring(0, 500));
+            }
+          }
+        } else {
+          // Try to get text response
+          const textResponse = await responseClone.text();
+          const originalConsole = (window as any).__originalConsole || console;
+          originalConsole.log('🔍 Server error response (text):', textResponse.substring(0, 500));
+          if (textResponse && textResponse.trim()) {
+            const firstLine = textResponse.trim().split('\n')[0];
+            errorMessage = firstLine.replace(/^Restore failed:\s*/i, '');
+            fullErrorDetails = textResponse.trim();
+          }
+        }
+      } catch (parseError: any) {
+        const originalConsole = (window as any).__originalConsole || console;
+        originalConsole.error('❌ Error parsing error response:', parseError);
+        
+        // Last resort: try to read the response as text one more time
+        try {
+          const finalTextAttempt = await response.text();
+          if (finalTextAttempt && finalTextAttempt.trim()) {
+            originalConsole.log('🔍 Raw error response:', finalTextAttempt.substring(0, 1000));
+            errorMessage = finalTextAttempt.trim().split('\n')[0].substring(0, 200);
+          }
+        } catch (finalError) {
+          originalConsole.error('❌ Could not read error response at all:', finalError);
+        }
+        
+        // If we still don't have a good message, use status-based messages
+        if (errorMessage === `Server returned ${response.status}`) {
+          if (response.status === 401) {
+            errorMessage = 'Authentication required';
+          } else if (response.status === 500) {
+            errorMessage = 'Internal server error - check server logs for details';
+          } else if (response.status === 400) {
+            errorMessage = 'Bad request - check the backup file format';
+          }
+        }
+      }
+      
+      // Store full error details in error object for debugging
+      const error = new Error(errorMessage);
+      if (fullErrorDetails && fullErrorDetails !== errorMessage) {
+        (error as any).fullDetails = fullErrorDetails;
+      }
+      if (rawErrorData) {
+        (error as any).rawErrorData = rawErrorData;
+      }
+      throw error;
+    }
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      console.log('✅ Restore completed successfully:', result.data);
+      return {
+        success: true,
+        message: result.message || '✅ Restore completed successfully!',
+        data: result.data
+      };
+    } else {
+      throw new Error(result.error || 'Restore failed');
+    }
+  } catch (error: any) {
+    // Handle connection errors gracefully
+    const isConnectionError = 
+      (error instanceof TypeError && error.message.includes('fetch')) ||
+      (error instanceof DOMException && error.name === 'AbortError') ||
+      error?.message?.includes('Failed to fetch') ||
+      error?.message?.includes('ERR_CONNECTION_REFUSED') ||
+      error?.message?.includes('NetworkError');
+    
+    if (isConnectionError) {
+      return {
+        success: false,
+        message: '❌ Connection failed',
+        error: 'Could not connect to restore server. Please ensure the backend server is running.'
+      };
+    }
+    
+    // Log non-connection errors
     console.error('Error restoring from backup:', error);
+    
     return {
       success: false,
       message: '❌ Restore failed',
       error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};
+
+/**
+ * Get supported restore formats information
+ */
+export const getRestoreFormats = async (): Promise<{
+  formats: Array<{
+    format: string;
+    extension: string;
+    description: string;
+    advantages: string[];
+  }>;
+  recommended: string;
+}> => {
+  try {
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    
+    // Get auth token
+    const token = await getAuthToken();
+    const headers: HeadersInit = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    const response = await fetch(`${apiBaseUrl}/api/backup/restore/formats`, {
+      method: 'GET',
+      headers,
+      // Add timeout to prevent hanging
+      signal: createTimeoutSignal(5000)
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      return result;
+    }
+    
+    // If server returns error but is reachable, still use fallback
+    console.warn('Server returned error, using fallback formats');
+    
+    // Fallback if server not available or returns error
+    return {
+      formats: [
+        {
+          format: 'SQL',
+          extension: '.sql',
+          description: 'PostgreSQL SQL dump format (RECOMMENDED)',
+          advantages: [
+            'Standard PostgreSQL format',
+            'Easiest to restore',
+            'Can be executed directly with psql',
+            'Contains both schema and data',
+            'Easy to validate and preview',
+            'Works with any PostgreSQL tool',
+          ]
+        },
+        {
+          format: 'JSON',
+          extension: '.json',
+          description: 'JSON backup format',
+          advantages: [
+            'Human-readable',
+            'Easy to parse programmatically',
+            'Can be edited before restore',
+            'Good for selective restore',
+          ]
+        }
+      ],
+      recommended: 'SQL'
+    };
+  } catch (error: any) {
+    // Silently handle connection errors - this is expected if server is not running
+    const isConnectionError = 
+      (error instanceof TypeError && error.message.includes('fetch')) ||
+      (error instanceof DOMException && error.name === 'AbortError') ||
+      error?.message?.includes('Failed to fetch') ||
+      error?.message?.includes('ERR_CONNECTION_REFUSED') ||
+      error?.message?.includes('NetworkError');
+    
+    if (isConnectionError) {
+      // Don't log connection errors - they're expected when server is not running
+      // Just return fallback data silently
+    } else {
+      // Only log unexpected errors
+      console.error('Error getting restore formats:', error);
+    }
+    // Return default formats
+    return {
+      formats: [
+        {
+          format: 'SQL',
+          extension: '.sql',
+          description: 'PostgreSQL SQL dump format (RECOMMENDED)',
+          advantages: [
+            'Standard PostgreSQL format',
+            'Easiest to restore',
+            'Can be executed directly with psql',
+            'Contains both schema and data',
+          ]
+        },
+        {
+          format: 'JSON',
+          extension: '.json',
+          description: 'JSON backup format',
+          advantages: [
+            'Human-readable',
+            'Easy to parse programmatically',
+          ]
+        }
+      ],
+      recommended: 'SQL'
     };
   }
 };

@@ -1943,12 +1943,14 @@ export class PurchaseOrderService {
           // ✅ NEW SYSTEM: Parent-Child IMEI Variant System
           console.log(`✅ Using Parent-Child IMEI variant system for ${receivedItem.serialNumbers.length} devices`);
 
-          // ✅ FIX: Process items with IMEI (serial_number is optional)
+          // ✅ FIX: Process items with IMEI (serial_number is unified with IMEI)
+          // ✅ UNIFIED: Serial number and IMEI are the same - always use IMEI value for both
+          // Serial number is TEXT type and accepts any text value (no numeric validation)
           const variants = receivedItem.serialNumbers
             .filter(serial => serial.imei && serial.imei.trim() !== '')
             .map(serial => ({
-              imei: serial.imei!,
-              serial_number: serial.serial_number || '', // ✅ Allow empty serial_number if only IMEI provided
+              imei: String(serial.imei!),  // Explicitly convert to string/text
+              serial_number: String(serial.imei!), // ✅ UNIFIED: Always use IMEI value for serial_number (as TEXT)
               mac_address: serial.mac_address,
               condition: serial.condition || 'new',
               cost_price: serial.cost_price || orderItem.unit_cost || 0,

@@ -222,9 +222,9 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
     console.log("🔄 Fallback: Querying child variants directly...");
     
-    // ✅ FIX: Use loadChildIMEIs for each parent to include legacy items
-    const { loadChildIMEIs } = await import('../../lib/variantHelpers');
-    const allChildrenPromises = variantIds.map((parentId: string) => loadChildIMEIs(parentId));
+    // ✅ FIX: Use loadAvailableChildIMEIs to exclude sold items
+    const { loadAvailableChildIMEIs } = await import('../../lib/variantHelpers');
+    const allChildrenPromises = variantIds.map((parentId: string) => loadAvailableChildIMEIs(parentId));
     const allChildrenArrays = await Promise.all(allChildrenPromises);
     const allChildren = allChildrenArrays.flat();
 
@@ -418,8 +418,11 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       console.warn("Error checking cache service:", error);
     }
 
-    // Fallback: Load from database if not in cache
-    console.warn(`⚠️ Fallback loading for parent ${parentVariantId} - children not preloaded`);
+    // Fallback: Load from database if not in cache (this is normal - cache may not be ready yet)
+    // Only log in development mode to reduce console noise
+    if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+      console.log(`ℹ️ Loading children from database for parent ${parentVariantId} (cache not ready yet)`);
+    }
     setLoadingChildren((prev) => new Set(prev).add(parentVariantId));
 
     try {
@@ -427,9 +430,9 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       const parentVariant = normalizedProduct?.variants?.find((v: any) => v.id === parentVariantId);
       const parentPrice = parentVariant?.sellingPrice ?? parentVariant?.selling_price ?? parentVariant?.price ?? 0;
 
-      // ✅ FIX: Use loadChildIMEIs which includes legacy inventory items
-      const { loadChildIMEIs } = await import('../../lib/variantHelpers');
-      const allChildren = await loadChildIMEIs(parentVariantId);
+      // ✅ FIX: Use loadAvailableChildIMEIs to exclude sold items
+      const { loadAvailableChildIMEIs } = await import('../../lib/variantHelpers');
+      const allChildren = await loadAvailableChildIMEIs(parentVariantId);
 
       if (allChildren && allChildren.length > 0) {
         const formattedChildren = allChildren.map((child) => {
@@ -517,7 +520,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
     setExpandedParents(newExpanded);
   };
 
-  // Handle variant selection
+  // Handle variant selection - toggle for multiple selection mode
   const handleVariantSelect = (variant: any) => {
     const quantity = selectedQuantities[variant.id] || 1;
 
@@ -543,17 +546,18 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       return;
     }
 
-    // ✅ ALLOWED: Either a child variant or a parent without children
-    if (isParent && !hasChildren) {
-      // Parent with no children - can be added directly
-      console.log("✅ Adding parent variant (no children):", variant.name);
-    } else if (!isParent) {
-      // Child variant (IMEI device) - this is what we want!
-      console.log("✅ Adding child variant (IMEI):", variant.imei || variant.name);
+    // ✅ MULTIPLE SELECTION MODE: Toggle variant in selectedDevices instead of immediately adding
+    const newSelectedDevices = new Set(selectedDevices);
+    if (newSelectedDevices.has(variant.id)) {
+      // Deselect
+      newSelectedDevices.delete(variant.id);
+      console.log("❌ Deselected variant:", variant.imei || variant.name || variant.id);
+    } else {
+      // Select
+      newSelectedDevices.add(variant.id);
+      console.log("✅ Selected variant:", variant.imei || variant.name || variant.id);
     }
-    
-    onSelectVariant(productToUse, variant, quantity);
-    onClose();
+    setSelectedDevices(newSelectedDevices);
   };
 
   // Update quantity for a variant
@@ -608,37 +612,25 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       return quantity > 0 && isActive;
     }) || [];
 
-  // FALLBACK: If no variants pass the filter, show all active variants regardless of stock
-  // This is normal for purchase orders where items have zero stock
+  // ✅ FIX: For POS mode, don't show variants with zero stock
+  // Only show fallback for purchase order mode where zero stock is expected
   if (
     availableVariants.length === 0 &&
     productToUse?.variants &&
     productToUse.variants.length > 0
   ) {
-    if (!isPurchaseOrderMode) {
-      console.warn(
-        "⚠️ No variants with stock found, showing all active variants as fallback",
+    if (isPurchaseOrderMode) {
+      // In PO mode, showing zero-stock variants is expected behavior
+      availableVariants = productToUse.variants.filter((v: any) => {
+        const isActive = v.is_active !== false && v.isActive !== false;
+        return isActive;
+      });
+    } else {
+      // For POS mode, don't show any variants if all are out of stock
+      console.log(
+        "ℹ️ No variants with stock available for POS - product is out of stock",
       );
     }
-    // In PO mode, showing zero-stock variants is expected behavior
-    availableVariants = productToUse.variants.filter((v: any) => {
-      const isActive = v.is_active !== false && v.isActive !== false;
-      return isActive;
-    });
-  }
-
-  // ULTIMATE FALLBACK: If still no variants, show ALL variants
-  if (
-    availableVariants.length === 0 &&
-    productToUse?.variants &&
-    productToUse.variants.length > 0
-  ) {
-    if (!isPurchaseOrderMode) {
-      console.warn(
-        "⚠️ No active variants found, showing ALL variants as fallback",
-      );
-    }
-    availableVariants = productToUse.variants;
   }
 
   return createPortal(
@@ -889,9 +881,11 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                         <div
                           className="flex items-start justify-between p-6 cursor-pointer"
                           onClick={() => {
-                            if (isParent) {
+                            if (isParent && (childCount > 0 || (children && children.length > 0))) {
+                              // Parent with children - expand to show them
                               toggleParentExpansion(variant.id);
                             } else {
+                              // Parent without children or regular variant - toggle selection
                               handleVariantSelect(variant);
                             }
                           }}
@@ -1143,7 +1137,36 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
             <button
               onClick={() => {
                 if (selectedDevices.size > 0) {
-                  // Handle confirmation logic here
+                  // Process all selected variants
+                  let processedCount = 0;
+                  
+                  // Get all child variants from all parents
+                  const allChildVariants: any[] = [];
+                  Object.values(childVariants).forEach(children => {
+                    allChildVariants.push(...children);
+                  });
+                  
+                  // Process each selected device
+                  selectedDevices.forEach(deviceId => {
+                    // Find the variant in child variants first
+                    let selectedVariant = allChildVariants.find(child => child.id === deviceId);
+                    
+                    // If not found in children, check parent variants
+                    if (!selectedVariant) {
+                      selectedVariant = availableVariants.find(v => v.id === deviceId);
+                    }
+                    
+                    if (selectedVariant) {
+                      const quantity = selectedQuantities[selectedVariant.id] || 1;
+                      onSelectVariant(productToUse, selectedVariant, quantity);
+                      processedCount++;
+                    }
+                  });
+                  
+                  if (processedCount > 0) {
+                    toast.success(`Added ${processedCount} variant(s) to cart`);
+                  }
+                  
                   onClose();
                 }
               }}

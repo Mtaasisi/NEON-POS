@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import MobileLayout from '../components/MobileLayout';
 import {
   Star,
@@ -20,7 +21,7 @@ import { LoyaltyReward } from '../types';
 import toast from 'react-hot-toast';
 import customerPortalService from '../services/customerPortalService';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
-import { customerLoyaltyService } from '../../../../lib/customerLoyaltyService';
+import { customerLoyaltyService } from '../../../lib/customerLoyaltyService';
 
 const LoyaltyPage: React.FC = () => {
   const navigate = useNavigate();

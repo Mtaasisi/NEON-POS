@@ -452,10 +452,12 @@ export const getVariantDisplayName = (variant: any, includeIMEICount = false): s
 };
 
 /**
- * Get IMEI from variant attributes
+ * Get IMEI/Serial Number from variant attributes
+ * ✅ FIX: IMEI and serial_number are the same - use whichever is available
  */
 export const getVariantIMEI = (variant: any): string | null => {
-  return variant.variant_attributes?.imei || null;
+  // IMEI and serial_number are synced to the same value
+  return variant.variant_attributes?.imei || variant.variant_attributes?.serial_number || null;
 };
 
 /**

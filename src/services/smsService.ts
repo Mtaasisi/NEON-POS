@@ -52,6 +52,7 @@ class SMSService {
   private apiPassword: string | null = null;
   private initialized: boolean = false;
   private initializationPromise: Promise<void> | null = null;
+  private static hasWarnedAboutConfig: boolean = false;
 
   constructor() {
     this.initializationPromise = this.initializeService();
@@ -388,31 +389,24 @@ Respond in JSON format:
     // Ensure service is initialized
     await this.ensureInitialized();
     
-    console.log('🔍 DEBUG: sendSMSToProvider called with:', {
-      phone,
-      message: message.substring(0, 50) + '...',
-      apiKey: this.apiKey ? '✅ Set' : '❌ Not Set',
-      apiUrl: this.apiUrl ? '✅ Set' : '❌ Not Set',
-      apiPassword: this.apiPassword ? '✅ Set' : '❌ Not Set',
-      initialized: this.initialized
-    });
+    // Only log debug info in development mode
+    if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+      console.debug('🔍 SMS send attempt:', {
+        phone,
+        message: message.substring(0, 50) + '...',
+        apiKey: this.apiKey ? '✅ Set' : '❌ Not Set',
+        apiUrl: this.apiUrl ? '✅ Set' : '❌ Not Set',
+        initialized: this.initialized
+      });
+    }
     
     if (!this.apiKey || !this.apiUrl) {
-      console.warn('📱 SMS Configuration Missing:');
-      console.warn('   - sms_provider_api_key: ' + (this.apiKey ? '✅ Configured' : '❌ Missing'));
-      console.warn('   - sms_api_url: ' + (this.apiUrl ? '✅ Configured' : '❌ Missing'));
-      console.warn('   - sms_provider_password: ' + (this.apiPassword ? '✅ Configured' : '❌ Missing'));
-      console.warn('');
-      console.warn('📋 To configure SMS, run this SQL in your Neon database:');
-      console.warn('');
-      console.warn('   INSERT INTO settings (key, value, description, created_at, updated_at) VALUES');
-      console.warn('   (\'sms_provider_api_key\', \'your_api_key\', \'SMS Provider API Key\', NOW(), NOW()),');
-      console.warn('   (\'sms_api_url\', \'https://your-provider.com/api/send\', \'SMS API URL\', NOW(), NOW()),');
-      console.warn('   (\'sms_provider_password\', \'your_password\', \'SMS Provider Password\', NOW(), NOW())');
-      console.warn('   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();');
-      console.warn('');
-      console.warn('ℹ️  Until configured, SMS sending will be simulated (logged only, not actually sent).');
-      return { success: false, error: 'SMS provider not configured. Messages will be logged but not sent. Check console for setup instructions.' };
+      // Only warn once to avoid console spam
+      if (!SMSService.hasWarnedAboutConfig) {
+        console.warn('⚠️ SMS provider not configured. Configure SMS Gateway in Admin Settings → Integrations. Until configured, SMS sending will be simulated (logged only, not actually sent).');
+        SMSService.hasWarnedAboutConfig = true;
+      }
+      return { success: false, error: 'SMS provider not configured. Messages will be logged but not sent. Configure SMS Gateway in Admin Settings → Integrations.' };
     }
 
     try {
@@ -428,10 +422,13 @@ Respond in JSON format:
         ? `${import.meta.env.VITE_API_URL}/api/sms-proxy`
         : 'http://localhost:8000/api/sms-proxy';
       
-      console.log('📱 Sending SMS via MShastra backend proxy...');
-      console.log('   Phone:', phone);
-      console.log('   Message:', message.substring(0, 50) + '...');
-      console.log('   Provider: MShastra');
+      // Only log in development mode
+      if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+        console.log('📱 Sending SMS via MShastra backend proxy...');
+        console.log('   Phone:', phone);
+        console.log('   Message:', message.substring(0, 50) + '...');
+        console.log('   Provider: MShastra');
+      }
 
       // Get fresh credentials from integrations for all fields
       const { getIntegration } = await import('../lib/integrationsApi');
@@ -441,29 +438,53 @@ Respond in JSON format:
       const apiKey = integration?.credentials?.api_key || this.apiKey;
       const apiPassword = integration?.credentials?.api_password || this.apiPassword;
 
-      const response = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          phone,
-          message,
-          apiUrl: apiUrl,
-          apiKey: apiKey,
-          apiPassword: apiPassword,
-          senderId: senderId
-        })
-      });
+      let response: Response;
+      try {
+        response = await fetch(proxyUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            phone,
+            message,
+            apiUrl: apiUrl,
+            apiKey: apiKey,
+            apiPassword: apiPassword,
+            senderId: senderId
+          })
+        });
+      } catch (fetchError) {
+        // ✅ FIX: Catch connection errors at fetch level to prevent browser error logs
+        const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+        const isConnectionError = 
+          errorMessage.includes('Failed to fetch') || 
+          errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+          errorMessage.includes('ECONNREFUSED') ||
+          (fetchError instanceof TypeError);
+        
+        if (isConnectionError) {
+          // Silently handle - SMS proxy server not running is expected in some environments
+          if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+            console.debug('ℹ️ SMS proxy server not available (connection refused). SMS features disabled.');
+          }
+          return { success: false, error: 'SMS proxy server not running' };
+        }
+        // Re-throw if it's not a connection error
+        throw fetchError;
+      }
       
-      console.log('🔍 DEBUG: Request payload:', {
-        phone,
-        message: message.substring(0, 50) + '...',
-        apiUrl: this.apiUrl,
-        apiKey: this.apiKey,
-        apiPassword: this.apiPassword,
-        senderId: 'INAUZWA'
-      });
+      // Only log in development mode
+      if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+        console.log('🔍 DEBUG: Request payload:', {
+          phone,
+          message: message.substring(0, 50) + '...',
+          apiUrl: this.apiUrl,
+          apiKey: this.apiKey ? '✅ Set' : '❌ Not Set',
+          apiPassword: this.apiPassword ? '✅ Set' : '❌ Not Set',
+          senderId: senderId
+        });
+      }
 
       const result = await response.json();
       
@@ -490,12 +511,10 @@ Respond in JSON format:
         (error instanceof TypeError && errorMessage.includes('network'));
       
       if (isConnectionError) {
-        // Silently handle connection errors in dev - this is expected when backend proxy isn't running
-        // Use console.debug instead of console.log to reduce noise in dev console
-        // Note: Browser network errors will still appear in console, but this reduces duplicate warnings
-        console.debug('ℹ️  SMS proxy server not available (expected in dev - backend server not running)');
-        // Return success=false but don't treat it as a critical error
-        return { success: false, error: 'SMS proxy server not running - this is normal in development mode' };
+        // ✅ FIX: Silently handle connection errors - SMS proxy server may not be running
+        // Don't log as error - this is expected when proxy server isn't running
+        // Browser will still show network error in console (can't prevent that)
+        return { success: false, error: 'SMS proxy server not running' };
       }
       
       // Only log actual SMS provider errors, not connection errors

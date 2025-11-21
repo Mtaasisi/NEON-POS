@@ -5,7 +5,6 @@
  * ✅ Removed duplicate useEffect hooks (stock update listeners)
  * ✅ Removed duplicate inventory alert check hooks
  * ✅ Added useCallback to optimize cart functions (addToCart, updateCartItemQuantity, removeCartItem, clearCart)
- * ✅ Added useCallback to optimize checkLowStock function
  * ✅ Improved error handling and validation throughout
  * ✅ Added stock availability checks before adding to cart
  * ✅ Combined event bus and window event listeners for backward compatibility
@@ -582,18 +581,6 @@ const POSPageOptimized: React.FC = () => {
   const [selectedReceipt, setSelectedReceipt] = useState<any>(null);
   const [receiptPrintMode, setReceiptPrintMode] = useState<'thermal' | 'a4' | 'email'>('thermal');
 
-  // Inventory alerts
-  const [showInventoryAlerts, setShowInventoryAlerts] = useState(false);
-  const [lowStockThreshold, setLowStockThreshold] = useState(10);
-  const [inventoryAlerts, setInventoryAlerts] = useState<Array<{
-    productId: string;
-    productName: string;
-    currentStock: number;
-    threshold: number;
-    type: 'low_stock' | 'out_of_stock';
-  }>>([]);
-  const [alertsDismissed, setAlertsDismissed] = useState(false);
-  const [alertsDismissedToday, setAlertsDismissedToday] = useState(false);
 
   // Daily closure state
   const [isDailyClosed, setIsDailyClosed] = useState(false);
@@ -694,40 +681,6 @@ const POSPageOptimized: React.FC = () => {
            currentUser.role === 'owner';
   }, [currentUser]);
 
-  // Check for dismissed alerts today from localStorage
-  useEffect(() => {
-    const today = new Date().toDateString();
-    const dismissedToday = localStorage.getItem('inventoryAlertsDismissedToday');
-    if (dismissedToday === today) {
-      setAlertsDismissedToday(true);
-    } else {
-      // Clear the flag if it's a new day
-      setAlertsDismissedToday(false);
-      localStorage.removeItem('inventoryAlertsDismissedToday');
-    }
-    
-    // Set up interval to check for day change (check every minute)
-    const checkDayInterval = setInterval(() => {
-      const currentDay = new Date().toDateString();
-      const storedDay = localStorage.getItem('inventoryAlertsDismissedToday');
-      
-      if (storedDay && storedDay !== currentDay) {
-        // It's a new day, reset the dismissed flag
-        setAlertsDismissedToday(false);
-        localStorage.removeItem('inventoryAlertsDismissedToday');
-        console.log('🔔 New day detected - low stock alerts will show again');
-      }
-    }, 60000); // Check every minute
-    
-    return () => clearInterval(checkDayInterval);
-  }, []);
-
-  // Check for low stock on data load
-  useEffect(() => {
-    if (dbProducts.length > 0) {
-      checkLowStock();
-    }
-  }, [dbProducts, lowStockThreshold]);
 
   // Show loading indicator when search query changes (debounced)
   useEffect(() => {
@@ -1103,78 +1056,6 @@ const POSPageOptimized: React.FC = () => {
     toast('QrCode scanner stopped');
   };
 
-  // Inventory alerts functionality (optimized with useCallback)
-  const checkLowStock = useCallback(() => {
-    try {
-      // Use local threshold for now
-      const threshold = lowStockThreshold || 5;
-      
-      const lowStockProducts = dbProducts.filter(product => {
-        const totalStock = product.variants?.reduce((sum, variant) => sum + ((variant as any).quantity || 0), 0) || 0;
-        return totalStock <= threshold && totalStock >= 0; // Ensure valid stock values
-      });
-      
-      if (lowStockProducts.length > 0) {
-        const newAlerts = lowStockProducts.map(product => ({
-          productId: product.id,
-          productName: product.name,
-          currentStock: product.variants?.reduce((sum, variant) => sum + ((variant as any).quantity || 0), 0) || 0,
-          threshold: lowStockThreshold || 5,
-          type: 'low_stock' as const
-        }));
-        
-        setInventoryAlerts(newAlerts);
-        
-        // Check if there are new alerts that weren't previously dismissed
-        const hasNewAlerts = newAlerts.some(newAlert => 
-          !inventoryAlerts.some(existingAlert => 
-            existingAlert.productId === newAlert.productId && 
-            existingAlert.currentStock === newAlert.currentStock
-          )
-        );
-        
-        if (!alertsDismissed || hasNewAlerts) {
-          setShowInventoryAlerts(true);
-          if (hasNewAlerts) {
-            setAlertsDismissed(false); // Reset dismissed state for new alerts
-          }
-        }
-      } else {
-        // No low stock products, reset alerts
-        setInventoryAlerts([]);
-      }
-    } catch (error) {
-      console.error('Error checking low stock:', error);
-      toast.error('Failed to check inventory levels');
-    }
-  }, [dbProducts, lowStockThreshold, inventoryAlerts, alertsDismissedToday, alertsDismissed]);
-
-  const handleCloseInventoryAlerts = (dismissForToday = false) => {
-    setShowInventoryAlerts(false);
-    setAlertsDismissed(true);
-    
-    if (dismissForToday) {
-      const today = new Date().toDateString();
-      localStorage.setItem('inventoryAlertsDismissedToday', today);
-      setAlertsDismissedToday(true);
-    }
-  };
-
-  const handleShowInventoryAlerts = () => {
-    setShowInventoryAlerts(true);
-    setAlertsDismissed(false);
-  };
-
-  // Auto-dismiss inventory alerts notification after 10 seconds
-  useEffect(() => {
-    if (showInventoryAlerts) {
-      const timer = setTimeout(() => {
-        handleCloseInventoryAlerts();
-      }, 10000); // 10 seconds
-
-      return () => clearTimeout(timer);
-    }
-  }, [showInventoryAlerts]);
 
   // Migration handler for testing (temporarily disabled)
   // const handleApplyMigration = async () => {
@@ -1551,14 +1432,34 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
-      // If no variant specified, check if this product has IMEI variants that need selection
-      if (!variant || variant.id === 'default') {
-        const hasIMEIVariants = await checkForIMEIVariants(product);
-        if (hasIMEIVariants) {
-          toast.error('Please select a specific device variant first');
-          console.log('⚠️ Product has IMEI variants, variant selection required');
-          return;
+      // If no variant specified, try to get the first variant from the product
+      if (!variant || variant.id === 'default' || !variant.id) {
+        // Check if product has variants
+        if (product.variants && product.variants.length > 0) {
+          // Use the first variant
+          variant = product.variants[0];
+          console.log('⚠️ No variant specified, using first variant:', variant);
+        } else {
+          // Check if this product has IMEI variants that need selection
+          const hasIMEIVariants = await checkForIMEIVariants(product);
+          if (hasIMEIVariants) {
+            toast.error('Please select a specific device variant first');
+            console.log('⚠️ Product has IMEI variants, variant selection required');
+            return;
+          } else {
+            toast.error('Product has no variants available. Cannot add to cart.');
+            console.error('❌ Product has no variants:', product);
+            return;
+          }
         }
+      }
+
+      // Validate variant ID is a valid UUID
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!variant.id || !UUID_REGEX.test(variant.id)) {
+        toast.error('Invalid variant ID. Please select a valid variant.');
+        console.error('❌ Invalid variant ID:', variant.id, 'for product:', product.name);
+        return;
       }
 
       // Validate price and ensure it's a number - check multiple field names
@@ -1626,7 +1527,7 @@ const POSPageOptimized: React.FC = () => {
         ));
         
         // Update stock adjustments - track how much stock has been used
-        const variantKey = `${product.id}-${variant?.id || 'default'}`;
+        const variantKey = `${product.id}-${variant?.id || existingItem.variantId}`;
         const currentAdjustment = stockAdjustments.get(variantKey) || 0;
         const newAdjustment = currentAdjustment + quantity;
         
@@ -1643,13 +1544,20 @@ const POSPageOptimized: React.FC = () => {
         
         toast.success(`${product.name} quantity updated to ${newQuantity}`);
       } else {
+        // Ensure variant exists and has valid ID
+        if (!variant || !variant.id) {
+          toast.error('Invalid variant. Cannot add to cart.');
+          console.error('❌ No valid variant for product:', product.name);
+          return;
+        }
+
         const newItem = {
-          id: `${product.id}-${variant?.id || 'default'}-${Date.now()}`,
+          id: `${product.id}-${variant.id}-${Date.now()}`,
           productId: product.id,
-          variantId: variant?.id || 'default',
+          variantId: variant.id, // Always use valid variant ID
           productName: product.name,
-          variantName: variant?.name || 'Default',
-          sku: variant?.sku || product.sku || 'N/A',
+          variantName: variant.name || 'Default',
+          sku: variant.sku || product.sku || 'N/A',
           quantity: quantity,
           unitPrice: price,
           totalPrice: price * quantity,
@@ -1664,7 +1572,7 @@ const POSPageOptimized: React.FC = () => {
         setCartItems(prev => [...prev, newItem]);
         
         // Update stock adjustments - track how much stock has been used
-        const variantKey = `${product.id}-${variant?.id || 'default'}`;
+        const variantKey = `${product.id}-${variant.id}`;
         const currentAdjustment = stockAdjustments.get(variantKey) || 0;
         const newAdjustment = currentAdjustment + quantity;
         
@@ -1676,7 +1584,7 @@ const POSPageOptimized: React.FC = () => {
         
         // Check if this makes the product out of stock
         if (availableStock - newAdjustment <= 0) {
-          console.log(`🔴 Product now out of stock: ${product.name} (${variant?.name || 'Default'})`);
+          console.log(`🔴 Product now out of stock: ${product.name} (${variant.name || 'Default'})`);
           toast(`${product.name} is now out of stock`, { icon: 'ℹ️' });
         }
         
@@ -2666,6 +2574,19 @@ const POSPageOptimized: React.FC = () => {
                   setDiscountPercentage(0);
                   setSelectedCustomer(null);
                   
+                  // ✅ FIX: Clear child variants cache after sale to ensure sold items are hidden
+                  (async () => {
+                    try {
+                      const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+                      childVariantsCacheService.clearCache();
+                      console.log('✅ Child variants cache cleared after sale');
+                    } catch (error) {
+                      console.warn('⚠️ Failed to clear child variants cache:', error);
+                    }
+                  })().catch(err => {
+                    console.warn('⚠️ Unhandled error in cache clearing:', err);
+                  });
+                  
                   // Reload today's sales
                   loadTodaysSales();
                   
@@ -3127,6 +3048,27 @@ const POSPageOptimized: React.FC = () => {
               setTimeout(() => {
                 clearCart();
                 setSelectedCustomer(null);
+                
+                // ✅ FIX: Clear child variants cache after sale to ensure sold items are hidden
+                (async () => {
+                  try {
+                    const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
+                    childVariantsCacheService.clearCache();
+                    console.log('✅ Child variants cache cleared after ZenoPay sale');
+                  } catch (error) {
+                    console.warn('⚠️ Failed to clear child variants cache:', error);
+                  }
+                })().catch(err => {
+                  console.warn('⚠️ Unhandled error in cache clearing:', err);
+                });
+                
+                // ✅ FIX: Reload today's sales for consistency with regular payment handler
+                loadTodaysSales();
+                
+                // Play success sound
+                playPaymentSound();
+                
+                console.log('🧹 POS: Cart cleared after successful ZenoPay payment');
               }, 150);
             } else {
               throw new Error(result.error || 'Failed to process sale');
@@ -3481,13 +3423,94 @@ const POSPageOptimized: React.FC = () => {
               saleNotes = saleNotes ? `${saleNotes}; ${tradeInNote}` : tradeInNote;
             }
 
+            // Validate cart items before processing - filter out invalid items
+            const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            const validCartItems = cartItems.filter(item => {
+              if (!item.variantId || !UUID_REGEX.test(item.variantId)) {
+                console.error('❌ Invalid cart item detected, removing:', {
+                  itemId: item.id,
+                  productName: item.productName,
+                  variantId: item.variantId
+                });
+                toast.error(`Removed invalid item from cart: ${item.productName} (invalid variant)`);
+                return false;
+              }
+              return true;
+            });
+
+            if (validCartItems.length === 0) {
+              toast.error('No valid items in cart. Please add items before processing payment.');
+              console.error('❌ No valid items in cart after filtering');
+              return;
+            }
+
+            if (validCartItems.length < cartItems.length) {
+              // Update cart to remove invalid items
+              setCartItems(validCartItems);
+              toast.warning(`Removed ${cartItems.length - validCartItems.length} invalid item(s) from cart. Please review and try again.`);
+              return;
+            }
+
+            // Pre-validate that all variants exist in database before processing payment
+            // This catches deleted/moved variants early and provides better UX
+            // Note: Query without branch/is_active filters to match sale processing service behavior
+            // ✅ FIX: Check both lats_product_variants AND inventory_items (for serial number devices)
+            const variantIds = validCartItems.map(item => item.variantId);
+            
+            // Check lats_product_variants table
+            const { data: existingVariants, error: variantCheckError } = await supabase
+              .from('lats_product_variants')
+              .select('id, is_active, branch_id, is_shared, variant_type')
+              .in('id', variantIds);
+
+            // ✅ FIX: Also check inventory_items table for serial number devices (legacy items)
+            const { data: existingInventoryItems, error: inventoryCheckError } = await supabase
+              .from('inventory_items')
+              .select('id, status, variant_id, product_id')
+              .in('id', variantIds);
+
+            if (variantCheckError || inventoryCheckError) {
+              console.warn('⚠️ Error checking variant existence (will be validated by sale service):', variantCheckError || inventoryCheckError);
+              // Don't block payment - let the sale processing service handle validation
+              // It has more sophisticated error handling
+            } else {
+              // Combine IDs from both tables
+              const variantIdsSet = new Set(existingVariants?.map(v => v.id) || []);
+              const inventoryIdsSet = new Set(existingInventoryItems?.map(i => i.id) || []);
+              const existingVariantIds = new Set([...variantIdsSet, ...inventoryIdsSet]);
+              
+              const missingVariants = validCartItems.filter(item => !existingVariantIds.has(item.variantId));
+
+              if (missingVariants.length > 0) {
+                // Log warning instead of error since this is expected behavior
+                console.warn('⚠️ Cart contains variants that may no longer be accessible:', missingVariants.map(v => ({
+                  productName: v.productName,
+                  variantId: v.variantId
+                })));
+                
+                const missingItems = missingVariants.map(item => item.productName).join(', ');
+                
+                // Remove missing variants from cart
+                const remainingItems = validCartItems.filter(item => existingVariantIds.has(item.variantId));
+                setCartItems(remainingItems);
+                
+                if (remainingItems.length === 0) {
+                  toast.error('All items were removed. Please add items to cart before processing payment.');
+                  return;
+                }
+                
+                toast.warning(`Some items in your cart are no longer available: ${missingItems}. They have been removed. Please review and try again.`);
+                return;
+              }
+            }
+
             // Prepare sale data for database with multiple payments
             const saleData = {
               customerId: selectedCustomer?.id || null,
               customerName: selectedCustomer?.name || 'Walk-in Customer',
               customerPhone: selectedCustomer?.phone || null,
               customerEmail: selectedCustomer?.email || null,
-              items: cartItems.map(item => ({
+              items: validCartItems.map(item => ({
                 id: item.id,
                 productId: item.productId,
                 variantId: item.variantId,
@@ -3963,100 +3986,6 @@ const POSPageOptimized: React.FC = () => {
         currentUser={currentUser}
       />
 
-      {/* Inventory Alerts Notification (Non-Blocking Toast) */}
-      {showInventoryAlerts && (
-        <div className="fixed top-4 right-4 z-50 w-96 animate-slide-in">
-          <div className="bg-white rounded-xl shadow-2xl border border-red-200 overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-red-500 to-orange-500 px-4 py-3 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <h3 className="text-white font-semibold text-sm">
-                  {inventoryAlerts.length} Low Stock {inventoryAlerts.length !== 1 ? 'Items' : 'Item'}
-                </h3>
-              </div>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  handleCloseInventoryAlerts();
-                }}
-                className="text-white hover:text-red-100 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Content */}
-            <div className="max-h-72 overflow-y-auto bg-gray-50">
-              {inventoryAlerts.length > 0 ? (
-                inventoryAlerts.slice(0, 5).map((alert, index) => (
-                  <div 
-                    key={alert.productId} 
-                    className={`px-4 py-3 bg-white ${index !== inventoryAlerts.length - 1 && index !== 4 ? 'border-b border-gray-100' : ''} hover:bg-red-50 transition-colors`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-900 text-sm truncate">{alert.productName}</div>
-                        <div className="text-xs text-gray-600 mt-0.5">
-                          Stock: <span className="font-semibold text-red-600">{alert.currentStock}</span> / {alert.threshold}
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Low
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="px-4 py-6 text-center">
-                  <p className="text-gray-500 text-sm">No inventory alerts</p>
-                </div>
-              )}
-              {inventoryAlerts.length > 5 && (
-                <div className="px-4 py-2 bg-gray-100 text-center">
-                  <p className="text-xs text-gray-600">
-                    +{inventoryAlerts.length - 5} more items
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="bg-white px-4 py-3 flex gap-2 border-t border-gray-200">
-              <button
-                onClick={() => {
-                  playClickSound();
-                  handleCloseInventoryAlerts(true);
-                }}
-                className="flex-1 px-3 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors text-xs font-medium"
-              >
-                Hide Today
-              </button>
-              <button
-                onClick={() => {
-                  playClickSound();
-                  setAlertsDismissed(true);
-                  setShowInventoryAlerts(false);
-                }}
-                className="flex-1 px-3 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-xs font-medium"
-              >
-                Don't Show Again
-              </button>
-            </div>
-          </div>
-
-          {/* Auto-dismiss progress bar */}
-          <div className="mt-1 h-1 bg-gray-200 rounded-full overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-red-500 to-orange-500 animate-shrink" />
-          </div>
-        </div>
-      )}
 
 
       {/* Stock Adjustment Modal */}

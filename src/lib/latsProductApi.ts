@@ -591,12 +591,15 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     const suppliersQuery = supabase.from('lats_suppliers').select('id, name').eq('is_active', true).order('name');
     
     // Build variants query
+    // ✅ FIX: Filter out variants with zero stock for POS page
     const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
     let variantQuery = supabase
       .from('lats_product_variants')
       .select('id, product_id, name, variant_name, sku, attributes, variant_attributes, cost_price, selling_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared, is_parent, variant_type, parent_variant_id')
       .in('product_id', productIds)
       .is('parent_variant_id', null)
+      .gt('quantity', 0) // ✅ Only show variants with stock > 0
+      .eq('is_active', true) // ✅ Only show active variants
       .order('name');
     
     // Apply branch filtering to variants

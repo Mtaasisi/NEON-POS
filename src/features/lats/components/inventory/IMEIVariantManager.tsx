@@ -28,8 +28,8 @@ const IMEIVariantManager: React.FC<IMEIVariantManagerProps> = ({
 
   const handleAddVariant = () => {
     const newVariant: IMEIVariantData = {
-      imei: '',
-      serial_number: '',
+      imei: '', // This is now IMEI/Serial Number - single field
+      serial_number: '', // Will be synced to same value as imei
       mac_address: '',
       condition: 'new',
       cost_price: defaultCostPrice,
@@ -46,10 +46,26 @@ const IMEIVariantManager: React.FC<IMEIVariantManagerProps> = ({
 
   const handleUpdateVariant = (index: number, field: keyof IMEIVariantData, value: any) => {
     const updatedVariants = [...variants];
-    updatedVariants[index] = {
-      ...updatedVariants[index],
-      [field]: value,
-    };
+    // ✅ FIX: When updating IMEI, also update serial_number to the same value
+    if (field === 'imei') {
+      updatedVariants[index] = {
+        ...updatedVariants[index],
+        imei: value,
+        serial_number: value, // Keep them in sync
+      };
+    } else if (field === 'serial_number') {
+      // ✅ FIX: When updating serial_number, also update IMEI to the same value
+      updatedVariants[index] = {
+        ...updatedVariants[index],
+        imei: value, // Keep them in sync
+        serial_number: value,
+      };
+    } else {
+      updatedVariants[index] = {
+        ...updatedVariants[index],
+        [field]: value,
+      };
+    }
     setVariants(updatedVariants);
     onVariantsChange(updatedVariants);
   };
@@ -85,8 +101,8 @@ const IMEIVariantManager: React.FC<IMEIVariantManagerProps> = ({
 
     // Create variants from IMEI list
     const newVariants: IMEIVariantData[] = uniqueImeis.map((imei) => ({
-      imei,
-      serial_number: '',
+      imei, // IMEI/Serial Number - single field
+      serial_number: imei, // Keep them in sync
       mac_address: '',
       condition: 'new',
       cost_price: defaultCostPrice,
@@ -293,34 +309,25 @@ const IMEIVariantManager: React.FC<IMEIVariantManagerProps> = ({
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {/* IMEI (Required) */}
+                  {/* IMEI/Serial Number (Single Field) */}
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-gray-700 mb-1">
-                      IMEI Number <span className="text-red-500">*</span>
+                      IMEI / Serial Number <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      value={variant.imei}
-                      onChange={(e) => handleUpdateVariant(index, 'imei', e.target.value)}
-                      placeholder="356789012345678"
+                      value={variant.imei || variant.serial_number || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Update both fields to keep them in sync
+                        handleUpdateVariant(index, 'imei', value);
+                      }}
+                      placeholder="Enter IMEI or Serial Number (any value)"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm font-mono"
                     />
-                  </div>
-
-                  {/* Serial Number */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      Serial Number
-                    </label>
-                    <input
-                      type="text"
-                      value={variant.serial_number || ''}
-                      onChange={(e) =>
-                        handleUpdateVariant(index, 'serial_number', e.target.value)
-                      }
-                      placeholder="Optional"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter any IMEI or Serial Number - no format restrictions
+                    </p>
                   </div>
 
                   {/* MAC Address */}

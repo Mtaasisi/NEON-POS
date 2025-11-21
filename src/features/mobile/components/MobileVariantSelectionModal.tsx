@@ -177,7 +177,9 @@ const MobileVariantSelectionModal: React.FC<MobileVariantSelectionModalProps> = 
         .from('lats_product_variants')
         .select('*')
         .eq('parent_variant_id', parentVariantId)
+        .eq('variant_type', 'imei_child')
         .eq('is_active', true)
+        .gt('quantity', 0)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

@@ -158,7 +158,7 @@ class SaleProcessingService {
 
       // 4. Run post-sale operations in parallel (non-critical for transaction completion)
       const [inventoryResult, receiptResult, customerResult, serialNumbersResult] = await Promise.allSettled([
-        this.updateInventory(saleData.items),
+        this.updateInventory(saleData.items, saleResult.saleId),
         this.generateReceipt(saleResult.sale!),
         this.updateCustomerStats(saleData),
         this.linkSerialNumbers(saleResult.saleId!, saleData.items, saleData.customerId)
@@ -234,11 +234,28 @@ class SaleProcessingService {
         };
       }
       
+      // ✅ FIX: Query both lats_product_variants AND inventory_items (for serial number devices)
       // Single query to get both quantity and cost_price for all variants
       // Also fetch parent-child relationship fields
-      const { data: variants, error } = await supabase
+      // Note: For sale processing, we need to access variants regardless of branch/is_active
+      // since they're already in the cart and may have been added from a different context
+      let query = supabase
         .from('lats_product_variants')
-        .select('id, quantity, cost_price, is_parent, variant_type, parent_variant_id')
+        .select('id, quantity, cost_price, is_parent, variant_type, parent_variant_id, is_active, branch_id, is_shared')
+        .in('id', variantIds);
+
+      // Try to get current branch for context (but don't filter by it - we need all variants in cart)
+      const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+      
+      // If branch isolation is enabled, we still need to query variants that might be from other branches
+      // but are already in the cart. However, RLS might block them, so we'll try without branch filter first
+      const { data: variants, error } = await query;
+
+      // ✅ FIX: Also query inventory_items for serial number devices (legacy items)
+      // Query without status filter to check status in validation (better error messages)
+      const { data: inventoryItems, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .select('id, cost_price, status, product_id, variant_id')
         .in('id', variantIds);
 
       if (error) {
@@ -250,26 +267,143 @@ class SaleProcessingService {
           code: error.code
         });
         console.error('❌ Variant IDs requested:', variantIds);
-        return {
-          stockValidation: { success: false, error: `Failed to check stock and costs: ${error.message}` },
-          itemsWithCosts: items.map(item => ({ ...item, costPrice: 0, profit: item.totalPrice }))
-        };
+        // Don't return error if inventory_items query succeeds - check both
+        if (inventoryError) {
+          return {
+            stockValidation: { success: false, error: `Failed to check stock and costs: ${error.message}` },
+            itemsWithCosts: items.map(item => ({ ...item, costPrice: 0, profit: item.totalPrice }))
+          };
+        }
       }
 
-      // Create maps for quick lookup
+      // ✅ FIX: Create maps for both variants and inventory items
       const variantDataMap = new Map(variants?.map(v => [v.id, v]) || []);
+      const inventoryItemMap = new Map(inventoryItems?.map(i => [i.id, i]) || []);
 
       // Validate stock and calculate costs in single pass
       const itemsWithCosts: SaleItem[] = [];
       
       for (const item of items) {
-        const variantData = variantDataMap.get(item.variantId);
-        
-        if (!variantData) {
+        // Validate variantId format before lookup
+        if (!isValidUuid(item.variantId)) {
+          console.error('❌ Invalid variant ID format:', {
+            variantId: item.variantId,
+            productName: item.productName,
+            productId: item.productId
+          });
           return {
-            stockValidation: { success: false, error: `Product variant not found: ${item.productName}` },
+            stockValidation: { 
+              success: false, 
+              error: `Invalid variant ID format for "${item.productName}": ${item.variantId}. Please remove this item from cart and add it again.` 
+            },
             itemsWithCosts: []
           };
+        }
+        
+        const variantData = variantDataMap.get(item.variantId);
+        const inventoryItem = inventoryItemMap.get(item.variantId);
+        
+        // ✅ FIX: Check both variant and inventory item
+        if (!variantData && !inventoryItem) {
+          // Try to check if variant exists but might be filtered by RLS/branch
+          // This helps diagnose the issue
+          const { data: variantCheck, error: checkError } = await supabase
+            .from('lats_product_variants')
+            .select('id, is_active, branch_id, is_shared, variant_type')
+            .eq('id', item.variantId)
+            .maybeSingle();
+
+          // Also check inventory_items
+          const { data: inventoryCheck, error: inventoryCheckError } = await supabase
+            .from('inventory_items')
+            .select('id, status, product_id, variant_id')
+            .eq('id', item.variantId)
+            .maybeSingle();
+
+          // Log detailed error for debugging
+          console.error('❌ Variant not found during sale processing:', {
+            variantId: item.variantId,
+            productName: item.productName,
+            productId: item.productId,
+            requestedVariantIds: variantIds,
+            foundVariants: variants?.map(v => v.id) || [],
+            foundInventoryItems: inventoryItems?.map(i => i.id) || [],
+            variantCheckResult: variantCheck ? 'Found but filtered' : 'Not found',
+            inventoryCheckResult: inventoryCheck ? `Found (status: ${inventoryCheck.status})` : 'Not found',
+            variantCheckError: checkError?.message,
+            inventoryCheckError: inventoryCheckError?.message,
+            currentBranchId: currentBranchId
+          });
+
+          let errorMessage = `Product variant not found for "${item.productName}" (Variant ID: ${item.variantId}). `;
+          
+          if (variantCheck) {
+            errorMessage += `The variant exists but may be in a different branch (branch_id: ${variantCheck.branch_id}), inactive (is_active: ${variantCheck.is_active}), or filtered by access permissions. `;
+            if (currentBranchId && variantCheck.branch_id && variantCheck.branch_id !== currentBranchId && !variantCheck.is_shared) {
+              errorMessage += `This variant belongs to a different branch and is not shared. `;
+            }
+          } else if (inventoryCheck) {
+            if (inventoryCheck.status !== 'available') {
+              errorMessage += `The inventory item exists but is not available (status: ${inventoryCheck.status}). `;
+            } else {
+              errorMessage += `The inventory item exists but may be filtered by access permissions. `;
+            }
+          } else if (checkError || inventoryCheckError) {
+            errorMessage += `Database error: ${checkError?.message || inventoryCheckError?.message}. `;
+          } else {
+            errorMessage += `The variant may have been deleted or does not exist. `;
+          }
+          
+          errorMessage += `Please remove this item from cart and add it again. If the variant was deleted, you may need to select a different variant or product.`;
+
+          // Return error immediately - this will prevent the sale from being processed
+          return {
+            stockValidation: { 
+              success: false, 
+              error: errorMessage
+            },
+            itemsWithCosts: []
+          };
+        }
+
+        // ✅ FIX: Handle inventory items (serial number devices)
+        if (inventoryItem && !variantData) {
+          // For inventory items, each item is a single unit (quantity = 1)
+          // Check that the item is available
+          if (inventoryItem.status !== 'available') {
+            return {
+              stockValidation: { 
+                success: false, 
+                error: `Serial number device for ${item.productName} is not available for sale (status: ${inventoryItem.status}). Please select a different device.` 
+              },
+              itemsWithCosts: []
+            };
+          }
+
+          // Check quantity - inventory items are individual units, so quantity should be 1
+          if (item.quantity > 1) {
+            return {
+              stockValidation: { 
+                success: false, 
+                error: `Cannot sell ${item.quantity} units of serial number device ${item.productName}. Each serial number device is a single unit. Please adjust quantity to 1.` 
+              },
+              itemsWithCosts: []
+            };
+          }
+
+          // Calculate costs and profits for inventory item
+          const costPrice = inventoryItem.cost_price || 0;
+          const totalCost = costPrice * item.quantity;
+          const profit = item.totalPrice - totalCost;
+
+          itemsWithCosts.push({
+            ...item,
+            costPrice,
+            profit,
+            is_legacy: true, // Mark as legacy item for inventory update
+            is_imei_child: false
+          });
+          continue; // Skip to next item
         }
         
         // For parent variants, calculate stock from children
@@ -303,7 +437,9 @@ class SaleProcessingService {
         itemsWithCosts.push({
           ...item,
           costPrice,
-          profit
+          profit,
+          is_legacy: false,
+          is_imei_child: variantData.variant_type === 'imei_child'
         });
       }
 
@@ -351,10 +487,31 @@ class SaleProcessingService {
 
       // Check stock for each item
       for (const item of items) {
+        // Validate variantId format before lookup
+        if (!isValidUuid(item.variantId)) {
+          console.error('❌ Invalid variant ID format in stock validation:', {
+            variantId: item.variantId,
+            productName: item.productName
+          });
+          return { 
+            success: false, 
+            error: `Invalid variant ID format for "${item.productName}": ${item.variantId}. Please remove this item from cart and add it again.` 
+          };
+        }
+        
         const availableStock = variantStockMap.get(item.variantId);
         
         if (availableStock === undefined) {
-          return { success: false, error: `Product variant not found: ${item.productName}` };
+          console.error('❌ Variant not found in stock validation:', {
+            variantId: item.variantId,
+            productName: item.productName,
+            requestedVariantIds: variantIds,
+            foundVariants: variants?.map(v => v.id) || []
+          });
+          return { 
+            success: false, 
+            error: `Product variant not found for "${item.productName}" (Variant ID: ${item.variantId}). The variant may have been deleted or is invalid. Please remove this item from cart and add it again.` 
+          };
         }
         
         if (availableStock < item.quantity) {
@@ -894,7 +1051,7 @@ class SaleProcessingService {
   }
 
   // Update inventory after sale (optimized with batched operations)
-  private async updateInventory(items: SaleItem[]): Promise<{ success: boolean; error?: string }> {
+  private async updateInventory(items: SaleItem[], saleId?: string): Promise<{ success: boolean; error?: string }> {
     try {
       // Get user ID for tracking (optional)
       let userId = 'system';
@@ -942,17 +1099,24 @@ class SaleProcessingService {
           // Try to find in inventory_items
           const { data: inventoryItem, error: inventoryError } = await supabase
             .from('inventory_items')
-            .select('id, status, variant_id, product_id')
+            .select('id, status, variant_id, product_id, metadata')
             .eq('id', item.variantId)
             .single();
 
           if (inventoryItem) {
             // ✅ FIX: Mark legacy item as sold
+            // Note: inventory_items table doesn't have sold_at column, so we store it in metadata
+            const updatedMetadata = {
+              ...(inventoryItem.metadata || {}),
+              sold_at: new Date().toISOString(),
+              ...(saleId ? { sale_id: saleId } : {}),
+            };
+
             const { error: updateError } = await supabase
               .from('inventory_items')
               .update({
                 status: 'sold',
-                sold_at: new Date().toISOString(),
+                metadata: updatedMetadata,
                 updated_at: new Date().toISOString(),
               })
               .eq('id', item.variantId);
@@ -963,14 +1127,29 @@ class SaleProcessingService {
             }
 
             // Create stock movement for legacy item
+            // ✅ FIX: Verify variant_id exists in lats_product_variants before using it
+            // For legacy items, variant_id might not exist in lats_product_variants
+            let validVariantId = null;
+            if (inventoryItem.variant_id) {
+              // Check if variant exists in lats_product_variants
+              const { data: variantCheck } = await supabase
+                .from('lats_product_variants')
+                .select('id')
+                .eq('id', inventoryItem.variant_id)
+                .maybeSingle();
+              
+              validVariantId = variantCheck ? inventoryItem.variant_id : null;
+            }
+
             const { error: movementError } = await supabase
               .from('lats_stock_movements')
               .insert({
                 product_id: inventoryItem.product_id || null,
-                variant_id: inventoryItem.variant_id || null,
+                variant_id: validVariantId, // NULL if variant doesn't exist in lats_product_variants
                 movement_type: 'sale',
                 quantity: -item.quantity,
                 reference_type: 'pos_sale',
+                reference_id: saleId || null,
                 notes: `Sold ${item.quantity} units of legacy item ${item.productName}`,
                 created_at: new Date().toISOString(),
               });
@@ -997,7 +1176,7 @@ class SaleProcessingService {
         // If it's an IMEI child or legacy item, mark as sold using markIMEIAsSold
         if (variantData?.variant_type === 'imei_child' || item.is_legacy || item.is_imei_child) {
           const { markIMEIAsSold } = await import('../features/lats/lib/imeiVariantService');
-          return markIMEIAsSold(item.variantId, item.saleId);
+          return markIMEIAsSold(item.variantId, saleId);
         }
         
         // Update with calculated quantity for regular variants
@@ -1012,24 +1191,33 @@ class SaleProcessingService {
       });
 
       // Prepare all stock movement records for batch insert
-      const stockMovements = items.map(item => {
-        const variantData = currentStockMap.get(item.variantId);
-        const currentQuantity = variantData?.quantity || 0;
-        const newQuantity = Math.max(0, currentQuantity - item.quantity);
-        
-        return {
-          product_id: item.productId,
-          variant_id: item.variantId,
-          movement_type: 'out',
-          quantity: item.quantity,
-          previous_quantity: currentQuantity,
-          new_quantity: newQuantity,
-          reason: 'Sale',
-          reference: `Sale ${item.sku}`,
-          notes: `Sold ${item.quantity} units of ${item.productName} (${item.variantName})`,
-          created_by: normalizedUserId
-        };
-      });
+      // ✅ FIX: Only include variants that exist in lats_product_variants
+      // Legacy items (inventory_items) should have variant_id set to NULL
+      const stockMovements = items
+        .filter(item => {
+          // Skip legacy items - they're handled separately above
+          // Only include items that have a valid variant in lats_product_variants
+          const variantData = currentStockMap.get(item.variantId);
+          return variantData !== undefined;
+        })
+        .map(item => {
+          const variantData = currentStockMap.get(item.variantId);
+          const currentQuantity = variantData?.quantity || 0;
+          const newQuantity = Math.max(0, currentQuantity - item.quantity);
+          
+          return {
+            product_id: item.productId,
+            variant_id: item.variantId, // This is guaranteed to exist in lats_product_variants
+            movement_type: 'out',
+            quantity: item.quantity,
+            previous_quantity: currentQuantity,
+            new_quantity: newQuantity,
+            reason: 'Sale',
+            reference: `Sale ${item.sku}`,
+            notes: `Sold ${item.quantity} units of ${item.productName} (${item.variantName})`,
+            created_by: normalizedUserId
+          };
+        });
 
       // Execute inventory updates in parallel (now handles async legacy items)
       const updateResults = await Promise.allSettled(updatePromises.map(p => Promise.resolve(p)));
@@ -1065,6 +1253,16 @@ class SaleProcessingService {
       }
 
       console.log('✅ Inventory updated successfully');
+      
+      // ✅ FIX: Clear child variants cache after sale to ensure sold items are hidden
+      try {
+        const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
+        childVariantsCacheService.clearCache();
+        console.log('✅ Child variants cache cleared after sale');
+      } catch (error) {
+        console.warn('⚠️ Failed to clear child variants cache:', error);
+        // Don't fail the sale if cache clearing fails
+      }
       
       // Emit stock updated events for real-time updates
       items.forEach(item => {
@@ -1249,18 +1447,20 @@ class SaleProcessingService {
         if (result.success) {
           console.log('📱 SMS notification sent successfully for sale:', sale.saleNumber);
         } else {
-          // Only log SMS errors if they're not connection errors or dev mode errors (which are expected in dev)
-          const isDevModeError = result.error && (
-            result.error.includes('SMS proxy server not running') ||
-            result.error.includes('this is normal in development mode') ||
-            result.error.includes('Network error') ||
-            result.error.includes('Failed to fetch') ||
-            result.error.includes('ERR_CONNECTION_REFUSED')
+          // ✅ FIX: Don't log connection errors - SMS proxy server may not be running (expected)
+          const isConnectionError = result.error && (
+            result.error.includes('proxy server not running') ||
+            result.error.includes('connection refused') ||
+            result.error.includes('ERR_CONNECTION_REFUSED') ||
+            result.error.includes('ECONNREFUSED') ||
+            result.error.includes('Failed to fetch')
           );
           
-          if (!isDevModeError && result.error) {
+          // Only log actual SMS provider errors, not connection errors
+          if (!isConnectionError && result.error) {
             console.warn('⚠️ SMS notification failed:', result.error);
           }
+          // Connection errors are silently ignored - SMS is optional
         }
       } catch (importError) {
         // Silently skip SMS if service is unavailable (expected in dev environment)

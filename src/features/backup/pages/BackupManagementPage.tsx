@@ -12,6 +12,8 @@ import {
   runManualBackup, 
   downloadBackup,
   restoreFromBackup,
+  previewBackupFile,
+  getRestoreFormats,
   getAutomaticBackupConfig,
   saveAutomaticBackupConfig,
   toggleAutomaticBackup,
@@ -44,10 +46,58 @@ export const BackupManagementPage: React.FC<BackupManagementPageProps> = () => {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [backupLogs, setBackupLogs] = useState<string[]>([]);
   const [selectedBackup, setSelectedBackup] = useState<BackupFile | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreFormats, setRestoreFormats] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [showTableSelection, setShowTableSelection] = useState(false);
 
   useEffect(() => {
     loadBackupData();
+    loadRestoreFormats();
   }, []);
+
+  const loadRestoreFormats = async () => {
+    try {
+      // getRestoreFormats handles connection errors gracefully and returns fallback data
+      const formats = await getRestoreFormats();
+      setRestoreFormats(formats);
+    } catch (error) {
+      // This should rarely happen since getRestoreFormats has fallback logic
+      // Only log unexpected errors
+      if (error instanceof Error && !error.message.includes('fetch')) {
+        console.error('Error loading restore formats:', error);
+      }
+      // Set default formats as last resort
+      setRestoreFormats({
+        formats: [
+          {
+            format: 'SQL',
+            extension: '.sql',
+            description: 'PostgreSQL SQL dump format (RECOMMENDED)',
+            advantages: [
+              'Standard PostgreSQL format',
+              'Easiest to restore',
+              'Can be executed directly with psql',
+              'Contains both schema and data',
+            ]
+          },
+          {
+            format: 'JSON',
+            extension: '.json',
+            description: 'JSON backup format',
+            advantages: [
+              'Human-readable',
+              'Easy to parse programmatically',
+            ]
+          }
+        ],
+        recommended: 'SQL'
+      });
+    }
+  };
 
   const loadBackupData = async () => {
     try {
@@ -133,17 +183,143 @@ export const BackupManagementPage: React.FC<BackupManagementPageProps> = () => {
       return;
     }
 
+    // For existing backup files, we'd need to download first then restore
+    // For now, show message to use file upload instead
+    alert('⚠️ Please use the "Restore from File" section below to upload and restore a backup file.\n\nSupported formats: .sql (recommended) or .json');
+  };
+
+  const handleRestoreFromFile = async () => {
+    if (!restoreFile) {
+      alert('❌ Please select a backup file to restore');
+      return;
+    }
+
+    // Check if tables are selected
+    if (selectedTables.length === 0) {
+      alert('❌ Please select at least one table to restore');
+      return;
+    }
+
+    const tablesToRestore = selectedTables.length === previewData?.tables.length 
+      ? 'all tables' 
+      : `${selectedTables.length} selected table(s)`;
+
+    if (!confirm(`⚠️ WARNING: Restoring ${tablesToRestore} from "${restoreFile.name}" will overwrite current database data.\n\nAre you sure you want to continue?`)) {
+      return;
+    }
+
     try {
-      // This would normally load the backup data first
-      const result = await restoreFromBackup({ timestamp: file.timestamp, tables: {} });
+      setIsRestoring(true);
+      const result = await restoreFromBackup(restoreFile, selectedTables);
+      
       if (result.success) {
-        alert('✅ Restore completed successfully!');
+        const data = result.data;
+        const message = `✅ Restore completed successfully!\n\n` +
+          `Tables restored: ${data?.tablesRestored || 'N/A'}\n` +
+          `Records restored: ${data?.recordsRestored || 'N/A'}\n` +
+          `Format: ${data?.format || 'N/A'}\n` +
+          `Selected: ${data?.selectedTables || 'all'}`;
+        
+        if (data?.warnings && data.warnings.length > 0) {
+          alert(message + `\n\n⚠️ Warnings:\n${data.warnings.join('\n')}`);
+        } else {
+          alert(message);
+        }
+        
+        // Reset everything
+        setRestoreFile(null);
+        setPreviewData(null);
+        setSelectedTables([]);
+        setShowTableSelection(false);
+        // Refresh backup data
+        loadBackupData();
       } else {
-        alert(`❌ Restore failed: ${result.error}`);
+        // Show user-friendly error message
+        const errorMsg = result.error || result.message || 'Unknown error';
+        alert(`❌ Restore failed\n\n${errorMsg}\n\nPlease check:\n- The backup file is valid\n- The server is running\n- Check server logs for details`);
       }
     } catch (error) {
-      alert(`❌ Restore failed: ${error}`);
+      // Extract user-friendly error message
+      let errorMsg = 'Unknown error';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+        // If there's full error details, log them but don't show to user
+        if ((error as any).fullDetails) {
+          console.error('Full restore error:', (error as any).fullDetails);
+        }
+      }
+      alert(`❌ Restore failed\n\n${errorMsg}\n\nPlease check:\n- The backup file is valid\n- The server is running\n- Check server logs for details`);
+    } finally {
+      setIsRestoring(false);
     }
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type
+      const isSql = file.name.endsWith('.sql');
+      const isJson = file.name.endsWith('.json');
+      
+      if (!isSql && !isJson) {
+        alert('❌ Invalid file type. Please select a .sql or .json backup file.');
+        event.target.value = ''; // Clear input
+        return;
+      }
+      
+      // Validate file size (1GB limit)
+      if (file.size > 1024 * 1024 * 1024) {
+        alert('❌ File too large. Maximum file size is 1GB (1024MB).');
+        event.target.value = '';
+        return;
+      }
+      
+      setRestoreFile(file);
+      setPreviewData(null);
+      setSelectedTables([]);
+      setShowTableSelection(false);
+      
+      // Automatically preview the file
+      await handlePreviewFile(file);
+    }
+  };
+
+  const handlePreviewFile = async (file: File) => {
+    try {
+      setIsPreviewing(true);
+      const result = await previewBackupFile(file);
+      
+      if (result.success && result.data) {
+        setPreviewData(result.data);
+        // Select all tables by default
+        setSelectedTables(result.data.tables.map((t: any) => t.name));
+        setShowTableSelection(true);
+      } else {
+        alert(`❌ Failed to preview backup file: ${result.error}`);
+      }
+    } catch (error) {
+      alert(`❌ Error previewing backup file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  const handleToggleTable = (tableName: string) => {
+    setSelectedTables(prev => 
+      prev.includes(tableName)
+        ? prev.filter(t => t !== tableName)
+        : [...prev, tableName]
+    );
+  };
+
+  const handleSelectAllTables = () => {
+    if (previewData?.tables) {
+      setSelectedTables(previewData.tables.map((t: any) => t.name));
+    }
+  };
+
+  const handleDeselectAllTables = () => {
+    setSelectedTables([]);
   };
 
   const handleToggleAutoBackup = async () => {
@@ -444,6 +620,180 @@ export const BackupManagementPage: React.FC<BackupManagementPageProps> = () => {
             </div>
           </GlassCard>
         )}
+
+        {/* Restore from File Section */}
+        <GlassCard className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">Restore from Backup File</h3>
+              <p className="text-gray-600">Upload and restore a backup file (.sql or .json format)</p>
+            </div>
+            <Upload className="w-8 h-8 text-orange-600" />
+          </div>
+
+          {restoreFormats && (
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="text-sm font-medium text-blue-900 mb-2">📋 Supported Formats:</p>
+              <div className="space-y-2">
+                {restoreFormats.formats.map((format: any, index: number) => (
+                  <div key={index} className="text-sm text-blue-800">
+                    <span className="font-semibold">{format.format}</span> ({format.extension}) - {format.description}
+                    {format.format === restoreFormats.recommended && (
+                      <span className="ml-2 px-2 py-0.5 bg-blue-200 rounded text-xs">RECOMMENDED</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-blue-700 mt-2">
+                💡 {restoreFormats.note || 'SQL format is recommended as it is the easiest to restore.'}
+              </p>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Backup File
+              </label>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="file"
+                  accept=".sql,.json"
+                  onChange={handleFileSelect}
+                  className="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-blue-50 file:text-blue-700
+                    hover:file:bg-blue-100
+                    cursor-pointer"
+                  disabled={isRestoring}
+                />
+              </div>
+              {restoreFile && (
+                <div className="mt-2 p-3 bg-green-50 rounded-md border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <FileText className="w-5 h-5 text-green-600" />
+                      <div>
+                        <p className="text-sm font-medium text-green-900">{restoreFile.name}</p>
+                        <p className="text-xs text-green-700">
+                          {(restoreFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setRestoreFile(null);
+                        setPreviewData(null);
+                        setSelectedTables([]);
+                        setShowTableSelection(false);
+                      }}
+                      className="text-red-600 hover:text-red-800"
+                      disabled={isRestoring}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isPreviewing && (
+                <div className="mt-2 p-3 bg-blue-50 rounded-md border border-blue-200">
+                  <div className="flex items-center space-x-2">
+                    <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                    <p className="text-sm text-blue-900">Analyzing backup file...</p>
+                  </div>
+                </div>
+              )}
+
+              {previewData && showTableSelection && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="font-semibold text-gray-900">Select Tables to Restore</h4>
+                      <p className="text-sm text-gray-600">
+                        Found {previewData.totalTables} tables with {previewData.totalRecords.toLocaleString()} total records
+                      </p>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={handleSelectAllTables}
+                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        onClick={handleDeselectAllTables}
+                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                      >
+                        Deselect All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto space-y-2">
+                    {previewData.tables.map((table: any) => (
+                      <label
+                        key={table.name}
+                        className="flex items-center space-x-3 p-2 hover:bg-white rounded cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTables.includes(table.name)}
+                          onChange={() => handleToggleTable(table.name)}
+                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          disabled={isRestoring}
+                        />
+                        <div className="flex-1">
+                          <span className="text-sm font-medium text-gray-900">{table.name}</span>
+                          <span className="ml-2 text-xs text-gray-500">
+                            ({table.recordCount.toLocaleString()} records)
+                          </span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <p className="text-sm text-gray-600">
+                      <strong>{selectedTables.length}</strong> of <strong>{previewData.totalTables}</strong> tables selected
+                      {selectedTables.length > 0 && (
+                        <span className="ml-2 text-green-600">
+                          ({previewData.tables
+                            .filter((t: any) => selectedTables.includes(t.name))
+                            .reduce((sum: number, t: any) => sum + t.recordCount, 0)
+                            .toLocaleString()} records will be restored)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <GlassButton
+              onClick={handleRestoreFromFile}
+              disabled={!restoreFile || isRestoring || selectedTables.length === 0}
+              icon={isRestoring ? <Square size={16} /> : <Upload size={16} />}
+              className="w-full"
+              variant={restoreFile && selectedTables.length > 0 ? "primary" : "secondary"}
+            >
+              {isRestoring 
+                ? 'Restoring...' 
+                : selectedTables.length === 0 
+                  ? 'Select Tables to Restore' 
+                  : `Restore ${selectedTables.length} Selected Table(s)`}
+            </GlassButton>
+
+            <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
+              <p className="text-xs text-yellow-800">
+                ⚠️ <strong>Warning:</strong> Restoring will overwrite existing data in the database. 
+                Make sure you have a current backup before proceeding.
+              </p>
+            </div>
+          </div>
+        </GlassCard>
 
         {/* Backup Files List */}
         <GlassCard className="p-6">

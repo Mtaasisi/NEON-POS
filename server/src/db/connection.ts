@@ -15,27 +15,51 @@ dotenv.config({ path: join(__dirname, '../../.env') });
 
 const databaseUrl = process.env.DATABASE_URL;
 
-if (!databaseUrl) {
-  console.error('❌ DATABASE_URL environment variable is not set');
-  console.error('📝 Please add DATABASE_URL to server/.env file');
-  throw new Error('DATABASE_URL environment variable is not set');
+// Create connection with pooling (only if DATABASE_URL is set)
+// This allows the server to start for SMS proxy functionality without a database
+let sqlInstance: ReturnType<typeof postgres> | null = null;
+
+if (databaseUrl) {
+  sqlInstance = postgres(databaseUrl, {
+    max: 10, // Maximum number of connections
+    idle_timeout: 20,
+    connect_timeout: 10,
+    ssl: 'require',
+    // Connection lifecycle logging
+    onnotice: () => {}, // Suppress notices in production
+    debug: process.env.NODE_ENV === 'development',
+  });
+  console.log('✅ Database connection initialized');
+} else {
+  console.warn('⚠️  DATABASE_URL not set - database features will be unavailable');
+  console.warn('📝 SMS proxy will still work without a database');
 }
 
-// Create connection with pooling
-export const sql = postgres(databaseUrl, {
-  max: 10, // Maximum number of connections
-  idle_timeout: 20,
-  connect_timeout: 10,
-  ssl: 'require',
-  // Connection lifecycle logging
-  onnotice: () => {}, // Suppress notices in production
-  debug: process.env.NODE_ENV === 'development',
-});
+// Export sql with lazy initialization check
+// This allows template literal calls like sql`SELECT 1` to work
+export const sql = new Proxy(function() {} as any, {
+  apply(target, thisArg, argumentsList) {
+    if (!sqlInstance) {
+      throw new Error('DATABASE_URL environment variable is not set. Database features are unavailable.');
+    }
+    return (sqlInstance as any).apply(thisArg, argumentsList);
+  },
+  get(target, prop) {
+    if (!sqlInstance) {
+      throw new Error('DATABASE_URL environment variable is not set. Database features are unavailable.');
+    }
+    return (sqlInstance as any)[prop];
+  }
+}) as ReturnType<typeof postgres>;
 
 // Test connection
 export const testConnection = async () => {
+  if (!sqlInstance) {
+    console.warn('⚠️  Database not configured - skipping connection test');
+    return false;
+  }
   try {
-    await sql`SELECT 1`;
+    await sqlInstance`SELECT 1`;
     console.log('✅ Database connected successfully');
     return true;
   } catch (error) {
@@ -46,14 +70,18 @@ export const testConnection = async () => {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n🔌 Closing database connection...');
-  await sql.end();
+  if (sqlInstance) {
+    console.log('\n🔌 Closing database connection...');
+    await sqlInstance.end();
+  }
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.log('\n🔌 Closing database connection...');
-  await sql.end();
+  if (sqlInstance) {
+    console.log('\n🔌 Closing database connection...');
+    await sqlInstance.end();
+  }
   process.exit(0);
 });
 
