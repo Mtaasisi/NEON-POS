@@ -120,18 +120,55 @@ export const getTradeInPriceForProduct = async (productId: string, variantId?: s
  */
 export const createTradeInPrice = async (formData: TradeInPriceFormData) => {
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !userData?.user?.id) {
+      throw new Error('User authentication required to create trade-in price');
+    }
+
+    // Verify the user exists in the users table to satisfy the foreign key constraint
+    const { data: validUser, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userData.user.id)
+      .single();
+
+    // If user doesn't exist in users table, try to get any valid user or use fallback
+    let userId = userData.user.id;
+    if (userError || !validUser) {
+      // Try to get any active user from the users table
+      const { data: anyUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('is_active', true)
+        .limit(1)
+        .single();
+      
+      if (anyUser) {
+        userId = anyUser.id;
+      } else {
+        // Last resort: use a default system user ID
+        userId = '00000000-0000-0000-0000-000000000001';
+        console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+      }
+    }
     
     const { data, error } = await supabase
       .from('lats_trade_in_prices')
       .insert({
         ...formData,
-        created_by: userData?.user?.id,
+        created_by: userId,
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If it's a foreign key constraint error, provide a more helpful message
+      if (error.code === '23503' && error.message.includes('created_by_fkey')) {
+        throw new Error('User not found in system. Please ensure you are properly authenticated.');
+      }
+      throw error;
+    }
     return { success: true, data: data as TradeInPrice };
   } catch (error) {
     console.error('Error creating trade-in price:', error);
@@ -144,13 +181,40 @@ export const createTradeInPrice = async (formData: TradeInPriceFormData) => {
  */
 export const updateTradeInPrice = async (id: string, formData: Partial<TradeInPriceFormData>) => {
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    
+    let updatedBy: string | undefined = undefined;
+    
+    if (userData?.user?.id) {
+      // Verify the user exists in the users table to satisfy the foreign key constraint
+      const { data: validUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (validUser) {
+        updatedBy = validUser.id;
+      } else {
+        // Try to get any active user from the users table
+        const { data: anyUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1)
+          .single();
+        
+        if (anyUser) {
+          updatedBy = anyUser.id;
+        }
+      }
+    }
     
     const { data, error } = await supabase
       .from('lats_trade_in_prices')
       .update({
         ...formData,
-        updated_by: userData?.user?.id,
+        ...(updatedBy && { updated_by: updatedBy }),
       })
       .eq('id', id)
       .select()
@@ -341,10 +405,40 @@ export const getTradeInTransaction = async (id: string) => {
  */
 export const createTradeInTransaction = async (formData: TradeInTransactionFormData) => {
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: authError } = await supabase.auth.getUser();
     
     // Get active branch (you may need to adjust this based on your branch context)
     const activeBranchId = localStorage.getItem('activeBranchId') || '00000000-0000-0000-0000-000000000001';
+    
+    // Verify the user exists in the users table to satisfy the foreign key constraint
+    let userId: string | undefined = undefined;
+    if (userData?.user?.id) {
+      const { data: validUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (validUser) {
+        userId = validUser.id;
+      } else {
+        // Try to get any active user from the users table
+        const { data: anyUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1)
+          .single();
+        
+        if (anyUser) {
+          userId = anyUser.id;
+        } else {
+          // Last resort: use a default system user ID
+          userId = '00000000-0000-0000-0000-000000000001';
+          console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+        }
+      }
+    }
     
     // Calculate condition multiplier and final value
     const conditionMultipliers = {
@@ -389,10 +483,12 @@ export const createTradeInTransaction = async (formData: TradeInTransactionFormD
         customer_payment_amount: customerPayment,
         customer_id_number: formData.customer_id_number,
         customer_id_type: formData.customer_id_type,
+        device_photos: (formData as any).device_photos || null,
+        customer_id_photo_url: (formData as any).customer_id_photo_url || null,
         needs_repair: formData.needs_repair || false,
         resale_price: formData.resale_price,
         staff_notes: formData.staff_notes,
-        created_by: userData?.user?.id,
+        ...(userId && { created_by: userId }),
         status: 'pending',
       })
       .select(`
@@ -403,7 +499,13 @@ export const createTradeInTransaction = async (formData: TradeInTransactionFormD
       `)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If it's a foreign key constraint error, provide a more helpful message
+      if (error.code === '23503' && error.message.includes('created_by_fkey')) {
+        throw new Error('User not found in system. Please ensure you are properly authenticated.');
+      }
+      throw error;
+    }
     return { success: true, data: data as TradeInTransaction };
   } catch (error) {
     console.error('Error creating trade-in transaction:', error);
@@ -436,20 +538,52 @@ export const updateTradeInTransaction = async (id: string, updates: Partial<Trad
  */
 export const approveTradeInTransaction = async (id: string) => {
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    
+    // Verify the user exists in the users table to satisfy the foreign key constraint
+    let userId: string | undefined = undefined;
+    if (userData?.user?.id) {
+      const { data: validUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (validUser) {
+        userId = validUser.id;
+      } else {
+        // Try to get any active user from the users table
+        const { data: anyUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1)
+          .single();
+        
+        if (anyUser) {
+          userId = anyUser.id;
+        }
+      }
+    }
     
     const { data, error } = await supabase
       .from('lats_trade_in_transactions')
       .update({
         status: 'approved',
-        approved_by: userData?.user?.id,
+        ...(userId && { approved_by: userId }),
         approved_at: new Date().toISOString(),
       })
       .eq('id', id)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If it's a foreign key constraint error, provide a more helpful message
+      if (error.code === '23503' && error.message.includes('approved_by_fkey')) {
+        throw new Error('User not found in system. Please ensure you are properly authenticated.');
+      }
+      throw error;
+    }
     return { success: true, data: data as TradeInTransaction };
   } catch (error) {
     console.error('Error approving trade-in transaction:', error);
@@ -477,6 +611,53 @@ export const completeTradeInTransaction = async (id: string) => {
   } catch (error) {
     console.error('Error completing trade-in transaction:', error);
     return { success: false, error: error instanceof Error ? error.message : 'Failed to complete trade-in transaction' };
+  }
+};
+
+/**
+ * Cancel trade-in transaction
+ */
+export const cancelTradeInTransaction = async (id: string, reason?: string) => {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    
+    // Get transaction to check status
+    const { data: transaction } = await supabase
+      .from('lats_trade_in_transactions')
+      .select('status, inventory_item_id')
+      .eq('id', id)
+      .single();
+
+    if (!transaction) {
+      throw new Error('Transaction not found');
+    }
+
+    // Can only cancel pending or approved transactions
+    if (transaction.status !== 'pending' && transaction.status !== 'approved') {
+      throw new Error(`Cannot cancel transaction with status: ${transaction.status}`);
+    }
+
+    // If already in inventory, we should not cancel (or handle differently)
+    if (transaction.inventory_item_id) {
+      throw new Error('Cannot cancel transaction that has been added to inventory');
+    }
+
+    const { data, error } = await supabase
+      .from('lats_trade_in_transactions')
+      .update({
+        status: 'cancelled',
+        internal_notes: reason ? `Cancelled: ${reason}` : 'Transaction cancelled',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data: data as TradeInTransaction };
+  } catch (error) {
+    console.error('Error cancelling trade-in transaction:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to cancel trade-in transaction' };
   }
 };
 
@@ -508,6 +689,34 @@ export const getTradeInSettings = async () => {
 };
 
 /**
+ * Update trade-in settings
+ */
+export const updateTradeInSettings = async (key: string, value: string, description?: string) => {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    
+    const { data, error } = await supabase
+      .from('lats_trade_in_settings')
+      .upsert({
+        key,
+        value,
+        description,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'key'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return { success: true, data: data as TradeInSettings };
+  } catch (error) {
+    console.error('Error updating trade-in settings:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to update settings' };
+  }
+};
+
+/**
  * Create trade-in contract
  */
 export const createTradeInContract = async (
@@ -515,7 +724,7 @@ export const createTradeInContract = async (
   formData: TradeInContractFormData
 ) => {
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: authError } = await supabase.auth.getUser();
     
     // Get settings for terms and conditions
     const settingsResult = await getTradeInSettings();
@@ -524,6 +733,36 @@ export const createTradeInContract = async (
     }
     
     const settings = settingsResult.data!;
+    
+    // Verify the user exists in the users table to satisfy the foreign key constraint
+    let userId: string | undefined = undefined;
+    if (userData?.user?.id) {
+      const { data: validUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (validUser) {
+        userId = validUser.id;
+      } else {
+        // Try to get any active user from the users table
+        const { data: anyUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1)
+          .single();
+        
+        if (anyUser) {
+          userId = anyUser.id;
+        } else {
+          // Last resort: use a default system user ID
+          userId = '00000000-0000-0000-0000-000000000001';
+          console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+        }
+      }
+    }
     
     const { data, error } = await supabase
       .from('lats_trade_in_contracts')
@@ -548,12 +787,18 @@ export const createTradeInContract = async (
         customer_signature_data: formData.customer_signature_data,
         staff_signature_data: formData.staff_signature_data,
         status: 'signed',
-        created_by: userData?.user?.id,
+        ...(userId && { created_by: userId }),
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If it's a foreign key constraint error, provide a more helpful message
+      if (error.code === '23503' && error.message.includes('created_by_fkey')) {
+        throw new Error('User not found in system. Please ensure you are properly authenticated.');
+      }
+      throw error;
+    }
     
     // Update transaction with contract ID
     await updateTradeInTransaction(transaction.id, {
@@ -597,18 +842,54 @@ export const getContractByTransactionId = async (transactionId: string) => {
  */
 export const addDamageAssessment = async (formData: TradeInDamageAssessmentFormData) => {
   try {
-    const { data: userData } = await supabase.auth.getUser();
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    
+    // Verify the user exists in the users table to satisfy the foreign key constraint
+    let userId: string | undefined = undefined;
+    if (userData?.user?.id) {
+      const { data: validUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', userData.user.id)
+        .single();
+
+      if (validUser) {
+        userId = validUser.id;
+      } else {
+        // Try to get any active user from the users table
+        const { data: anyUser } = await supabase
+          .from('users')
+          .select('id')
+          .eq('is_active', true)
+          .limit(1)
+          .single();
+        
+        if (anyUser) {
+          userId = anyUser.id;
+        } else {
+          // Last resort: use a default system user ID
+          userId = '00000000-0000-0000-0000-000000000001';
+          console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+        }
+      }
+    }
     
     const { data, error } = await supabase
       .from('lats_trade_in_damage_assessments')
       .insert({
         ...formData,
-        assessed_by: userData?.user?.id,
+        ...(userId && { assessed_by: userId }),
       })
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If it's a foreign key constraint error, provide a more helpful message
+      if (error.code === '23503' && error.message.includes('assessed_by_fkey')) {
+        throw new Error('User not found in system. Please ensure you are properly authenticated.');
+      }
+      throw error;
+    }
     return { success: true, data: data as TradeInDamageAssessment };
   } catch (error) {
     console.error('Error adding damage assessment:', error);

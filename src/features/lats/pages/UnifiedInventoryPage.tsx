@@ -8,7 +8,7 @@ import ErrorState from '../components/ui/ErrorState';
 import { 
   Package, Plus, Download, Upload,
   Trash2, Star, BarChart3, Settings, RefreshCw, AlertTriangle, ShoppingCart, MoreHorizontal, Tag, Truck,
-  FileText, ArrowUp, ArrowDown
+  FileText, ArrowUp, ArrowDown, X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -16,6 +16,7 @@ import { toast } from 'react-hot-toast';
 import EnhancedStockAdjustModal from '../components/inventory/EnhancedStockAdjustModal';
 import CategoryFormModal from '../components/inventory/CategoryFormModal';
 import ProductExcelImportModal from '../components/ProductExcelImportModal';
+import ProductExcelExport from '../components/inventory/ProductExcelExport';
 
 import SupplierForm from '../components/inventory/SupplierForm';
 import { useProductModals } from '../hooks/useProductModals';
@@ -124,8 +125,9 @@ const UnifiedInventoryPage: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedBrand, setSelectedBrand] = useState('all');
   
-  // Excel import modal state
+  // Excel import/export modal state
   const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  const [showExcelExportModal, setShowExcelExportModal] = useState(false);
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [showFeaturedOnly, setShowFeaturedOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
@@ -899,12 +901,20 @@ const UnifiedInventoryPage: React.FC = () => {
               Create PO
             </GlassButton>
             <GlassButton
-              onClick={() => navigate('/lats/bulk-import')}
+              onClick={handleImport}
               icon={<Upload size={18} />}
               className="bg-gradient-to-r from-green-500 to-teal-600 text-white"
-              title="Bulk import products (⌘I)"
+              title="Import products from Excel (⌘I)"
             >
-              Bulk Import
+              Import Excel
+            </GlassButton>
+            <GlassButton
+              onClick={() => setShowExcelExportModal(true)}
+              icon={<Download size={18} />}
+              className="bg-gradient-to-r from-purple-500 to-pink-600 text-white"
+              title="Export products to Excel (⌘E)"
+            >
+              Export Excel
             </GlassButton>
             <GlassButton
               onClick={async () => {
@@ -1318,6 +1328,26 @@ const UnifiedInventoryPage: React.FC = () => {
         onClose={() => setShowExcelImportModal(false)}
         onImportComplete={handleExcelImportComplete}
       />
+
+      {/* Excel Export Modal */}
+      {showExcelExportModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]" role="dialog" aria-modal="true">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowExcelExportModal(false)}
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <ProductExcelExport />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Product Modal */}
       <AddProductModal

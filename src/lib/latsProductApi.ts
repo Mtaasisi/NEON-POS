@@ -132,8 +132,28 @@ export async function createProduct(
     if (productWithoutImages.barcode) {
       productInsertData.barcode = productWithoutImages.barcode;
     }
+    if (productWithoutImages.shortDescription) {
+      // Store short description in metadata since there's no short_description column
+      if (!productInsertData.metadata) {
+        productInsertData.metadata = {};
+      }
+      productInsertData.metadata.shortDescription = productWithoutImages.shortDescription;
+    }
+    if ((productWithoutImages as any).maxStockLevel !== undefined) {
+      productInsertData.max_stock_level = (productWithoutImages as any).maxStockLevel;
+    }
+    if ((productWithoutImages as any).internalNotes) {
+      // Store internal notes in attributes or metadata
+      if (!productInsertData.attributes) {
+        productInsertData.attributes = {};
+      }
+      productInsertData.attributes.internalNotes = (productWithoutImages as any).internalNotes;
+    }
     if (productWithoutImages.attributes) {
-      productInsertData.attributes = productWithoutImages.attributes;
+      productInsertData.attributes = {
+        ...productInsertData.attributes,
+        ...productWithoutImages.attributes
+      };
     }
     
     // ✅ CRITICAL FIX: Ensure metadata includes skip_default_variant flag
@@ -159,25 +179,67 @@ export async function createProduct(
     if (productError) {
       console.error('Product creation error:', productError);
       console.error('Product data being inserted:', productInsertData);
+      
+      // Format error message for better user experience
+      if (productError.code === '23505') {
+        // Duplicate key error (likely SKU conflict)
+        const errorMessage = productError.message || 'Duplicate key violation';
+        if (errorMessage.includes('sku') || errorMessage.includes('SKU')) {
+          const formattedError = new Error(`Product with SKU "${productInsertData.sku}" already exists. Please use a unique SKU or update the existing product.`);
+          (formattedError as any).code = productError.code;
+          throw formattedError;
+        }
+      }
+      
       throw productError;
     }
 
     // Create variants (be resilient to both price/sellingPrice & stock field names)
     if (productWithoutImages.variants && productWithoutImages.variants.length > 0) {
-      const variants = productWithoutImages.variants.map(variant => ({
-        product_id: product.id,
-        sku: variant.sku,
-        name: variant.name,  // 🔧 FIX: Save to 'name' (user-defined column)
-        attributes: variant.attributes || {},  // 🔧 FIX: Save to 'attributes' (user-defined column)
-        cost_price: variant.costPrice ?? 0,
-        selling_price: (variant.sellingPrice ?? variant.price) ?? 0,
-        quantity: (variant.quantity ?? variant.stockQuantity) ?? 0,
-        min_quantity: (variant.minQuantity ?? variant.minStockLevel) ?? 0,
-        branch_id: currentBranchId,  // 🔒 Auto-assign variant to current branch
-        is_shared: false,  // 🔒 Not shared by default
-        sharing_mode: 'isolated',  // 🔒 Isolated by default
-        visible_to_branches: currentBranchId ? [currentBranchId] : null  // 🔒 Only visible to current branch
-      }));
+      // Ensure currentBranchId is a valid UUID or null
+      const branchIdUuid = currentBranchId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(currentBranchId)
+        ? currentBranchId
+        : null;
+      
+      const variants = productWithoutImages.variants.map(variant => {
+        const variantData: any = {
+          product_id: product.id,
+          sku: variant.sku,
+          name: variant.name,  // 🔧 FIX: Save to 'name' (user-defined column)
+          attributes: variant.attributes || {},  // 🔧 FIX: Save to 'attributes' (user-defined column)
+          cost_price: variant.costPrice ?? 0,
+          selling_price: (variant.sellingPrice ?? variant.price) ?? 0,
+          quantity: (variant.quantity ?? variant.stockQuantity) ?? 0,
+          min_quantity: (variant.minQuantity ?? variant.minStockLevel) ?? 0,
+          branch_id: branchIdUuid,  // 🔒 Auto-assign variant to current branch
+          is_shared: false,  // 🔒 Not shared by default
+          sharing_mode: 'isolated'  // 🔒 Isolated by default
+        };
+        
+        // ✅ CRITICAL FIX: Explicitly set visible_to_branches to null for isolated items
+        // This prevents type mismatch errors (uuid[] vs text[])
+        // For isolated items, branch_id handles isolation, so visible_to_branches should be null
+        variantData.visible_to_branches = null;
+        
+        // Add variant-specific fields if present
+        if (variant.variantType) {
+          variantData.variant_type = variant.variantType;
+        }
+        if (variant.isParent !== undefined) {
+          variantData.is_parent = variant.isParent;
+        }
+        if (variant.parentVariantId) {
+          variantData.parent_variant_id = variant.parentVariantId;
+        }
+        if (variant.variantAttributes) {
+          variantData.variant_attributes = variant.variantAttributes;
+        }
+        if (variant.isActive !== undefined) {
+          variantData.is_active = variant.isActive;
+        }
+        
+        return variantData;
+      });
 
       const { error: variantsError } = await supabase
         .from('lats_product_variants')
@@ -190,6 +252,9 @@ export async function createProduct(
       }
       
       console.log('✅ Created', variants.length, 'variants for product');
+      
+      // Small delay to ensure variants are committed to database before fetching
+      await new Promise(resolve => setTimeout(resolve, 100));
     } else {
       // ✨ If no variants provided, the database trigger will auto-create a "Default" variant
       // Wait a moment to allow the trigger to execute
@@ -240,20 +305,10 @@ export async function createProduct(
       }
     }
 
-    return {
-      id: product.id,
-      name: product.name,
-      description: product.description,
-      sku: productWithoutImages.sku,
-
-      categoryId: product.category_id,
-      supplierId: product.supplier_id,
-      isActive: product.is_active,
-      totalQuantity: product.total_quantity,
-      totalValue: product.total_value,
-      createdAt: product.created_at,
-      updatedAt: product.updated_at
-    };
+    // Fetch the complete product with variants to return
+    const completeProduct = await _getProductImpl(product.id);
+    
+    return completeProduct;
   } catch (error) {
     console.error('Error creating product:', error);
     throw error;
@@ -320,11 +375,20 @@ async function _getProductImpl(productId: string): Promise<LatsProduct & { image
   }
 
   // Map variants to the expected format with correct stock calculation
-  // ✅ FIX: Recalculate parent variant stock from children
+  // ✅ FIX: Recalculate parent variant stock from children, but fallback to parent's own quantity if no children
+  // 
+  // IMPORTANT: Parent variants can have stock in two ways:
+  // 1. IMEI parent variants: Stock is calculated from IMEI child variants (each IMEI = 1 unit)
+  // 2. Regular parent variants: Stock is stored directly in the parent variant's quantity field
+  // 
+  // This logic handles both cases:
+  // - If IMEI children exist with stock > 0 → use sum of children stock
+  // - If no children OR children stock = 0 → use parent's own quantity field
+  // - This ensures parent variants without IMEI children still show their correct stock
   const variants = await Promise.all((variantsResult.data || []).map(async (variant: any) => {
     let actualStock = variant.quantity || 0;
     
-    // If this is a parent variant, recalculate stock from active children
+    // If this is a parent variant, try to recalculate stock from active IMEI children
     if (variant.is_parent || variant.variant_type === 'parent') {
       try {
         const { data: children, error: childError } = await supabase
@@ -334,12 +398,17 @@ async function _getProductImpl(productId: string): Promise<LatsProduct & { image
           .eq('variant_type', 'imei_child')
           .eq('is_active', true);
         
-        if (!childError && children) {
+        if (!childError && children && children.length > 0) {
           // Sum up quantities of all active children
-          actualStock = children.reduce((sum: number, child: any) => sum + (child.quantity || 0), 0);
+          const childrenStock = children.reduce((sum: number, child: any) => sum + (child.quantity || 0), 0);
+          // Only use children stock if it's greater than 0, otherwise use parent's own quantity
+          // This ensures parent variants without IMEI children (or with 0 IMEI stock) still show their own stock
+          actualStock = childrenStock > 0 ? childrenStock : actualStock;
         }
+        // If no children found, keep using parent's own quantity (actualStock already set above)
       } catch (e) {
         console.warn(`Could not calculate stock from children for variant ${variant.id}:`, e);
+        // On error, keep using parent's own quantity
       }
     }
     
@@ -512,6 +581,7 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     console.log(`🔍 [getProducts] Executing query with branch filter...`);
     console.log(`   Branch ID: ${currentBranchId || 'none'}`);
     console.log(`   Branch Mode: ${branchSettings?.data_isolation_mode || 'none'}`);
+    console.log(`   Filter: is_active = true${currentBranchId ? ` AND (branch_id = ${currentBranchId} OR is_shared = true OR branch_id IS NULL)` : ''}`);
     const { data: allProducts, error } = await query;
     const queryTime = Date.now() - startTime;
     
@@ -527,8 +597,20 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     
     if (allProducts && allProducts.length > 0) {
       console.log(`✅ [getProducts] First product: ${allProducts[0].name} (branch_id=${allProducts[0].branch_id || 'NULL'}, is_shared=${allProducts[0].is_shared})`);
+      // Log branch distribution
+      const branchStats = allProducts.reduce((acc: any, p: any) => {
+        const key = p.branch_id || 'NULL';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+      console.log(`📊 [getProducts] Products by branch:`, branchStats);
     } else {
       console.warn('⚠️ [getProducts] No products returned! This might indicate a filtering issue.');
+      console.warn('   Possible causes:');
+      console.warn('   1. All products are inactive (is_active = false)');
+      console.warn('   2. Branch filtering is excluding all products');
+      console.warn('   3. No products exist in database');
+      console.warn('   💡 Tip: Check database directly to verify products exist');
     }
 
     if (error) {
@@ -591,14 +673,15 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     const suppliersQuery = supabase.from('lats_suppliers').select('id, name').eq('is_active', true).order('name');
     
     // Build variants query
-    // ✅ FIX: Filter out variants with zero stock for POS page
+    // ✅ FIX: Show ALL variants (including 0 stock) for inventory management
+    // Note: POS page can filter out 0 stock variants on the frontend if needed
     const currentBranchIdForVariants = localStorage.getItem('current_branch_id');
     let variantQuery = supabase
       .from('lats_product_variants')
       .select('id, product_id, name, variant_name, sku, attributes, variant_attributes, cost_price, selling_price, quantity, reserved_quantity, min_quantity, created_at, updated_at, branch_id, is_shared, is_parent, variant_type, parent_variant_id')
       .in('product_id', productIds)
       .is('parent_variant_id', null)
-      .gt('quantity', 0) // ✅ Only show variants with stock > 0
+      // ✅ REMOVED: .gt('quantity', 0) - Show all variants including 0 stock for inventory management
       .eq('is_active', true) // ✅ Only show active variants
       .order('name');
     
@@ -709,6 +792,35 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       console.warn('Could not fetch shelf data:', shelfError);
     }
 
+    // ✅ FIX: Recalculate parent variant stock from children before mapping products
+    // This ensures consistency between list view and detail view
+    const parentVariantIds = allVariants
+      .filter((v: any) => v.is_parent || v.variant_type === 'parent')
+      .map((v: any) => v.id);
+    
+    const childrenStockMap = new Map<string, number>();
+    if (parentVariantIds.length > 0) {
+      try {
+        const { data: allChildren, error: childrenError } = await supabase
+          .from('lats_product_variants')
+          .select('parent_variant_id, quantity, is_active')
+          .in('parent_variant_id', parentVariantIds)
+          .eq('variant_type', 'imei_child')
+          .eq('is_active', true);
+        
+        if (!childrenError && allChildren) {
+          // Sum up children quantities by parent
+          allChildren.forEach((child: any) => {
+            const parentId = child.parent_variant_id;
+            const currentSum = childrenStockMap.get(parentId) || 0;
+            childrenStockMap.set(parentId, currentSum + (child.quantity || 0));
+          });
+        }
+      } catch (e) {
+        console.warn('Could not fetch children stock for parent variants:', e);
+      }
+    }
+
     const mappedProducts = (products || []).map(product => {
       // Get images for this product - combine image_url field and product_images table
       const images: string[] = [];
@@ -758,25 +870,46 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
         storageRoomName: undefined, // Can be added later if needed
         createdAt: product.created_at,
         updatedAt: product.updated_at,
-        variants: productVariants.map((variant: any) => ({
-          id: variant.id,
-          productId: variant.product_id,
-          sku: variant.sku,
-          name: variant.variant_name || variant.name || 'Unnamed',  // ✅ FIX: Prioritize variant_name (DB column) first, then legacy name
-          attributes: variant.variant_attributes || variant.attributes || {},  // ✅ FIX: Prioritize variant_attributes (DB column) first
-          costPrice: variant.cost_price || 0,
-          sellingPrice: variant.selling_price || 0,
-          price: variant.selling_price || 0,
-          stockQuantity: variant.quantity || 0,
-          minStockLevel: variant.min_quantity || 0,
-          quantity: variant.quantity || 0,
-          minQuantity: variant.min_quantity || 0,
+        variants: productVariants.map((variant: any) => {
+          // ✅ FIX: For parent variants, use recalculated stock from children, but fallback to parent's own quantity
+          // 
+          // IMPORTANT: Parent variants can have stock in two ways:
+          // 1. IMEI parent variants: Stock from IMEI child variants (each IMEI = 1 unit)
+          // 2. Regular parent variants: Stock stored directly in parent's quantity field
+          // 
+          // This ensures parent variants without IMEI children still show their correct stock
+          let actualStock = variant.quantity || 0;
+          
+          if (variant.is_parent || variant.variant_type === 'parent') {
+            const childrenStock = childrenStockMap.get(variant.id);
+            // Only use children stock if it exists and is greater than 0, otherwise use parent's own quantity
+            // This prevents parent variants from showing 0 stock when they have stock in their own quantity field
+            if (childrenStock !== undefined && childrenStock > 0) {
+              actualStock = childrenStock;
+            }
+            // If no children or children stock is 0, keep using parent's own quantity (already set above)
+          }
+          
+          return {
+            id: variant.id,
+            productId: variant.product_id,
+            sku: variant.sku,
+            name: variant.variant_name || variant.name || 'Unnamed',  // ✅ FIX: Prioritize variant_name (DB column) first, then legacy name
+            attributes: variant.variant_attributes || variant.attributes || {},  // ✅ FIX: Prioritize variant_attributes (DB column) first
+            costPrice: variant.cost_price || 0,
+            sellingPrice: variant.selling_price || 0,
+            price: variant.selling_price || 0,
+            stockQuantity: actualStock,  // ✅ Use recalculated stock for parent variants
+            minStockLevel: variant.min_quantity || 0,
+            quantity: actualStock,  // ✅ Use recalculated stock for parent variants
+            minQuantity: variant.min_quantity || 0,
     
-          weight: null, // Column was removed in migration
-          dimensions: null, // Column was removed in migration
-          createdAt: variant.created_at,
-          updatedAt: variant.updated_at
-        }))
+            weight: null, // Column was removed in migration
+            dimensions: null, // Column was removed in migration
+            createdAt: variant.created_at,
+            updatedAt: variant.updated_at
+          };
+        })
       };
     });
     
@@ -1075,7 +1208,10 @@ export async function updateProduct(
 
             // Skip deletion if variant has stock movements (preserve historical data)
             if (stockMovements && stockMovements.length > 0) {
-              console.warn(`⚠️ Skipping deletion of variant ${variantToDelete.id} (${variantToDelete.sku || variantToDelete.variant_name}): has ${stockMovements.length} stock movement(s)`);
+              // Only log in development mode to reduce console noise
+              if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+                console.log(`ℹ️ Preserving variant ${variantToDelete.sku || variantToDelete.variant_name} (has ${stockMovements.length} stock movement(s) - historical data)`);
+              }
               continue;
             }
 
@@ -1133,6 +1269,105 @@ export async function updateProduct(
 
 // Delete a product
 export async function deleteProduct(productId: string): Promise<void> {
+  // Step 1: Get all variants for this product
+  const { data: variants, error: variantsError } = await supabase
+    .from('lats_product_variants')
+    .select('id')
+    .eq('product_id', productId);
+
+  if (variantsError) {
+    console.error('Error fetching variants:', variantsError);
+    throw variantsError;
+  }
+
+  const variantIds = variants?.map(v => v.id) || [];
+
+  // Step 2: Delete purchase order items that reference this product
+  // This handles the foreign key constraint: lats_purchase_order_items_product_id_fkey
+  if (variantIds.length > 0) {
+    // Delete PO items that reference variants of this product
+    const { error: poItemsError } = await supabase
+      .from('lats_purchase_order_items')
+      .delete()
+      .in('variant_id', variantIds);
+
+    if (poItemsError) {
+      console.error('Error deleting purchase order items (by variant):', poItemsError);
+      // Continue anyway, try to delete by product_id
+    }
+  }
+
+  // Delete PO items that directly reference the product
+  const { error: poItemsByProductError } = await supabase
+    .from('lats_purchase_order_items')
+    .delete()
+    .eq('product_id', productId);
+
+  if (poItemsByProductError) {
+    console.error('Error deleting purchase order items (by product):', poItemsByProductError);
+    throw poItemsByProductError;
+  }
+
+  // Step 3: Delete stock movements for variants
+  if (variantIds.length > 0) {
+    const { error: stockMovementsError } = await supabase
+      .from('lats_stock_movements')
+      .delete()
+      .in('variant_id', variantIds);
+
+    if (stockMovementsError) {
+      console.error('Error deleting stock movements:', stockMovementsError);
+      // Continue anyway
+    }
+  }
+
+  // Delete stock movements that reference the product directly
+  const { error: stockMovementsByProductError } = await supabase
+    .from('lats_stock_movements')
+    .delete()
+    .eq('product_id', productId);
+
+  if (stockMovementsByProductError) {
+    console.error('Error deleting stock movements (by product):', stockMovementsByProductError);
+    // Continue anyway
+  }
+
+  // Step 4: Delete variants (must be done before deleting product)
+  if (variantIds.length > 0) {
+    const { error: variantsDeleteError } = await supabase
+      .from('lats_product_variants')
+      .delete()
+      .in('id', variantIds);
+
+    if (variantsDeleteError) {
+      console.error('Error deleting variants:', variantsDeleteError);
+      throw variantsDeleteError;
+    }
+  }
+
+  // Step 5: Delete sale items that reference this product
+  const { error: saleItemsError } = await supabase
+    .from('lats_sale_items')
+    .delete()
+    .eq('product_id', productId);
+
+  if (saleItemsError) {
+    console.error('Error deleting sale items:', saleItemsError);
+    // Continue anyway - sale items might have ON DELETE CASCADE or we want to preserve history
+  }
+
+  // Step 6: Delete auto reorder log entries
+  const { error: autoReorderLogError } = await supabase
+    .from('auto_reorder_log')
+    .delete()
+    .eq('product_id', productId);
+
+  if (autoReorderLogError) {
+    console.error('Error deleting auto reorder log:', autoReorderLogError);
+    // Continue anyway
+  }
+
+  // Step 7: Now delete the product itself
   const { error } = await supabase
     .from('lats_products')
     .delete()

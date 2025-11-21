@@ -812,7 +812,7 @@ const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                           </span>
                                         ) : (
                                           <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
-                                            new
+                                            Stock: {variant.quantity ?? variant.stockQuantity ?? variant.stock_quantity ?? 0}
                                           </span>
                                         )}
                                       </div>

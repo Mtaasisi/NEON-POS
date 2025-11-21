@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import {
   X,
@@ -7,6 +7,7 @@ import {
   Package,
   Tag,
   AlertCircle,
+  Search,
 } from "lucide-react";
 import { supabase } from "../../../../lib/supabaseClient";
 import { format } from "../../lib/format";
@@ -43,20 +44,25 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
     [key: string]: number;
   }>({});
   const [searchQuery, setSearchQuery] = useState<{ [key: string]: string }>({});
+  const [mainSearchQuery, setMainSearchQuery] = useState<string>("");
   const [focusedVariantIndex, setFocusedVariantIndex] = useState(0);
   const [focusedChildIndex, setFocusedChildIndex] = useState<{
     [key: string]: number;
   }>({});
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set());
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
+  const [matchingParentIds, setMatchingParentIds] = useState<Set<string>>(new Set());
   const cacheWarningLoggedRef = React.useRef(false);
   const preloadInProgressRef = React.useRef(false);
 
   // Normalize product data: handle both 'variants' and 'product_variants' property names
-  const normalizedProduct = product ? {
-    ...product,
-    variants: product.variants || product.product_variants || []
-  } : null;
+  // ✅ FIX: Memoize normalizedProduct to prevent infinite re-renders
+  const normalizedProduct = useMemo(() => {
+    return product ? {
+      ...product,
+      variants: product.variants || product.product_variants || []
+    } : null;
+  }, [product]);
 
   // Early return if product is invalid
   if (!isOpen || !normalizedProduct || !normalizedProduct.variants) {
@@ -75,6 +81,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       setSelectedQuantities({});
       setVariantChildCounts({});
       setSearchQuery({});
+      setMainSearchQuery("");
       setFocusedVariantIndex(0);
       setFocusedChildIndex({});
       setSelectedDevices(new Set());
@@ -301,6 +308,96 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       }
     }
   }, [isOpen, normalizedProduct?.id, normalizedProduct?.variants?.length, preloadAllChildVariants]);
+
+  // Search child variants in database when search query changes
+  useEffect(() => {
+    if (!isOpen || !normalizedProduct?.variants || !mainSearchQuery.trim()) {
+      setMatchingParentIds(new Set());
+      return;
+    }
+
+    const searchChildVariants = async () => {
+      const query = mainSearchQuery.toLowerCase().trim();
+      const parentIds = normalizedProduct.variants.map((v: any) => v.id);
+      
+      if (parentIds.length === 0) {
+        setMatchingParentIds(new Set());
+        return;
+      }
+
+      try {
+        // Search in child variants (IMEI children)
+        const { data: matchingChildren, error } = await supabase
+          .from('lats_product_variants')
+          .select('parent_variant_id, variant_attributes, sku')
+          .in('parent_variant_id', parentIds)
+          .eq('variant_type', 'imei_child')
+          .eq('is_active', true)
+          .gt('quantity', 0);
+
+        if (error) {
+          console.error('Error searching child variants:', error);
+          setMatchingParentIds(new Set());
+          return;
+        }
+
+        // Also search in legacy inventory_items
+        const productId = normalizedProduct.id;
+        const { data: matchingInventory, error: inventoryError } = await supabase
+          .from('inventory_items')
+          .select('product_id, serial_number, imei')
+          .eq('product_id', productId)
+          .eq('status', 'available')
+          .not('serial_number', 'is', null);
+
+        // Filter matches
+        const matchingParents = new Set<string>();
+        
+        // Check IMEI children
+        if (matchingChildren) {
+          matchingChildren.forEach((child: any) => {
+            const imei = (child.variant_attributes?.imei || child.variant_attributes?.IMEI || "").toLowerCase();
+            const serial = (child.variant_attributes?.serial_number || child.variant_attributes?.serialNumber || "").toLowerCase();
+            const sku = (child.sku || "").toLowerCase();
+            
+            if ((imei && (imei.includes(query) || imei.endsWith(query))) ||
+                (serial && (serial.includes(query) || serial.endsWith(query))) ||
+                (sku && (sku.includes(query) || sku.endsWith(query)))) {
+              matchingParents.add(child.parent_variant_id);
+            }
+          });
+        }
+
+        // Check inventory items - if any match, include all parent variants for this product
+        if (matchingInventory && !inventoryError) {
+          const hasMatchingInventory = matchingInventory.some((item: any) => {
+            const imei = (item.imei || "").toLowerCase();
+            const serial = (item.serial_number || "").toLowerCase();
+            
+            return (imei && (imei.includes(query) || imei.endsWith(query))) ||
+                   (serial && (serial.includes(query) || serial.endsWith(query)));
+          });
+
+          // If inventory item matches, include all parent variants for this product
+          if (hasMatchingInventory) {
+            parentIds.forEach((id: string) => matchingParents.add(id));
+          }
+        }
+
+        setMatchingParentIds(matchingParents);
+      } catch (error) {
+        console.error('Error in searchChildVariants:', error);
+        setMatchingParentIds(new Set());
+      }
+    };
+
+    // Debounce the search
+    const timeoutId = setTimeout(() => {
+      searchChildVariants();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [mainSearchQuery, isOpen, normalizedProduct]);
 
   // Debug log all available variants (reduced verbosity)
   useEffect(() => {
@@ -576,12 +673,15 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
     return children.filter((child) => {
       // ✅ FIX: IMEI and serial number are the same - search both fields together
-      const identifier = ((child.imei || child.serialNumber || "")).toLowerCase();
+      const identifier = ((child.imei || child.serialNumber || child.sku || "")).toLowerCase();
       const condition = (child.condition || "").toLowerCase();
 
+      // Check if query matches anywhere or at the end (for last digits search)
       return (
         identifier.includes(query) ||
-        condition.includes(query)
+        identifier.endsWith(query) ||
+        condition.includes(query) ||
+        condition.endsWith(query)
       );
     });
   };
@@ -612,6 +712,33 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       return quantity > 0 && isActive;
     }) || [];
 
+  // Apply main search filter
+  if (mainSearchQuery.trim()) {
+    const query = mainSearchQuery.toLowerCase().trim();
+    availableVariants = availableVariants.filter((v: any) => {
+      const name = (v.name || v.variant_name || "").toLowerCase();
+      const sku = (v.sku || "").toLowerCase();
+      
+      // Check if query matches parent variant name or SKU (anywhere or at the end)
+      const matchesParent = name.includes(query) || 
+                            name.endsWith(query) || 
+                            sku.includes(query) || 
+                            sku.endsWith(query);
+      
+      // Check child variants (IMEIs) if they're loaded
+      const children = childVariants[v.id] || [];
+      const matchesLoadedChild = children.some((child: any) => {
+        const childIdentifier = ((child.imei || child.serialNumber || child.sku || "")).toLowerCase();
+        return childIdentifier.includes(query) || childIdentifier.endsWith(query);
+      });
+      
+      // Check if this parent has matching children in database (from search query)
+      const matchesDatabaseChild = matchingParentIds.has(v.id);
+      
+      return matchesParent || matchesLoadedChild || matchesDatabaseChild;
+    });
+  }
+
   // ✅ FIX: For POS mode, don't show variants with zero stock
   // Only show fallback for purchase order mode where zero stock is expected
   if (
@@ -632,6 +759,13 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       );
     }
   }
+
+  // Calculate completed parent variants (parent variants with at least one selected child)
+  const completedParentVariants = availableVariants.filter((parent: any) => {
+    if (!isParentVariant(parent)) return false;
+    const children = childVariants[parent.id] || [];
+    return children.some((child: any) => selectedDevices.has(child.id));
+  }).length;
 
   return createPortal(
     <>
@@ -660,22 +794,62 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
 
           {/* Icon Header - Fixed */}
           <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center mb-4">
               {/* Icon */}
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center shadow-lg">
                 <Package className="w-8 h-8 text-white" />
               </div>
 
               {/* Text */}
-              <div>
-                <h3
-                  id="variant-modal-title"
-                  className="text-2xl font-bold text-gray-900 mb-3"
-                >
-                  Select Multiple Variants
-                </h3>
-                <div className="flex items-center gap-4"></div>
+              <div className="flex-1">
+                {productToUse?.name && (
+                  <h3 className="text-3xl font-extrabold text-gray-900 mb-1">
+                    {productToUse.name}
+                  </h3>
+                )}
+                <div className="flex items-center gap-3">
+                  <p
+                    id="variant-modal-title"
+                    className="text-sm text-gray-500 font-medium"
+                  >
+                    Select Multiple Variants
+                  </p>
+                  {completedParentVariants > 0 && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-200 rounded-lg">
+                      <svg
+                        className="w-4 h-4 text-green-600"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={3}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                      <span className="text-sm font-bold text-green-700">
+                        {completedParentVariants} Complete
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
+            </div>
+            
+            {/* Search Bar */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search variants..."
+                value={mainSearchQuery}
+                onChange={(e) => setMainSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all text-gray-900 placeholder-gray-400"
+              />
             </div>
           </div>
 
@@ -818,7 +992,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                             <h4 className="text-xl font-bold text-gray-900 truncate">
                                               {child.imei || child.serialNumber}
                                             </h4>
-                                            {child.condition && (
+                                            {child.condition && child.condition.toLowerCase() !== "new" && (
                                               <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                                                 {child.condition}
                                               </span>
@@ -868,18 +1042,28 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                     }
 
                     // Regular variant card with optional expansion
+                    const hasNoChildren = !isParent || (childCount === 0 && (!children || children.length === 0));
+                    const isVariantSelected = hasNoChildren && selectedDevices.has(variant.id);
+                    
                     return (
                       <div
                         key={variant.id}
-                        className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 ${
-                          isExpanded
+                        className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 relative overflow-hidden ${
+                          isVariantSelected
+                            ? "border-green-500 ring-4 ring-green-100"
+                            : isExpanded
                             ? "border-blue-500 shadow-xl"
                             : "border-gray-200 hover:border-gray-300 hover:shadow-md"
                         }`}
                       >
+                        {/* Selection Indicator Bar */}
+                        {isVariantSelected && (
+                          <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-green-500 to-emerald-600"></div>
+                        )}
+                        
                         {/* Variant Card - Collapsed style */}
                         <div
-                          className="flex items-start justify-between p-6 cursor-pointer"
+                          className="flex items-start justify-between p-6 cursor-pointer group"
                           onClick={() => {
                             if (isParent && (childCount > 0 || (children && children.length > 0))) {
                               // Parent with children - expand to show them
@@ -894,24 +1078,44 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                             <div className="flex items-center gap-3">
                               <div
                                 className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors ${
-                                  isExpanded ? "bg-blue-500" : "bg-gray-200"
+                                  isVariantSelected
+                                    ? "bg-gradient-to-br from-green-500 to-emerald-600 scale-110"
+                                    : isExpanded
+                                    ? "bg-blue-500"
+                                    : "bg-gray-200"
                                 }`}
                               >
-                                <svg
-                                  className={`w-4 h-4 text-white transition-transform duration-200 ${
-                                    isExpanded ? "rotate-180" : ""
-                                  }`}
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 9l-7 7-7-7"
-                                  />
-                                </svg>
+                                {isVariantSelected ? (
+                                  <svg
+                                    className="w-4 h-4 text-white animate-[scale-in_0.3s_ease-out]"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={3}
+                                      d="M5 13l4 4L19 7"
+                                    />
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    className={`w-4 h-4 text-white transition-transform duration-200 ${
+                                      isExpanded ? "rotate-180" : ""
+                                    }`}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 9l-7 7-7-7"
+                                    />
+                                  </svg>
+                                )}
                               </div>
                               <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
@@ -974,11 +1178,41 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                               </div>
                             </div>
                           </div>
-                          <div className="flex flex-col items-end gap-2"></div>
+                          <div className="flex flex-col items-end gap-2 ml-4">
+                            {hasNoChildren && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVariantSelect(variant);
+                                }}
+                                className={`px-6 py-2.5 rounded-xl font-bold transition-all transform hover:scale-105 ${
+                                  isVariantSelected
+                                    ? "bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white"
+                                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white"
+                                }`}
+                              >
+                                {isVariantSelected ? (
+                                  <span className="flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Selected
+                                  </span>
+                                ) : (
+                                  "Select"
+                                )}
+                              </button>
+                            )}
+                          </div>
                         </div>
+                        
+                        {/* Hover Glow Effect */}
+                        {!isVariantSelected && !isExpanded && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 via-blue-500/0 to-blue-500/0 group-hover:from-blue-500/5 group-hover:via-blue-500/10 group-hover:to-blue-500/5 transition-all duration-300 pointer-events-none rounded-2xl"></div>
+                        )}
 
-                        {/* Child Variants (IMEI devices) - Show if expanded */}
-                        {isParent && isExpanded && (
+                      {/* Child Variants (IMEI devices) - Show if expanded */}
+                      {isParent && isExpanded && (
                           <div className="bg-white p-6 border-t-2 border-gray-200 rounded-b-2xl">
                             {isLoadingChild ? (
                               <div className="text-center py-12">
@@ -1068,7 +1302,7 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                                               <h4 className="text-xl font-bold text-gray-900 truncate">
                                                 {child.imei || child.serialNumber}
                                               </h4>
-                                              {child.condition && (
+                                              {child.condition && child.condition.toLowerCase() !== "new" && (
                                                 <span className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200">
                                                   {child.condition}
                                                 </span>

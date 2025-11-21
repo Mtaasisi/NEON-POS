@@ -79,7 +79,6 @@ import QuickExpenseModal from '../../../components/QuickExpenseModal';
 import QuickReminderModal from '../../../components/QuickReminderModal';
 import { useGlobalSearchModal } from '../../../context/GlobalSearchContext';
 import AddProductModal from '../../lats/components/product/AddProductModal';
-import BulkImportModal from '../../lats/components/inventory/BulkImportModal';
 import EnhancedAddSupplierModal from '../../settings/components/EnhancedAddSupplierModal';
 import UnifiedContactImportModal from '../../customers/components/UnifiedContactImportModal';
 import AppointmentModal from '../../customers/components/forms/AppointmentModal';
@@ -109,7 +108,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const [showQuickReminder, setShowQuickReminder] = useState(false);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showStockTransferModal, setShowStockTransferModal] = useState(false);
-  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [showAddSupplierModal, setShowAddSupplierModal] = useState(false);
   const [showCustomerImportModal, setShowCustomerImportModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
@@ -463,20 +461,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
       });
     }
 
-    if (canManageInventory) {
-      options.push({
-        key: 'bulk-import',
-        label: 'Bulk Import',
-        description: 'Import products from Excel',
-        icon: Upload,
-        gradient: 'from-green-500 to-teal-600',
-        hover: 'hover:from-teal-600 hover:to-emerald-700',
-        action: () => {
-          setShowBulkImportModal(true);
-          setShowCreateDropdown(false);
-        },
-      });
-    }
 
     if (role === 'admin' || hasAll || userPermissions.includes('manage_suppliers')) {
       options.push({
@@ -637,7 +621,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
     }
 
     return options;
-  }, [currentUser, navigate, setShowCreateDropdown, setShowAddProductModal, setShowBulkImportModal, setShowAddSupplierModal, setShowCustomerImportModal, setShowAppointmentModal, setPaymentModalConfig, setShowPaymentModal, setShowSMSModal, setShowEmployeeImportModal, setShowAccountTransferModal, setShowBulkSMSModal, setShowDailyReportModal, setReportType]);
+  }, [currentUser, navigate, setShowCreateDropdown, setShowAddProductModal, setShowAddSupplierModal, setShowCustomerImportModal, setShowAppointmentModal, setPaymentModalConfig, setShowPaymentModal, setShowSMSModal, setShowEmployeeImportModal, setShowAccountTransferModal, setShowBulkSMSModal, setShowDailyReportModal, setReportType]);
 
   return (
     <header ref={headerRef} className={`fixed top-0 left-0 right-0 z-20 transition-all duration-500 ${isNavCollapsed ? 'md:ml-[5.5rem]' : 'md:ml-72'}`}>
@@ -1116,8 +1100,9 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
               <div className="relative">
                 <button
                   onClick={() => {
-                    setShowUserSelector(!showUserSelector);
-                    if (!showUserSelector && availableTestUsers.length === 0) {
+                    const willOpen = !showUserSelector;
+                    setShowUserSelector(willOpen);
+                    if (willOpen) {
                       loadTestUsers();
                     }
                   }}
@@ -1314,16 +1299,6 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
         }}
       />
 
-      <BulkImportModal
-        isOpen={showBulkImportModal}
-        onClose={() => setShowBulkImportModal(false)}
-        onImportComplete={(result) => {
-          const success = result?.success || 0;
-          const failed = result?.failed || 0;
-          toast.success(`Imported ${success} products${failed ? `, ${failed} failed` : ''}`);
-          setShowBulkImportModal(false);
-        }}
-      />
 
       <EnhancedAddSupplierModal
         isOpen={showAddSupplierModal}

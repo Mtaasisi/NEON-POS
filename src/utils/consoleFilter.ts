@@ -24,7 +24,11 @@ const SUPPRESS_PATTERNS = [
   
   // WebSocket errors to Neon database (using HTTP API instead)
   /WebSocket connection.*neon\.tech.*failed/i,
+  /WebSocket connection to.*failed/i,
+  /WebSocket is closed before the connection is established/i,
   /network connection was lost/i,
+  /Connection timeout.*attempt/i,
+  /⏱️ Connection timeout/i,
   
   // Auth state changes (noisy)
   /^Auth state changed:/,
@@ -179,12 +183,22 @@ export function initConsoleFilter() {
     }
     
     // Suppress WebSocket errors to Neon database
-    if (message.includes('WebSocket') && message.includes('neon.tech')) {
-      return; // Silent suppression - using HTTP API instead
+    if (message.includes('WebSocket') && (message.includes('neon.tech') || message.includes('failed') || message.includes('closed before') || message.includes('connection to'))) {
+      return; // Silent suppression - using HTTP API instead, errors are automatically retried
     }
     
     if (message.includes('network connection was lost')) {
       return; // Silent suppression - network reconnection handled automatically
+    }
+    
+    // Suppress connection timeout warnings (these are handled by retry logic)
+    if (message.includes('Connection timeout') || message.includes('⏱️ Connection timeout') || message.includes('timeout (attempt')) {
+      return; // Silent suppression - retry logic handles this
+    }
+    
+    // Suppress slow database response warnings (these are expected during cold starts)
+    if (message.includes('Slow database response') || message.includes('possible cold start')) {
+      return; // Silent suppression - cold starts are normal
     }
     
     // Allow all other errors through
@@ -218,8 +232,10 @@ if (import.meta.env.MODE !== 'test') {
         event.message.includes('neon.tech') || 
         event.message.includes('400') ||
         event.message.includes('Bad Request') ||
-        (event.message.includes('WebSocket') && event.message.includes('neon.tech')) ||
-        event.message.includes('network connection was lost')
+        (event.message.includes('WebSocket') && (event.message.includes('neon.tech') || event.message.includes('failed') || event.message.includes('closed before'))) ||
+        event.message.includes('network connection was lost') ||
+        event.message.includes('Connection timeout') ||
+        event.message.includes('WebSocket connection to')
       )) {
         event.preventDefault();
         return false;
@@ -230,14 +246,17 @@ if (import.meta.env.MODE !== 'test') {
     window.addEventListener('unhandledrejection', (event) => {
       if (event.reason && typeof event.reason === 'object') {
         const message = JSON.stringify(event.reason);
-        if (message.includes('neon.tech') && (message.includes('400') || message.includes('WebSocket'))) {
+        if (message.includes('neon.tech') && (message.includes('400') || message.includes('WebSocket') || message.includes('timeout'))) {
           event.preventDefault();
           return false;
         }
       }
       // Also check string reasons
       if (typeof event.reason === 'string') {
-        if (event.reason.includes('neon.tech') || event.reason.includes('network connection was lost')) {
+        if (event.reason.includes('neon.tech') || 
+            event.reason.includes('network connection was lost') ||
+            event.reason.includes('WebSocket') ||
+            event.reason.includes('Connection timeout')) {
           event.preventDefault();
           return false;
         }

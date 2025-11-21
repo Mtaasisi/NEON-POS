@@ -205,6 +205,7 @@ const PurchaseOrdersPage: React.FC = () => {
     switch (status) {
       case 'draft': return 'bg-gray-500 text-white shadow-sm';
       case 'sent': return 'bg-blue-600 text-white shadow-sm';
+      case 'confirmed': return 'bg-indigo-600 text-white shadow-sm';
       case 'partial_received': return 'bg-orange-500 text-white shadow-sm';
       case 'received': return 'bg-sky-500 text-white shadow-sm';
       case 'completed': return 'bg-green-600 text-white shadow-sm';
@@ -218,6 +219,7 @@ const PurchaseOrdersPage: React.FC = () => {
     switch (status) {
       case 'draft': return <FileText className="w-3 h-3" />;
       case 'sent': return <Send className="w-3 h-3" />;
+      case 'confirmed': return <CheckCircle className="w-3 h-3" />;
       case 'partial_received': return <PackageCheck className="w-3 h-3" />;
       case 'received': return <CheckSquare className="w-3 h-3" />;
       case 'completed': return <CheckCircle className="w-3 h-3" />;
@@ -276,14 +278,14 @@ const PurchaseOrdersPage: React.FC = () => {
     const actions = [];
     
     // Validate status - Option B workflow only
-    const validStatuses = ['draft', 'sent', 'partial_received', 'received', 'completed', 'cancelled'];
+    const validStatuses = ['draft', 'sent', 'confirmed', 'partial_received', 'received', 'completed', 'cancelled'];
     const orderStatus = validStatuses.includes(order.status) ? order.status : 'draft';
     
     if (orderStatus !== order.status) {
       console.warn(`⚠️ Invalid PO status detected: "${order.status}" for order ${order.id} - using "draft" as fallback`);
     }
     
-    // Option B Workflow: Draft → Sent → Partial_Received → Received → Completed
+    // Option B Workflow: Draft → Sent → Confirmed → Partial_Received → Received → Completed
     switch (orderStatus) {
       case 'draft':
         // Draft - Send to supplier
@@ -307,6 +309,17 @@ const PurchaseOrdersPage: React.FC = () => {
       
       case 'sent':
         // Sent - Allow receiving (payment not required)
+        actions.push({
+          type: 'receive',
+          label: 'Receive Items',
+          icon: <Package className="w-4 h-4" />,
+          color: 'bg-green-600 hover:bg-green-700',
+          onClick: () => navigate(`/lats/purchase-orders/${order.id}?action=receive`)
+        });
+        break;
+      
+      case 'confirmed':
+        // Confirmed - Allow receiving items (supplier confirmed the order)
         actions.push({
           type: 'receive',
           label: 'Receive Items',

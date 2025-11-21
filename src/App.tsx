@@ -106,7 +106,6 @@ const DatabaseSetupPage = lazy(() => import('./features/admin/pages/DatabaseSetu
 const BackupManagementPage = lazy(() => import('./features/backup/pages/BackupManagementPage'));
 const ExcelImportPage = lazy(() => import('./features/reports/pages/ExcelImportPage'));
 const ExcelTemplateDownloadPage = lazy(() => import('./features/lats/pages/ExcelTemplateDownloadPage'));
-const ProductExportPage = lazy(() => import('./features/lats/pages/ProductExportPage'));
 
 // Customer Portal Pages
 const CustomerLoginPage = lazy(() => import('./features/customer-portal/pages/LoginPage'));
@@ -160,7 +159,6 @@ const ShippedItemsPage = lazy(() => import('./features/lats/pages/ShippedItemsPa
 
 
 const UnifiedInventoryPage = lazy(() => import('./features/lats/pages/UnifiedInventoryPage'));
-const BulkImportPage = lazy(() => import('./features/lats/pages/BulkImportPage'));
 
 const POSPage = createSafeLazyComponent(() => import('./features/lats/pages/POSPageOptimized'), 'POSPage');
 
@@ -666,13 +664,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </Suspense>
           </RoleProtectedRoute>
         } />
-        <Route path="/product-export" element={
-          <RoleProtectedRoute allowedRoles={['admin']}>
-            <Suspense fallback={<DynamicPageLoader />}>
-              <ProductExportPage />
-            </Suspense>
-          </RoleProtectedRoute>
-        } />
 
           <Route path="/customers" element={
             <RoleProtectedRoute allowedRoles={['admin', 'customer-care']}>
@@ -809,8 +800,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           
           {/* Keep product detail route for individual product views */}
           
-          {/* Bulk Import Route */}
-          <Route path="/lats/bulk-import" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><BulkImportPage /></Suspense></RoleProtectedRoute>} />
 
           <Route path="/lats/sales-reports" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><SalesReportsPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/admin/reports" element={<RoleProtectedRoute allowedRoles={['admin', 'manager']}><Suspense fallback={<DynamicPageLoader />}><ReportsPage /></Suspense></RoleProtectedRoute>} />

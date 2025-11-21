@@ -17,6 +17,8 @@ import {
   TrendingUp,
   DollarSign,
   Smartphone,
+  FileText,
+  Printer,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { TradeInTransaction, TradeInFilters, ConditionRating, TradeInStatus } from '../../types/tradeIn';
@@ -139,6 +141,146 @@ const TradeInHistoryTab: React.FC = () => {
     loadTransactions();
   };
 
+  const exportToCSV = () => {
+    if (transactions.length === 0) {
+      toast.error('No transactions to export');
+      return;
+    }
+
+    const headers = [
+      'Transaction Number',
+      'Date',
+      'Device Name',
+      'Device Model',
+      'IMEI',
+      'Customer Name',
+      'Customer Phone',
+      'Condition',
+      'Base Price',
+      'Damage Deductions',
+      'Final Value',
+      'Status',
+      'Needs Repair',
+      'Ready for Resale',
+    ];
+
+    const rows = transactions.map(t => [
+      t.transaction_number || '',
+      new Date(t.created_at).toLocaleDateString(),
+      t.device_name || '',
+      t.device_model || '',
+      t.device_imei || '',
+      t.customer?.name || '',
+      t.customer?.phone || '',
+      t.condition_rating || '',
+      format.money(t.base_trade_in_price || 0),
+      format.money(t.total_damage_deductions || 0),
+      format.money(t.final_trade_in_value || 0),
+      t.status || '',
+      t.needs_repair ? 'Yes' : 'No',
+      t.ready_for_resale ? 'Yes' : 'No',
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `trade-in-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    toast.success('Export completed successfully!');
+  };
+
+  const printReport = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Please allow popups to print reports');
+      return;
+    }
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Trade-In Transactions Report - ${new Date().toLocaleDateString()}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { color: #333; border-bottom: 2px solid #2563eb; padding-bottom: 10px; }
+            .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 20px 0; }
+            .summary-card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
+            .summary-card h3 { margin: 0 0 10px 0; font-size: 14px; color: #666; }
+            .summary-card p { margin: 0; font-size: 24px; font-weight: bold; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f3f4f6; font-weight: 600; }
+            @media print { 
+              body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Trade-In Transactions Report</h1>
+          <p>Generated on: ${new Date().toLocaleString()}</p>
+          
+          <div class="summary">
+            <div class="summary-card">
+              <h3>Total Transactions</h3>
+              <p>${analytics.totalTransactions}</p>
+            </div>
+            <div class="summary-card">
+              <h3>Total Value</h3>
+              <p>${format.money(analytics.totalValue)}</p>
+            </div>
+            <div class="summary-card">
+              <h3>Needs Repair</h3>
+              <p>${analytics.needsRepairCount}</p>
+            </div>
+            <div class="summary-card">
+              <h3>Ready for Sale</h3>
+              <p>${analytics.readyForResaleCount}</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Transaction #</th>
+                <th>Date</th>
+                <th>Device</th>
+                <th>Customer</th>
+                <th>Condition</th>
+                <th>Value</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${transactions.map(t => `
+                <tr>
+                  <td>${t.transaction_number || ''}</td>
+                  <td>${new Date(t.created_at).toLocaleDateString()}</td>
+                  <td>${t.device_name} ${t.device_model}</td>
+                  <td>${t.customer?.name || ''}</td>
+                  <td>${t.condition_rating || ''}</td>
+                  <td>${format.money(t.final_trade_in_value || 0)}</td>
+                  <td>${t.status || ''}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
   const getStatusBadge = (status: TradeInStatus) => {
     const badges = {
       pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: Clock },
@@ -249,6 +391,28 @@ const TradeInHistoryTab: React.FC = () => {
           >
             Search
           </button>
+
+          {/* Export Button */}
+          {transactions.length > 0 && (
+            <>
+              <button
+                onClick={exportToCSV}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2"
+                title="Export to CSV"
+              >
+                <Download className="w-4 h-4" />
+                Export CSV
+              </button>
+              <button
+                onClick={printReport}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2"
+                title="Print Report"
+              >
+                <Printer className="w-4 h-4" />
+                Print
+              </button>
+            </>
+          )}
         </div>
 
         {/* Filter Panel */}

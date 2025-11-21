@@ -14,6 +14,9 @@ DROP FUNCTION IF EXISTS add_imei_to_parent_variant(UUID, TEXT, DECIMAL, DECIMAL)
 DROP FUNCTION IF EXISTS add_imei_to_parent_variant(UUID, TEXT, TEXT, INTEGER, INTEGER, TEXT, TEXT) CASCADE;
 DROP FUNCTION IF EXISTS add_imei_to_parent_variant CASCADE;
 
+-- Drop existing internal function if it exists (will be recreated by fix_parent_stock_merging.sql)
+DROP FUNCTION IF EXISTS add_imei_to_parent_variant_internal(UUID, TEXT, TEXT, TEXT, NUMERIC, NUMERIC, TEXT, TEXT) CASCADE;
+
 -- Create internal helper function with the main implementation
 CREATE OR REPLACE FUNCTION add_imei_to_parent_variant_internal(
   parent_variant_id_param UUID,
@@ -171,10 +174,18 @@ BEGIN
     NOW()
   );
 
-  -- Update parent variant's quantity
+  -- ✅ FIX: Recalculate parent variant's quantity from children instead of manually incrementing
+  -- This ensures consistency with the trigger and prevents double-counting
+  -- The trigger should also fire, but this ensures immediate consistency
   UPDATE lats_product_variants
   SET 
-    quantity = quantity + 1,
+    quantity = COALESCE((
+      SELECT SUM(quantity)
+      FROM lats_product_variants
+      WHERE parent_variant_id = parent_variant_id_param
+        AND variant_type = 'imei_child'
+        AND is_active = TRUE
+    ), 0),
     updated_at = NOW()
   WHERE id = parent_variant_id_param;
 

@@ -1,13 +1,11 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { MessageSquare, Users } from 'lucide-react';
+import BulkSMSModal from '../components/BulkSMSModal';
 
-// Lazy load the tab components
+// Lazy load the SMS logs page
 const SMSLogsPage = lazy(() => import('./SMSLogsPage'));
-const BulkSMSPage = lazy(() => import('./BulkSMSPage'));
 
-type TabType = 'logs' | 'bulk';
-
-// Simple loading component for tabs
+// Simple loading component
 const TabLoader = () => (
   <div className="flex items-center justify-center min-h-[400px]">
     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -15,47 +13,41 @@ const TabLoader = () => (
 );
 
 const SMSControlCenterPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabType>('logs');
+  const [showBulkSMSModal, setShowBulkSMSModal] = useState(false);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Tab Navigation */}
+      {/* Header Navigation */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex space-x-8">
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-6 h-6 text-blue-600" />
+              <h1 className="text-xl font-bold text-gray-900">SMS Control Center</h1>
+            </div>
             <button
-              onClick={() => setActiveTab('logs')}
-              className={`flex items-center gap-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'logs'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <MessageSquare size={20} />
-              SMS Logs
-            </button>
-            <button
-              onClick={() => setActiveTab('bulk')}
-              className={`flex items-center gap-2 px-4 py-4 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'bulk'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+              onClick={() => setShowBulkSMSModal(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-semibold shadow-lg hover:shadow-xl"
             >
               <Users size={20} />
-              Bulk SMS
+              Send Bulk SMS
             </button>
           </div>
         </div>
       </div>
 
-      {/* Tab Content */}
+      {/* SMS Logs Content */}
       <div className="pt-0">
         <Suspense fallback={<TabLoader />}>
-          {activeTab === 'logs' && <SMSLogsPage />}
-          {activeTab === 'bulk' && <BulkSMSPage />}
+          <SMSLogsPage />
         </Suspense>
       </div>
+
+      {/* Bulk SMS Modal */}
+      <BulkSMSModal 
+        isOpen={showBulkSMSModal} 
+        onClose={() => setShowBulkSMSModal(false)} 
+      />
     </div>
   );
 };

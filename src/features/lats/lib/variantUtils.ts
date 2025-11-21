@@ -62,12 +62,16 @@ export const getVariantIdentifier = (variant: ProductVariant): string | null => 
 
 /**
  * Get all variant attributes as a clean object
+ * Merges variant_attributes (primary) with attributes (legacy) to ensure all data is available
  */
 export const getVariantAttributes = (variant: ProductVariant): Record<string, any> => {
-  return (variant as any).variant_attributes || 
-         (variant as any).variantAttributes || 
-         variant.attributes || 
-         {};
+  const variantAttrs = (variant as any).variant_attributes || 
+                      (variant as any).variantAttributes || 
+                      {};
+  const legacyAttrs = variant.attributes || {};
+  
+  // Merge both, with variant_attributes taking precedence
+  return { ...legacyAttrs, ...variantAttrs };
 };
 
 /**

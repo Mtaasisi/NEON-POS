@@ -97,7 +97,7 @@ try {
     // Connection pool settings optimized for browser environments
     max: 10,                          // Maximum number of clients in the pool (browser-friendly limit)
     idleTimeoutMillis: 30000,         // Close idle connections after 30 seconds
-    connectionTimeoutMillis: 30000,   // Wait 30 seconds for new connection (increased for cold starts)
+    connectionTimeoutMillis: 60000,   // Wait 60 seconds for new connection (increased for cold starts)
     maxUses: 7500,                    // Maximum uses before connection is closed and recreated
     // Statement timeout to prevent long-running queries
     statement_timeout: 60000,         // 60 seconds max per query (increased from 30s)
@@ -310,10 +310,9 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
     );
     
     if (shouldRetry) {
-      // Log timeout errors with specific guidance
-      if (isTimeout && !suppressLogs) {
-        console.warn(`⏱️ Connection timeout (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES})`);
-        console.warn('💡 This may be due to database cold start or network latency. Retrying...');
+      // Log timeout errors with specific guidance (only in dev mode and only on first attempt)
+      if (isTimeout && !suppressLogs && isDevelopment && retryCount === 0) {
+        console.debug(`⏱️ Connection timeout (attempt ${retryCount + 1}/${MAX_NETWORK_RETRIES}) - retrying automatically`);
       }
       // Log connection termination errors with specific guidance
       else if (isConnectionTerminated && !suppressLogs) {

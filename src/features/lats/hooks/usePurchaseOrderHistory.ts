@@ -27,10 +27,36 @@ export interface PurchaseOrderStats {
   hasMultipleCurrencies: boolean; // Flag if multiple currencies are present
 }
 
+// Maximum realistic amount (1 trillion) to detect corrupt data
+const MAX_REALISTIC_AMOUNT = 1_000_000_000_000;
+
 // Helper function to check if a string is a valid UUID
 const isValidUUID = (id: string): boolean => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(id);
+};
+
+/**
+ * Validate if a price value is realistic and not corrupted
+ */
+const isValidPrice = (price: number): boolean => {
+  if (!isFinite(price)) return false;
+  if (isNaN(price)) return false;
+  if (Math.abs(price) > MAX_REALISTIC_AMOUNT) return false;
+  return true;
+};
+
+/**
+ * Safely validate a price, returning the validated price or null if corrupt
+ */
+const validatePrice = (price: number | null | undefined): number | null => {
+  if (price === null || price === undefined) return null;
+  const numPrice = Number(price);
+  if (!isValidPrice(numPrice)) {
+    console.warn(`⚠️ Corrupt costPrice detected in purchase order: ${price}. Skipping from statistics.`);
+    return null;
+  }
+  return numPrice > 0 ? numPrice : null;
 };
 
 export const usePurchaseOrderHistory = (productId: string | undefined) => {
@@ -184,12 +210,21 @@ export const usePurchaseOrderHistory = (productId: string | undefined) => {
           const totalOrders = historyItems.length;
           const totalQuantityOrdered = historyItems.reduce((sum, item) => sum + item.quantity, 0);
           const totalQuantityReceived = historyItems.reduce((sum, item) => sum + item.receivedQuantity, 0);
-          const averageCostPrice = historyItems.reduce((sum, item) => sum + item.costPrice, 0) / totalOrders;
+          
+          // Validate and filter cost prices before calculating statistics
+          const validCostPrices = historyItems
+            .map(item => validatePrice(item.costPrice))
+            .filter((price): price is number => price !== null);
+          
+          // Calculate average from valid prices only
+          const averageCostPrice = validCostPrices.length > 0
+            ? validCostPrices.reduce((sum, price) => sum + price, 0) / validCostPrices.length
+            : 0;
+          
           const lastOrderDate = historyItems[0]?.orderDate || null;
-          const lastCostPrice = historyItems[0]?.costPrice || null;
-          const costPrices = historyItems.map(item => item.costPrice).filter(price => price > 0);
-          const lowestCostPrice = costPrices.length > 0 ? Math.min(...costPrices) : null;
-          const highestCostPrice = costPrices.length > 0 ? Math.max(...costPrices) : null;
+          const lastCostPrice = validatePrice(historyItems[0]?.costPrice);
+          const lowestCostPrice = validCostPrices.length > 0 ? Math.min(...validCostPrices) : null;
+          const highestCostPrice = validCostPrices.length > 0 ? Math.max(...validCostPrices) : null;
           
           // Determine primary currency (use latest order's currency)
           const currencies = [...new Set(historyItems.map(item => item.currency || 'TZS'))];

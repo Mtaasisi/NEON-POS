@@ -1,31 +1,10 @@
-// Enhanced Stock Adjustment Modal for handling multiple variants
 import React, { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Package, TrendingUp, TrendingDown, Settings, Info, CheckCircle, AlertCircle, X } from 'lucide-react';
-import GlassCard from '../../../shared/components/ui/GlassCard';
-import GlassInput from '../../../shared/components/ui/GlassInput';
-import GlassSelect from '../../../shared/components/ui/GlassSelect';
-import GlassButton from '../../../shared/components/ui/GlassButton';
-import GlassBadge from '../../../shared/components/ui/GlassBadge';
-import PriceInput from '../../../../shared/components/ui/PriceInput';
+import { X, Package, Plus, Minus, Trash2, TrendingUp, TrendingDown, Settings, CheckCircle2, AlertCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { supabase } from '../../../../lib/supabaseClient';
+import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
+import { addIMEIToParentVariant, checkIMEIExists } from '../../lib/imeiVariantService';
 import { format } from '../../lib/format';
-import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
-
-// Enhanced validation schema
-const enhancedStockAdjustmentSchema = z.object({
-  selectedVariantId: z.string().min(1, 'Please select a variant'),
-  adjustmentType: z.enum(['in', 'out', 'set']),
-  quantity: z.number().min(0.01, 'Quantity must be greater than 0'),
-  reason: z.string().min(1, 'Reason is required').max(200, 'Reason must be less than 200 characters'),
-  reference: z.string().max(100, 'Reference must be less than 100 characters').optional(),
-  notes: z.string().max(500, 'Notes must be less than 500 characters').optional(),
-  cost: z.number().min(0, 'Cost must be 0 or greater').optional(),
-  location: z.string().max(100, 'Location must be less than 100 characters').optional()
-});
-
-type EnhancedStockAdjustmentData = z.infer<typeof enhancedStockAdjustmentSchema>;
 
 interface ProductVariant {
   id: string;
@@ -35,7 +14,10 @@ interface ProductVariant {
   costPrice: number;
   quantity: number;
   minQuantity: number;
-  attributes?: Record<string, any>;
+  maxQuantity?: number;
+  is_parent?: boolean;
+  variant_type?: string;
+  variant_attributes?: any;
 }
 
 interface Product {
@@ -48,9 +30,22 @@ interface EnhancedStockAdjustModalProps {
   product?: Product;
   isOpen: boolean;
   onClose?: () => void;
-  onSubmit?: (data: EnhancedStockAdjustmentData & { variant: ProductVariant }) => Promise<void>;
+  onSubmit?: (data: { variant: ProductVariant; adjustmentType: 'in' | 'out' | 'set'; quantity: number; reason: string; notes?: string; imeis?: string[] }) => Promise<void>;
   loading?: boolean;
 }
+
+const REASON_OPTIONS = [
+  { value: 'purchase', label: 'Purchase Order' },
+  { value: 'sale', label: 'Sale' },
+  { value: 'return', label: 'Customer Return' },
+  { value: 'damage', label: 'Damaged Goods' },
+  { value: 'expiry', label: 'Expired Goods' },
+  { value: 'theft', label: 'Theft/Loss' },
+  { value: 'adjustment', label: 'Manual Adjustment' },
+  { value: 'transfer', label: 'Location Transfer' },
+  { value: 'audit', label: 'Stock Audit' },
+  { value: 'other', label: 'Other' }
+];
 
 const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
   product,
@@ -59,548 +54,628 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
   onSubmit,
   loading = false
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [adjustmentType, setAdjustmentType] = useState<'in' | 'out' | 'set'>('in');
+  const [quantity, setQuantity] = useState<number>(0);
+  const [reason, setReason] = useState<string>('');
+  const [notes, setNotes] = useState<string>('');
+  const [imeis, setImeis] = useState<string[]>(['']);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Prevent body scroll when modal is open
-  useBodyScrollLock(isOpen);
-
-  // Form setup
-  const {
-    control,
-    handleSubmit,
-    formState: { errors, isDirty },
-    watch,
-    reset,
-    setValue
-  } = useForm<EnhancedStockAdjustmentData>({
-    resolver: zodResolver(enhancedStockAdjustmentSchema),
-    defaultValues: {
-      selectedVariantId: '',
-      adjustmentType: 'in',
-      quantity: 0,
-      reason: '',
-      reference: '',
-      notes: '',
-      cost: 0,
-      location: ''
-    }
-  });
-
-  // Watch form values
-  const watchedValues = watch();
-  const selectedVariantId = watchedValues.selectedVariantId;
-  const adjustmentType = watchedValues.adjustmentType;
-  const quantity = watchedValues.quantity;
-
-  // Update selected variant when variant ID changes
+  // Reset form when modal opens/closes
   useEffect(() => {
-    if (selectedVariantId && product?.variants) {
-      const variant = product.variants.find(v => v.id === selectedVariantId);
-      setSelectedVariant(variant || null);
-    } else {
+    if (isOpen && product) {
       setSelectedVariant(null);
+      setAdjustmentType('in');
+      setQuantity(0);
+      setReason('');
+      setNotes('');
+      setImeis(['']);
     }
-  }, [selectedVariantId, product?.variants]);
+  }, [isOpen, product]);
+
+  // Sync IMEI fields with quantity when quantity changes and adjustment type is 'in'
+  useEffect(() => {
+    if (adjustmentType === 'in' && quantity > 0) {
+      setImeis(prevImeis => {
+        const newImeis = Array(quantity).fill('').map((_, index) => prevImeis[index] || '');
+        return newImeis;
+      });
+    } else if (adjustmentType !== 'in') {
+      // Clear IMEIs when not stock in
+      setImeis(['']);
+    }
+  }, [quantity, adjustmentType]);
 
   // Calculate new stock level
-  const getNewStockLevel = () => {
+  const getNewStockLevel = (): number => {
     if (!selectedVariant) return 0;
-    
+    const currentStock = selectedVariant.quantity || 0;
     switch (adjustmentType) {
       case 'in':
-        return selectedVariant.quantity + quantity;
+        return currentStock + quantity;
       case 'out':
-        return Math.max(0, selectedVariant.quantity - quantity);
+        return Math.max(0, currentStock - quantity);
       case 'set':
         return quantity;
       default:
-        return selectedVariant.quantity;
+        return currentStock;
     }
   };
 
   const newStockLevel = getNewStockLevel();
 
   // Get stock status
-  const getStockStatus = (stock: number) => {
+  const getStockStatus = (stock: number): 'low' | 'normal' | 'high' => {
     if (!selectedVariant) return 'normal';
-    if (stock <= selectedVariant.minQuantity) return 'low';
+    if (stock <= (selectedVariant.minQuantity || 0)) return 'low';
+    if (selectedVariant.maxQuantity && stock >= selectedVariant.maxQuantity) return 'high';
     return 'normal';
   };
 
-  const currentStatus = selectedVariant ? getStockStatus(selectedVariant.quantity) : 'normal';
+  const currentStatus = selectedVariant ? getStockStatus(selectedVariant.quantity || 0) : 'normal';
   const newStatus = selectedVariant ? getStockStatus(newStockLevel) : 'normal';
 
+  // Format price
+  const formatPrice = (price: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(price);
+  };
+
+  // Update IMEI value
+  const updateIMEI = (index: number, value: string) => {
+    const newImeis = [...imeis];
+    newImeis[index] = value;
+    setImeis(newImeis);
+  };
+
   // Handle form submission
-  const handleFormSubmit = async (data: EnhancedStockAdjustmentData) => {
+  const handleSubmit = async () => {
+    if (!selectedVariant || !product) return;
+
+    // Validation
+    if (quantity <= 0) {
+      toast.error('Quantity must be greater than 0');
+      return;
+    }
+
+    if (!reason) {
+      toast.error('Please select a reason');
+      return;
+    }
+
+    // Validate IMEIs if adding stock - must have one for each unit
+    const validImeis = imeis.filter(imei => imei.trim().length > 0);
+    if (adjustmentType === 'in' && quantity > 0) {
+      if (validImeis.length !== quantity) {
+        toast.error(`Please enter IMEI/Serial number for all ${quantity} unit(s)`);
+        return;
+      }
+      
+      // Check for duplicate IMEIs in the current input
+      const uniqueImeis = new Set(validImeis.map(imei => imei.trim()));
+      if (uniqueImeis.size !== validImeis.length) {
+        toast.error('Duplicate IMEI/Serial numbers detected. Each unit must have a unique identifier.');
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+
     try {
-      if (onSubmit && selectedVariant) {
-        await onSubmit({ ...data, variant: selectedVariant });
-        reset();
-        setSelectedVariant(null);
-        onClose?.();
-      }
-    } catch (error) {
-      console.error('Stock adjustment submission error:', error);
-    }
-  };
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id;
+      const currentBranchId = getCurrentBranchId();
 
-  // Handle cancel
-  const handleCancel = () => {
-    if (isDirty) {
-      if (confirm('Are you sure you want to discard your changes?')) {
-        reset();
-        setSelectedVariant(null);
-        onClose?.();
+      // If adding IMEIs as child variants
+      if (adjustmentType === 'in' && validImeis.length > 0) {
+        // Check if variant is a parent or needs to be converted
+        let parentVariantId = selectedVariant.id;
+        
+        // If variant is not a parent, convert it
+        if (!selectedVariant.is_parent && selectedVariant.variant_type !== 'parent') {
+          const { error: convertError } = await supabase
+            .from('lats_product_variants')
+            .update({
+              is_parent: true,
+              variant_type: 'parent',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', selectedVariant.id);
+
+          if (convertError) {
+            console.error('Error converting variant to parent:', convertError);
+    }
+        }
+
+        // Add each IMEI as a child variant
+        const imeiResults = [];
+        for (const imei of validImeis) {
+          const trimmedImei = imei.trim();
+          if (!trimmedImei) continue;
+
+          // Check if IMEI already exists
+          const exists = await checkIMEIExists(trimmedImei);
+          if (exists) {
+            toast.error(`IMEI ${trimmedImei} already exists in system`);
+            continue;
+          }
+
+          // Add IMEI to parent variant
+          const result = await addIMEIToParentVariant(parentVariantId, {
+            imei: trimmedImei,
+            serial_number: trimmedImei, // Unified system
+            cost_price: selectedVariant.costPrice || 0,
+            selling_price: selectedVariant.sellingPrice || 0,
+            condition: 'new',
+            source: 'purchase'
+          });
+
+          if (result.success) {
+            imeiResults.push(trimmedImei);
+          } else {
+            toast.error(`Failed to add IMEI ${trimmedImei}: ${result.error}`);
+          }
+        }
+
+        if (imeiResults.length > 0) {
+          toast.success(`Added ${imeiResults.length} IMEI/Serial number(s) as child variants`);
+        }
       }
-    } else {
-      reset();
-      setSelectedVariant(null);
+
+      // Create stock movement record
+      const movementQuantity = adjustmentType === 'out' ? -quantity : 
+                               adjustmentType === 'set' ? (newStockLevel - (selectedVariant.quantity || 0)) : quantity;
+
+      const { error: movementError } = await supabase
+        .from('lats_stock_movements')
+        .insert({
+          product_id: product.id,
+          variant_id: selectedVariant.id,
+          movement_type: adjustmentType === 'set' ? 'adjustment' : adjustmentType,
+          quantity: movementQuantity,
+          reason: reason,
+          notes: notes || `Stock ${adjustmentType === 'in' ? 'added' : adjustmentType === 'out' ? 'removed' : 'set'}`,
+          created_by: userId,
+          created_at: new Date().toISOString()
+        });
+
+      if (movementError) {
+        console.error('Error creating stock movement:', movementError);
+        toast.error('Failed to record stock movement');
+      }
+
+      // Call custom onSubmit if provided
+      if (onSubmit) {
+        await onSubmit({
+          variant: selectedVariant,
+          adjustmentType,
+          quantity,
+          reason,
+          notes,
+          imeis: validImeis
+        });
+      }
+
+      toast.success('Stock adjustment completed successfully');
       onClose?.();
+    } catch (error) {
+      console.error('Stock adjustment error:', error);
+      toast.error('Failed to adjust stock');
+    } finally {
+      setIsSubmitting(false);
     }
-  };
-
-  // Adjustment type options
-  const adjustmentTypeOptions = [
-    { value: 'in', label: 'Stock In', icon: '📥', description: 'Add to current stock' },
-    { value: 'out', label: 'Stock Out', icon: '📤', description: 'Remove from current stock' },
-    { value: 'set', label: 'Set Stock', icon: '⚙️', description: 'Set to specific quantity' }
-  ];
-
-  // Reason options
-  const reasonOptions = [
-    { value: 'purchase', label: 'Purchase Order' },
-    { value: 'sale', label: 'Sale' },
-    { value: 'return', label: 'Customer Return' },
-    { value: 'damage', label: 'Damaged Goods' },
-    { value: 'expiry', label: 'Expired Goods' },
-    { value: 'theft', label: 'Theft/Loss' },
-    { value: 'adjustment', label: 'Manual Adjustment' },
-    { value: 'transfer', label: 'Location Transfer' },
-    { value: 'audit', label: 'Stock Audit' },
-    { value: 'other', label: 'Other' }
-  ];
-
-  // Location options
-  const locationOptions = [
-    { value: 'main', label: 'Main Warehouse' },
-    { value: 'secondary', label: 'Secondary Warehouse' },
-    { value: 'store', label: 'Store Front' },
-    { value: 'transit', label: 'In Transit' },
-    { value: 'supplier', label: 'At Supplier' }
-  ];
-
-  // Get status badge
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'low':
-        return <GlassBadge variant="error" className="flex items-center gap-1"><AlertCircle className="w-3 h-3" />Low Stock</GlassBadge>;
-      default:
-        return <GlassBadge variant="success" className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />Normal</GlassBadge>;
-    }
-  };
-
-  // Get adjustment type badge
-  const getAdjustmentTypeBadge = (type: string) => {
-    const option = adjustmentTypeOptions.find(opt => opt.value === type);
-    if (!option) return null;
-    
-    return (
-      <GlassBadge variant={type === 'in' ? 'success' : type === 'out' ? 'error' : 'info'}>
-        {option.icon} {option.label}
-      </GlassBadge>
-    );
   };
 
   if (!isOpen || !product) return null;
 
+  const isDirty = quantity > 0 && reason.length > 0 && selectedVariant !== null;
+
   return (
-    <>
-      {/* Backdrop - respects sidebar and topbar */}
       <div 
-        className="fixed bg-black/50 backdrop-blur-sm"
-        onClick={onClose}
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 35
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-4"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none'
+      className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      role="dialog" 
+      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose?.();
+        }
         }}
       >
         <div 
-          className="relative max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-          style={{ pointerEvents: 'auto' }}
+        className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
         >
-          <GlassCard className="w-full">
-            <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+          <X className="w-5 h-5" />
+        </button>
+
             {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-lats-glass-border">
-              <div>
-                <h2 className="text-xl font-semibold text-lats-text flex items-center gap-2">
-                  <Package className="w-6 h-6 text-lats-primary" />
-                  Adjust Stock Level
-                </h2>
-                <p className="text-sm text-lats-text-secondary mt-1">
-                  {product.name} - Select variant to adjust
-                </p>
-              </div>
-              <button
-                onClick={handleCancel}
-                className="p-2 hover:bg-lats-surface-hover rounded-lg transition-colors"
-                type="button"
-              >
-                <X className="w-5 h-5 text-lats-text-secondary" />
-              </button>
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <Package className="w-8 h-8 text-white" />
             </div>
 
-            {/* Product Overview */}
-            <div className="p-4 bg-lats-surface/30 rounded-lats-radius-md border border-lats-glass-border">
-              <h3 className="text-lg font-medium text-lats-text mb-3 flex items-center gap-2">
-                <Info className="w-5 h-5 text-lats-primary" />
-                Product Overview
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Title and Info */}
                 <div>
-                  <div className="text-sm text-lats-text-secondary">Product Name</div>
-                  <div className="font-medium text-lats-text">{product.name}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-lats-text-secondary">Total Variants</div>
-                  <div className="font-medium text-lats-text">{product.variants?.length || 0}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-lats-text-secondary">Total Stock</div>
-                  <div className="font-medium text-lats-text">
-                    {product.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0}
-                  </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Adjust Stock Level</h3>
+              <p className="text-sm text-gray-600">
+                {product.name} - Select variant to adjust
+              </p>
                 </div>
               </div>
             </div>
 
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
             {/* Variant Selection */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-lats-text">Select Variant to Adjust</h3>
-              
-              <Controller
-                name="selectedVariantId"
-                control={control}
-                render={({ field }) => (
+          {!selectedVariant && (
+            <div className="space-y-4 mb-6">
+              <h4 className="text-lg font-semibold text-gray-900">Select Variant</h4>
                   <div className="space-y-3">
                     {product.variants?.map((variant) => (
                       <div
                         key={variant.id}
-                        className={`p-4 rounded-lats-radius-md border-2 cursor-pointer transition-all ${
-                          field.value === variant.id
-                            ? 'border-lats-primary bg-lats-primary/10'
-                            : 'border-lats-glass-border hover:border-lats-primary/50 hover:bg-lats-surface/50'
-                        }`}
-                        onClick={() => field.onChange(variant.id)}
+                    onClick={() => setSelectedVariant(variant)}
+                    className="p-6 border-2 border-gray-300 rounded-xl cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-all"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <input
-                                type="radio"
-                                checked={field.value === variant.id}
-                                onChange={() => field.onChange(variant.id)}
-                                className="w-4 h-4 text-lats-primary"
-                              />
-                              <div>
-                                <div className="font-medium text-lats-text">{variant.name}</div>
-                                <div className="text-sm text-lats-text-secondary">SKU: {variant.sku}</div>
+                        <div className="font-semibold text-lg text-gray-900 mb-1">
+                          {variant.name}
                               </div>
-                            </div>
-                          
-                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                        <div className="text-sm text-gray-600 mb-3">SKU: {variant.sku}</div>
+                        <div className="grid grid-cols-3 gap-4 text-sm">
                             <div>
-                              <div className="text-lats-text-secondary">Current Stock</div>
-                              <div className="font-medium text-lats-text">{variant.quantity}</div>
-                            </div>
-                            <div>
-                              <div className="text-lats-text-secondary">Min Level</div>
-                              <div className="font-medium text-lats-text">{variant.minQuantity}</div>
+                            <div className="text-gray-600">Current Stock</div>
+                            <div className="font-bold text-gray-900">{variant.quantity || 0}</div>
                             </div>
                             <div>
-                              <div className="text-lats-text-secondary">Price</div>
-                              <div className="font-medium text-lats-text">{format.money(variant.sellingPrice)}</div>
+                            <div className="text-gray-600">Min Level</div>
+                            <div className="font-bold text-gray-900">{variant.minQuantity || 0}</div>
                             </div>
+                            <div>
+                            <div className="text-gray-600">Price</div>
+                            <div className="font-bold text-gray-900">{formatPrice(variant.sellingPrice || 0)}</div>
                           </div>
                         </div>
-                        
+                      </div>
                         <div className="ml-4">
-                          {getStatusBadge(getStockStatus(variant.quantity))}
+                        {getStockStatus(variant.quantity || 0) === 'low' && (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                            <AlertCircle className="w-3 h-3" />
+                            Low Stock
+                          </span>
+                        )}
+                        {getStockStatus(variant.quantity || 0) === 'normal' && (
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Normal
+                          </span>
+                        )}
                         </div>
                       </div>
                     </div>
                   ))}
-                  
-                    {errors.selectedVariantId && (
-                      <p className="text-red-500 text-sm mt-2">{errors.selectedVariantId.message}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Adjustment Form - Only show when variant is selected */}
+          {selectedVariant && (
+            <>
+              {/* Current Stock Summary */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6 border border-blue-200">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-semibold text-gray-900">Current Stock</h4>
+                  <button
+                    onClick={() => setSelectedVariant(null)}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Change Variant
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-600">{selectedVariant.quantity || 0}</div>
+                    <div className="text-xs text-gray-600 mt-1">Current Stock</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold text-gray-700">{selectedVariant.minQuantity || 0}</div>
+                    <div className="text-xs text-gray-600 mt-1">Min Level</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold text-gray-700">{selectedVariant.maxQuantity || 'N/A'}</div>
+                    <div className="text-xs text-gray-600 mt-1">Max Level</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-xl font-semibold text-gray-700">{formatPrice(selectedVariant.sellingPrice || 0)}</div>
+                    <div className="text-xs text-gray-600 mt-1">Unit Price</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  {currentStatus === 'low' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 border border-red-200">
+                      <AlertCircle className="w-3 h-3" />
+                      Low Stock
+                    </span>
+                  )}
+                  {currentStatus === 'high' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                      <AlertCircle className="w-3 h-3" />
+                      Overstocked
+                    </span>
+                  )}
+                  {currentStatus === 'normal' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 border border-green-200">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Normal
+                    </span>
                     )}
                 </div>
-              )}
-            />
           </div>
 
-            {/* Adjustment Details - Only show when variant is selected */}
-            {selectedVariant && (
-              <>
-                <div className="space-y-4">
-                  <h3 className="text-lg font-medium text-lats-text">Adjustment Details</h3>
+              {/* Adjustment Details */}
+              <div className="space-y-6">
+                <h4 className="text-lg font-semibold text-gray-900">Adjustment Details</h4>
                 
-                {/* Adjustment Type Buttons */}
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-lats-text">
-                    Adjustment Type <span className="text-red-500">*</span>
+                {/* Adjustment Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Adjustment Type *
                   </label>
-                  <Controller
-                    name="adjustmentType"
-                    control={control}
-                    render={({ field }) => (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {adjustmentTypeOptions.map((option) => (
+                  <div className="grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAdjustmentType('in')}
+                      className={`px-4 py-3 rounded-xl border-2 font-semibold transition-all ${
+                        adjustmentType === 'in'
+                          ? 'border-green-500 bg-green-50 text-green-700'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-green-300'
+                      }`}
+                    >
+                      <TrendingUp className="w-5 h-5 mx-auto mb-1" />
+                      Stock In
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdjustmentType('out')}
+                      className={`px-4 py-3 rounded-xl border-2 font-semibold transition-all ${
+                        adjustmentType === 'out'
+                          ? 'border-red-500 bg-red-50 text-red-700'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-red-300'
+                      }`}
+                    >
+                      <TrendingDown className="w-5 h-5 mx-auto mb-1" />
+                      Stock Out
+                    </button>
                           <button
-                            key={option.value}
                             type="button"
-                            onClick={() => field.onChange(option.value)}
-                            className={`p-4 rounded-lats-radius-md border-2 transition-all duration-200 hover:scale-105 ${
-                              field.value === option.value
-                                ? option.value === 'in'
-                                  ? 'border-green-500 bg-green-500/10 text-green-700 shadow-lg shadow-green-500/20'
-                                  : option.value === 'out'
-                                  ? 'border-red-500 bg-red-500/10 text-red-700 shadow-lg shadow-red-500/20'
-                                  : 'border-lats-primary bg-lats-primary/10 text-lats-primary shadow-lg shadow-lats-primary/20'
-                                : 'border-lats-glass-border hover:border-lats-primary/50 hover:bg-lats-surface/50 text-lats-text hover:shadow-md'
+                      onClick={() => setAdjustmentType('set')}
+                      className={`px-4 py-3 rounded-xl border-2 font-semibold transition-all ${
+                        adjustmentType === 'set'
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-300 bg-white text-gray-700 hover:border-blue-300'
                             }`}
                           >
-                            <div className="flex flex-col items-center gap-2">
-                              <div className="text-2xl">{option.icon}</div>
-                              <div className="font-medium">{option.label}</div>
-                              <div className="text-xs text-center opacity-75">
-                                {option.description}
-                              </div>
-                            </div>
+                      <Settings className="w-5 h-5 mx-auto mb-1" />
+                      Set Stock
                           </button>
-                        ))}
                       </div>
-                    )}
-                  />
-                  {errors.adjustmentType && (
-                    <p className="text-red-500 text-sm">{errors.adjustmentType.message}</p>
-                  )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
                   {/* Quantity */}
-                  <Controller
-                    name="quantity"
-                    control={control}
-                    render={({ field }) => (
-                      <GlassInput
-                        label="Quantity"
-                        placeholder="0"
-                        type="number"
-                        value={field.value}
-                        onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
-                        error={errors.quantity?.message}
-                        min={0.01}
-                        step={0.01}
-                        required
-                        helperText={
-                          adjustmentType === 'set' 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Quantity *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(Math.max(0.01, (quantity || 0) - 1))}
+                      className="w-12 h-12 flex items-center justify-center border-2 border-gray-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all font-bold text-gray-700 hover:text-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={quantity <= 0.01}
+                    >
+                      <Minus className="w-5 h-5" />
+                    </button>
+                    <input
+                      type="number"
+                      value={quantity || ''}
+                      onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
+                      min={0.01}
+                      step={0.01}
+                      placeholder="0"
+                      className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-xl font-bold bg-white text-center"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setQuantity((quantity || 0) + 1)}
+                      className="w-12 h-12 flex items-center justify-center border-2 border-gray-300 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all font-bold text-gray-700 hover:text-blue-700"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {adjustmentType === 'set' 
                             ? 'Set stock to this quantity'
                             : adjustmentType === 'in'
                             ? 'Add to current stock'
-                            : 'Remove from current stock'
-                        }
-                      />
-                    )}
-                  />
+                      : 'Remove from current stock'}
+                  </p>
                 </div>
 
                 {/* Reason */}
-                <Controller
-                  name="reason"
-                  control={control}
-                  render={({ field }) => (
-                    <GlassSelect
-                      label="Reason"
-                      placeholder="Select reason"
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.reason?.message}
-                      options={reasonOptions}
-                      required
-                    />
-                  )}
-                />
-
-                {/* Reference */}
-                <Controller
-                  name="reference"
-                  control={control}
-                  render={({ field }) => (
-                    <GlassInput
-                      label="Reference"
-                      placeholder="e.g., PO-001, Invoice #123"
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.reference?.message}
-                      maxLength={100}
-                      helperText="Optional reference number or document"
-                    />
-                  )}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Reason *
+                  </label>
+                  <select
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                  >
+                    <option value="">Select reason</option>
+                    {REASON_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
                 {/* Notes */}
-                <Controller
-                  name="notes"
-                  control={control}
-                  render={({ field }) => (
-                    <GlassInput
-                      label="Notes"
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={3}
                       placeholder="Additional notes about this adjustment"
-                      value={field.value}
-                      onChange={field.onChange}
-                      error={errors.notes?.message}
-                      multiline
-                      rows={3}
-                      maxLength={500}
-                      helperText={`${field.value?.length || 0}/500 characters`}
-                    />
-                  )}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white resize-none"
                 />
               </div>
 
-                {/* Advanced Settings */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-lats-text">Advanced Settings</h3>
-                    <GlassButton
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsExpanded(!isExpanded)}
-                      icon={
-                        <Settings className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                      }
-                    >
-                      {isExpanded ? 'Hide' : 'Show'} Advanced
-                    </GlassButton>
-                  </div>
-
-                  {isExpanded && (
-                    <div className="space-y-4 p-4 bg-lats-surface/30 rounded-lats-radius-md border border-lats-glass-border">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Cost */}
-                        <Controller
-                          name="cost"
-                          control={control}
-                          render={({ field }) => (
-                            <PriceInput
-                              label="Unit Cost"
-                              placeholder="0"
-                              value={field.value}
-                              onChange={field.onChange}
-                              error={errors.cost?.message}
-                              helperText="Cost per unit for this adjustment"
-                            />
-                          )}
-                        />
-
-                        {/* Location */}
-                        <Controller
-                          name="location"
-                          control={control}
-                          render={({ field }) => (
-                            <GlassSelect
-                              label="Location"
-                              placeholder="Select location"
-                              value={field.value}
-                              onChange={field.onChange}
-                              error={errors.location?.message}
-                              options={locationOptions}
-                              clearable
-                            />
-                          )}
-                        />
-                      </div>
+                {/* IMEI/Serial Number Section - Only for Stock In */}
+                {adjustmentType === 'in' && quantity > 0 && (
+                  <div className="border-2 border-blue-300 rounded-xl p-4 bg-blue-50/50">
+                    <div className="mb-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        IMEI/Serial Numbers ({quantity} required)
+                      </label>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Enter one IMEI or Serial Number for each unit. Each will be created as a child variant.
+                      </p>
                     </div>
-                  )}
-                </div>
+
+                    <div className="space-y-3 max-h-64 overflow-y-auto">
+                      {imeis.map((imei, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="w-8 text-sm font-semibold text-gray-600 text-right">
+                            #{index + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={imei}
+                            onChange={(e) => updateIMEI(index, e.target.value)}
+                            placeholder={`IMEI/Serial #${index + 1}`}
+                            className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Preview */}
-                <div className="p-4 bg-lats-surface/30 rounded-lats-radius-md border border-lats-glass-border">
-                  <h3 className="text-lg font-medium text-lats-text mb-3">Preview</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="text-center">
-                      <div className="text-sm text-lats-text-secondary mb-1">Current Stock</div>
-                      <div className="text-xl font-bold text-lats-text">{selectedVariant.quantity}</div>
-                      {getStatusBadge(currentStatus)}
+                <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-6 border border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Preview</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+                      <div className="text-sm text-gray-600 mb-1">Current Stock</div>
+                      <div className="text-2xl font-bold text-gray-900">{selectedVariant.quantity || 0}</div>
+                      {currentStatus === 'low' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 mt-2">
+                          Low
+                        </span>
+                      )}
+                      {currentStatus === 'high' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 mt-2">
+                          High
+                        </span>
+                      )}
+                      {currentStatus === 'normal' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 mt-2">
+                          Normal
+                        </span>
+                      )}
                     </div>
-                    <div className="text-center">
-                      <div className="text-sm text-lats-text-secondary mb-1">New Stock</div>
-                      <div className="text-xl font-bold text-lats-text">{newStockLevel}</div>
-                      {getStatusBadge(newStatus)}
+                    <div className="text-center p-4 bg-white rounded-lg border border-gray-200">
+                      <div className="text-sm text-gray-600 mb-1">New Stock</div>
+                      <div className="text-2xl font-bold text-gray-900">{newStockLevel}</div>
+                      {newStatus === 'low' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700 mt-2">
+                          Low
+                        </span>
+                      )}
+                      {newStatus === 'high' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 mt-2">
+                          High
+                        </span>
+                      )}
+                      {newStatus === 'normal' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 mt-2">
+                          Normal
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center justify-center gap-2 mt-3">
-                    {getAdjustmentTypeBadge(adjustmentType)}
-                    <span className="text-sm text-lats-text-secondary">
-                      {adjustmentType === 'in' && `+${quantity} units`}
-                      {adjustmentType === 'out' && `-${quantity} units`}
-                      {adjustmentType === 'set' && `Set to ${quantity} units`}
+                  <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t border-gray-200">
+                    {adjustmentType === 'in' && (
+                      <span className="text-sm font-semibold text-green-700">
+                        +{quantity} units
+                      </span>
+                    )}
+                    {adjustmentType === 'out' && (
+                      <span className="text-sm font-semibold text-red-700">
+                        -{quantity} units
+                      </span>
+                    )}
+                    {adjustmentType === 'set' && (
+                      <span className="text-sm font-semibold text-blue-700">
+                        Set to {quantity} units
                     </span>
+                    )}
+                  </div>
                   </div>
                 </div>
               </>
             )}
+        </div>
 
-            {/* Form Actions */}
-            <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-lats-glass-border">
-              <GlassButton
-                type="submit"
-                variant="primary"
-                loading={loading}
-                disabled={!isDirty || !selectedVariant}
-                className="flex-1 sm:flex-none"
+        {/* Footer */}
+        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!isDirty || isSubmitting || loading}
+              className="flex-1 px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
               >
-                {loading ? 'Processing...' : 'Apply Adjustment'}
-              </GlassButton>
+              {isSubmitting || loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </span>
+              ) : (
+                'Apply Adjustment'
+              )}
+            </button>
               
-              <GlassButton
+            <button
                 type="button"
-                variant="secondary"
-                onClick={handleCancel}
-                disabled={loading}
-                className="flex-1 sm:flex-none"
+              onClick={onClose}
+              disabled={isSubmitting || loading}
+              className="flex-1 sm:flex-none px-6 py-3.5 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
-              </GlassButton>
+            </button>
             </div>
-          </form>
-        </GlassCard>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
-// Export with display name for debugging
 EnhancedStockAdjustModal.displayName = 'EnhancedStockAdjustModal';
 
 export default EnhancedStockAdjustModal;

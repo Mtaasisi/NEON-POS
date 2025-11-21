@@ -4,15 +4,17 @@
  */
 
 import React, { useState } from 'react';
-import { History, DollarSign } from 'lucide-react';
+import { History, DollarSign, Settings } from 'lucide-react';
 import TradeInHistoryTab from '../components/tradeIn/TradeInHistoryTab';
 import TradeInPricingTab from '../components/tradeIn/TradeInPricingTab';
+import { TradeInSettingsModal } from '../components/tradeIn/TradeInSettingsModal';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 type TabType = 'history' | 'pricing';
 
 export const TradeInManagementPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('history');
+  const [showSettings, setShowSettings] = useState(false);
 
   const tabs = [
     {
@@ -32,14 +34,24 @@ export const TradeInManagementPage: React.FC = () => {
   return (
     <div className="container mx-auto p-6 max-w-7xl">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-          <History className="w-8 h-8 text-blue-600" />
-          Trade-In Management
-        </h1>
-        <p className="text-gray-600 mt-2">
-          Manage device trade-ins, pricing, and transaction history
-        </p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+            <History className="w-8 h-8 text-blue-600" />
+            Trade-In Management
+          </h1>
+          <p className="text-gray-600 mt-2">
+            Manage device trade-ins, pricing, and transaction history
+          </p>
+        </div>
+        <button
+          onClick={() => setShowSettings(true)}
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium flex items-center gap-2"
+          title="Trade-In Settings"
+        >
+          <Settings className="w-5 h-5" />
+          Settings
+        </button>
       </div>
 
       {/* Tabs Navigation */}
@@ -88,6 +100,12 @@ export const TradeInManagementPage: React.FC = () => {
         {activeTab === 'history' && <TradeInHistoryTab />}
         {activeTab === 'pricing' && <TradeInPricingTab />}
       </div>
+
+      {/* Settings Modal */}
+      <TradeInSettingsModal
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
+      />
     </div>
   );
 };

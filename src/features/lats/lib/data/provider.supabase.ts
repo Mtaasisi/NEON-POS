@@ -952,6 +952,106 @@ const supabaseProvider = {
 
   deleteProduct: async (id: string) => {
     try {
+      // Step 1: Get all variants for this product
+      const { data: variants, error: variantsError } = await supabase
+        .from('lats_product_variants')
+        .select('id')
+        .eq('product_id', id);
+
+      if (variantsError) {
+        console.error('Error fetching variants:', variantsError);
+        throw variantsError;
+      }
+
+      const variantIds = variants?.map(v => v.id) || [];
+
+      // Step 2: Delete purchase order items that reference this product
+      // This handles the foreign key constraint: lats_purchase_order_items_product_id_fkey
+      if (variantIds.length > 0) {
+        // Delete PO items that reference variants of this product
+        const { error: poItemsError } = await supabase
+          .from('lats_purchase_order_items')
+          .delete()
+          .in('variant_id', variantIds);
+
+        if (poItemsError) {
+          console.error('Error deleting purchase order items (by variant):', poItemsError);
+          // Continue anyway, try to delete by product_id
+        }
+      }
+
+      // Delete PO items that directly reference the product
+      const { error: poItemsByProductError } = await supabase
+        .from('lats_purchase_order_items')
+        .delete()
+        .eq('product_id', id);
+
+      if (poItemsByProductError) {
+        console.error('Error deleting purchase order items (by product):', poItemsByProductError);
+        throw poItemsByProductError;
+      }
+
+      // Step 3: Delete stock movements for variants
+      if (variantIds.length > 0) {
+        const { error: stockMovementsError } = await supabase
+          .from('lats_stock_movements')
+          .delete()
+          .in('variant_id', variantIds);
+
+        if (stockMovementsError) {
+          console.error('Error deleting stock movements:', stockMovementsError);
+          // Continue anyway
+        }
+      }
+
+      // Delete stock movements that reference the product directly
+      const { error: stockMovementsByProductError } = await supabase
+        .from('lats_stock_movements')
+        .delete()
+        .eq('product_id', id);
+
+      if (stockMovementsByProductError) {
+        console.error('Error deleting stock movements (by product):', stockMovementsByProductError);
+        // Continue anyway
+      }
+
+      // Step 4: Delete variants (must be done before deleting product)
+      if (variantIds.length > 0) {
+        const { error: variantsDeleteError } = await supabase
+          .from('lats_product_variants')
+          .delete()
+          .in('id', variantIds);
+
+        if (variantsDeleteError) {
+          console.error('Error deleting variants:', variantsDeleteError);
+          throw variantsDeleteError;
+        }
+      }
+
+      // Step 5: Delete sale items that reference this product
+      const { error: saleItemsError } = await supabase
+        .from('lats_sale_items')
+        .delete()
+        .eq('product_id', id);
+
+      if (saleItemsError) {
+        console.error('Error deleting sale items:', saleItemsError);
+        // Continue anyway - sale items might have ON DELETE CASCADE or we want to preserve history
+        // If preserving history is preferred, we could set product_id to NULL instead
+      }
+
+      // Step 6: Delete auto reorder log entries
+      const { error: autoReorderLogError } = await supabase
+        .from('auto_reorder_log')
+        .delete()
+        .eq('product_id', id);
+
+      if (autoReorderLogError) {
+        console.error('Error deleting auto reorder log:', autoReorderLogError);
+        // Continue anyway
+      }
+
+      // Step 7: Now delete the product itself
       const { error } = await supabase
         .from('lats_products')
         .delete()

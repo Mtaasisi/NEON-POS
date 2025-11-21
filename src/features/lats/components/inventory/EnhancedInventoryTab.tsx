@@ -716,8 +716,19 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   
                   // Calculate stock: Use variant stock if product HAS variants, otherwise use product-level stock
                   // 🐛 FIX: Don't fallback to product stock when variants exist but have 0 stock
+                  // ✅ FIX: Exclude IMEI child variants from stock calculation (they are counted as part of parent)
                   const hasVariants = product.variants && product.variants.length > 0;
-                  const variantStock = hasVariants ? product.variants.reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) : 0;
+                  const variantStock = hasVariants ? product.variants
+                    .filter((variant: any) => {
+                      // Exclude IMEI child variants - they should not be counted separately
+                      const isImeiChild = variant.parent_variant_id || 
+                                        variant.parentVariantId ||
+                                        variant.variant_type === 'imei_child' ||
+                                        variant.variantType === 'imei_child' ||
+                                        (variant.name && variant.name.toLowerCase().includes('imei:'));
+                      return !isImeiChild;
+                    })
+                    .reduce((sum: any, variant: any) => sum + (variant.quantity || 0), 0) : 0;
                   const totalStock = hasVariants ? variantStock : (product.stockQuantity || product.stock_quantity || 0);
                   const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
                   const availableStock = totalStock - reservedStock;
@@ -750,10 +761,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                           }
                           
                           // Allow products without variants - they can be added to POs and variants will be created automatically
-                          if (!freshProduct.data.variants || freshProduct.data.variants.length === 0) {
-                            console.warn('⚠️ [Table View] Product has no variants - variants will be created automatically when added to PO', freshProduct.data);
-                            // Don't block - continue to show product details
-                          }
+                          // No warning needed - this is expected behavior
                           
                           setSelectedProductForDetail(freshProduct.data);
                           setShowProductDetailModal(true);
@@ -1228,10 +1236,7 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                     }
                     
                     // Allow products without variants - they can be added to POs and variants will be created automatically
-                    if (!freshProduct.data.variants || freshProduct.data.variants.length === 0) {
-                      console.warn('⚠️ [Grid View] Product has no variants - variants will be created automatically when added to PO', freshProduct.data);
-                      // Don't block - continue to show product details
-                    }
+                    // No warning needed - this is expected behavior
                     
                     setSelectedProductForDetail(freshProduct.data);
                     setShowProductDetailModal(true);

@@ -123,10 +123,20 @@ const ProductModal: React.FC<ProductModalProps> = ({
       return;
     }
     
-    // Calculate correct totalQuantity from variants
-    const calculatedTotalQuantity = product?.variants?.reduce((sum: number, variant: any) => {
-      return sum + (variant.quantity || 0);
-    }, 0) || 0;
+    // Calculate totalQuantity: Use database value (which includes all variants including IMEI children)
+    // Only calculate from variants if we have variants AND the calculated value is greater than 0
+    // This ensures we show the correct total even when IMEI children are filtered out
+    const variantCalculatedTotal = product?.variants && product.variants.length > 0
+      ? product.variants.reduce((sum: number, variant: any) => {
+          return sum + (variant.quantity || 0);
+        }, 0)
+      : 0;
+    
+    // Use database totalQuantity (includes all variants) if it's available and different from calculated
+    // This handles cases where IMEI children are filtered out but their stock should be included
+    const calculatedTotalQuantity = (product?.totalQuantity || product?.total_quantity || product?.stockQuantity || product?.stock_quantity || 0) > variantCalculatedTotal
+      ? (product?.totalQuantity || product?.total_quantity || product?.stockQuantity || product?.stock_quantity || 0)
+      : variantCalculatedTotal;
     
     // Set product with correct total - synchronous update
     const updatedProduct = {
@@ -1336,7 +1346,22 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                       <TrendingUp className="w-3 h-3 text-green-600" />
                       <span className="text-[9px] font-bold text-green-700 uppercase tracking-wide">Price</span>
                     </div>
-                    <p className="text-lg font-bold text-green-700">{format.money(primaryVariant?.sellingPrice || 0)}</p>
+                    {(() => {
+                      const prices = currentProduct.variants?.map(v => v.sellingPrice || v.price || 0).filter(p => p > 0) || [];
+                      const minPrice = Math.min(...prices);
+                      const maxPrice = Math.max(...prices);
+                      const hasPriceRange = prices.length > 1 && minPrice !== maxPrice;
+                      
+                      if (hasPriceRange) {
+                        return (
+                          <div>
+                            <p className="text-lg font-bold text-green-700">{format.money(minPrice)} - {format.money(maxPrice)}</p>
+                            <p className="text-[8px] text-green-600 mt-0.5">Varies by variant</p>
+                          </div>
+                        );
+                      }
+                      return <p className="text-lg font-bold text-green-700">{format.money(primaryVariant?.sellingPrice || primaryVariant?.price || 0)}</p>;
+                    })()}
                   </div>
                   
                   <div className="bg-red-50 rounded-lg p-2 border border-red-200">
@@ -1344,24 +1369,83 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                       <TrendingDown className="w-3 h-3 text-red-600" />
                       <span className="text-[9px] font-bold text-red-700 uppercase tracking-wide">Cost</span>
                     </div>
-                    <p className="text-lg font-bold text-red-700">{format.money(primaryVariant?.costPrice || 0)}</p>
+                    {(() => {
+                      const costs = currentProduct.variants?.map(v => v.costPrice || 0).filter(c => c > 0) || [];
+                      const minCost = costs.length > 0 ? Math.min(...costs) : 0;
+                      const maxCost = costs.length > 0 ? Math.max(...costs) : 0;
+                      const hasCostRange = costs.length > 1 && minCost !== maxCost;
+                      
+                      if (hasCostRange) {
+                        return (
+                          <div>
+                            <p className="text-lg font-bold text-red-700">{format.money(minCost)} - {format.money(maxCost)}</p>
+                            <p className="text-[8px] text-red-600 mt-0.5">Varies by variant</p>
+                          </div>
+                        );
+                      }
+                      return <p className="text-lg font-bold text-red-700">{format.money(primaryVariant?.costPrice || 0)}</p>;
+                    })()}
                   </div>
                   
                   <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
                     <span className="text-[9px] font-bold text-blue-700 uppercase tracking-wide block mb-0.5">Profit</span>
-                    <p className="text-sm font-bold text-blue-700">
-                      {format.money((primaryVariant?.sellingPrice || 0) - (primaryVariant?.costPrice || 0))}
-                    </p>
+                    {(() => {
+                      const profits = currentProduct.variants?.map(v => {
+                        const sellingPrice = v.sellingPrice || v.price || 0;
+                        const costPrice = v.costPrice || 0;
+                        return sellingPrice - costPrice;
+                      }).filter(p => !isNaN(p)) || [];
+                      
+                      if (profits.length === 0) {
+                        return <p className="text-sm font-bold text-blue-700">TSh 0</p>;
+                      }
+                      
+                      const minProfit = Math.min(...profits);
+                      const maxProfit = Math.max(...profits);
+                      const hasProfitRange = profits.length > 1 && minProfit !== maxProfit;
+                      
+                      if (hasProfitRange) {
+                        return (
+                          <div>
+                            <p className="text-sm font-bold text-blue-700">{format.money(minProfit)} - {format.money(maxProfit)}</p>
+                            <p className="text-[8px] text-blue-600 mt-0.5">Varies</p>
+                          </div>
+                        );
+                      }
+                      return <p className="text-sm font-bold text-blue-700">{format.money(profits[0] || 0)}</p>;
+                    })()}
                   </div>
                   
                   <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
                     <span className="text-[9px] font-bold text-purple-700 uppercase tracking-wide block mb-0.5">Markup</span>
-                    <p className="text-sm font-bold text-purple-700">
-                      {primaryVariant?.costPrice > 0 
-                        ? `${(((primaryVariant.sellingPrice - primaryVariant.costPrice) / primaryVariant.costPrice) * 100).toFixed(1)}%`
-                        : 'N/A'
+                    {(() => {
+                      const markups = currentProduct.variants?.map(v => {
+                        const sellingPrice = v.sellingPrice || v.price || 0;
+                        const costPrice = v.costPrice || 0;
+                        if (costPrice > 0) {
+                          return ((sellingPrice - costPrice) / costPrice) * 100;
+                        }
+                        return 0;
+                      }).filter(m => !isNaN(m) && m > 0) || [];
+                      
+                      if (markups.length === 0) {
+                        return <p className="text-sm font-bold text-purple-700">0.0%</p>;
                       }
-                    </p>
+                      
+                      const minMarkup = Math.min(...markups);
+                      const maxMarkup = Math.max(...markups);
+                      const hasMarkupRange = markups.length > 1 && minMarkup !== maxMarkup;
+                      
+                      if (hasMarkupRange) {
+                        return (
+                          <div>
+                            <p className="text-sm font-bold text-purple-700">{minMarkup.toFixed(1)}% - {maxMarkup.toFixed(1)}%</p>
+                            <p className="text-[8px] text-purple-600 mt-0.5">Varies</p>
+                          </div>
+                        );
+                      }
+                      return <p className="text-sm font-bold text-purple-700">{markups[0]?.toFixed(1) || '0.0'}%</p>;
+                    })()}
                   </div>
                 </div>
 
@@ -2101,9 +2185,9 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                                         {getVariantDisplayName(variant)}
                                       </span>
                                       {variant.quantity <= 0 && (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-red-600 text-white">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-gray-500 text-white">
                                           <X className="w-3 h-3" />
-                                          SOLD
+                                          Out of Stock
                                         </span>
                                       )}
                                       {sourceBadge && (
@@ -2149,7 +2233,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                                   ) : (
                                     <>
                                       <X className="w-3 h-3" />
-                                      SOLD
+                                      Out of Stock
                                     </>
                                   )}
                                 </span>

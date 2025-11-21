@@ -4,11 +4,11 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { FileText, Download, Printer, CheckCircle, X, AlertTriangle } from 'lucide-react';
+import { FileText, Download, Printer, CheckCircle, X, AlertTriangle, Upload, Camera } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { toast } from 'sonner';
 import type { TradeInTransaction, CustomerIdType } from '../../types/tradeIn';
-import { createTradeInContract, getTradeInSettings } from '../../lib/tradeInApi';
+import { createTradeInContract, getTradeInSettings, updateTradeInTransaction } from '../../lib/tradeInApi';
 import { format } from '../../lib/format';
 import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
@@ -37,6 +37,8 @@ export const TradeInContractModal: React.FC<TradeInContractModalProps> = ({
   const [idType, setIdType] = useState<CustomerIdType>('national_id');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(transaction.customer_id_photo_url || null);
+  const idPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // Signature refs
   const customerSigRef = useRef<SignatureCanvas>(null);
@@ -64,6 +66,39 @@ export const TradeInContractModal: React.FC<TradeInContractModalProps> = ({
 
   const handleClearStaffSignature = () => {
     staffSigRef.current?.clear();
+  };
+
+  const handleIdPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setIdPhotoPreview(result);
+        // Save to transaction
+        try {
+          await updateTradeInTransaction(transaction.id, {
+            customer_id_photo_url: result,
+          } as any);
+          toast.success('ID photo uploaded');
+        } catch (error) {
+          console.error('Error saving ID photo:', error);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -261,6 +296,48 @@ export const TradeInContractModal: React.FC<TradeInContractModalProps> = ({
                           placeholder="Enter ID number"
                           required
                         />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          ID Photo (Optional)
+                        </label>
+                        <input
+                          ref={idPhotoInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleIdPhotoSelect}
+                          className="hidden"
+                        />
+                        {idPhotoPreview ? (
+                          <div className="relative">
+                            <img
+                              src={idPhotoPreview}
+                              alt="ID Photo"
+                              className="w-full h-48 object-contain border-2 border-gray-300 rounded-lg"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIdPhotoPreview(null);
+                                if (idPhotoInputRef.current) {
+                                  idPhotoInputRef.current.value = '';
+                                }
+                              }}
+                              className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => idPhotoInputRef.current?.click()}
+                            className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-colors flex items-center justify-center gap-2"
+                          >
+                            <Upload className="w-5 h-5 text-gray-400" />
+                            <span className="text-sm text-gray-600">Upload ID Photo</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

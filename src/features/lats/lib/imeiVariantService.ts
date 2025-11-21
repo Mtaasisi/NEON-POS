@@ -201,18 +201,42 @@ export const convertToParentVariant = async (variant_id: string) => {
  */
 export const checkIMEIExists = async (imei: string): Promise<boolean> => {
   try {
+    // ✅ FIX: Use RPC function if available (most reliable)
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('imei_exists', {
+        check_imei: imei
+      });
+      
+      if (!rpcError && typeof rpcData === 'boolean') {
+        return rpcData;
+      }
+    } catch (rpcErr) {
+      // RPC function might not exist, fall back to direct query
+    }
+
+    // ✅ FIX: Query IMEI children and filter in memory to avoid SQL syntax issues
+    // This is more reliable than using .filter() with JSONB operators which can cause SQL syntax errors
     const { data, error } = await supabase
       .from('lats_product_variants')
-      .select('id')
-      .filter("variant_attributes->>'imei'", 'eq', imei)
-      .maybeSingle();
+      .select('id, variant_attributes')
+      .eq('variant_type', 'imei_child')
+      .eq('is_active', true)
+      .limit(1000); // Reasonable limit for IMEI check
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       console.error('Error checking IMEI:', error);
       return false;
     }
 
-    return !!data;
+    // Filter in memory to find matching IMEI
+    const matching = (data || []).find((variant: any) => {
+      const variantImei = variant.variant_attributes?.imei || 
+                         variant.variant_attributes?.['imei'] ||
+                         variant.attributes?.imei;
+      return variantImei === imei;
+    });
+
+    return !!matching;
   } catch (error) {
     console.error('Error checking IMEI:', error);
     return false;

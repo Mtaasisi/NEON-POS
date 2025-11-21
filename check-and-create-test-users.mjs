@@ -3,12 +3,15 @@
 /**
  * Check and Create Test Users for Admin Testing
  * This script checks what users exist and creates test users for each role
+ * Supports both Supabase and Neon database
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { Pool } from '@neondatabase/serverless';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { randomUUID } from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,17 +20,22 @@ const __dirname = dirname(__filename);
 const envPath = join(__dirname, '.env');
 let supabaseUrl = process.env.VITE_SUPABASE_URL;
 let supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+let databaseUrl = process.env.VITE_DATABASE_URL || process.env.DATABASE_URL;
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseKey || !databaseUrl) {
   try {
     const envContent = readFileSync(envPath, 'utf8');
     const envLines = envContent.split('\n');
     for (const line of envLines) {
       if (line.startsWith('VITE_SUPABASE_URL=')) {
-        supabaseUrl = line.split('=')[1].replace(/['"]/g, '');
+        supabaseUrl = line.split('=')[1].replace(/['"]/g, '').trim();
       }
       if (line.startsWith('VITE_SUPABASE_ANON_KEY=')) {
-        supabaseKey = line.split('=')[1].replace(/['"]/g, '');
+        supabaseKey = line.split('=')[1].replace(/['"]/g, '').trim();
+      }
+      if (line.startsWith('VITE_DATABASE_URL=') || line.startsWith('DATABASE_URL=')) {
+        const value = line.split('=').slice(1).join('=').replace(/['"]/g, '').trim();
+        if (!databaseUrl) databaseUrl = value;
       }
     }
   } catch (error) {
@@ -35,27 +43,51 @@ if (!supabaseUrl || !supabaseKey) {
   }
 }
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ Supabase configuration not found');
-  console.error('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env file');
+// Initialize database connection
+let supabase;
+let pool;
+let useNeon = false;
+
+if (supabaseUrl && supabaseKey) {
+  console.log('🔗 Using Supabase connection');
+  supabase = createClient(supabaseUrl, supabaseKey);
+} else if (databaseUrl) {
+  console.log('🔗 Using Neon database connection');
+  useNeon = true;
+  pool = new Pool({ connectionString: databaseUrl });
+} else {
+  console.error('❌ Database configuration not found');
+  console.error('Please set either:');
+  console.error('  - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (for Supabase)');
+  console.error('  - VITE_DATABASE_URL or DATABASE_URL (for Neon)');
   process.exit(1);
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function checkUsers() {
   console.log('🔍 Checking existing users...');
   console.log('================================');
 
   try {
-    const { data: users, error } = await supabase
-      .from('users')
-      .select('id, full_name, name, email, role')
-      .order('role', { ascending: false });
+    let users;
+    
+    if (useNeon) {
+      const result = await pool.query(`
+        SELECT id, full_name, email, role 
+        FROM users 
+        ORDER BY role DESC
+      `);
+      users = result.rows;
+    } else {
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, name, email, role')
+        .order('role', { ascending: false });
 
-    if (error) {
-      console.error('❌ Error fetching users:', error.message);
-      return [];
+      if (error) {
+        console.error('❌ Error fetching users:', error.message);
+        return [];
+      }
+      users = data || [];
     }
 
     console.log(`📊 Found ${users.length} users:`);
@@ -87,49 +119,83 @@ async function createTestUsers() {
       console.log(`   Creating ${userData.full_name} (${userData.role})...`);
 
       // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', userData.email)
-        .single();
+      let existingUser;
+      if (useNeon) {
+        const result = await pool.query(
+          'SELECT id FROM users WHERE email = $1',
+          [userData.email]
+        );
+        existingUser = result.rows[0];
+      } else {
+        const { data } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', userData.email)
+          .single();
+        existingUser = data;
+      }
 
       if (existingUser) {
         console.log(`   ⚠️  User ${userData.email} already exists, skipping...`);
         continue;
       }
 
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: userData.email,
-        password: userData.password,
-        options: {
-          data: {
-            full_name: userData.full_name,
-            role: userData.role
-          }
+      let userId;
+      
+      if (useNeon) {
+        // For Neon, create user directly in database
+        // Generate a UUID for the user ID
+        userId = randomUUID();
+        
+        // Insert user record directly (password is required by schema)
+        const result = await pool.query(
+          `INSERT INTO users (id, full_name, email, role, password, is_active, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+           RETURNING id`,
+          [userId, userData.full_name, userData.email, userData.role, userData.password, true]
+        );
+        
+        if (result.rows[0]) {
+          console.log(`   ✅ Created ${userData.full_name} (${userData.role})`);
+        } else {
+          console.log(`   ❌ Failed to create user record`);
         }
-      });
-
-      if (authError) {
-        console.log(`   ❌ Failed to create auth user: ${authError.message}`);
-        continue;
-      }
-
-      // Insert user record
-      const { error: userError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user?.id,
-          full_name: userData.full_name,
+      } else {
+        // For Supabase, create auth user first
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email: userData.email,
-          role: userData.role,
-          is_active: true
+          password: userData.password,
+          options: {
+            data: {
+              full_name: userData.full_name,
+              role: userData.role
+            }
+          }
         });
 
-      if (userError) {
-        console.log(`   ❌ Failed to create user record: ${userError.message}`);
-      } else {
-        console.log(`   ✅ Created ${userData.full_name} (${userData.role})`);
+        if (authError) {
+          console.log(`   ❌ Failed to create auth user: ${authError.message}`);
+          continue;
+        }
+
+        userId = authData.user?.id;
+
+        // Insert user record
+        const { error: userError } = await supabase
+          .from('users')
+          .insert({
+            id: userId,
+            full_name: userData.full_name,
+            email: userData.email,
+            role: userData.role,
+            is_active: true
+          });
+
+        if (userError) {
+          console.log(`   ❌ Failed to create user record: ${userError.message}`);
+        } else {
+          console.log(`   ✅ Created ${userData.full_name} (${userData.role})`);
+        }
       }
 
     } catch (error) {
@@ -186,4 +252,8 @@ async function main() {
   }
 }
 
-main().catch(console.error);
+main().catch(console.error).finally(() => {
+  if (pool) {
+    pool.end();
+  }
+});

@@ -158,6 +158,8 @@ export interface TradeInTransactionFormData {
   condition_rating: ConditionRating;
   condition_description?: string;
   damage_items?: DamageItem[];
+  device_photos?: DevicePhoto[];
+  customer_id_photo_url?: string;
   new_product_id?: string;
   new_variant_id?: string;
   new_device_price?: number;

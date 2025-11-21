@@ -782,6 +782,7 @@ export const AuthProvider: FC<{ children: ReactNode }> = ({ children }) => {
         .from('users')
         .select('id, full_name, email, role')
         .neq('role', 'admin') // Don't include other admins
+        .eq('is_active', true) // Only include active users
         .order('full_name');
 
       if (error) throw error;
