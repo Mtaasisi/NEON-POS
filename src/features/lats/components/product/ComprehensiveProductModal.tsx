@@ -172,13 +172,30 @@ const ComprehensiveProductModal: React.FC<ComprehensiveProductModalProps> = ({
     };
   }, [currentProduct?.variants]);
 
-  // Parse specifications
+  // Parse specifications - check both product.specification column and variant attributes
   const specifications = useMemo(() => {
-    const primaryVariant = currentProduct?.variants?.[0];
-    if (!primaryVariant?.attributes?.specification) return {};
+    // Get specification from product specification column or variant attributes
+    const specificationText = (currentProduct as any).specification || 
+                              currentProduct?.variants?.[0]?.attributes?.specification || 
+                              (currentProduct as any).attributes?.specification || 
+                              null;
     
-    return parseSpecification(primaryVariant.attributes.specification);
-  }, [currentProduct?.variants]);
+    if (!specificationText) return {};
+    
+    // Try to parse as JSON first (structured specs), otherwise treat as plain text
+    try {
+      const parsed = JSON.parse(specificationText);
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        return parsed;
+      } else {
+        // If it's a valid JSON but not an object (e.g., string), treat as plain text
+        return { _raw: specificationText };
+      }
+    } catch {
+      // Not JSON - treat as plain text string
+      return { _raw: specificationText };
+    }
+  }, [currentProduct]);
 
   if (!isOpen || !product) {
     return null;
@@ -569,21 +586,101 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                       </div>
                     </div>
 
-                    {/* Specifications */}
+                    {/* Specifications - Redesigned */}
                     {Object.keys(specifications).length > 0 && (
-                      <div className="bg-white rounded-xl p-4 border border-gray-200">
-                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200">
-                          <Tag className="w-5 h-5 text-indigo-600" />
-                          <h3 className="text-sm font-semibold text-gray-800">Specifications</h3>
+                      <div className="bg-white rounded-2xl p-6 border border-gray-200 shadow-lg">
+                        <div className="flex items-center gap-3 mb-6">
+                          <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                            <Tag className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-bold text-gray-900">Technical Specifications</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">{Object.keys(specifications).length} {Object.keys(specifications).length === 1 ? 'specification' : 'specifications'}</p>
+                          </div>
                         </div>
-                        <div className="space-y-2">
-                          {Object.entries(specifications).map(([key, value]) => (
-                            <div key={key} className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg">
-                              <span className="text-sm text-gray-600 capitalize">{key.replace(/_/g, ' ')}</span>
-                              <span className="text-sm font-medium text-gray-900">{formatSpecificationValue(key, value)}</span>
+                        
+                        {specifications._raw ? (
+                          // Display as plain text if it's a raw string (from CSV) - Minimal design
+                          <div className="bg-white rounded-lg p-4 border border-gray-200">
+                            <div className="flex flex-wrap gap-2">
+                              {specifications._raw.split(',').map((item, idx) => {
+                                const trimmedItem = item.trim();
+                                if (!trimmedItem) return null;
+                                
+                                return (
+                                  <span 
+                                    key={idx} 
+                                    className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-md text-sm border border-gray-200"
+                                  >
+                                    {trimmedItem}
+                                  </span>
+                                );
+                              })}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ) : (
+                          // Display as key-value pairs if it's structured data - Enhanced design
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {Object.entries(specifications).map(([key, value]) => {
+                              const formattedValue = formatSpecificationValue(key, value);
+                              const keyLower = key.toLowerCase();
+                              
+                              // Color coding based on specification type
+                              const getSpecColor = () => {
+                                if (keyLower.includes('ram') || keyLower.includes('memory')) 
+                                  return 'bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-300 text-emerald-900';
+                                if (keyLower.includes('storage') || keyLower.includes('capacity')) 
+                                  return 'bg-gradient-to-br from-blue-50 to-blue-100 border-blue-300 text-blue-900';
+                                if (keyLower.includes('processor') || keyLower.includes('cpu') || keyLower.includes('snapdragon') || keyLower.includes('chip')) 
+                                  return 'bg-gradient-to-br from-purple-50 to-purple-100 border-purple-300 text-purple-900';
+                                if (keyLower.includes('screen') || keyLower.includes('display') || keyLower.includes('amoled')) 
+                                  return 'bg-gradient-to-br from-orange-50 to-orange-100 border-orange-300 text-orange-900';
+                                if (keyLower.includes('battery') || keyLower.includes('mah')) 
+                                  return 'bg-gradient-to-br from-teal-50 to-teal-100 border-teal-300 text-teal-900';
+                                if (keyLower.includes('camera') || keyLower.includes('mp')) 
+                                  return 'bg-gradient-to-br from-pink-50 to-pink-100 border-pink-300 text-pink-900';
+                                if (keyLower.includes('android') || keyLower.includes('os')) 
+                                  return 'bg-gradient-to-br from-green-50 to-green-100 border-green-300 text-green-900';
+                                if (keyLower.includes('5g') || keyLower.includes('wifi') || keyLower.includes('bluetooth')) 
+                                  return 'bg-gradient-to-br from-cyan-50 to-cyan-100 border-cyan-300 text-cyan-900';
+                                if (keyLower.includes('weight') || keyLower.includes('dimension')) 
+                                  return 'bg-gradient-to-br from-slate-50 to-slate-100 border-slate-300 text-slate-900';
+                                return 'bg-gradient-to-br from-gray-50 to-gray-100 border-gray-300 text-gray-900';
+                              };
+                              
+                              const getSpecIcon = () => {
+                                if (keyLower.includes('ram') || keyLower.includes('memory')) return '💾';
+                                if (keyLower.includes('storage') || keyLower.includes('capacity')) return '💿';
+                                if (keyLower.includes('processor') || keyLower.includes('cpu') || keyLower.includes('snapdragon')) return '⚙️';
+                                if (keyLower.includes('screen') || keyLower.includes('display')) return '📱';
+                                if (keyLower.includes('battery')) return '🔋';
+                                if (keyLower.includes('camera')) return '📷';
+                                if (keyLower.includes('android') || keyLower.includes('os')) return '🤖';
+                                if (keyLower.includes('5g')) return '📶';
+                                return '✨';
+                              };
+                              
+                              return (
+                                <div 
+                                  key={key} 
+                                  className={`${getSpecColor()} rounded-xl p-4 border-2 shadow-sm hover:shadow-lg transition-all duration-200 hover:scale-[1.02] cursor-default`}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <span className="text-2xl flex-shrink-0 filter drop-shadow-sm">{getSpecIcon()}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs font-bold uppercase tracking-wider opacity-70 mb-1.5">
+                                        {key.replace(/_/g, ' ')}
+                                      </div>
+                                      <div className="text-base font-bold break-words leading-tight">
+                                        {formattedValue}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

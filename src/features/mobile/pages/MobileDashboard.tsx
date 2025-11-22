@@ -355,7 +355,7 @@ const MobileDashboard: React.FC = () => {
         </div>
 
         {/* Loading State - Skeleton */}
-        {isLoading && products.length === 0 && (
+        {isLoading && (
           <div className="px-4 animate-pulse space-y-4">
             {/* Stats Cards Skeleton */}
             <div className="grid grid-cols-2 gap-3">

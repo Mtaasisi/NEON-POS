@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Upload, Download, AlertCircle, CheckCircle, Package, FileText, Info, Shield, FileSpreadsheet } from 'lucide-react';
+import { X, Upload, Download, AlertCircle, CheckCircle, Package, FileText, Info, Shield, FileSpreadsheet, CheckSquare, Square, Trash2, Copy, RotateCcw, Filter, Search, Edit } from 'lucide-react';
 import { Product, ProductFormData } from '../types/inventory';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
@@ -45,6 +45,7 @@ interface ImportedProduct {
   barcode?: string;
   description?: string;
   shortDescription?: string;
+  specifications?: string; // Product specifications
   
   // Relationships
   categoryId?: string;
@@ -100,9 +101,149 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
   const [editableData, setEditableData] = useState<ImportedProduct[]>([]);
   const [isCompactView, setIsCompactView] = useState(false);
   const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
+  const [expandedProductIndex, setExpandedProductIndex] = useState<number | null>(0); // First product expanded by default
+  const [selectedProducts, setSelectedProducts] = useState<Set<number>>(new Set()); // Selected product indices
+  const [expandedSpecifications, setExpandedSpecifications] = useState<Set<number>>(new Set()); // Track which product specs are expanded
   const [updateExisting, setUpdateExisting] = useState(false);
   const [conflictResolution, setConflictResolution] = useState<'migrate' | 'skip' | 'delete'>('migrate');
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Prevent default drag behavior on window level when modal is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const preventDefaults = (e: DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      preventDefaults(e);
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      preventDefaults(e);
+      // Don't handle drop here - let the drop zone handle it
+    };
+
+    // Add listeners to window
+    window.addEventListener('dragover', handleDragOver, false);
+    window.addEventListener('drop', handleDrop, false);
+
+    return () => {
+      window.removeEventListener('dragover', handleDragOver, false);
+      window.removeEventListener('drop', handleDrop, false);
+    };
+  }, [isOpen]);
+
+  // Ensure first product is expanded when preview step loads
+  useEffect(() => {
+    if (currentStep === 'preview' && previewData.length > 0) {
+      if (expandedProductIndex === null) {
+        setExpandedProductIndex(0);
+      }
+    }
+  }, [currentStep, previewData.length, expandedProductIndex]);
+
+  // Helper functions for edit mode
+  const handleSelectAll = () => {
+    const data = isEditMode ? editableData : previewData;
+    const allIndices = new Set(data.map((_, index) => index));
+    setSelectedProducts(allIndices);
+  };
+
+  const handleSelectNone = () => {
+    setSelectedProducts(new Set());
+  };
+
+  const handleToggleSelect = (index: number) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(index)) {
+      newSelected.delete(index);
+    } else {
+      newSelected.add(index);
+    }
+    setSelectedProducts(newSelected);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedProducts.size === 0) {
+      toast.error('No products selected');
+      return;
+    }
+
+    if (!window.confirm(`Are you sure you want to delete ${selectedProducts.size} product(s)?`)) {
+      return;
+    }
+
+    const data = isEditMode ? editableData : previewData;
+    const indicesToDelete = Array.from(selectedProducts).sort((a, b) => b - a); // Sort descending to delete from end
+    
+    const newData = [...data];
+    indicesToDelete.forEach(index => {
+      newData.splice(index, 1);
+    });
+
+    if (isEditMode) {
+      setEditableData(newData);
+      toast.success(`Deleted ${selectedProducts.size} product(s)`);
+    } else {
+      setPreviewData(newData);
+      toast.success(`Deleted ${selectedProducts.size} product(s)`);
+    }
+    
+    setSelectedProducts(new Set());
+    
+    // Reset expanded product if it was deleted
+    if (expandedProductIndex !== null && indicesToDelete.includes(expandedProductIndex)) {
+      setExpandedProductIndex(newData.length > 0 ? 0 : null);
+    }
+  };
+
+  const handleDuplicateSelected = () => {
+    if (selectedProducts.size === 0) {
+      toast.error('No products selected');
+      return;
+    }
+
+    const data = isEditMode ? editableData : previewData;
+    const indicesToDuplicate = Array.from(selectedProducts).sort((a, b) => a - b);
+    const duplicatedItems: ImportedProduct[] = [];
+
+    indicesToDuplicate.forEach(index => {
+      const item = data[index];
+      const duplicated: ImportedProduct = JSON.parse(JSON.stringify(item));
+      // Append " (Copy)" to name and update SKU
+      duplicated.name = `${duplicated.name} (Copy)`;
+      if (duplicated.sku) {
+        duplicated.sku = `${duplicated.sku}-COPY`;
+      }
+      duplicatedItems.push(duplicated);
+    });
+
+    const newData = [...data, ...duplicatedItems];
+    
+    if (isEditMode) {
+      setEditableData(newData);
+      toast.success(`Duplicated ${selectedProducts.size} product(s)`);
+    } else {
+      setPreviewData(newData);
+      toast.success(`Duplicated ${selectedProducts.size} product(s)`);
+    }
+    
+    setSelectedProducts(new Set());
+  };
+
+  const handleResetChanges = () => {
+    if (!window.confirm('Are you sure you want to reset all changes? This will restore the original preview data.')) {
+      return;
+    }
+    
+    setEditableData(JSON.parse(JSON.stringify(previewData)));
+    setSelectedProducts(new Set());
+    toast.success('Changes reset successfully');
+  };
 
   // Function to format product name
   const formatProductName = (name: string): string => {
@@ -231,6 +372,40 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
     if (selectedFile) {
       setFile(selectedFile);
       processExcelFile(selectedFile);
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      const droppedFile = droppedFiles[0];
+      // Check if file type is valid
+      const validExtensions = ['.xlsx', '.xls', '.csv'];
+      const fileExtension = droppedFile.name.toLowerCase().substring(droppedFile.name.lastIndexOf('.'));
+      
+      if (validExtensions.includes(fileExtension)) {
+        setFile(droppedFile);
+        processExcelFile(droppedFile);
+      } else {
+        toast.error('Invalid file type. Please upload .xlsx, .xls, or .csv files only.');
+      }
     }
   };
 
@@ -395,8 +570,12 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
             if (modelIdx >= 0 && row[modelIdx]) {
               attributes.model = (row[modelIdx] || '').toString().trim();
             }
+            // Extract specifications from attributes
+            let specifications: string | undefined;
             if (specIdx >= 0 && row[specIdx]) {
-              attributes.specification = (row[specIdx] || '').toString().trim();
+              const specValue = (row[specIdx] || '').toString().trim();
+              specifications = specValue;
+              attributes.specification = specValue;
             }
             
             // Helper function to parse price (handles commas, currency symbols, etc.)
@@ -426,6 +605,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
               sku: autoProductSku, // Always auto-generated, never from Excel
               description: (row[descIdx] || '').toString().trim(),
               shortDescription: shortDescIdx >= 0 ? (row[shortDescIdx] || '').toString().trim() : undefined,
+              specifications: specifications, // Product specifications
               barcode: barcodeIdx >= 0 ? (row[barcodeIdx] || '').toString().trim() : undefined,
               categoryId: categoryId || undefined,
               categoryName: categoryName || undefined,
@@ -545,7 +725,9 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
     setCurrentStep('import');
     
     const results: ImportResult[] = [];
-    const totalProducts = previewData.length;
+    // Use editableData if in edit mode, otherwise use previewData
+    const dataToImport = isEditMode && editableData.length > 0 ? editableData : previewData;
+    const totalProducts = dataToImport.length;
     const { createProduct } = await import('../../../lib/latsProductApi');
     
     // Get user with better error handling and session refresh
@@ -590,7 +772,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
     }
     
     for (let i = 0; i < totalProducts; i++) {
-      const product = previewData[i];
+      const product = dataToImport[i];
       const errors = validateProductData(product, i + 1);
       
       if (errors.length > 0) {
@@ -948,6 +1130,20 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
         
         // Prepare product data (use final SKU - always auto-generated, never from Excel)
         console.log(`📦 [Import] Creating product "${product.name}" with SKU: "${finalSku}"`);
+        
+        // Get specifications from product.specifications or attributes.specification
+        const specifications = product.specifications || product.attributes?.specification || '';
+        
+        // Build attributes object - include specifications in attributes too for compatibility
+        const productAttributes: Record<string, any> = {};
+        if (product.attributes && Object.keys(product.attributes).length > 0) {
+          Object.assign(productAttributes, product.attributes);
+        }
+        // Ensure specifications are in attributes for compatibility
+        if (specifications) {
+          productAttributes.specification = specifications;
+        }
+        
         let productData: any = {
           name: product.name,
           sku: finalSku, // Always auto-generated, never from Excel
@@ -964,6 +1160,11 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
           variants: variantsToCreate.length > 0 ? variantsToCreate : undefined
         };
         
+        // Add specifications to the main specification column in database
+        if (specifications) {
+          productData.specification = specifications;
+        }
+        
         // Add additional fields if present
         if (product.maxStockLevel !== undefined) {
           productData.maxStockLevel = product.maxStockLevel;
@@ -974,8 +1175,9 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
         if (product.metadata && Object.keys(product.metadata).length > 0) {
           productData.metadata = product.metadata;
         }
-        if (product.attributes && Object.keys(product.attributes).length > 0) {
-          productData.attributes = product.attributes;
+        // Add attributes (including specifications for compatibility)
+        if (Object.keys(productAttributes).length > 0) {
+          productData.attributes = productAttributes;
         }
         
         // ✅ Update existing product or create new one
@@ -1152,6 +1354,9 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
     setIsEditMode(false);
     setIsCompactView(false);
     setExpandedVariants(new Set());
+    setExpandedProductIndex(0);
+    setSelectedProducts(new Set());
+    setExpandedSpecifications(new Set());
     setUpdateExisting(false);
     setConflictResolution('migrate');
     
@@ -1321,31 +1526,78 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
             <div className="py-6 space-y-6">
               <div className="text-center">
                 <div className="mb-6">
-                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Package className="w-10 h-10 text-blue-600" />
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-2">Upload Excel File</h3>
-                  <p className="text-gray-600 mb-6">
-                    Upload an Excel file (.xlsx, .xls) or CSV file with product data including variants
-                  </p>
-                  
-                  <div className="flex gap-4 justify-center">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isProcessing}
-                      className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                    >
-                      <Upload className="w-5 h-5" />
-                      {isProcessing ? 'Processing...' : 'Choose File'}
-                    </button>
-                    
-                    <button
-                      onClick={downloadTemplate}
-                      className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-xl font-semibold transition-all shadow-sm hover:shadow-md"
-                    >
-                      <Download className="w-5 h-5" />
-                      Download Template
-                    </button>
+                  {/* Drag and Drop Zone */}
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`
+                      relative border-2 border-dashed rounded-2xl p-8 mb-6 transition-all
+                      ${isDragging 
+                        ? 'border-blue-500 bg-blue-50 scale-[1.02]' 
+                        : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
+                      }
+                      ${isProcessing ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                    `}
+                    onClick={() => !isProcessing && fileInputRef.current?.click()}
+                  >
+                    <div className="flex flex-col items-center gap-4">
+                      <div className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${
+                        isDragging ? 'bg-blue-100 scale-110' : 'bg-blue-100'
+                      }`}>
+                        <Package className={`w-10 h-10 transition-colors ${
+                          isDragging ? 'text-blue-600' : 'text-blue-600'
+                        }`} />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">
+                          {isDragging ? 'Drop your file here' : 'Upload Excel File'}
+                        </h3>
+                        <p className="text-gray-600">
+                          {isDragging 
+                            ? 'Release to upload your file' 
+                            : 'Drag and drop your file here, or click to browse'
+                          }
+                        </p>
+                        <p className="text-sm text-gray-500 mt-2">
+                          Supports .xlsx, .xls, or .csv files
+                        </p>
+                      </div>
+                      {!isDragging && (
+                        <div className="flex gap-4 justify-center mt-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fileInputRef.current?.click();
+                            }}
+                            disabled={isProcessing}
+                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                          >
+                            <Upload className="w-5 h-5" />
+                            {isProcessing ? 'Processing...' : 'Choose File'}
+                          </button>
+                          
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadTemplate();
+                            }}
+                            className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-xl font-semibold transition-all shadow-sm hover:shadow-md"
+                          >
+                            <Download className="w-5 h-5" />
+                            Download Template
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {isProcessing && (
+                      <div className="absolute inset-0 bg-white bg-opacity-75 rounded-2xl flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                          <p className="text-gray-700 font-medium">Processing file...</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   
                   <input
@@ -1399,49 +1651,151 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
             </div>
           )}
           {currentStep === 'preview' && (
-            <div className="py-6 space-y-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900">Preview Data</h3>
-                  <p className="text-sm text-gray-600 mt-1">
-                    {previewData.length} product{previewData.length !== 1 ? 's' : ''} ready to import
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setIsEditMode(!isEditMode)}
-                    className="px-4 py-2 text-sm bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-lg transition-all font-semibold shadow-sm"
-                  >
-                    {isEditMode ? 'View Mode' : 'Edit Mode'}
-                  </button>
+            <>
+              {/* Icon Header - Fixed (matching SetPricingModal style) */}
+              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                  {/* Icon */}
+                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Package className="w-8 h-8 text-white" />
+                  </div>
+                  
+                  {/* Text */}
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900">Preview Import Data</h3>
+                  </div>
                 </div>
               </div>
-              
-              {/* Conflict Resolution Settings */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                <div className="flex items-start gap-2">
-                  <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-blue-800 flex-1">
-                    <p className="font-semibold mb-1">Conflict Resolution Settings</p>
-                    <div className="space-y-2">
-                      <div>
-                        <p className="font-medium">SKU Conflicts:</p>
-                        <p className="text-xs">If SKU exists, a new unique SKU will be auto-generated automatically.</p>
+
+              {/* Fixed Toolbar Section */}
+              <div className="p-6 pb-0 flex-shrink-0">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-bold text-blue-700">{previewData.length} Product{previewData.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    {isEditMode && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <Edit className="w-4 h-4 text-yellow-600" />
+                        <span className="text-sm font-bold text-yellow-700">Edit Mode</span>
                       </div>
-                      <div>
-                        <p className="font-medium">Name Conflicts:</p>
-                        <p className="text-xs">When a product with the same name exists, choose how to handle it:</p>
+                    )}
+                    {selectedProducts.size > 0 && (
+                      <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 border border-purple-200 rounded-lg">
+                        <CheckSquare className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm font-bold text-purple-700">{selectedProducts.size} Selected</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        const newEditMode = !isEditMode;
+                        if (newEditMode) {
+                          // Entering edit mode - initialize editableData from previewData
+                          if (editableData.length === 0 && previewData.length > 0) {
+                            // Deep clone previewData to editableData
+                            setEditableData(JSON.parse(JSON.stringify(previewData)));
+                          }
+                          setIsEditMode(true);
+                        } else {
+                          // Exiting edit mode - save editableData back to previewData if it was modified
+                          if (editableData.length > 0) {
+                            setPreviewData(JSON.parse(JSON.stringify(editableData)));
+                          }
+                          setIsEditMode(false);
+                        }
+                        // Clear selections when exiting edit mode
+                        if (!newEditMode) {
+                          setSelectedProducts(new Set());
+                        }
+                      }}
+                      className={`px-4 py-2 text-sm rounded-xl transition-all font-semibold shadow-lg flex items-center gap-2 ${
+                        isEditMode 
+                          ? 'bg-yellow-500 hover:bg-yellow-600 text-white' 
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {isEditMode ? (
+                        <>
+                          <FileText className="w-4 h-4" />
+                          View Mode
+                        </>
+                      ) : (
+                        <>
+                          <Edit className="w-4 h-4" />
+                          Edit Mode
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Edit Mode Toolbar */}
+                {isEditMode && (
+                  <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-4 mb-6">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSelectAll}
+                            className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-colors shadow-sm flex items-center gap-2"
+                          >
+                            <CheckSquare className="w-4 h-4" />
+                            Select All
+                          </button>
+                          <button
+                            onClick={handleSelectNone}
+                            className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-semibold transition-colors shadow-sm flex items-center gap-2"
+                          >
+                            <Square className="w-4 h-4" />
+                            Select None
+                          </button>
+                        </div>
+                        {selectedProducts.size > 0 && (
+                          <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm font-bold border border-blue-300">
+                            {selectedProducts.size} selected
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {selectedProducts.size > 0 && (
+                          <>
+                            <button
+                              onClick={handleDuplicateSelected}
+                              className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold transition-colors shadow-sm flex items-center gap-2"
+                            >
+                              <Copy className="w-4 h-4" />
+                              Duplicate ({selectedProducts.size})
+                            </button>
+                            <button
+                              onClick={handleDeleteSelected}
+                              className="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 text-white rounded-xl font-semibold transition-colors shadow-sm flex items-center gap-2"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete ({selectedProducts.size})
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={handleResetChanges}
+                          className="px-3 py-1.5 text-sm bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold transition-colors shadow-sm flex items-center gap-2"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                          Reset Changes
+                        </button>
                       </div>
                     </div>
                   </div>
-                </div>
-                
-                {/* Conflict Resolution Options */}
-                <div className="bg-white rounded-lg p-3 border border-blue-200">
-                  <label className="block text-xs font-semibold text-gray-700 mb-2">
-                    If Product Name Exists:
-                  </label>
-                  <div className="space-y-2">
+                )}
+
+                {/* Conflict Resolution - Minimal Design */}
+                <div className="flex items-center gap-4 mb-6">
+                  <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">If Product Name Exists:</span>
+                  <div className="flex items-center gap-4 flex-wrap">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
@@ -1449,11 +1803,9 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                         value="migrate"
                         checked={conflictResolution === 'migrate'}
                         onChange={(e) => setConflictResolution(e.target.value as 'migrate' | 'skip' | 'delete')}
-                        className="w-4 h-4 text-blue-600"
+                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-gray-700">
-                        <strong>Migrate/Update</strong> - Update existing product with new data
-                      </span>
+                      <span className="text-sm text-gray-700 font-medium">Migrate/Update</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -1462,11 +1814,9 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                         value="skip"
                         checked={conflictResolution === 'skip'}
                         onChange={(e) => setConflictResolution(e.target.value as 'migrate' | 'skip' | 'delete')}
-                        className="w-4 h-4 text-blue-600"
+                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-gray-700">
-                        <strong>Skip</strong> - Skip this product and keep existing one
-                      </span>
+                      <span className="text-sm text-gray-700 font-medium">Skip</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
@@ -1475,15 +1825,12 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                         value="delete"
                         checked={conflictResolution === 'delete'}
                         onChange={(e) => setConflictResolution(e.target.value as 'migrate' | 'skip' | 'delete')}
-                        className="w-4 h-4 text-blue-600"
+                        className="w-4 h-4 text-blue-600 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-gray-700">
-                        <strong>Delete & Replace</strong> - Delete existing product and create new one
-                      </span>
+                      <span className="text-sm text-gray-700 font-medium">Delete & Replace</span>
                     </label>
                   </div>
                 </div>
-              </div>
               
               {validationErrors.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
@@ -1505,199 +1852,501 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                 </div>
               )}
               
-              <div className="space-y-4">
-                {previewData.map((product, index) => (
-                  <div key={index} className="border-2 rounded-xl bg-white shadow-sm border-gray-200 hover:border-blue-300 hover:shadow-md transition-all">
-                    <div className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <h4 className="text-lg font-bold text-gray-900">{product.name}</h4>
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                              product.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                            }`}>
-                              {product.isActive !== false ? 'Active' : 'Inactive'}
-                            </span>
+              {isEditMode && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Info className="w-5 h-5 text-yellow-600" />
+                    <p className="text-sm text-yellow-800">
+                      <strong>Edit Mode:</strong> You are viewing editable data. Changes will be saved when you import.
+                    </p>
+                  </div>
+                </div>
+              )}
+              </div>
+
+              {/* Scrollable Products List Section */}
+              <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                <div className="space-y-4 py-4">
+                {(isEditMode ? editableData : previewData).map((product, index) => {
+                  const isExpanded = expandedProductIndex === index;
+                  const isSelected = selectedProducts.has(index);
+                  
+                  return (
+                    <div key={index} className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 ${
+                      isExpanded 
+                        ? 'border-blue-500 shadow-xl' 
+                        : isSelected && isEditMode
+                          ? 'border-blue-400 bg-blue-50 shadow-md'
+                          : isEditMode
+                            ? 'border-yellow-300 hover:border-yellow-400 hover:shadow-md'
+                            : 'border-gray-200 hover:border-blue-300 hover:shadow-md'
+                    }`}>
+                      {/* Product Header - Clickable */}
+                      <div 
+                        className="flex items-start justify-between p-6 cursor-pointer"
+                        onClick={() => setExpandedProductIndex(isExpanded ? null : index)}
+                      >
+                        <div className="flex items-start gap-3 flex-1">
+                          {/* Checkbox for Edit Mode */}
+                          {isEditMode && (
+                            <div 
+                              className="flex-shrink-0 mt-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleSelect(index);
+                              }}
+                            >
+                              {isSelected ? (
+                                <CheckSquare className="w-6 h-6 text-blue-600 cursor-pointer hover:text-blue-700 transition-colors" />
+                              ) : (
+                                <Square className="w-6 h-6 text-gray-400 cursor-pointer hover:text-gray-500 transition-colors" />
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Chevron Icon - Matching SetPricingModal style */}
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
+                            isExpanded ? 'bg-blue-500' : 'bg-gray-200'
+                          }`}>
+                            <svg 
+                              className={`w-4 h-4 text-white transition-transform duration-200 ${
+                                isExpanded ? 'rotate-180' : ''
+                              }`} 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <span><strong>SKU:</strong> {product.sku}</span>
-                            <span><strong>Category:</strong> {product.categoryName || product.categoryId || 'N/A'}</span>
-                            {product.price && (
-                              <span><strong>Price:</strong> {product.price.toLocaleString()} TZS</span>
-                            )}
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                              {isEditMode && (
+                                <span className="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs font-semibold rounded">
+                                  Editable
+                                </span>
+                              )}
+                              {isEditMode ? (
+                                <input
+                                  type="text"
+                                  value={product.name || ''}
+                                  onChange={(e) => {
+                                    e.stopPropagation(); // Prevent collapsing when editing
+                                    const newData = [...editableData];
+                                    newData[index].name = e.target.value;
+                                    setEditableData(newData);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()} // Prevent collapsing when clicking input
+                                  className="text-lg font-bold text-gray-900 border-2 border-gray-300 rounded-lg px-3 py-1 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                                  placeholder="Product Name"
+                                />
+                              ) : (
+                                <h4 className="text-lg font-bold text-gray-900">{product.name}</h4>
+                              )}
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                                product.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                              }`}>
+                                {product.isActive !== false ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
+                            {/* Quick Info - Clean Modern Design */}
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-md border border-gray-200 shadow-xs">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">SKU</span>
+                                <span className="font-mono text-xs text-gray-700 font-semibold">{product.sku}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-md border border-gray-200 shadow-xs">
+                                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Category</span>
+                                <span className="text-xs text-gray-700 font-semibold">{product.categoryName || product.categoryId || 'N/A'}</span>
+                              </div>
+                              {product.stockQuantity !== undefined && product.stockQuantity > 0 && (
+                                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md border shadow-xs ${
+                                  product.stockQuantity >= (product.minStockLevel || 5)
+                                    ? 'bg-green-50 border-green-200' 
+                                    : 'bg-orange-50 border-orange-200'
+                                }`}>
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    product.stockQuantity >= (product.minStockLevel || 5)
+                                      ? 'bg-green-500' 
+                                      : 'bg-orange-500'
+                                  }`}></div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+                                      product.stockQuantity >= (product.minStockLevel || 5)
+                                        ? 'text-green-700' 
+                                        : 'text-orange-700'
+                                    }`}>Stock</span>
+                                    <span className={`text-sm font-bold ${
+                                      product.stockQuantity >= (product.minStockLevel || 5)
+                                        ? 'text-green-800' 
+                                        : 'text-orange-800'
+                                    }`}>{product.stockQuantity}</span>
+                                  </div>
+                                </div>
+                              )}
+                              {!isEditMode && product.price && (
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 rounded-md border border-emerald-200 shadow-xs">
+                                  <span className="text-[10px] font-medium text-emerald-600 uppercase tracking-wider">Price</span>
+                                  <span className="text-xs text-emerald-700 font-bold">{product.price.toLocaleString()} TZS</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
-                      
-                      {product.variants && product.variants.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Package className="w-4 h-4 text-blue-600" />
-                            <span className="text-sm font-semibold text-gray-700">
-                              {product.variants.length} Variant{product.variants.length > 1 ? 's' : ''}
-                            </span>
-                          </div>
-                          <div className="space-y-2">
-                            {(() => {
-                              // Group variants by parent-child relationships
-                              const parentVariants = product.variants.filter(v => 
-                                v.variantType === 'parent' || v.isParent || !v.parentVariantSku
-                              );
-                              const childVariants = product.variants.filter(v => 
-                                v.variantType === 'imei_child' && v.parentVariantSku
-                              );
-                              
-                              // Group children by parent SKU
-                              const childrenByParent = new Map<string, typeof childVariants>();
-                              childVariants.forEach(child => {
-                                const parentSku = child.parentVariantSku || product.sku;
-                                if (!childrenByParent.has(parentSku)) {
-                                  childrenByParent.set(parentSku, []);
-                                }
-                                childrenByParent.get(parentSku)!.push(child);
-                              });
-                              
-                              return (
-                                <>
-                                  {/* Parent and Standard Variants */}
-                                  {parentVariants.map((variant, vIdx) => {
-                                    const variantKey = `${product.sku}-${variant.variantSku || vIdx}`;
-                                    const isExpanded = expandedVariants.has(variantKey);
-                                    const children = childrenByParent.get(variant.variantSku || product.sku) || [];
-                                    const hasChildren = children.length > 0;
+
+                      {/* Expanded Content - Only show when product is expanded */}
+                      {isExpanded && (
+                        <div className="px-6 pb-6">
+                          {/* Editable Fields Row - Only in Edit Mode */}
+                          {isEditMode && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Price:</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={product.price || ''}
+                                    onChange={(e) => {
+                                      const newData = [...editableData];
+                                      newData[index].price = parseFloat(e.target.value) || 0;
+                                      setEditableData(newData);
+                                    }}
+                                    className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-800"
+                                    placeholder="0"
+                                    step="0.01"
+                                  />
+                                  <span className="text-gray-600 text-sm">TZS</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Cost Price:</label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    value={product.costPrice || ''}
+                                    onChange={(e) => {
+                                      const newData = [...editableData];
+                                      newData[index].costPrice = parseFloat(e.target.value) || 0;
+                                      setEditableData(newData);
+                                    }}
+                                    className="flex-1 border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-800"
+                                    placeholder="0"
+                                    step="0.01"
+                                  />
+                                  <span className="text-gray-600 text-sm">TZS</span>
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Quantity:</label>
+                                <input
+                                  type="number"
+                                  value={product.stockQuantity || ''}
+                                  onChange={(e) => {
+                                    const newData = [...editableData];
+                                    newData[index].stockQuantity = parseInt(e.target.value) || 0;
+                                    setEditableData(newData);
+                                  }}
+                                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-800"
+                                  placeholder="0"
+                                  min="0"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs font-medium text-gray-700 mb-1">Min Stock:</label>
+                                <input
+                                  type="number"
+                                  value={product.minStockLevel || ''}
+                                  onChange={(e) => {
+                                    const newData = [...editableData];
+                                    newData[index].minStockLevel = parseInt(e.target.value) || 0;
+                                    setEditableData(newData);
+                                  }}
+                                  className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-blue-500 text-gray-800"
+                                  placeholder="0"
+                                  min="0"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Description */}
+                          {(product.description || isEditMode) && (
+                            <div className="mb-6">
+                              <label className="block text-sm font-medium text-gray-700 mb-2">Description:</label>
+                              {isEditMode ? (
+                                <textarea
+                                  value={product.description || ''}
+                                  onChange={(e) => {
+                                    const newData = [...editableData];
+                                    newData[index].description = e.target.value;
+                                    setEditableData(newData);
+                                  }}
+                                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 text-sm text-gray-800"
+                                  placeholder="Product description"
+                                  rows={2}
+                                />
+                              ) : (
+                                <p className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3 border border-gray-200">{product.description || 'No description'}</p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Specifications - Clean Modern Design */}
+                          {((product.specifications || product.attributes?.specification) || isEditMode) && (
+                            <div className="mb-4">
+                              <div className="flex items-center gap-2 mb-2.5">
+                                <div className="w-1 h-4 bg-gradient-to-b from-blue-500 to-purple-500 rounded-full"></div>
+                                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Specifications</label>
+                              </div>
+                              {isEditMode ? (
+                                <textarea
+                                  value={product.specifications || product.attributes?.specification || ''}
+                                  onChange={(e) => {
+                                    const newData = [...editableData];
+                                    newData[index].specifications = e.target.value;
+                                    // Also update attributes.specification
+                                    if (!newData[index].attributes) {
+                                      newData[index].attributes = {};
+                                    }
+                                    newData[index].attributes!.specification = e.target.value;
+                                    setEditableData(newData);
+                                  }}
+                                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-300 text-sm text-gray-800 bg-white transition-all"
+                                  placeholder="Enter specifications separated by commas (e.g., 128GB, 8GB RAM, 6.1 inch)"
+                                  rows={2}
+                                />
+                              ) : (
+                                <div className="px-3 py-2.5 bg-gradient-to-br from-gray-50 to-blue-50/30 rounded-lg border border-gray-200">
+                                  {(() => {
+                                    const specString = (product.specifications || product.attributes?.specification || '').toString();
+                                    const allSpecs = specString.split(',').map((item: string) => item.trim()).filter((item: string) => item);
+                                    const isExpanded = expandedSpecifications.has(index);
+                                    const maxVisible = 4; // Show first 4 specifications
+                                    const visibleSpecs = isExpanded ? allSpecs : allSpecs.slice(0, maxVisible);
+                                    const hasMore = allSpecs.length > maxVisible;
                                     
                                     return (
-                                      <div key={vIdx} className="border-2 rounded-xl bg-white shadow-sm transition-all">
-                                        {/* Parent Variant Header - Clickable if has children */}
-                                        <div 
-                                          className={`flex items-center gap-2 p-3 ${hasChildren ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                          onClick={hasChildren ? () => {
-                                            const newExpanded = new Set(expandedVariants);
-                                            if (isExpanded) {
-                                              newExpanded.delete(variantKey);
-                                            } else {
-                                              newExpanded.add(variantKey);
-                                            }
-                                            setExpandedVariants(newExpanded);
-                                          } : undefined}
-                                        >
-                                          {hasChildren && (
-                                            <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
-                                              isExpanded ? 'bg-blue-500' : 'bg-gray-200'
-                                            }`}>
-                                              <svg 
-                                                className={`w-3 h-3 text-white transition-transform duration-200 ${
-                                                  isExpanded ? 'rotate-180' : ''
-                                                }`} 
-                                                fill="none" 
-                                                stroke="currentColor" 
-                                                viewBox="0 0 24 24"
-                                              >
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                              </svg>
+                                      <>
+                                        <div className="flex flex-wrap items-center gap-2 text-sm">
+                                          {visibleSpecs.map((trimmedItem: string, idx: number) => (
+                                            <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-md border border-gray-200 text-gray-700 text-xs font-medium shadow-xs">
+                                              <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                                              {trimmedItem}
+                                            </span>
+                                          ))}
+                                          {hasMore && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const newExpanded = new Set(expandedSpecifications);
+                                                if (isExpanded) {
+                                                  newExpanded.delete(index);
+                                                } else {
+                                                  newExpanded.add(index);
+                                                }
+                                                setExpandedSpecifications(newExpanded);
+                                              }}
+                                              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 rounded-md border border-blue-200 text-blue-600 text-xs font-medium shadow-xs hover:bg-blue-100 hover:border-blue-300 transition-colors cursor-pointer"
+                                            >
+                                              {isExpanded ? (
+                                                <>
+                                                  <span>See Less</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <span>+{allSpecs.length - maxVisible} more</span>
+                                                </>
+                                              )}
+                                            </button>
+                                          )}
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {/* Variants Section */}
+                          {product.variants && product.variants.length > 0 && (
+                            <div className="mt-6 pt-6 border-t border-gray-200">
+                              <div className="flex items-center gap-2 mb-4">
+                                <Package className="w-5 h-5 text-blue-600" />
+                                <span className="text-base font-semibold text-gray-900">
+                                  {product.variants.length} Variant{product.variants.length > 1 ? 's' : ''}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {(() => {
+                                  // Group variants by parent-child relationships
+                                  const parentVariants = product.variants.filter(v => 
+                                    v.variantType === 'parent' || v.isParent || !v.parentVariantSku
+                                  );
+                                  const childVariants = product.variants.filter(v => 
+                                    v.variantType === 'imei_child' && v.parentVariantSku
+                                  );
+                                  
+                                  // Group children by parent SKU
+                                  const childrenByParent = new Map<string, typeof childVariants>();
+                                  childVariants.forEach(child => {
+                                    const parentSku = child.parentVariantSku || product.sku;
+                                    if (!childrenByParent.has(parentSku)) {
+                                      childrenByParent.set(parentSku, []);
+                                    }
+                                    childrenByParent.get(parentSku)!.push(child);
+                                  });
+                                  
+                                  return (
+                                    <>
+                                      {/* Parent and Standard Variants */}
+                                      {parentVariants.map((variant, vIdx) => {
+                                      const variantKey = `${product.sku}-${variant.variantSku || vIdx}`;
+                                      const isExpanded = expandedVariants.has(variantKey);
+                                      const children = childrenByParent.get(variant.variantSku || product.sku) || [];
+                                      const hasChildren = children.length > 0;
+                                      
+                                      return (
+                                        <div key={vIdx} className="border-2 rounded-xl bg-white shadow-sm transition-all hover:shadow-md">
+                                          {/* Parent Variant Header - Clickable if has children */}
+                                          <div
+                                            className={`flex items-start gap-2 p-3 ${hasChildren ? 'cursor-pointer hover:bg-gray-50' : ''}`}
+                                            onClick={hasChildren ? () => {
+                                              const newExpanded = new Set(expandedVariants);
+                                              if (isExpanded) {
+                                                newExpanded.delete(variantKey);
+                                              } else {
+                                                newExpanded.add(variantKey);
+                                              }
+                                              setExpandedVariants(newExpanded);
+                                            } : undefined}
+                                          >
+                                            {hasChildren && (
+                                              <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors flex-shrink-0 mt-0.5 ${
+                                                isExpanded ? 'bg-blue-500' : 'bg-gray-200'
+                                              }`}>
+                                                <svg 
+                                                  className={`w-3 h-3 text-white transition-transform duration-200 ${
+                                                    isExpanded ? 'rotate-180' : ''
+                                                  }`} 
+                                                  fill="none" 
+                                                  stroke="currentColor" 
+                                                  viewBox="0 0 24 24"
+                                                >
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                              </div>
+                                            )}
+                                            <div className="flex-1 min-w-0">
+                                              <div className="font-medium text-gray-900 text-sm mb-1.5 truncate">
+                                                {variant.variantName || variant.variantSku || `Variant ${vIdx + 1}`}
+                                              </div>
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                                                  variant.variantType === 'parent' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                                                  'bg-gray-100 text-gray-700 border border-gray-200'
+                                                }`}>
+                                                  {variant.variantType || 'standard'}
+                                                </span>
+                                                {hasChildren && (
+                                                  <span className="text-xs text-gray-500 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                                    {children.length} device{children.length > 1 ? 's' : ''}
+                                                  </span>
+                                                )}
+                                              </div>
+                                              {variant.variantSellingPrice && (
+                                                <div className="mt-2 text-xs font-semibold text-gray-700">
+                                                  {variant.variantSellingPrice.toLocaleString()} TZS
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                          
+                                          {/* Children Variants - Expandable */}
+                                          {hasChildren && isExpanded && (
+                                            <div className="px-3 pb-3 pt-0 space-y-2 border-t border-gray-100">
+                                              {children.map((child, cIdx) => (
+                                                <div key={cIdx} className="bg-blue-50 rounded-lg p-2.5 border border-blue-200">
+                                                  <div className="flex flex-col gap-1.5">
+                                                    <div className="font-medium text-gray-900 text-xs">
+                                                      {child.variantName || child.variantSku || `Device ${cIdx + 1}`}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                                                        imei_child
+                                                      </span>
+                                                      {child.imei && (
+                                                        <span className="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 font-mono">
+                                                          {child.imei}
+                                                        </span>
+                                                      )}
+                                                      {child.serialNumber && (
+                                                        <span className="text-[10px] text-gray-600 bg-white px-1.5 py-0.5 rounded border border-gray-200 font-mono">
+                                                          {child.serialNumber}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                    {child.variantSellingPrice && (
+                                                      <div className="text-[10px] font-semibold text-gray-700">
+                                                        {child.variantSellingPrice.toLocaleString()} TZS
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              ))}
                                             </div>
                                           )}
-                                          <div className="flex-1 flex items-center gap-2 flex-wrap">
-                                            <span className="font-medium text-gray-900">
-                                              {variant.variantName || variant.variantSku || `Variant ${vIdx + 1}`}
-                                            </span>
-                                            <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                                              variant.variantType === 'parent' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
-                                              'bg-gray-100 text-gray-700 border border-gray-200'
-                                            }`}>
-                                              {variant.variantType || 'standard'}
-                                            </span>
-                                            {hasChildren && (
-                                              <span className="text-xs text-gray-500 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                                                {children.length} device{children.length > 1 ? 's' : ''}
-                                              </span>
-                                            )}
-                                            {variant.variantSellingPrice && (
-                                              <span className="text-xs text-gray-600">
-                                                Price: {variant.variantSellingPrice.toLocaleString()} TZS
-                                              </span>
-                                            )}
-                                          </div>
                                         </div>
-                                        
-                                        {/* Children Variants - Expandable */}
-                                        {hasChildren && isExpanded && (
-                                          <div className="pl-8 pr-3 pb-3 space-y-2 border-t border-gray-100">
-                                            {children.map((child, cIdx) => (
-                                              <div key={cIdx} className="bg-blue-50 rounded-lg p-2.5 border border-blue-200 mt-2">
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                  <span className="font-medium text-gray-900 text-sm">
-                                                    {child.variantName || child.variantSku || `Device ${cIdx + 1}`}
-                                                  </span>
-                                                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-                                                    imei_child
-                                                  </span>
-                                                  {child.imei && (
-                                                    <span className="text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200 font-mono">
-                                                      IMEI: {child.imei}
-                                                    </span>
-                                                  )}
-                                                  {child.serialNumber && (
-                                                    <span className="text-xs text-gray-600 bg-white px-2 py-0.5 rounded border border-gray-200 font-mono">
-                                                      SN: {child.serialNumber}
-                                                    </span>
-                                                  )}
-                                                  {child.variantSellingPrice && (
-                                                    <span className="text-xs text-gray-600">
-                                                      Price: {child.variantSellingPrice.toLocaleString()} TZS
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        )}
+                                      );
+                                      })}
+                                      
+                                      {/* Orphaned Children (children without a parent variant in the list) */}
+                                      {childVariants.filter(child => {
+                                      const parentSku = child.parentVariantSku || product.sku;
+                                      return !parentVariants.some(p => (p.variantSku || product.sku) === parentSku);
+                                    }).map((variant, vIdx) => (
+                                      <div key={`orphan-${vIdx}`} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="font-medium text-gray-900">
+                                            {variant.variantName || variant.variantSku || `Variant ${vIdx + 1}`}
+                                          </span>
+                                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                                            imei_child
+                                          </span>
+                                          {variant.parentVariantSku && (
+                                            <span className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
+                                              ← Parent: {variant.parentVariantSku}
+                                            </span>
+                                          )}
+                                          {variant.imei && (
+                                            <span className="text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200 font-mono">
+                                              IMEI: {variant.imei}
+                                            </span>
+                                          )}
+                                          {variant.variantSellingPrice && (
+                                            <span className="text-xs text-gray-600">
+                                              Price: {variant.variantSellingPrice.toLocaleString()} TZS
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
-                                    );
-                                  })}
-                                  
-                                  {/* Orphaned Children (children without a parent variant in the list) */}
-                                  {childVariants.filter(child => {
-                                    const parentSku = child.parentVariantSku || product.sku;
-                                    return !parentVariants.some(p => (p.variantSku || product.sku) === parentSku);
-                                  }).map((variant, vIdx) => (
-                                    <div key={`orphan-${vIdx}`} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-medium text-gray-900">
-                                          {variant.variantName || variant.variantSku || `Variant ${vIdx + 1}`}
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-                                          imei_child
-                                        </span>
-                                        {variant.parentVariantSku && (
-                                          <span className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
-                                            ← Parent: {variant.parentVariantSku}
-                                          </span>
-                                        )}
-                                        {variant.imei && (
-                                          <span className="text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200 font-mono">
-                                            IMEI: {variant.imei}
-                                          </span>
-                                        )}
-                                        {variant.variantSellingPrice && (
-                                          <span className="text-xs text-gray-600">
-                                            Price: {variant.variantSellingPrice.toLocaleString()} TZS
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  ))}
-                                </>
-                              );
-                            })()}
-                          </div>
+                                      ))}
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
+            </>
           )}
           {currentStep === 'import' && (
             <div className="py-6 space-y-6">

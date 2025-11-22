@@ -156,6 +156,16 @@ export async function createProduct(
       };
     }
     
+    // Add specification field if provided (save to database specification column)
+    if ((productWithoutImages as any).specification) {
+      productInsertData.specification = (productWithoutImages as any).specification;
+      // Also store in attributes for compatibility
+      if (!productInsertData.attributes) {
+        productInsertData.attributes = {};
+      }
+      productInsertData.attributes.specification = (productWithoutImages as any).specification;
+    }
+    
     // ✅ CRITICAL FIX: Ensure metadata includes skip_default_variant flag
     const hasVariants = productWithoutImages.variants && productWithoutImages.variants.length > 0;
     productInsertData.metadata = {

@@ -298,7 +298,6 @@ const POSDiscountModal: React.FC<POSDiscountModalProps> = ({
                 onClick={() => handleKeyPress('0')}
                 className="aspect-square flex items-center justify-center rounded-lg font-semibold text-lg sm:text-xl transition-all duration-200 bg-gray-50 text-gray-900 hover:bg-orange-100 hover:text-orange-700 active:bg-orange-200 border border-gray-200 hover:border-orange-300 cursor-pointer shadow-sm hover:shadow-md active:scale-95"
               >
-                0
               </button>
               <button
                 onClick={handleBackspace}

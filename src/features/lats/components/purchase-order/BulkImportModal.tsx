@@ -469,7 +469,7 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
                         <td className="border border-gray-300 px-2 py-1.5">Galaxy S23</td>
                         <td className="border border-gray-300 px-2 py-1.5">256GB Black</td>
                         <td className="border border-gray-300 px-2 py-1.5 text-gray-500">Electronics</td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-center text-red-600 font-bold bg-red-50">0</td>
+                        <td className="border border-gray-300 px-2 py-1.5 text-center text-red-600 font-bold bg-red-50"></td>
                         <td className="border border-gray-300 px-2 py-1.5 text-center">8</td>
                         <td className="border border-gray-300 px-2 py-1.5 text-center font-bold">20</td>
                         <td className="border border-gray-300 px-2 py-1.5 text-right">1,000,000</td>
