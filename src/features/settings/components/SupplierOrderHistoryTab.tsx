@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Package, Calendar, DollarSign, TrendingUp, Download } from 'lucide-react';
+import { Package, Calendar, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
 import { supabase } from '../../../lib/supabaseClient';
 
 interface SupplierOrderHistoryTabProps {
@@ -38,7 +36,7 @@ const SupplierOrderHistoryTab: React.FC<SupplierOrderHistoryTabProps> = ({
         .from('lats_purchase_orders')
         .select(`
           id,
-          order_number,
+          po_number,
           order_date,
           expected_delivery_date,
           total_amount,
@@ -84,12 +82,12 @@ const SupplierOrderHistoryTab: React.FC<SupplierOrderHistoryTabProps> = ({
     }
   };
 
-  const formatCurrency = (amount: number, currency: string = 'TZS') => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0
-    }).format(amount);
+  // Helper to format numbers
+  const formatPrice = (amount: number): string => {
+    if (amount % 1 === 0) {
+      return amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+    return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
   const getStatusBadge = (status: string) => {
@@ -111,102 +109,93 @@ const SupplierOrderHistoryTab: React.FC<SupplierOrderHistoryTabProps> = ({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-        <span className="ml-3 text-gray-600">Loading order history...</span>
+        <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading orders...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="mb-4">
-        <h4 className="text-sm font-semibold text-gray-700">Order History</h4>
-        <p className="text-xs text-gray-500">Purchase orders from {supplierName}</p>
-      </div>
-
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-blue-600">{stats.totalOrders}</div>
-          <div className="text-sm text-gray-600">Total Orders</div>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 border-2 border-orange-200">
+          <div className="flex items-center gap-2 mb-2">
+            <Package className="w-5 h-5 text-orange-600" />
+            <span className="text-xs font-semibold text-orange-700">Total Orders</span>
+          </div>
+          <div className="text-2xl font-bold text-orange-900">{stats.totalOrders}</div>
         </div>
 
-        <div className="bg-green-50 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-600">
-            {formatCurrency(stats.totalValue, stats.currency)}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border-2 border-green-200">
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign className="w-5 h-5 text-green-600" />
+            <span className="text-xs font-semibold text-green-700">Total Value</span>
           </div>
-          <div className="text-sm text-gray-600">Total Value</div>
-          {stats.hasMultipleCurrencies && (
-            <div className="text-xs text-amber-600 mt-1">Mixed</div>
-          )}
+          <div className="text-lg font-bold text-green-900">
+            {formatPrice(stats.totalValue)} {stats.currency}
+          </div>
         </div>
 
-        <div className="bg-purple-50 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-purple-600">
-            {formatCurrency(stats.avgOrderValue, stats.currency)}
+        <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-4 border-2 border-blue-200">
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign className="w-5 h-5 text-blue-600" />
+            <span className="text-xs font-semibold text-blue-700">Avg Value</span>
           </div>
-          <div className="text-sm text-gray-600">Avg Order Value</div>
-          {stats.hasMultipleCurrencies && (
-            <div className="text-xs text-amber-600 mt-1">Mixed</div>
-          )}
-        </div>
-
-        <div className="bg-orange-50 rounded-lg p-4 text-center">
-          <div className="text-sm font-bold text-orange-600">
-            {stats.lastOrderDate 
-              ? new Date(stats.lastOrderDate).toLocaleDateString()
-              : 'N/A'
-            }
+          <div className="text-lg font-bold text-blue-900">
+            {formatPrice(stats.avgOrderValue)} {stats.currency}
           </div>
-          <div className="text-sm text-gray-600">Last Order</div>
         </div>
       </div>
 
       {/* Orders List */}
       {orders.length === 0 ? (
-        <div className="bg-gray-50 rounded-lg p-12 text-center border-2 border-dashed border-gray-300">
-          <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h4 className="text-lg font-medium text-gray-900 mb-2">No Orders Yet</h4>
-          <p className="text-gray-600">No purchase orders found for this supplier</p>
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Package className="w-16 h-16 text-gray-400 mb-4" />
+          <p className="text-gray-600 text-lg font-medium">No orders found</p>
+          <p className="text-sm text-gray-500 mt-2">No purchase orders for this supplier</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {orders.map((order) => (
-            <GlassCard key={order.id} className="p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <h4 className="font-semibold text-gray-900">
-                      {order.order_number || `Order #${order.id.slice(0, 8)}`}
+            <div
+              key={order.id}
+              className="border-2 rounded-xl bg-white shadow-sm transition-all duration-300 hover:shadow-md border-gray-200 hover:border-orange-300"
+            >
+              <div className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="text-base font-bold text-gray-900">
+                        {order.order_number || order.po_number || `Order #${order.id.slice(0, 8)}`}
                     </h4>
                     {getStatusBadge(order.status)}
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <span className="flex items-center gap-1">
-                      <Calendar size={14} />
-                      {new Date(order.order_date).toLocaleDateString()}
-                    </span>
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>{new Date(order.order_date).toLocaleDateString()}</span>
+                      </div>
                     {order.expected_delivery_date && (
-                      <span className="flex items-center gap-1">
-                        Expected: {new Date(order.expected_delivery_date).toLocaleDateString()}
-                      </span>
+                        <div className="flex items-center gap-1">
+                          <span>Expected: {new Date(order.expected_delivery_date).toLocaleDateString()}</span>
+                        </div>
                     )}
+                    </div>
+                  </div>
+                  <div className="text-right ml-4">
+                    <div className="text-lg font-bold text-gray-900">
+                      {formatPrice(order.total_amount || 0)} {order.currency || 'TZS'}
+                    </div>
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <div className="text-xl font-bold text-gray-900">
-                    {formatCurrency(order.total_amount, order.currency)}
+                {order.notes && (
+                  <div className="pt-3 border-t border-gray-100">
+                    <p className="text-sm text-gray-600">{order.notes}</p>
                   </div>
-                  <div className="text-sm text-gray-600">{order.currency}</div>
-                </div>
+                )}
               </div>
-
-              {order.notes && (
-                <p className="text-sm text-gray-600 mt-2">{order.notes}</p>
-              )}
-            </GlassCard>
+            </div>
           ))}
         </div>
       )}

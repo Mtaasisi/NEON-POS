@@ -8,7 +8,6 @@ import { History, DollarSign, Settings } from 'lucide-react';
 import TradeInHistoryTab from '../components/tradeIn/TradeInHistoryTab';
 import TradeInPricingTab from '../components/tradeIn/TradeInPricingTab';
 import { TradeInSettingsModal } from '../components/tradeIn/TradeInSettingsModal';
-import { useLoadingJob } from '../../../hooks/useLoadingJob';
 
 type TabType = 'history' | 'pricing';
 

@@ -277,8 +277,8 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
           className="flex items-start justify-between p-4 cursor-pointer"
           onClick={handleToggleExpand}
         >
-          <div className="flex-1">
-            <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
               {/* Chevron Icon - Styled like SetPricingModal */}
               <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-colors flex-shrink-0 ${
                 isExpanded ? 'bg-blue-500' : 'bg-gray-200'
@@ -311,8 +311,8 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
               
               {/* Product Details */}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-bold text-gray-900 truncate text-base">
+                <div className="flex items-center gap-2 mb-1 min-w-0">
+                  <h3 className="font-bold text-gray-900 truncate text-base flex-1 min-w-0 max-w-full">
                     {item.productName}
                   </h3>
                 </div>
@@ -323,7 +323,7 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
                 )}
                 {/* Total Price - Show when collapsed, below variant name - Simple */}
                 {!isExpanded && (
-                  <p className="text-base font-bold text-emerald-600 mt-1.5">
+                  <p className="text-2xl font-bold text-gray-900 mt-1.5">
                     {format.money(subtotal)}
                   </p>
                 )}
@@ -389,50 +389,45 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
         {isExpanded && (
           <div className="px-4 pb-4">
             {/* Price and Quantity Controls - Styled like SetPricingModal */}
-            <div className="bg-gray-50 rounded-xl p-3.5 border border-gray-200">
-              <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex flex-col gap-4 w-full">
                 {/* Total Price - Styled like SetPricingModal */}
-                <div className="flex-1 min-w-0">
+                <div className="w-full">
                   <p className="text-xs font-medium text-gray-500 mb-0.5">Total</p>
-                  <p className="text-base font-bold text-emerald-600 truncate">
+                  <p className="text-2xl font-bold text-gray-900 truncate">
                     {format.money(subtotal)}
                   </p>
                 </div>
                 
-                {/* Divider */}
-                <div className="h-14 w-px bg-gray-300"></div>
-                
                 {/* Quantity Controls - Styled like SetPricingModal */}
-                <div className="flex items-center gap-2.5 flex-shrink-0">
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-gray-500 mb-0.5">Quantity</p>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuantityChange(item.quantity - 1);
-                        }}
-                        disabled={item.quantity <= 1}
-                        className="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-14 text-center font-bold text-base px-3 py-1.5 bg-white rounded-xl border-2 border-gray-300 shadow-sm">
-                        {item.quantity}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleQuantityChange(item.quantity + 1);
-                        }}
-                        disabled={item.quantity >= availableStock}
-                        className="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
+                <div className="w-full">
+                  <p className="text-xs font-medium text-gray-500 mb-0.5">Quantity</p>
+                  <div className="flex items-center gap-2 w-full">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleQuantityChange(item.quantity - 1);
+                      }}
+                      disabled={item.quantity <= 1}
+                      className="inline-flex items-center justify-center w-12 h-12 text-base font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex-shrink-0"
+                    >
+                      <Minus className="w-5 h-5" />
+                    </button>
+                    <span className="flex-1 text-center font-bold text-lg px-4 py-2 bg-white rounded-xl border-2 border-gray-300 shadow-sm">
+                      {item.quantity}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleQuantityChange(item.quantity + 1);
+                      }}
+                      disabled={item.quantity >= availableStock}
+                      className="inline-flex items-center justify-center w-12 h-12 text-base font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm flex-shrink-0"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -473,7 +468,7 @@ const VariantCartItem: React.FC<VariantCartItemProps> = ({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 truncate">{item.productName}</h3>
+            <h3 className="text-lg font-semibold text-gray-900 truncate min-w-0 max-w-full">{item.productName}</h3>
             {item.variantName !== 'Default' && (
               <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
                 <span className="text-blue-600 font-medium">{item.variantName}</span>

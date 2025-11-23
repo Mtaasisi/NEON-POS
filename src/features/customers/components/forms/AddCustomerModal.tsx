@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, UserPlus, ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X, UserPlus, User } from 'lucide-react';
 import { useCustomers } from '../../../../context/CustomersContext';
 import { toast } from 'react-hot-toast';
 import CustomerForm from './CustomerForm';
@@ -8,6 +9,7 @@ import { formatTanzaniaPhoneNumber, formatTanzaniaWhatsAppNumber } from '../../.
 import SuccessModal from '../../../../components/ui/SuccessModal';
 import { useSuccessModal } from '../../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../../components/ui/SuccessModalIcons';
+import { useBodyScrollLock } from '../../../../hooks/useBodyScrollLock';
 
 interface AddCustomerModalProps {
   isOpen: boolean;
@@ -176,112 +178,127 @@ const AddCustomerModal: React.FC<AddCustomerModalProps> = ({ isOpen, onClose, on
     }
   };
 
-  return (
-    <>
-      {isOpen && (
-        <>
-          {/* Backdrop - respects sidebar and topbar */}
-          <div 
-            className="fixed bg-black/50"
-            onClick={onClose}
-            style={{
-              left: 'var(--sidebar-width, 0px)',
-              top: 'var(--topbar-height, 64px)',
-              right: 0,
-              bottom: 0,
-              zIndex: 35
-            }}
-          />
-          
-          {/* Modal Container */}
-          <div 
-            className="fixed flex items-center justify-center p-4"
-            style={{
-              left: 'var(--sidebar-width, 0px)',
-              top: 'var(--topbar-height, 64px)',
-              right: 0,
-              bottom: 0,
-              zIndex: 50,
-              pointerEvents: 'none'
-            }}
-          >
-            <div 
-              className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
-              style={{ pointerEvents: 'auto' }}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <UserPlus className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">Add New Customer</h3>
-                    <p className="text-sm text-gray-500">Enter customer details below</p>
-                  </div>
-                </div>
-                <button
-                  onClick={onClose}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  aria-label="Close modal"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
 
-              {/* Content */}
-              <div className="p-6">
-                <CustomerForm
-                  onSubmit={handleCustomerCreated}
-                  onCancel={onClose}
-                  isLoading={isLoading}
-                  renderActionsInModal={false}
-                />
-                
-                {/* Action Buttons */}
-                <div className="flex gap-3 mt-6 pt-6 border-t border-gray-200">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    disabled={isLoading}
-                    className="flex-1 px-6 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const form = document.getElementById('customer-form') as HTMLFormElement;
-                      if (form) {
-                        form.requestSubmit();
-                      }
-                    }}
-                    disabled={isLoading}
-                    className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                        Adding...
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="w-4 h-4" />
-                        Add Customer
-                      </>
-                    )}
-                  </button>
-                </div>
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <>
+      <div 
+        className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+        style={{
+          top: 0, 
+          left: 0, 
+          right: 0,
+          bottom: 0,
+          overflow: 'hidden',
+          overscrollBehavior: 'none'
+        }}
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="customer-form-title"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
+          style={{ pointerEvents: 'auto' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Close Button */}
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isLoading}
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Icon Header - Fixed */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                <User className="w-8 h-8 text-white" />
+              </div>
+              
+              {/* Text */}
+              <div>
+                <h3 className="text-2xl font-bold text-gray-900 mb-2" id="customer-form-title">
+                  Add New Customer
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Enter customer details below
+                </p>
               </div>
             </div>
           </div>
-        </>
-      )}
+
+          {/* Form - Scrollable */}
+          <div className="flex-1 overflow-y-auto p-6">
+            <CustomerForm
+              onSubmit={handleCustomerCreated}
+              onCancel={onClose}
+              isLoading={isLoading}
+              renderActionsInModal={false}
+            />
+          </div>
+
+          {/* Action Buttons - Fixed Footer */}
+          <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white px-6 pb-6">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isLoading}
+              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const form = document.getElementById('customer-form') as HTMLFormElement;
+                if (form) {
+                  form.requestSubmit();
+                }
+              }}
+              disabled={isLoading}
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-5 h-5" />
+                  Add Customer
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
       
       {/* Success Modal - Always rendered so it persists after form closes */}
       <SuccessModal {...successModal.props} />
-    </>
+    </>,
+    document.body
   );
 };
 

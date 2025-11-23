@@ -708,6 +708,20 @@ const POcreate: React.FC = () => {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null); // Fixed temporal dead zone issue
   const [hasRestoredSession, setHasRestoredSession] = useState(false);
 
+  // Re-match supplier from session once suppliers are loaded
+  useEffect(() => {
+    if (hasRestoredSession && selectedSupplier && suppliers.length > 0) {
+      // If we have a supplier from session, try to match it with the loaded suppliers
+      // This ensures we have the latest supplier data
+      const matchedSupplier = suppliers.find(s => s.id === selectedSupplier.id);
+      if (matchedSupplier) {
+        // Update to use the latest supplier data from the store
+        setSelectedSupplier(matchedSupplier);
+        console.log('🔄 [POcreate] Re-matched supplier from session with loaded suppliers');
+      }
+    }
+  }, [hasRestoredSession, selectedSupplier, suppliers]);
+
   // Auto-open supplier selection modal for new purchase orders
   useEffect(() => {
     // Only show automatically for new purchase orders (not edit or duplicate mode)
@@ -1042,12 +1056,10 @@ const POcreate: React.FC = () => {
       // Mark session as restored
       setHasRestoredSession(true);
 
-      // Auto-restore session without showing banner (now uses toast notification only)
-
-      console.log('✅ [POcreate] Session restored successfully from localStorage');
-      toast.success(`Session restored: ${sessionData.purchaseCartItems.length} item(s) in cart`, { 
-        duration: 3000,
-        icon: '🔄'
+      // Auto-restore session silently - no notification needed
+      console.log('✅ [POcreate] Session restored automatically from localStorage', {
+        cartItems: sessionData.purchaseCartItems.length,
+        supplier: sessionData.selectedSupplier?.name
       });
       return true;
     } catch (error) {
@@ -1183,25 +1195,61 @@ const POcreate: React.FC = () => {
   }, [purchaseCartItems, selectedSupplier, selectedCurrency, expectedDelivery, paymentTerms, purchaseOrderNotes, exchangeRates]);
 
   // Restore session on component mount (only if not in edit/duplicate mode)
+  // Restore immediately on mount, don't wait for suppliers to load
   useEffect(() => {
-    if (!isEditMode && !isDuplicateMode && suppliers.length > 0 && !hasRestoredSession) {
+    if (!isEditMode && !isDuplicateMode && !hasRestoredSession) {
       console.log('🔍 [POcreate] Checking for saved session to restore...');
       const restored = loadSession();
       if (!restored) {
         console.log('ℹ️ [POcreate] No session to restore, starting fresh');
       }
     }
-  }, [isEditMode, isDuplicateMode, suppliers.length, hasRestoredSession, loadSession]);
+  }, [isEditMode, isDuplicateMode, hasRestoredSession, loadSession]);
 
-  // Auto-save session when cart or supplier changes (with debounce)
+  // Auto-save session when cart or supplier changes (with shorter debounce for better persistence)
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      saveSession();
-      autoSaveDraft();
-    }, 2000); // Auto-save after 2 seconds of inactivity
+    // Don't save if we're still restoring session or in edit/duplicate mode
+    if (hasRestoredSession && !isEditMode && !isDuplicateMode) {
+      const timeoutId = setTimeout(() => {
+        saveSession();
+        autoSaveDraft();
+      }, 500); // Reduced to 500ms for faster persistence
 
-    return () => clearTimeout(timeoutId);
-  }, [purchaseCartItems, selectedSupplier, selectedCurrency, expectedDelivery, paymentTerms, purchaseOrderNotes, exchangeRates, shippingInfo, saveSession, autoSaveDraft]);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [purchaseCartItems, selectedSupplier, selectedCurrency, expectedDelivery, paymentTerms, purchaseOrderNotes, exchangeRates, shippingInfo, saveSession, autoSaveDraft, hasRestoredSession, isEditMode, isDuplicateMode]);
+
+  // Save session immediately before page unload (refresh, close tab, etc.)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only save if we have data and not in edit/duplicate mode
+      if (!isEditMode && !isDuplicateMode && (purchaseCartItems.length > 0 || selectedSupplier)) {
+        // Save session synchronously before page unloads
+        try {
+          const sessionData = {
+            purchaseCartItems,
+            selectedSupplier,
+            selectedCurrency,
+            expectedDelivery,
+            paymentTerms,
+            purchaseOrderNotes,
+            exchangeRates,
+            shippingInfo
+          };
+          localStorage.setItem(PO_SESSION_KEY, JSON.stringify(sessionData));
+          localStorage.setItem(PO_SESSION_TIMESTAMP_KEY, new Date().toISOString());
+          console.log('💾 [POcreate] Session saved on page unload');
+        } catch (error) {
+          console.error('❌ [POcreate] Failed to save session on unload:', error);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [purchaseCartItems, selectedSupplier, selectedCurrency, expectedDelivery, paymentTerms, purchaseOrderNotes, exchangeRates, shippingInfo, isEditMode, isDuplicateMode]);
 
   // Draft loading functionality
   const handleLoadDraft = useCallback((draft: PurchaseOrderDraft) => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, User, Phone, Mail, X, Plus, Star, RefreshCw } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Search, User, Phone, Mail, X, Plus, Star, RefreshCw, CheckCircle, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import GlassCard from '../../../shared/components/ui/GlassCard';
 import GlassButton from '../../../shared/components/ui/GlassButton';
@@ -278,83 +279,69 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
   // Prevent body scroll when modal is open
   useBodyScrollLock(isOpen);
 
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
-    <>
-      {/* Backdrop - respects sidebar and topbar */}
-      <div 
-        className="fixed bg-black/50"
-        onClick={onClose}
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 35
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-4"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none'
-        }}
-      >
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="customer-modal-title"
+      onClick={onClose}
+    >
         <div 
-          className="w-full max-w-5xl max-h-[95vh] overflow-hidden bg-white rounded-lg shadow-xl flex flex-col"
+        className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
           onClick={(e) => e.stopPropagation()}
-          style={{ pointerEvents: 'auto' }}
+      >
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
         >
-        {/* Header */}
-        <div className="flex-shrink-0 p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <User className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">
-                  Select Customer
-                </h2>
-                <p className="text-xs text-gray-500">Search and select a customer for this sale</p>
-              </div>
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <User className="w-8 h-8 text-white" />
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={loadAllCustomers}
-                disabled={loading}
-                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
-                title="Refresh customers"
-              >
-                <RefreshCw className={`w-6 h-6 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
+            
+            {/* Text */}
+            <div>
+              <h3 id="customer-modal-title" className="text-2xl font-bold text-gray-900 mb-2">Select Customer</h3>
+              <p className="text-sm text-gray-600">Choose a customer for this sale</p>
             </div>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="flex-shrink-0 p-6 bg-gray-50 border-b border-gray-200">
+        {/* Fixed Search Section */}
+        <div className="p-6 pb-0 flex-shrink-0">
+          <div className="mb-4">
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by name, phone, email, city, or any field..."
+                placeholder="Search customers by name, phone, email, city..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-10 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 placeholder-gray-400"
+                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
               autoFocus
             />
             {searchQuery && (
@@ -367,52 +354,37 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
             )}
           </div>
         </div>
-
-        {/* Content */}
-        <div className="relative flex-1 overflow-y-auto p-6" style={{ minHeight: '500px', maxHeight: 'calc(95vh - 200px)' }}>
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm text-gray-500">
+              {customers.length} of {recentCustomers.length} customers
+            </div>
+            <button
+              onClick={loadAllCustomers}
+              disabled={loading}
+              className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+              title="Refresh customers"
+            >
+              <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
           
-          {/* Loading overlay */}
+        {/* Scrollable Customers List Section */}
+        <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
           {loading && !hasAttemptedLoad && (
-            <div className="absolute inset-0 flex items-center justify-center bg-white z-20">
+            <div className="flex items-center justify-center py-12">
               <LoadingSpinner size="sm" color="blue" />
             </div>
           )}
 
           {error && (
-            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-4">
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-4 mt-4">
               <p className="text-red-600 font-medium">{error}</p>
             </div>
           )}
 
-          {/* Search Results or All Customers */}
-          {customers.length > 0 && (
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-gray-900 flex items-center gap-3">
-                  {searchQuery ? (
-                    <>
-                      <div className="p-2 bg-blue-100 rounded-lg">
-                        <Search className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <span>Search Results</span>
-                      <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm font-semibold rounded-full">
-                        {customers.length} found
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="p-2 bg-green-100 rounded-lg">
-                        <User className="w-5 h-5 text-green-600" />
-                      </div>
-                      <span>All Customers</span>
-                      <span className="px-3 py-1 bg-green-100 text-green-700 text-sm font-semibold rounded-full">
-                        {customers.length} total
-                      </span>
-                    </>
-                  )}
-                </h3>
-              </div>
-              <div className="grid grid-cols-3 gap-4 pb-4">
+          {customers.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
                 {customers.map((customer) => (
                   <CustomerCard
                     key={customer.id}
@@ -423,89 +395,39 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
                   />
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* No Results */}
-          {searchQuery && !loading && customers.length === 0 && (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 bg-gray-100 rounded-lg flex items-center justify-center mx-auto mb-6">
-                <User className="w-10 h-10 text-gray-400" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">No customers found</h3>
-              <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                No customers match your search for <span className="font-semibold text-blue-600">"{searchQuery}"</span>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <User className="w-16 h-16 text-gray-400 mb-4" />
+              <p className="text-gray-600 text-lg font-medium">No customers found</p>
+              <p className="text-sm text-gray-500 mt-2">
+                {searchQuery 
+                  ? "Try adjusting your search criteria" 
+                  : "No customers available"
+                }
               </p>
+              {!searchQuery && (
               <button
                 onClick={handleCreateNewCustomer}
-                className="inline-flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg"
               >
-                <Plus className="w-5 h-5" />
-                Create New Customer
+                  <Plus className="w-4 h-4" />
+                  Create Customer
               </button>
-            </div>
           )}
-
-          {/* No Customers in Database */}
-          {!searchQuery && !loading && customers.length === 0 && hasAttemptedLoad && (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-6">
-                <User className="w-10 h-10 text-blue-600" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">No customers yet</h3>
-              <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                You haven't added any customers to your system yet. Create your first customer to get started!
-              </p>
-              <button
-                onClick={handleCreateNewCustomer}
-                className="inline-flex items-center gap-3 px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                Create Your First Customer
-              </button>
             </div>
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex-shrink-0 p-6 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {selectedCustomer ? (
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-semibold text-sm">
-                    {selectedCustomer.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-600">Selected:</span>
-                    <span className="ml-2 font-medium text-gray-900">{selectedCustomer.name}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <User className="w-4 h-4 text-gray-500" />
-                  </div>
-                  <span className="text-sm text-gray-600">No customer selected</span>
-                </div>
-              )}
-            </div>
-            <div className="flex gap-3">
+        {/* Fixed Action Buttons Footer */}
+        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
               <button
-                onClick={onClose}
-                className="px-6 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
+            type="button"
                 onClick={handleCreateNewCustomer}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+            className="w-full px-6 py-3.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg hover:shadow-xl text-lg flex items-center justify-center gap-2"
               >
-                <Plus className="w-4 h-4" />
-                New Customer
+            <Plus className="w-5 h-5" />
+            Add New Customer
               </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -519,8 +441,8 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
           setShowCreateCustomer(true);
         }}
       />
-      </div>
-    </>
+    </div>,
+    document.body
   );
 };
 
@@ -561,119 +483,93 @@ const CustomerCard: React.FC<CustomerCardProps> = ({ customer, onSelect, isSelec
     return isCorrupt ? `${formatted} ⚠️` : formatted;
   };
 
-  // Helper function to highlight search terms
-  const highlightText = (text: string, query: string) => {
-    if (!query || !text) return text;
-    
-    const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-    const parts = text.split(regex);
-    
-    return parts.map((part, index) => 
-      regex.test(part) ? (
-        <mark key={index} className="bg-yellow-200 px-1 rounded font-semibold">
-          {part}
-        </mark>
-      ) : part
-    );
-  };
 
-  const getLoyaltyIcon = (loyaltyLevel: string) => {
-    switch (loyaltyLevel?.toLowerCase()) {
-      case 'vip':
-        return <Star className="w-4 h-4 text-purple-500 fill-current" />;
-      case 'premium':
-        return <Star className="w-4 h-4 text-yellow-500 fill-current" />;
-      case 'regular':
-        return <Star className="w-4 h-4 text-blue-500 fill-current" />;
-      case 'active':
-        return <Star className="w-4 h-4 text-green-500 fill-current" />;
-      case 'payment_customer':
-        return <Star className="w-4 h-4 text-teal-500 fill-current" />;
-      case 'engaged':
-        return <Star className="w-4 h-4 text-indigo-500 fill-current" />;
-      case 'interested':
-        return <Star className="w-4 h-4 text-gray-400 fill-current" />;
-      default:
-        return null;
-    }
-  };
+  const isVIP = customer.loyaltyLevel?.toLowerCase() === 'vip' || customer.loyaltyLevel?.toLowerCase() === 'premium';
 
   return (
     <div
-      onClick={() => onSelect(customer)}
-      className={`relative bg-white border-2 rounded-lg cursor-pointer transition-all duration-200 transform hover:-translate-y-1 ${
-        isSelected 
-          ? 'border-blue-500 bg-blue-50 shadow-lg scale-105' 
-          : 'border-gray-200 hover:border-blue-300 hover:shadow-lg'
+      className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 hover:shadow-lg hover:scale-[1.02] cursor-pointer relative ${
+        isSelected || isVIP
+          ? 'border-blue-400 shadow-lg' 
+          : 'border-gray-200 hover:border-blue-300'
       }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect(customer);
+      }}
     >
-      {/* Selection Indicator */}
-      {isSelected && (
-        <div className="absolute top-2 right-2 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-      )}
+      {/* Info Icon Button - Top Right Corner */}
+      {customer.email || customer.city ? (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            // Could add customer details modal here
+          }}
+          className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center bg-gray-100 hover:bg-blue-500 text-gray-600 hover:text-white rounded-lg transition-all duration-200 shadow-sm hover:shadow-md z-10"
+          title="View customer details"
+        >
+          <Info className="w-4 h-4" />
+        </button>
+      ) : null}
 
-      {/* Main Content */}
-      <div className="p-4">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-3">
-          {/* Simple Avatar */}
-          <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-gray-700 font-semibold text-sm group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors duration-200">
+      <div className="p-4 flex flex-col h-full">
+        {/* Header with Avatar and Name - Left Aligned */}
+        <div className="flex items-center gap-3 mb-4">
+          {/* Avatar */}
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg flex-shrink-0 ${
+            isVIP 
+              ? 'bg-gradient-to-br from-blue-500 via-blue-400 to-blue-600'
+              : 'bg-gradient-to-br from-blue-500 to-blue-600'
+          }`}>
             {customer.name.charAt(0).toUpperCase()}
           </div>
           
-          {/* Customer Info */}
+          {/* Name */}
           <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-gray-900 truncate text-sm hover:text-blue-600 transition-colors">
-              {highlightText(customer.name, searchQuery || '')}
-            </h4>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-gray-900 truncate">
+                {customer.name}
+              </h3>
+              {isVIP && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-green-500 text-white shadow-sm flex-shrink-0">
+                  <CheckCircle className="w-3 h-3" />
+                </span>
+              )}
+            </div>
             {customer.phone && (
-              <p className="text-xs text-blue-600 font-medium truncate">
-                {highlightText(customer.phone, searchQuery || '')}
-              </p>
+              <p className="text-xs text-gray-600 truncate mt-1">{customer.phone}</p>
             )}
           </div>
-
-          {/* Loyalty Level */}
-          <div className="flex items-center gap-1 transition-transform duration-200 hover:scale-110">
-            {getLoyaltyIcon(customer.loyaltyLevel)}
-            <span className="text-xs text-gray-500 font-medium">
-              {customer.loyaltyLevel || 'interested'}
-            </span>
-          </div>
         </div>
 
-        {/* Contact Info */}
-        <div className="space-y-1 mb-3">
-          {customer.email && (
-            <div className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-900 transition-colors">
-              <Mail className="w-3 h-3 text-gray-400" />
-              <span className="truncate">
-                {highlightText(customer.email, searchQuery || '')}
-              </span>
+        {/* Empty space for flex-1 */}
+        <div className="space-y-2 mb-4 flex-1"></div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-3 mb-4 pt-3 border-t border-gray-100">
+          <div className="text-center">
+            <div className="text-xs text-gray-500 mb-1">Points</div>
+            <div className="font-bold text-gray-900 text-sm">{customer.points || 0}</div>
             </div>
-          )}
-          {customer.city && (
-            <div className="flex items-center gap-2 text-xs text-gray-600 hover:text-gray-900 transition-colors">
-              <span className="w-3 h-3 text-gray-400">📍</span>
-              <span className="truncate">
-                {highlightText(customer.city, searchQuery || '')}
-              </span>
+          <div className="text-center">
+            <div className="text-xs text-gray-500 mb-1">Spent</div>
+            <div className="font-bold text-gray-900 text-sm">
+              {formatMoney(customer.totalSpent || 0).replace('TZS', '').trim()}
             </div>
-          )}
+          </div>
         </div>
 
-        {/* Stats */}
-        <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-          <div className="flex items-center gap-1 hover:scale-105 transition-transform">
-            <Star className="w-3 h-3 text-gray-400" />
-            <span className="text-xs text-gray-600 font-medium">
-              {customer.points || 0} pts
-            </span>
-          </div>
-          <div className="text-xs font-bold text-gray-900 hover:text-blue-600 transition-colors">
-            {formatMoney(customer.totalSpent || 0)}
-          </div>
-        </div>
+        {/* Action Button */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect(customer);
+          }}
+          className="w-full py-2.5 px-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all shadow-md hover:shadow-lg font-semibold text-sm flex items-center justify-center gap-2 mt-auto"
+        >
+          <CheckCircle className="w-4 h-4" />
+          Select
+        </button>
       </div>
     </div>
   );

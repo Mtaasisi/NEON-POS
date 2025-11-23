@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, Download, AlertCircle, CheckCircle, Package, FileText, Info, Shield, FileSpreadsheet, CheckSquare, Square, Trash2, Copy, RotateCcw, Filter, Search, Edit } from 'lucide-react';
 import { Product, ProductFormData } from '../types/inventory';
 import { toast } from 'react-hot-toast';
@@ -902,7 +903,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
           
           if (!existingCategory) {
             console.warn(`⚠️ Category ID "${categoryId}" not found, will try to use category name or create new one`);
-            categoryId = null; // Reset to try name-based lookup
+            categoryId = undefined; // Reset to try name-based lookup
           }
         }
         
@@ -1021,7 +1022,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
             if (createError) {
               console.warn('⚠️ Failed to create supplier, continuing without supplier:', createError.message);
               // Don't throw error - supplier is optional
-              supplierId = null;
+              supplierId = undefined;
             } else if (newSupplier) {
               supplierId = newSupplier.id;
               console.log(`✅ Created supplier "${supplierName}" with ID: ${supplierId}`);
@@ -1066,7 +1067,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
           }
           
           // Create missing parent variants if children reference them
-          for (const parentSku of referencedParentSkus) {
+          for (const parentSku of Array.from(referencedParentSkus)) {
             if (!variantSkuMap.has(parentSku)) {
               // Check if parent SKU matches product SKU or needs to be created
               const isProductSku = parentSku === product.sku;
@@ -1126,6 +1127,91 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
               });
             }
           }
+        }
+        
+        // ✅ FIX: Ensure all variant SKUs are unique within the batch
+        if (variantsToCreate.length > 0) {
+          const usedVariantSkus = new Set<string>();
+          const { generateSKU } = await import('../lib/skuUtils');
+          
+          // Check for existing variant SKUs in database and ensure uniqueness within batch
+          for (let i = 0; i < variantsToCreate.length; i++) {
+            const variant = variantsToCreate[i];
+            let variantSku = variant.sku;
+            
+            // If SKU is empty or already used in batch, generate a new one
+            if (!variantSku || usedVariantSkus.has(variantSku)) {
+              // Generate a unique SKU
+              variantSku = generateSKU();
+              let attempts = 0;
+              const maxAttempts = 10;
+              
+              while (attempts < maxAttempts && (usedVariantSkus.has(variantSku) || !variantSku)) {
+                // Check if SKU exists in database
+                const { data: existingVariant } = await supabase
+                  .from('lats_product_variants')
+                  .select('sku')
+                  .eq('sku', variantSku)
+                  .maybeSingle();
+                
+                if (!existingVariant && !usedVariantSkus.has(variantSku)) {
+                  break; // SKU is unique
+                }
+                
+                variantSku = generateSKU();
+                attempts++;
+              }
+              
+              // Fallback if we couldn't generate a unique SKU
+              if (attempts >= maxAttempts || usedVariantSkus.has(variantSku)) {
+                variantSku = `SKU-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+              }
+            } else {
+              // Check if SKU exists in database
+              const { data: existingVariant } = await supabase
+                .from('lats_product_variants')
+                .select('sku')
+                .eq('sku', variantSku)
+                .maybeSingle();
+              
+              if (existingVariant) {
+                // SKU exists in database, generate a new one
+                variantSku = generateSKU();
+                let attempts = 0;
+                const maxAttempts = 10;
+                
+                while (attempts < maxAttempts && (usedVariantSkus.has(variantSku) || !variantSku)) {
+                  const { data: checkVariant } = await supabase
+                    .from('lats_product_variants')
+                    .select('sku')
+                    .eq('sku', variantSku)
+                    .maybeSingle();
+                  
+                  if (!checkVariant && !usedVariantSkus.has(variantSku)) {
+                    break;
+                  }
+                  
+                  variantSku = generateSKU();
+                  attempts++;
+                }
+                
+                if (attempts >= maxAttempts || usedVariantSkus.has(variantSku)) {
+                  variantSku = `SKU-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                }
+              }
+            }
+            
+            // Update variant SKU and mark as used
+            variant.sku = variantSku;
+            usedVariantSkus.add(variantSku);
+            
+            // Update variantSkuMap if this SKU was tracked
+            if (variantSkuMap.has(variant.sku) || variantSkuMap.has(variantSku)) {
+              variantSkuMap.set(variantSku, variantSkuMap.get(variant.sku) || variantSkuMap.get(variantSku) || 'pending');
+            }
+          }
+          
+          console.log(`✅ [Import] Ensured ${variantsToCreate.length} variant SKUs are unique`);
         }
         
         // Prepare product data (use final SKU - always auto-generated, never from Excel)
@@ -1200,38 +1286,95 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
             }
           }
         } catch (createError: any) {
-          // Handle duplicate SKU error during creation (shouldn't happen, but handle gracefully)
-          if (createError.code === '23505' || createError.message?.includes('duplicate key') || 
-              (createError.message?.includes('SKU') && createError.message?.includes('already exists'))) {
-            console.warn('⚠️ SKU conflict during creation, generating new SKU and retrying:', createError);
+          // Handle duplicate SKU error during creation (product or variant SKU conflicts)
+          const isSkuConflict = createError.code === '23505' && 
+            (createError.message?.includes('sku') || createError.message?.includes('SKU') || 
+             createError.message?.includes('duplicate key') || 
+             createError.message?.includes('lats_product_variants_sku_key'));
+          
+          if (isSkuConflict) {
+            console.warn('⚠️ SKU conflict during creation, generating new SKUs and retrying:', createError);
             
-            // Generate a new unique SKU and retry
-            const { generateSKU } = await import('../lib/skuUtils');
-            let retrySku = generateSKU();
-            let retryAttempts = 0;
-            let uniqueSkuFound = false;
+            // Check if it's a variant SKU conflict
+            const isVariantSkuConflict = createError.message?.includes('lats_product_variants_sku_key') || 
+                                        createError.message?.includes('product_variants');
             
-            while (retryAttempts < 10 && !uniqueSkuFound) {
-              const { data: checkSku } = await supabase
-                .from('lats_products')
-                .select('id')
-                .eq('sku', retrySku)
-                .maybeSingle();
+            if (isVariantSkuConflict && productData.variants && productData.variants.length > 0) {
+              // Regenerate all variant SKUs to ensure uniqueness
+              const { generateSKU } = await import('../lib/skuUtils');
+              const usedSkus = new Set<string>();
               
-              if (!checkSku) {
-                uniqueSkuFound = true;
-                // Update productData with new SKU and retry
-                productData.sku = retrySku;
-                importedProduct = await createProduct(productData, user.id);
-                console.log(`✅ Resolved SKU conflict by using new SKU: "${retrySku}"`);
-              } else {
-                retryAttempts++;
-                retrySku = generateSKU();
+              for (let i = 0; i < productData.variants.length; i++) {
+                const variant = productData.variants[i];
+                let newSku = generateSKU();
+                let attempts = 0;
+                const maxAttempts = 10;
+                
+                while (attempts < maxAttempts) {
+                  // Check if SKU is unique in batch
+                  if (!usedSkus.has(newSku)) {
+                    // Check if it exists in database
+                    const { data: existingVariant } = await supabase
+                      .from('lats_product_variants')
+                      .select('sku')
+                      .eq('sku', newSku)
+                      .maybeSingle();
+                    
+                    if (!existingVariant) {
+                      usedSkus.add(newSku);
+                      variant.sku = newSku;
+                      break;
+                    }
+                  }
+                  
+                  newSku = generateSKU();
+                  attempts++;
+                }
+                
+                // Fallback if needed
+                if (attempts >= maxAttempts || usedSkus.has(newSku)) {
+                  variant.sku = `SKU-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                  usedSkus.add(variant.sku);
+                }
+              }
+              
+              console.log(`✅ Regenerated ${productData.variants.length} variant SKUs to resolve conflicts`);
+            } else {
+              // Product SKU conflict - generate new product SKU
+              const { generateSKU } = await import('../lib/skuUtils');
+              let retrySku = generateSKU();
+              let retryAttempts = 0;
+              let uniqueSkuFound = false;
+              
+              while (retryAttempts < 10 && !uniqueSkuFound) {
+                const { data: checkSku } = await supabase
+                  .from('lats_products')
+                  .select('id')
+                  .eq('sku', retrySku)
+                  .maybeSingle();
+                
+                if (!checkSku) {
+                  uniqueSkuFound = true;
+                  productData.sku = retrySku;
+                } else {
+                  retryAttempts++;
+                  retrySku = generateSKU();
+                }
+              }
+              
+              if (!uniqueSkuFound) {
+                throw new Error(`Could not generate unique product SKU after multiple attempts. Please try again.`);
               }
             }
             
-            if (!uniqueSkuFound) {
-              throw new Error(`Could not generate unique SKU after multiple attempts. Please try again.`);
+            // Retry product creation with updated SKUs
+            try {
+              importedProduct = await createProduct(productData, user.id);
+              console.log(`✅ Resolved SKU conflict and successfully created product`);
+            } catch (retryError: any) {
+              // If retry also fails, throw the original error
+              console.error('❌ Retry after SKU conflict resolution also failed:', retryError);
+              throw createError; // Throw original error for better context
             }
           } else {
             // Re-throw if it's not a SKU conflict error
@@ -1249,7 +1392,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
           
           if (createdVariants) {
             // Build SKU to ID map
-            createdVariants.forEach(v => {
+            createdVariants.forEach((v: any) => {
               variantSkuMap.set(v.sku, v.id);
             });
             
@@ -1261,7 +1404,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                 
                 // If parent SKU matches product SKU, find the parent variant
                 if (!parentId && variant.parentVariantSku === product.sku) {
-                  const parentVariant = createdVariants.find(v => 
+                  const parentVariant = createdVariants.find((v: any) => 
                     (v.is_parent || v.variant_type === 'parent') && 
                     (v.sku === product.sku || v.sku.startsWith(product.sku))
                   );
@@ -1471,8 +1614,14 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
   const failedCount = importResults.filter(r => !r.success).length;
   const totalCount = importResults.length;
 
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]" role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="import-modal-title"
+    >
       <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
         {/* Close Button */}
         <button
@@ -1548,7 +1697,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                         <Package className={`w-10 h-10 transition-colors ${
                           isDragging ? 'text-blue-600' : 'text-blue-600'
                         }`} />
-                      </div>
+                  </div>
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 mb-2">
                           {isDragging ? 'Drop your file here' : 'Upload Excel File'}
@@ -1565,28 +1714,28 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                       </div>
                       {!isDragging && (
                         <div className="flex gap-4 justify-center mt-2">
-                          <button
+                    <button
                             onClick={(e) => {
                               e.stopPropagation();
                               fileInputRef.current?.click();
                             }}
-                            disabled={isProcessing}
-                            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                          >
-                            <Upload className="w-5 h-5" />
-                            {isProcessing ? 'Processing...' : 'Choose File'}
-                          </button>
-                          
-                          <button
+                      disabled={isProcessing}
+                      className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                    >
+                      <Upload className="w-5 h-5" />
+                      {isProcessing ? 'Processing...' : 'Choose File'}
+                    </button>
+                    
+                    <button
                             onClick={(e) => {
                               e.stopPropagation();
                               downloadTemplate();
                             }}
-                            className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-xl font-semibold transition-all shadow-sm hover:shadow-md"
-                          >
-                            <Download className="w-5 h-5" />
-                            Download Template
-                          </button>
+                      className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-gray-50 text-gray-700 border-2 border-gray-300 rounded-xl font-semibold transition-all shadow-sm hover:shadow-md"
+                    >
+                      <Download className="w-5 h-5" />
+                      Download Template
+                    </button>
                         </div>
                       )}
                     </div>
@@ -1652,21 +1801,6 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
           )}
           {currentStep === 'preview' && (
             <>
-              {/* Icon Header - Fixed (matching SetPricingModal style) */}
-              <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-                <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
-                  {/* Icon */}
-                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
-                    <Package className="w-8 h-8 text-white" />
-                  </div>
-                  
-                  {/* Text */}
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900">Preview Import Data</h3>
-                  </div>
-                </div>
-              </div>
-
               {/* Fixed Toolbar Section */}
               <div className="p-6 pb-0 flex-shrink-0">
                 <div className="flex items-center justify-between mb-6">
@@ -1674,7 +1808,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                     <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-lg">
                       <FileText className="w-4 h-4 text-blue-600" />
                       <span className="text-sm font-bold text-blue-700">{previewData.length} Product{previewData.length !== 1 ? 's' : ''}</span>
-                    </div>
+                </div>
                     {isEditMode && (
                       <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <Edit className="w-4 h-4 text-yellow-600" />
@@ -1690,7 +1824,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                   </div>
                   
                   <div className="flex items-center gap-3">
-                    <button
+                  <button
                       onClick={() => {
                         const newEditMode = !isEditMode;
                         if (newEditMode) {
@@ -1717,7 +1851,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                           ? 'bg-yellow-500 hover:bg-yellow-600 text-white' 
                           : 'bg-blue-600 hover:bg-blue-700 text-white'
                       }`}
-                    >
+                  >
                       {isEditMode ? (
                         <>
                           <FileText className="w-4 h-4" />
@@ -1729,10 +1863,10 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                           Edit Mode
                         </>
                       )}
-                    </button>
-                  </div>
+                  </button>
                 </div>
-
+              </div>
+              
                 {/* Edit Mode Toolbar */}
                 {isEditMode && (
                   <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-xl p-4 mb-6">
@@ -1753,7 +1887,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                             <Square className="w-4 h-4" />
                             Select None
                           </button>
-                        </div>
+                      </div>
                         {selectedProducts.size > 0 && (
                           <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-lg text-sm font-bold border border-blue-300">
                             {selectedProducts.size} selected
@@ -1787,11 +1921,11 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                           <RotateCcw className="w-4 h-4" />
                           Reset Changes
                         </button>
-                      </div>
                     </div>
                   </div>
+                </div>
                 )}
-
+                
                 {/* Conflict Resolution - Minimal Design */}
                 <div className="flex items-center gap-4 mb-6">
                   <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">If Product Name Exists:</span>
@@ -1829,8 +1963,8 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                       />
                       <span className="text-sm text-gray-700 font-medium">Delete & Replace</span>
                     </label>
-                  </div>
                 </div>
+              </div>
               
               {validationErrors.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
@@ -1942,14 +2076,14 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                                   placeholder="Product Name"
                                 />
                               ) : (
-                                <h4 className="text-lg font-bold text-gray-900">{product.name}</h4>
+                            <h4 className="text-lg font-bold text-gray-900">{product.name}</h4>
                               )}
-                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                                product.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {product.isActive !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </div>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                              product.isActive !== false ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {product.isActive !== false ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
                             {/* Quick Info - Clean Modern Design */}
                             <div className="flex items-center gap-3 flex-wrap">
                               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-md border border-gray-200 shadow-xs">
@@ -1960,7 +2094,7 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                                 <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">Category</span>
                                 <span className="text-xs text-gray-700 font-semibold">{product.categoryName || product.categoryId || 'N/A'}</span>
                               </div>
-                              {product.stockQuantity !== undefined && product.stockQuantity > 0 && (
+                              {product.stockQuantity !== undefined && (
                                 <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md border shadow-xs ${
                                   product.stockQuantity >= (product.minStockLevel || 5)
                                     ? 'bg-green-50 border-green-200' 
@@ -1990,12 +2124,12 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                                   <span className="text-[10px] font-medium text-emerald-600 uppercase tracking-wider">Price</span>
                                   <span className="text-xs text-emerald-700 font-bold">{product.price.toLocaleString()} TZS</span>
                                 </div>
-                              )}
+                            )}
                             </div>
                           </div>
                         </div>
                       </div>
-
+                      
                       {/* Expanded Content - Only show when product is expanded */}
                       {isExpanded && (
                         <div className="px-6 pb-6">
@@ -2171,177 +2305,169 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
                           )}
                           
                           {/* Variants Section */}
-                          {product.variants && product.variants.length > 0 && (
-                            <div className="mt-6 pt-6 border-t border-gray-200">
+                      {product.variants && product.variants.length > 0 && (
+                            <div className="mt-6 pt-6 border-t border-gray-200 w-full">
                               <div className="flex items-center gap-2 mb-4">
                                 <Package className="w-5 h-5 text-blue-600" />
                                 <span className="text-base font-semibold text-gray-900">
-                                  {product.variants.length} Variant{product.variants.length > 1 ? 's' : ''}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {(() => {
-                                  // Group variants by parent-child relationships
-                                  const parentVariants = product.variants.filter(v => 
-                                    v.variantType === 'parent' || v.isParent || !v.parentVariantSku
-                                  );
-                                  const childVariants = product.variants.filter(v => 
-                                    v.variantType === 'imei_child' && v.parentVariantSku
-                                  );
-                                  
-                                  // Group children by parent SKU
-                                  const childrenByParent = new Map<string, typeof childVariants>();
-                                  childVariants.forEach(child => {
-                                    const parentSku = child.parentVariantSku || product.sku;
-                                    if (!childrenByParent.has(parentSku)) {
-                                      childrenByParent.set(parentSku, []);
-                                    }
-                                    childrenByParent.get(parentSku)!.push(child);
-                                  });
-                                  
-                                  return (
-                                    <>
-                                      {/* Parent and Standard Variants */}
-                                      {parentVariants.map((variant, vIdx) => {
+                              {product.variants.length} Variant{product.variants.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
+                            {(() => {
+                              // Group variants by parent-child relationships
+                              const parentVariants = product.variants.filter(v => 
+                                v.variantType === 'parent' || v.isParent || !v.parentVariantSku
+                              );
+                              const childVariants = product.variants.filter(v => 
+                                v.variantType === 'imei_child' && v.parentVariantSku
+                              );
+                              
+                              // Group children by parent SKU
+                              const childrenByParent = new Map<string, typeof childVariants>();
+                              childVariants.forEach(child => {
+                                const parentSku = child.parentVariantSku || product.sku;
+                                if (!childrenByParent.has(parentSku)) {
+                                  childrenByParent.set(parentSku, []);
+                                }
+                                childrenByParent.get(parentSku)!.push(child);
+                              });
+                              
+                              return (
+                                <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 w-full">
+                                  {/* Variants Header */}
+                                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 text-purple-600">
+                                      <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                                      <polyline points="2 17 12 22 22 17"></polyline>
+                                      <polyline points="2 12 12 17 22 12"></polyline>
+                                    </svg>
+                                    <h3 className="text-sm font-semibold text-gray-800">Variants</h3>
+                                  </div>
+
+                                  {/* Variants List */}
+                                  <div className="space-y-2">
+                                    {parentVariants.map((variant, vIdx) => {
                                       const variantKey = `${product.sku}-${variant.variantSku || vIdx}`;
                                       const isExpanded = expandedVariants.has(variantKey);
                                       const children = childrenByParent.get(variant.variantSku || product.sku) || [];
                                       const hasChildren = children.length > 0;
-                                      
+
                                       return (
-                                        <div key={vIdx} className="border-2 rounded-xl bg-white shadow-sm transition-all hover:shadow-md">
-                                          {/* Parent Variant Header - Clickable if has children */}
-                                          <div
-                                            className={`flex items-start gap-2 p-3 ${hasChildren ? 'cursor-pointer hover:bg-gray-50' : ''}`}
-                                            onClick={hasChildren ? () => {
-                                              const newExpanded = new Set(expandedVariants);
-                                              if (isExpanded) {
-                                                newExpanded.delete(variantKey);
-                                              } else {
-                                                newExpanded.add(variantKey);
-                                              }
-                                              setExpandedVariants(newExpanded);
-                                            } : undefined}
-                                          >
-                                            {hasChildren && (
-                                              <div className={`w-5 h-5 rounded flex items-center justify-center transition-colors flex-shrink-0 mt-0.5 ${
-                                                isExpanded ? 'bg-blue-500' : 'bg-gray-200'
-                                              }`}>
-                                                <svg 
-                                                  className={`w-3 h-3 text-white transition-transform duration-200 ${
-                                                    isExpanded ? 'rotate-180' : ''
-                                                  }`} 
-                                                  fill="none" 
-                                                  stroke="currentColor" 
-                                                  viewBox="0 0 24 24"
-                                                >
-                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                </svg>
-                                              </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                              <div className="font-medium text-gray-900 text-sm mb-1.5 truncate">
+                                        <div key={vIdx}>
+                                          {/* Main Variant */}
+                                          <div className="flex justify-between items-center py-2 px-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer w-full"
+                                               onClick={hasChildren ? () => {
+                                                 const newExpanded = new Set(expandedVariants);
+                                                 if (isExpanded) {
+                                                   newExpanded.delete(variantKey);
+                                                 } else {
+                                                   newExpanded.add(variantKey);
+                                                 }
+                                                 setExpandedVariants(newExpanded);
+                                               } : undefined}>
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                              <div className={`w-2 h-2 rounded-full ${
+                                                variant.variantType === 'parent' ? 'bg-purple-500' : 'bg-gray-400'
+                                              }`}></div>
+                                              <span className="text-sm font-medium text-gray-900">
                                                 {variant.variantName || variant.variantSku || `Variant ${vIdx + 1}`}
-                                              </div>
-                                              <div className="flex items-center gap-2 flex-wrap">
-                                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                                                  variant.variantType === 'parent' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
-                                                  'bg-gray-100 text-gray-700 border border-gray-200'
-                                                }`}>
-                                                  {variant.variantType || 'standard'}
+                                              </span>
+                                              {hasChildren && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                                  {children.length} device{children.length > 1 ? 's' : ''}
                                                 </span>
-                                                {hasChildren && (
-                                                  <span className="text-xs text-gray-500 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                                                    {children.length} device{children.length > 1 ? 's' : ''}
-                                                  </span>
-                                                )}
-                                              </div>
-                                              {variant.variantSellingPrice && (
-                                                <div className="mt-2 text-xs font-semibold text-gray-700">
-                                                  {variant.variantSellingPrice.toLocaleString()} TZS
-                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="flex items-center gap-3 text-sm">
+                                              {variant.variantSellingPrice && variant.variantSellingPrice !== 0 && (
+                                                <span className="font-semibold text-gray-900">
+                                                  TSh&nbsp;{variant.variantSellingPrice.toLocaleString()}
+                                                </span>
                                               )}
                                             </div>
                                           </div>
-                                          
-                                          {/* Children Variants - Expandable */}
-                                          {hasChildren && isExpanded && (
-                                            <div className="px-3 pb-3 pt-0 space-y-2 border-t border-gray-100">
-                                              {children.map((child, cIdx) => (
-                                                <div key={cIdx} className="bg-blue-50 rounded-lg p-2.5 border border-blue-200">
-                                                  <div className="flex flex-col gap-1.5">
-                                                    <div className="font-medium text-gray-900 text-xs">
-                                                      {child.variantName || child.variantSku || `Device ${cIdx + 1}`}
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-                                                        imei_child
-                                                      </span>
-                                                      {child.imei && (
-                                                        <span className="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200 font-mono">
-                                                          {child.imei}
-                                                        </span>
-                                                      )}
-                                                      {child.serialNumber && (
-                                                        <span className="text-[10px] text-gray-600 bg-white px-1.5 py-0.5 rounded border border-gray-200 font-mono">
-                                                          {child.serialNumber}
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                    {child.variantSellingPrice && (
-                                                      <div className="text-[10px] font-semibold text-gray-700">
-                                                        {child.variantSellingPrice.toLocaleString()} TZS
-                                                      </div>
-                                                    )}
-                                                  </div>
+                                        
+                                        {/* Children Variants - Expandable */}
+                                        {hasChildren && isExpanded && (
+                                          <div className="ml-6 mt-2 space-y-1">
+                                            {children.map((child, cIdx) => (
+                                              <div key={cIdx} className="flex justify-between items-center py-1.5 px-2 bg-blue-50 rounded-md border border-blue-100 w-full">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full"></div>
+                                                  <span className="text-xs font-medium text-gray-700">
+                                                    {child.variantName || child.variantSku || `Device ${cIdx + 1}`}
+                                                  </span>
+                                                  {child.imei && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                                      IMEI: {child.imei}
+                                                    </span>
+                                                  )}
+                                                  {child.serialNumber && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                                      SN: {child.serialNumber}
+                                                    </span>
+                                                  )}
                                                 </div>
-                                              ))}
-                                            </div>
-                                          )}
-                                        </div>
-                                      );
-                                      })}
-                                      
-                                      {/* Orphaned Children (children without a parent variant in the list) */}
-                                      {childVariants.filter(child => {
-                                      const parentSku = child.parentVariantSku || product.sku;
-                                      return !parentVariants.some(p => (p.variantSku || product.sku) === parentSku);
-                                    }).map((variant, vIdx) => (
-                                      <div key={`orphan-${vIdx}`} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                          <span className="font-medium text-gray-900">
-                                            {variant.variantName || variant.variantSku || `Variant ${vIdx + 1}`}
-                                          </span>
-                                          <span className="px-2 py-0.5 rounded text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-                                            imei_child
-                                          </span>
-                                          {variant.parentVariantSku && (
-                                            <span className="text-xs text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
-                                              ← Parent: {variant.parentVariantSku}
-                                            </span>
-                                          )}
-                                          {variant.imei && (
-                                            <span className="text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded border border-green-200 font-mono">
-                                              IMEI: {variant.imei}
-                                            </span>
-                                          )}
-                                          {variant.variantSellingPrice && (
-                                            <span className="text-xs text-gray-600">
-                                              Price: {variant.variantSellingPrice.toLocaleString()} TZS
-                                            </span>
-                                          )}
-                                        </div>
+                                                <div className="flex items-center gap-2 text-xs">
+                                                  {child.variantSellingPrice && child.variantSellingPrice !== 0 && (
+                                                    <span className="font-semibold text-green-600">
+                                                      TSh&nbsp;{child.variantSellingPrice.toLocaleString()}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
                                       </div>
-                                      ))}
-                                    </>
-                                  );
-                                })()}
-                              </div>
-                            </div>
-                          )}
+                                    );
+                                  })}
+                                  
+                                  {/* Orphaned Children (children without a parent variant in the list) */}
+                                  {childVariants.filter((child) => {
+                                    const parentSku = child.parentVariantSku || product.sku;
+                                    return !parentVariants.some(p => (p.variantSku || product.sku) === parentSku);
+                                  }).map((variant, vIdx) => (
+                                    <div key={`orphan-${vIdx}`} className="flex justify-between items-center py-2 px-3 bg-orange-50 rounded-lg border border-orange-200 w-full">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                                        <span className="text-sm font-medium text-gray-900">
+                                          {variant.variantName || variant.variantSku || `Variant ${vIdx + 1}`}
+                                        </span>
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                          IMEI Device
+                                        </span>
+                                        {variant.parentVariantSku && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+                                            Parent: {variant.parentVariantSku}
+                                          </span>
+                                        )}
+                                        {variant.imei && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">
+                                            IMEI: {variant.imei}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2 text-sm">
+                                        {variant.variantSellingPrice && variant.variantSellingPrice !== 0 && (
+                                          <span className="font-semibold text-gray-900">
+                                            TSh&nbsp;{variant.variantSellingPrice.toLocaleString()}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </div>
                       )}
                     </div>
+                      )}
+                  </div>
                   );
                 })}
               </div>
@@ -2467,7 +2593,8 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

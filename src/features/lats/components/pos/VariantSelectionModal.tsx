@@ -12,6 +12,7 @@ import {
 import { supabase } from "../../../../lib/supabaseClient";
 import { format } from "../../lib/format";
 import { toast } from "react-hot-toast";
+import { useBodyScrollLock } from "../../../../hooks/useBodyScrollLock";
 
 interface VariantSelectionModalProps {
   isOpen: boolean;
@@ -63,6 +64,22 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       variants: product.variants || product.product_variants || []
     } : null;
   }, [product]);
+
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
 
   // Early return if product is invalid
   if (!isOpen || !normalizedProduct || !normalizedProduct.variants) {
@@ -772,6 +789,10 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-black/60 z-[99999] transition-opacity duration-300"
+        style={{
+          overflow: 'hidden',
+          overscrollBehavior: 'none'
+        }}
         onClick={onClose}
         role="dialog"
         aria-modal="true"

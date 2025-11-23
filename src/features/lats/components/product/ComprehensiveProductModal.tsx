@@ -265,38 +265,22 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
   };
 
   return createPortal(
-    <>
-      {/* Backdrop */}
+    <div 
+      className="fixed bg-black/40 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" 
+      style={{ 
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999
+      }}
+      onClick={onClose}
+    >
+      {/* Modal */}
       <div 
-        className="fixed bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-        style={{
-          zIndex: 35,
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-2 sm:p-4" 
-        style={{ 
-          zIndex: 50,
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none'
-        }}
+        className="relative bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Modal */}
-        <div 
-          className="relative bg-white rounded-xl shadow-2xl max-w-7xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-          onClick={(e) => e.stopPropagation()}
-          style={{ pointerEvents: 'auto' }}
-        >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -1486,7 +1470,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
           )}
         </div>
       </div>
-    </>,
+    </div>,
     document.body
   );
 };

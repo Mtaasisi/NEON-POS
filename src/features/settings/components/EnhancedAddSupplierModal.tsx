@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Building, ChevronDown, MessageCircle, Plus, User, MapPin, Upload, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { createSupplier, updateSupplier, type Supplier } from '../../../lib/supplierApi';
+import { useBodyScrollLock } from '../../../hooks/useBodyScrollLock';
 
 interface EnhancedAddSupplierModalProps {
   isOpen: boolean;
@@ -527,65 +529,77 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
     }
   };
 
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
-    <>
-      {/* Backdrop - respects sidebar and topbar */}
+  return createPortal(
       <div 
-        className="fixed bg-black/50"
-        onClick={onClose}
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
         style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
+        top: 0, 
+        left: 0, 
           right: 0,
           bottom: 0,
-          zIndex: 35
+        overflow: 'hidden',
+        overscrollBehavior: 'none'
         }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-4"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none'
-        }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="supplier-form-title"
+      onClick={onClose}
       >
         <div 
-          className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
           style={{ pointerEvents: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
         >
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Building className="w-5 h-5 text-blue-600" />
+          {/* Close Button */}
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Icon Header - Fixed */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                <Building className="w-8 h-8 text-white" />
               </div>
+              
+              {/* Text */}
               <div>
-                <h3 className="text-xl font-bold text-gray-900">
+                <h3 className="text-2xl font-bold text-gray-900 mb-2">
                   {isEditMode ? 'Edit Supplier' : 'Add New Supplier'}
                 </h3>
-                <p className="text-xs text-gray-500">
+                <p className="text-sm text-gray-600">
                   {isEditMode ? 'Update supplier information' : 'Create new supplier information'}
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
           </div>
+
+          {/* Form - Scrollable */}
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
 
           {/* Supplier Identity & Contact */}
           <div className="mb-5">
@@ -601,7 +615,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   value={formData.name}
                   onChange={handleChange}
                   placeholder="Enter supplier name"
-                  className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors text-gray-900 border-gray-200 focus:border-blue-500"
+                  className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                   disabled={submitting}
                   required
                 />
@@ -616,7 +630,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   value={formData.company_name}
                   onChange={handleChange}
                   placeholder="Enter company name"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                   disabled={submitting}
                 />
               </div>
@@ -630,7 +644,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   value={formData.phone}
                   onChange={handleChange}
                   placeholder="+255 123 456 789"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                   disabled={submitting}
                 />
               </div>
@@ -645,7 +659,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     value={formData.whatsapp}
                     onChange={handleChange}
                     placeholder="+255 123 456 789"
-                    className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    className="w-full px-4 py-3 pr-10 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                     disabled={submitting}
                   />
                   <MessageCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
@@ -660,7 +674,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   <User className="w-4 h-4 text-gray-600" />
                   <h5 className="text-sm font-semibold text-gray-700">Contact Persons</h5>
                   {contactPersons.length > 0 && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
                       {contactPersons.length}
                     </span>
                   )}
@@ -668,7 +682,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                 <button
                   type="button"
                   onClick={addContactPerson}
-                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-orange-600 hover:text-orange-700 hover:bg-orange-50 rounded-xl transition-colors"
                   disabled={submitting}
                 >
                   <Plus className="w-4 h-4" />
@@ -680,9 +694,9 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
               {contactPersons.length > 0 && (
                 <div className="space-y-2">
                   {contactPersons.map((contact, index) => (
-                    <div key={index} className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <div key={index} className="p-3 bg-orange-50 rounded-xl border border-orange-200">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-blue-900">Contact {index + 1}</span>
+                        <span className="text-xs font-medium text-orange-900">Contact {index + 1}</span>
                         <button
                           type="button"
                           onClick={() => removeContactPerson(index)}
@@ -697,7 +711,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                           <input
                             type="text"
                           placeholder="Name"
-                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                          className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                             value={contact.name}
                             onChange={(e) => updateContactPerson(index, 'name', e.target.value)}
                             disabled={submitting}
@@ -705,7 +719,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                           <input
                             type="tel"
                             placeholder="+255 123 456 789"
-                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                          className="w-full px-3 py-2 text-sm border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                             value={contact.mobile}
                             onChange={(e) => updateContactPerson(index, 'mobile', e.target.value)}
                             disabled={submitting}
@@ -717,7 +731,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
               )}
 
               {hasClickedAddContact && contactPersons.length === 0 && (
-                <div className="text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+                <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-300">
                   <p className="text-sm text-gray-500">No contact persons added</p>
                 </div>
               )}
@@ -737,13 +751,13 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   onFocus={() => setShowCategorySuggestions(true)}
                   onBlur={() => setTimeout(() => setShowCategorySuggestions(false), 200)}
                   placeholder="e.g., Smartphones & Tablets, Laptops..."
-                  className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                   disabled={submitting}
                 />
                 <button
                   type="button"
                   onClick={() => addProductCategory(categoryInput)}
-                  className="px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                  className="px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-medium hover:from-orange-600 hover:to-orange-700 transition-all shadow-md hover:shadow-lg"
                   disabled={submitting || !categoryInput.trim()}
                 >
                   <Plus className="w-5 h-5" />
@@ -772,7 +786,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     return (
                       <div
                         key={index}
-                        className={`flex items-center gap-2 px-3 py-1.5 border-2 rounded-lg text-sm font-medium ${getCategoryColor(category)}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 border-2 rounded-xl text-sm font-medium ${getCategoryColor(category)}`}
                       >
                         {category}
                         {isFrequentlyUsed && usageCount > 2 && (
@@ -803,7 +817,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                         key={category}
                         type="button"
                         onClick={() => addProductCategory(category)}
-                        className={`px-2 py-1 text-xs rounded-lg transition-all border ${getCategoryColor(category)} opacity-50 hover:opacity-100 hover:scale-105`}
+                        className={`px-2 py-1 text-xs rounded-xl transition-all border ${getCategoryColor(category)} opacity-50 hover:opacity-100 hover:scale-105`}
                         disabled={submitting}
                       >
                         + {category}
@@ -827,7 +841,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                   disabled={submitting}
                 >
                   <option value="">Select country</option>
@@ -848,7 +862,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   onChange={handleChange}
                   placeholder="Enter city"
                   list="city-suggestions"
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                   disabled={submitting}
                 />
                 <datalist id="city-suggestions">
@@ -871,7 +885,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     value={formData.wechat}
                     onChange={handleChange}
                     placeholder="Enter WeChat ID"
-                    className="w-full px-4 py-3 pr-10 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    className="w-full px-4 py-3 pr-10 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                     disabled={submitting}
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 bg-[#09B83E] rounded flex items-center justify-center">
@@ -898,12 +912,12 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     onChange={handleAddressChange}
                     rows={2}
                     placeholder="Enter address or coordinates (e.g., -6.7924, 39.2083)"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900 resize-none"
                     disabled={submitting || convertingCoordinates}
                   />
                   {convertingCoordinates && (
-                    <div className="absolute right-3 top-3 flex items-center gap-2 text-blue-600">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                      <div className="absolute right-3 top-3 flex items-center gap-2 text-orange-600">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-600 border-t-transparent"></div>
                       <span className="text-xs font-medium">Converting...</span>
                     </div>
                   )}
@@ -1034,7 +1048,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                   onChange={(e) => setBankAccount(e.target.value)}
                   rows={2}
                   placeholder="Bank name, Account number, SWIFT/BIC code, etc."
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900 resize-none"
                   disabled={submitting}
                 />
               </div>
@@ -1047,7 +1061,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
             <button
               type="button"
               onClick={() => setShowAdvanced(!showAdvanced)}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border-2 border-gray-200"
+                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors border-2 border-gray-300"
             >
               <span className="text-sm font-semibold text-gray-700">Advanced Options</span>
               <ChevronDown 
@@ -1056,7 +1070,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
             </button>
 
             {showAdvanced && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg border-2 border-gray-200 space-y-4">
+              <div className="mt-4 p-4 bg-gray-50 rounded-xl border-2 border-gray-300 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Email
@@ -1067,7 +1081,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     value={formData.email}
                     onChange={handleChange}
                     placeholder="supplier@example.com"
-                    className="w-full px-4 py-3 border-2 rounded-lg focus:outline-none transition-colors text-gray-900 border-gray-200 focus:border-blue-500"
+                    className="w-full px-4 py-3 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200"
                     disabled={submitting}
                   />
                 </div>
@@ -1081,7 +1095,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     value={formData.tax_id}
                     onChange={handleChange}
                     placeholder="Enter tax ID"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                     disabled={submitting}
                   />
                 </div>
@@ -1095,7 +1109,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     value={formData.payment_terms}
                     onChange={handleChange}
                     placeholder="e.g., Net 30, Cash on Delivery"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
                     disabled={submitting}
                   />
                 </div>
@@ -1109,7 +1123,7 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
                     onChange={handleChange}
                     rows={3}
                     placeholder="Additional notes or comments"
-                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none"
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900 resize-none"
                     disabled={submitting}
                   />
                 </div>
@@ -1118,19 +1132,19 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
+          <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white">
             <button
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="flex-1 px-4 py-3 border-2 border-gray-200 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>
@@ -1142,13 +1156,10 @@ const EnhancedAddSupplierModal: React.FC<EnhancedAddSupplierModalProps> = ({
               )}
             </button>
           </div>
-          <p className="text-xs text-center text-gray-500 mt-2">
-            * Required fields must be filled
-          </p>
         </form>
         </div>
-      </div>
-    </>
+    </div>,
+    document.body
   );
 };
 

@@ -434,7 +434,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
   // Reusable form fields component
   const renderFormFields = () => (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Name */}
       <div className="md:col-span-2">
         <label className="block text-gray-700 mb-2 font-medium">
@@ -447,10 +447,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             name="name"
             value={formData.name || ''}
             onChange={handleInputChange}
-            className={`w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none ${
+            className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
               validationErrors.name 
-                ? 'border-red-500 focus:border-red-500' 
-                : 'border-gray-300 focus:border-blue-500'
+                ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+                : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
             }`}
             placeholder="Enter customer name"
             required
@@ -481,10 +481,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             name="phone"
             value={formData.phone || ''}
             onChange={handleInputChange}
-            className={`w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none ${
+            className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
               validationErrors.phone 
-                ? 'border-red-500 focus:border-red-500' 
-                : 'border-gray-300 focus:border-blue-500'
+                ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+                : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
             }`}
             placeholder="e.g., 0712345678 or +255712345678"
             required
@@ -497,8 +497,8 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
           />
           <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
           {checkingPhone && (
-            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              <div className="absolute right-4 top-1/2 -translate-y-1/2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div>
             </div>
           )}
         </div>
@@ -541,7 +541,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                   setFormData(prev => ({ ...prev, whatsapp: formData.phone }));
                 }
               }}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+              className="w-4 h-4 text-orange-600 bg-gray-100 border-gray-300 rounded focus:ring-orange-500 focus:ring-2"
             />
             <label htmlFor="hasWhatsapp" className="text-sm text-gray-600">Has WhatsApp</label>
           </div>
@@ -553,9 +553,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             value={formData.whatsapp || ''}
             onChange={handleInputChange}
             disabled={!hasWhatsapp}
-            className={`w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none ${
+            className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors ${
               hasWhatsapp 
-                ? 'border-gray-300 focus:border-blue-500' 
+                ? 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900' 
                 : 'border-gray-200 bg-gray-50 text-gray-500'
             }`}
               placeholder={hasWhatsapp ? "Enter WhatsApp number" : "WhatsApp disabled"}
@@ -580,7 +580,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             onChange={handleInputChange}
             onFocus={() => setShowRegionDropdown(true)}
             onBlur={() => setTimeout(() => setShowRegionDropdown(false), 200)}
-            className="w-full min-h-[48px] py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+            className="w-full min-h-[48px] py-3 pl-12 pr-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 transition-colors text-gray-900"
             placeholder="Type or select region"
             autoComplete="off"
             autoCorrect="off"
@@ -596,14 +596,14 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
           {showRegionDropdown && (
             <div 
               data-dropdown="region" 
-              className="absolute top-full left-0 right-0 mt-1 bg-white/95 backdrop-blur-md border-2 border-gray-300 rounded-lg shadow-xl z-[9999] max-h-60 overflow-y-auto"
+              className="absolute top-full left-0 right-0 mt-1 bg-white border-2 border-gray-300 rounded-xl shadow-xl z-[9999] max-h-60 overflow-y-auto"
               role="listbox"
               aria-label="Region options"
             >
               {filteredRegions.map((region, _index) => (
                   <div
                     key={region}
-                    className="px-4 py-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    className="px-4 py-3 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-b-0"
                     onClick={() => {
                       setFormData(prev => ({ ...prev, city: region }));
                       setShowRegionDropdown(false);
@@ -641,16 +641,16 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                     });
                   }
                 }}
-                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 text-sm font-medium transition-all duration-200 cursor-pointer relative
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 text-sm font-medium transition-all duration-200 cursor-pointer relative
                   ${validationErrors.gender && !isSelected
                     ? 'border-red-500 bg-red-50'
                     : isSelected
                     ? option.value === 'male'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-lg'
+                      ? 'bg-orange-600 text-white border-orange-600 shadow-lg'
                       : 'bg-pink-600 text-white border-pink-600 shadow-lg'
                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 hover:border-gray-400 hover:shadow-md'
                   }
-                  focus:outline-none focus:ring-2 focus:ring-blue-300 focus:ring-opacity-50
+                  focus:outline-none focus:ring-2 focus:ring-orange-300 focus:ring-opacity-50
                   h-[52px]`}
                 style={{ userSelect: 'none' }}
                 aria-label={`Select ${option.label}`}
@@ -681,10 +681,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
               onChange={handleInputChange}
               onFocus={() => setShowMonthDropdown(true)}
               onBlur={() => setTimeout(() => setShowMonthDropdown(false), 200)}
-              className={`w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none ${
+              className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
                 validationErrors.birthMonth 
-                  ? 'border-red-500 focus:border-red-500' 
-                  : 'border-gray-300 focus:border-blue-500'
+                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+                  : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
               }`}
               placeholder="Type or select month"
               autoComplete="off"
@@ -709,7 +709,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                   {filteredMonths.map((month) => (
                       <div
                         key={month}
-                        className="px-3 py-2 hover:bg-blue-50 cursor-pointer rounded text-sm"
+                        className="px-3 py-2 hover:bg-orange-50 cursor-pointer rounded text-sm"
                         onClick={() => {
                           setFormData(prev => ({ ...prev, birthMonth: month }));
                           setShowMonthDropdown(false);
@@ -741,10 +741,10 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
               onChange={handleInputChange}
               onFocus={() => setShowDayDropdown(true)}
               onBlur={() => setTimeout(() => setShowDayDropdown(false), 200)}
-              className={`w-full py-3 pl-12 pr-4 bg-white/30 backdrop-blur-md border-2 rounded-lg focus:outline-none ${
+              className={`w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 ${
                 validationErrors.birthDay 
-                  ? 'border-red-500 focus:border-red-500' 
-                  : 'border-gray-300 focus:border-blue-500'
+                  ? 'border-red-500 focus:border-red-500 focus:ring-2 focus:ring-red-200' 
+                  : 'border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-200'
               }`}
               placeholder="Type or select day"
               autoComplete="off"
@@ -769,7 +769,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                   {filteredDays.map((day) => (
                       <div
                         key={day}
-                        className="px-2 py-2 hover:bg-blue-50 cursor-pointer rounded text-sm text-center"
+                        className="px-2 py-2 hover:bg-orange-50 cursor-pointer rounded text-sm text-center"
                         onClick={() => {
                           setFormData(prev => ({ ...prev, birthDay: day }));
                           setShowDayDropdown(false);
@@ -807,9 +807,9 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
                 key={source.label}
                 type="button"
                 onClick={() => handleReferralClick(source.label)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                   selected 
-                    ? 'bg-blue-600 text-white' 
+                    ? 'bg-orange-600 text-white' 
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
                 style={{ userSelect: 'none' }}
@@ -832,7 +832,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
               name="referralSourceCustom"
               value={formData.referralSourceCustom || ''}
               onChange={e => setFormData(prev => ({ ...prev, referralSourceCustom: e.target.value }))}
-              className="w-full py-2.5 px-3 bg-white border-2 border-gray-200 rounded-lg focus:border-blue-500 focus:outline-none text-sm"
+              className="w-full py-2.5 px-3 bg-white border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 focus:outline-none transition-colors text-gray-900 text-sm"
               placeholder="Please specify..."
               autoComplete="off"
               autoCorrect="off"
@@ -848,7 +848,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
           <button
             type="button"
             onClick={() => setShowNotes(true)}
-            className="text-blue-600 hover:underline text-sm mt-2"
+            className="text-orange-600 hover:underline text-sm mt-2"
           >
             + Add Notes
           </button>
@@ -871,7 +871,7 @@ const CustomerForm: React.FC<CustomerFormProps> = ({
             value={formData.notes || ''}
             onChange={handleInputChange}
             rows={2}
-            className="w-full min-h-[48px] py-3 px-4 bg-white/30 backdrop-blur-md border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none"
+            className="w-full min-h-[48px] py-3 px-4 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:ring-2 focus:ring-orange-200 focus:outline-none transition-colors text-gray-900 resize-none"
             placeholder="Additional notes"
             autoComplete="off"
             autoCorrect="off"

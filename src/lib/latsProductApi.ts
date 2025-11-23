@@ -211,10 +211,134 @@ export async function createProduct(
         ? currentBranchId
         : null;
       
-      const variants = productWithoutImages.variants.map(variant => {
+      // ✅ FIX: Ensure variant SKUs are unique within the batch
+      // Generate unique SKUs sequentially to avoid race conditions
+      const usedSkus = new Set<string>();
+      const { generateSKU } = await import('../features/lats/lib/skuUtils');
+      
+      // Helper function to generate a truly unique SKU
+      const generateUniqueSku = async (baseSku: string | undefined, index: number): Promise<string> => {
+        let candidateSku = baseSku || '';
+        let attempts = 0;
+        const maxAttempts = 20; // Increased attempts
+        
+        // If base SKU is provided and not used, check it first
+        if (candidateSku && !usedSkus.has(candidateSku)) {
+          const { data: existingVariant } = await supabase
+            .from('lats_product_variants')
+            .select('sku')
+            .eq('sku', candidateSku)
+            .maybeSingle();
+          
+          if (!existingVariant) {
+            usedSkus.add(candidateSku);
+            return candidateSku;
+          }
+        }
+        
+        // Generate a new SKU and ensure it's unique
+        while (attempts < maxAttempts) {
+          // Generate SKU with more entropy to avoid collisions
+          const timestamp = Date.now();
+          const random1 = Math.random().toString(36).substring(2, 9).toUpperCase();
+          const random2 = Math.random().toString(36).substring(2, 9).toUpperCase();
+          candidateSku = `SKU-${timestamp}-${index}-${random1}-${random2}`;
+          
+          // Check if it's unique in batch
+          if (!usedSkus.has(candidateSku)) {
+            // Check if it exists in database
+            const { data: existingVariant } = await supabase
+              .from('lats_product_variants')
+              .select('sku')
+              .eq('sku', candidateSku)
+              .maybeSingle();
+            
+            if (!existingVariant) {
+              usedSkus.add(candidateSku);
+              return candidateSku;
+            }
+          }
+          
+          attempts++;
+        }
+        
+        // Final fallback - should never reach here, but just in case
+        const finalSku = `SKU-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 15).toUpperCase()}-${Math.random().toString(36).substring(2, 15).toUpperCase()}`;
+        usedSkus.add(finalSku);
+        return finalSku;
+      };
+      
+      // First, ensure all variant SKUs are unique within the batch
+      const variantsWithUniqueSkus = [];
+      for (let i = 0; i < productWithoutImages.variants.length; i++) {
+        const variant = productWithoutImages.variants[i];
+        const uniqueSku = await generateUniqueSku(variant.sku, i);
+        
+        // Double-check uniqueness before adding
+        if (usedSkus.has(uniqueSku) && variantsWithUniqueSkus.some(v => v.sku === uniqueSku)) {
+          console.error(`❌ Duplicate SKU detected: ${uniqueSku} - regenerating...`);
+          const newSku = await generateUniqueSku(undefined, i + 1000); // Use offset to ensure uniqueness
+          variantsWithUniqueSkus.push({
+            ...variant,
+            sku: newSku
+          });
+        } else {
+          variantsWithUniqueSkus.push({
+            ...variant,
+            sku: uniqueSku
+          });
+        }
+      }
+      
+      // Final validation: ensure no duplicates in the batch
+      const skuSet = new Set<string>();
+      const duplicates: number[] = [];
+      variantsWithUniqueSkus.forEach((v, idx) => {
+        if (skuSet.has(v.sku)) {
+          duplicates.push(idx);
+        } else {
+          skuSet.add(v.sku);
+        }
+      });
+      
+      // Regenerate SKUs for any duplicates found
+      if (duplicates.length > 0) {
+        console.warn(`⚠️ Found ${duplicates.length} duplicate SKUs in batch, regenerating...`);
+        for (const idx of duplicates) {
+          const newSku = await generateUniqueSku(undefined, idx + 2000);
+          variantsWithUniqueSkus[idx].sku = newSku;
+        }
+      }
+      
+      console.log(`✅ Generated ${variantsWithUniqueSkus.length} unique variant SKUs:`, 
+        variantsWithUniqueSkus.map(v => v.sku));
+      
+      // Final validation: ensure no duplicate SKUs before mapping to variantData
+      const finalSkuSet = new Set<string>();
+      const finalVariantsWithUniqueSkus = [];
+      for (let i = 0; i < variantsWithUniqueSkus.length; i++) {
+        const variant = variantsWithUniqueSkus[i];
+        let finalSku = variant.sku;
+        
+        // If SKU is duplicate, regenerate it
+        if (finalSkuSet.has(finalSku)) {
+          console.warn(`⚠️ Duplicate SKU detected at final check: ${finalSku}, regenerating...`);
+          finalSku = await generateUniqueSku(undefined, i + 3000);
+        }
+        
+        finalSkuSet.add(finalSku);
+        finalVariantsWithUniqueSkus.push({
+          ...variant,
+          sku: finalSku
+        });
+      }
+      
+      const variants = finalVariantsWithUniqueSkus.map((variant) => {
+        const uniqueSku = variant.sku;
+        
         const variantData: any = {
           product_id: product.id,
-          sku: variant.sku,
+          sku: uniqueSku,
           name: variant.name,  // 🔧 FIX: Save to 'name' (user-defined column)
           attributes: variant.attributes || {},  // 🔧 FIX: Save to 'attributes' (user-defined column)
           cost_price: variant.costPrice ?? 0,
@@ -250,6 +374,17 @@ export async function createProduct(
         
         return variantData;
       });
+      
+      // Log SKUs being inserted for debugging
+      const skusBeingInserted = variants.map(v => v.sku);
+      const uniqueSkusInInsert = new Set(skusBeingInserted);
+      if (uniqueSkusInInsert.size !== skusBeingInserted.length) {
+        console.error('❌ CRITICAL: Duplicate SKUs detected in final insert array!', skusBeingInserted);
+        const duplicates = skusBeingInserted.filter((sku, idx) => skusBeingInserted.indexOf(sku) !== idx);
+        throw new Error(`Duplicate SKUs found before insertion: ${duplicates.join(', ')}`);
+      }
+      
+      console.log(`✅ Inserting ${variants.length} variants with unique SKUs:`, skusBeingInserted);
 
       const { error: variantsError } = await supabase
         .from('lats_product_variants')
@@ -530,7 +665,7 @@ export async function getProduct(productId: string, options?: { forceRefresh?: b
     },
     {
       forceRefresh: options?.forceRefresh,
-      timeout: 60000, // 60 seconds - increased from default 30s to handle Neon cold starts
+      timeout: 90000, // 90 seconds - increased to handle Neon cold starts (can take 30-60 seconds)
     }
   );
 }
@@ -978,7 +1113,7 @@ export async function getProducts(options?: { forceRefresh?: boolean }): Promise
     },
     {
       forceRefresh: options?.forceRefresh,
-      timeout: 60000, // 60 seconds - increased from default 30s to handle Neon cold starts
+      timeout: 90000, // 90 seconds - increased to handle Neon cold starts (can take 30-60 seconds)
     }
   );
 }

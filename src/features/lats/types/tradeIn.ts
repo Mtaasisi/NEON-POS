@@ -24,13 +24,24 @@ export interface TradeInPrice {
   good_multiplier: number; // Default 0.85 (85%)
   fair_multiplier: number; // Default 0.70 (70%)
   poor_multiplier: number; // Default 0.50 (50%)
+  // Device specifications
+  storage_capacity?: string;
+  battery_health?: number;
+  has_charger?: boolean;
+  has_original_box?: boolean;
+  specifications?: {
+    storage?: number;
+    battery?: number;
+    condition?: number;
+    screen?: number;
+  };
   notes?: string;
   is_active: boolean;
   created_by?: string;
   updated_by?: string;
   created_at: string;
   updated_at: string;
-  
+
   // Joined data (not in database)
   product?: any;
   variant?: any;
@@ -48,6 +59,17 @@ export interface TradeInPriceFormData {
   good_multiplier?: number;
   fair_multiplier?: number;
   poor_multiplier?: number;
+  // Device specifications
+  storage_capacity?: string;
+  battery_health?: number;
+  has_charger?: boolean;
+  has_original_box?: boolean;
+  specifications?: {
+    storage?: number;
+    battery?: number;
+    condition?: number;
+    screen?: number;
+  };
   notes?: string;
   is_active?: boolean;
 }

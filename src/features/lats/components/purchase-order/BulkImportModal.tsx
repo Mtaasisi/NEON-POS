@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, Download, FileSpreadsheet, CheckCircle, AlertCircle, Trash2, Plus, HelpCircle, Package, TrendingUp, ShoppingCart } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -333,8 +334,11 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
   const validCount = importData.filter(r => r.status === 'valid').length;
   const invalidCount = importData.filter(r => r.status === 'invalid').length;
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" 
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="bg-gradient-to-br from-orange-100 to-amber-100 p-8">
@@ -469,7 +473,7 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
                         <td className="border border-gray-300 px-2 py-1.5">Galaxy S23</td>
                         <td className="border border-gray-300 px-2 py-1.5">256GB Black</td>
                         <td className="border border-gray-300 px-2 py-1.5 text-gray-500">Electronics</td>
-                        <td className="border border-gray-300 px-2 py-1.5 text-center text-red-600 font-bold bg-red-50"></td>
+                        <td className="border border-gray-300 px-2 py-1.5 text-center text-red-600 font-bold bg-red-50">0</td>
                         <td className="border border-gray-300 px-2 py-1.5 text-center">8</td>
                         <td className="border border-gray-300 px-2 py-1.5 text-center font-bold">20</td>
                         <td className="border border-gray-300 px-2 py-1.5 text-right">1,000,000</td>
@@ -731,7 +735,8 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

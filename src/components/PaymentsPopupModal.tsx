@@ -242,18 +242,19 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
   const baseAmount = amountInTZS || amount;
   
   // Calculate total paid for both modes
+  // methodAmounts now stores TZS amounts (user enters TZS)
   const totalPaidForRemaining = isMultipleMode 
     ? totalPaidInTZS
     : (selectedMethod && methodAmounts[selectedMethod] && methodAmounts[selectedMethod] > 0
-        ? (currency && currency !== 'TZS' && exchangeRate 
-            ? Math.round(methodAmounts[selectedMethod] * exchangeRate) 
-            : methodAmounts[selectedMethod])
+        ? methodAmounts[selectedMethod]  // Already in TZS
         : 0);
   
   const remainingAmount = baseAmount - totalPaidForRemaining;
 
   // Get the currency for display
-  const displayCurrency = currency || 'TZS';
+  // If amountInTZS exists, we're displaying in TZS (converted amount)
+  // Otherwise, use the original currency
+  const displayCurrency = amountInTZS ? 'TZS' : (currency || 'TZS');
   const currencySymbol = displayCurrency === 'USD' ? '$' : 
                         displayCurrency === 'EUR' ? '€' : 
                         displayCurrency === 'GBP' ? '£' : 
@@ -514,7 +515,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           amount: entry.amount
         })));
 
-        // Process multiple payments - validate amounts before sending and convert to TZS
+        // Process multiple payments - validate amounts before sending and convert ALL to TZS
+        // All payment amounts are converted to TZS regardless of entry currency
         const paymentData = paymentEntries.map(entry => {
           const entryAmount = typeof entry.amount === 'number' ? entry.amount : parseFloat(String(entry.amount));
           
@@ -522,20 +524,23 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
             throw new Error(`Invalid amount for payment method ${entry.method}: ${entry.amount}`);
           }
           
-          // Convert to TZS if needed
+          // Convert to TZS if needed - ensure ALL payments are in TZS
           const entryCurrency = entry.currency || currency || 'TZS';
           let amountInTZS = entryAmount;
           if (entryCurrency !== 'TZS' && currency && exchangeRate && entryCurrency === currency) {
+            // Convert from original currency to TZS using exchange rate
             amountInTZS = Math.round(entryAmount * exchangeRate);
           } else if (entryCurrency === 'TZS') {
+            // Already in TZS, no conversion needed
             amountInTZS = entryAmount;
           }
+          // If entryCurrency doesn't match purchase order currency, assume it's already in TZS
           
           return {
-            amount: amountInTZS,  // Always in TZS
+            amount: amountInTZS,  // Always in TZS - converted from entry currency if needed
             currency: 'TZS',  // Always process payments in TZS
             originalCurrency: entryCurrency,  // Track original currency for reference
-            originalAmount: entryAmount,  // Track original amount for reference
+            originalAmount: entryAmount,  // Track original amount in original currency for reference
             paymentMethod: entry.method,
             paymentMethodId: entry.methodId,
             paymentAccountId: entry.accountId,
@@ -578,22 +583,27 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         }
 
         // Validate amount before sending
-        // Use method-specific amount if set, otherwise use TZS converted amount if available (for foreign currency), otherwise use original amount
+        // Always ensure we work with TZS amounts
         const methodSpecificAmount = methodAmounts[selectedMethod];
-        const baseAmount = methodSpecificAmount && methodSpecificAmount > 0 
-          ? methodSpecificAmount 
-          : (amountInTZS || (typeof amount === 'number' ? amount : parseFloat(String(amount))));
         
-        if (isNaN(baseAmount) || baseAmount <= 0) {
-          toast.error(`Invalid payment amount: ${baseAmount}. Please refresh and try again.`);
+        // Calculate payment amount in TZS
+        // methodSpecificAmount is now always in TZS (user enters TZS amounts)
+        // Otherwise, use amountInTZS (already converted) or amount (if no conversion needed)
+        let paymentAmount: number;
+        
+        if (methodSpecificAmount && methodSpecificAmount > 0) {
+          // User entered a specific amount - it's already in TZS
+          paymentAmount = methodSpecificAmount;
+        } else {
+          // Use the full amount - ensure it's in TZS
+          paymentAmount = amountInTZS || (typeof amount === 'number' ? amount : parseFloat(String(amount)));
+        }
+        
+        if (isNaN(paymentAmount) || paymentAmount <= 0) {
+          toast.error(`Invalid payment amount: ${paymentAmount}. Please refresh and try again.`);
           setIsProcessing(false);
           return;
         }
-
-        // For method-specific amounts, convert to TZS if needed
-        const paymentAmount = methodSpecificAmount && methodSpecificAmount > 0
-          ? (currency && currency !== 'TZS' && exchangeRate ? Math.round(methodSpecificAmount * exchangeRate) : methodSpecificAmount)
-          : baseAmount;
 
         setProcessingStep('Processing payment...');
 
@@ -608,11 +618,20 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           convertedToTZS: amountInTZS ? true : false
         });
 
+        // Ensure payment amount is always in TZS
+        // paymentAmount is already in TZS (user enters TZS amounts)
+        // Calculate original amount in original currency for reference
+        const originalAmount = currency && currency !== 'TZS' && exchangeRate
+          ? (methodSpecificAmount && methodSpecificAmount > 0 
+              ? Math.round(methodSpecificAmount / exchangeRate)  // Convert TZS back to original currency
+              : amount)  // Use original amount prop
+          : paymentAmount;  // No conversion needed
+        
         const paymentData = [{
           amount: paymentAmount,  // Always in TZS
           currency: 'TZS',  // Always process payments in TZS
-          originalCurrency: currency,  // Track original currency for reference
-          originalAmount: amount,  // Track original amount for reference
+          originalCurrency: currency || 'TZS',  // Track original currency for reference
+          originalAmount: originalAmount,  // Track original amount in original currency for reference
           paymentMethod: method.name,
           paymentMethodId: method.id,
           paymentAccountId: account.id,
@@ -648,13 +667,12 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
     : (selectedMethod && (methodAmounts[selectedMethod] && methodAmounts[selectedMethod] > 0) ? 1 : 0);
 
   // Calculate total paid
+  // Calculate total paid - methodAmounts now stores TZS amounts
   const totalPaidCalculated = isMultipleMode 
     ? totalPaidInTZS
     : (selectedMethod 
         ? (methodAmounts[selectedMethod] && methodAmounts[selectedMethod] > 0
-            ? (currency && currency !== 'TZS' && exchangeRate 
-                ? Math.round(methodAmounts[selectedMethod] * exchangeRate) 
-                : methodAmounts[selectedMethod])
+            ? methodAmounts[selectedMethod]  // Already in TZS
             : (amountInTZS || amount))
         : 0);
 
@@ -832,6 +850,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                         setSelectedMethod(method.id);
                         setExpandedMethodId(method.id);
                         // Set the method amount to the full amount when using quick pay
+                        // Store in TZS (user enters TZS amounts)
+                        // amountInTZS is the converted TZS amount, or amount if already in TZS
                         const quickPayAmount = amountInTZS || amount;
                         setMethodAmounts(prev => ({
                           ...prev,
@@ -1141,10 +1161,9 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
               const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
               const methodSpecificAmount = methodAmounts[method.id];
               const basePaymentAmount = amountInTZS || amount;
+              // methodSpecificAmount is now always in TZS (user enters TZS amounts)
               const paymentAmount = methodSpecificAmount && methodSpecificAmount > 0
-                ? (currency && currency !== 'TZS' && exchangeRate 
-                    ? Math.round(methodSpecificAmount * exchangeRate) 
-                    : methodSpecificAmount)
+                ? methodSpecificAmount
                 : basePaymentAmount;
               const hasInsufficientBalance = paymentType === 'cash_out' && account && account.balance < paymentAmount;
               const isSelected = selectedMethod === method.id;
@@ -1217,7 +1236,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                         }`}
                       >
                         {isSelected || (methodAmounts[method.id] && methodAmounts[method.id] > 0) ? (
-                          `${(methodAmounts[method.id] || paymentAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${displayCurrency}`
+                          `${paymentAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ${displayCurrency}`
                         ) : (
                           'Amount Required'
                         )}
@@ -1232,15 +1251,26 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                         {/* Amount Input Field */}
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Enter {method.name} Amount
+                            Enter {method.name} Amount (in TZS)
                           </label>
-                          <input
-                            type="text"
-                            value={methodAmounts[method.id] > 0 ? methodAmounts[method.id].toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
-                            onChange={(e) => updateMethodAmount(method.id, e.target.value)}
-                            placeholder="Enter amount"
-                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
-                          />
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
+                              <span className="text-lg">{SUPPORTED_CURRENCIES.find(c => c.code === 'TZS')?.flag || '🇹🇿'}</span>
+                              <span className="text-sm font-medium text-gray-700">TZS</span>
+                            </div>
+                            <input
+                              type="text"
+                              value={methodAmounts[method.id] > 0 ? methodAmounts[method.id].toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
+                              onChange={(e) => updateMethodAmount(method.id, e.target.value)}
+                              placeholder="Enter amount"
+                              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
+                            />
+                          </div>
+                          {methodAmounts[method.id] > 0 && currency && currency !== 'TZS' && exchangeRate && (
+                            <p className="text-xs text-gray-500 mt-2">
+                              ≈ {(methodAmounts[method.id] / exchangeRate).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {currency}
+                            </p>
+                          )}
                         </div>
                         {account && (
                           <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -1252,13 +1282,13 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                               <div>
                                 <span className="text-gray-600">Amount to {paymentType === 'cash_out' ? 'Pay' : 'Receive'}:</span>
                                 <p className="font-bold text-gray-900">
-                                  {(methodAmounts[method.id] || paymentAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
+                                  {paymentAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
                                 </p>
                               </div>
                               <div className="col-span-2 pt-2 border-t border-gray-200">
                                 <span className="text-gray-600">Balance After Payment:</span>
-                                <p className={`font-bold ${Math.max(0, account.balance - (methodAmounts[method.id] || paymentAmount)) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
-                                  {Math.max(0, account.balance - (methodAmounts[method.id] || paymentAmount)).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
+                                <p className={`font-bold ${Math.max(0, account.balance - paymentAmount) >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                  {Math.max(0, account.balance - paymentAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {account.currency || 'TZS'}
                                 </p>
                               </div>
                             </div>

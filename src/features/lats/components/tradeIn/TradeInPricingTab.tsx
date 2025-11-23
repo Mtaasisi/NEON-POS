@@ -14,7 +14,7 @@ import {
   deleteTradeInPrice,
 } from '../../lib/tradeInApi';
 import { format } from '../../lib/format';
-import { TradeInPriceModal } from './TradeInPriceModal';
+import TradeInPriceModal from './TradeInPriceModal';
 
 const TradeInPricingTab: React.FC = () => {
   const [prices, setPrices] = useState<TradeInPrice[]>([]);

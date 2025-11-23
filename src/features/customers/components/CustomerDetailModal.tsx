@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, Users, Phone, Mail, MapPin, Calendar, Star, MessageSquare, 
   Smartphone, CreditCard, Gift, Tag, Bell, BarChart2, PieChart, 
@@ -52,6 +53,19 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   
   // Prevent body scroll when modal is open
   useBodyScrollLock(isOpen);
+
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
   const { addNote, updateCustomer, markCustomerAsRead } = useCustomers();
   const [currentCustomer, setCurrentCustomer] = useState(customer);
   
@@ -276,12 +290,29 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
       // Fetch spare part usage for this customer (optional, may not exist)
       try {
-        // First fetch the usage records
-        const { data: spareData, error: spareError } = await supabase
-          .from('lats_spare_part_usage')
-          .select('*')
-          .eq('customer_id', customer.id)
-          .order('used_at', { ascending: false});
+        // First fetch the usage records by joining with devices table
+        // lats_spare_part_usage has device_id, not customer_id
+        // We need to join with devices table to filter by customer_id
+        const { data: devicesData } = await supabase
+          .from('devices')
+          .select('id')
+          .eq('customer_id', customer.id);
+        
+        const deviceIds = devicesData?.map(d => d.id) || [];
+        
+        let spareData: any[] = [];
+        let spareError: any = null;
+        
+        if (deviceIds.length > 0) {
+          const result = await supabase
+            .from('lats_spare_part_usage')
+            .select('*')
+            .in('device_id', deviceIds)
+            .order('created_at', { ascending: false});
+          
+          spareData = result.data || [];
+          spareError = result.error;
+        }
 
         if (!spareError && spareData && spareData.length > 0) {
           // Get unique spare part IDs
@@ -535,262 +566,254 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
   if (!isOpen || !customer) return null;
 
+  // Ensure document.body exists before creating portal
+  if (typeof document === 'undefined' || !document.body) {
+    return null;
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+    <>
+      {createPortal(
+    <div 
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      style={{ 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        bottom: 0,
+        overflow: 'hidden',
+        overscrollBehavior: 'none'
+      }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="customer-detail-title"
+      onClick={onClose}
+    >
       <div 
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
-        onClick={onClose}
-      />
-      
-      {/* Modal */}
-      <div 
-        className="relative bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden"
+        className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-              <Users className="w-5 h-5 text-white" />
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <Users className="w-8 h-8 text-white" />
             </div>
+            
+            {/* Text */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{customer.name}</h2>
-              <p className="text-sm text-blue-600 font-medium">{customer.phone}</p>
+              <h3 id="customer-detail-title" className="text-2xl font-bold text-gray-900 mb-2">{customer.name}</h3>
+              <p className="text-sm text-gray-600">{customer.phone || 'No phone number'}</p>
             </div>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="border-b border-gray-200 bg-white">
-          <div className="flex space-x-8 px-6">
+        {/* Tab Navigation - Matching CBMCalculatorModal Style */}
+        <div className="bg-white flex-shrink-0 px-6 py-4">
+          <div className="flex rounded-lg bg-gray-100 p-1 gap-1 overflow-x-auto">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+              type="button"
+              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
                 activeTab === 'overview'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              <div className="flex items-center gap-2">
-                <Info className="w-4 h-4" />
-                Overview
-              </div>
+              <Info className="w-4 h-4" />
+              Overview
             </button>
-                        <button
-                          onClick={() => setActiveTab('activity')}
-                          className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                            activeTab === 'activity'
-                              ? 'border-blue-500 text-blue-600'
-                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <History className="w-4 h-4" />
-                            Activity
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => setActiveTab('journey')}
-                          className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                            activeTab === 'journey'
-                              ? 'border-blue-500 text-blue-600'
-                              : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4" />
-                            Journey
-                          </div>
-                        </button>
+            <button
+              onClick={() => setActiveTab('transactions')}
+              type="button"
+              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                activeTab === 'transactions'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Receipt className="w-4 h-4" />
+              Transactions
+            </button>
+            <button
+              onClick={() => setActiveTab('repairs')}
+              type="button"
+              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                activeTab === 'repairs'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Smartphone className="w-4 h-4" />
+              Repairs
+            </button>
+            <button
+              onClick={() => setActiveTab('communications')}
+              type="button"
+              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                activeTab === 'communications'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <MessageCircle className="w-4 h-4" />
+              Communications
+            </button>
+            <button
+              onClick={() => setActiveTab('journey')}
+              type="button"
+              className={`flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors whitespace-nowrap ${
+                activeTab === 'journey'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <TrendingUp className="w-4 h-4" />
+              Journey
+            </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-          {/* Overview Tab */}
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {/* Overview Tab - Essential Info Only */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Financial Overview */}
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 rounded-xl p-4">
-                  <div className="text-xs font-medium text-emerald-700 uppercase tracking-wide mb-1">Total Spent</div>
-                  <div className="text-lg font-bold text-emerald-900">
-                    {loadingEnhancedData ? '...' : formatCurrency(customerAnalytics?.totalSpent || 0)}
+              {/* Key Metrics Bar - Clean & Simple */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-lg">
+                  <div className="text-xs font-medium opacity-90 mb-1">Total Spent</div>
+                  <div className="text-2xl font-bold">
+                    {loadingEnhancedData ? '...' : formatCurrency(customerAnalytics?.totalSpent || 0).replace('Tsh ', '').replace('TZS ', '')}
                   </div>
                 </div>
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-xl p-4">
-                  <div className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-1">Orders</div>
-                  <div className="text-lg font-bold text-blue-900">
-                    {loadingEnhancedData ? '...' : posSales.length}
-                  </div>
+                <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-lg">
+                  <div className="text-xs font-medium opacity-90 mb-1">Orders</div>
+                  <div className="text-2xl font-bold">{loadingEnhancedData ? '...' : posSales.length}</div>
                 </div>
-                <div className="bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200 rounded-xl p-4">
-                  <div className="text-xs font-medium text-orange-700 uppercase tracking-wide mb-1">Devices</div>
-                  <div className="text-lg font-bold text-orange-900">
-                    {loadingEnhancedData ? '...' : devices.length}
-                  </div>
+                <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-5 text-white shadow-lg">
+                  <div className="text-xs font-medium opacity-90 mb-1">Repairs</div>
+                  <div className="text-2xl font-bold">{loadingEnhancedData ? '...' : devices.length}</div>
                 </div>
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-xl p-4">
-                  <div className="text-xs font-medium text-purple-700 uppercase tracking-wide mb-1">Points</div>
-                  <div className="text-lg font-bold text-purple-900">
-                    {loadingEnhancedData ? '...' : customer.points || 0}
-                  </div>
-                </div>
-                <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 border border-indigo-200 rounded-xl p-4">
-                  <div className="text-xs font-medium text-indigo-700 uppercase tracking-wide mb-1">Calls</div>
-                  <div className="text-lg font-bold text-indigo-900">
-                    {loadingEnhancedData ? '...' : customer.totalCalls || 0}
-                  </div>
+                <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-5 text-white shadow-lg">
+                  <div className="text-xs font-medium opacity-90 mb-1">Points</div>
+                  <div className="text-2xl font-bold">{loadingEnhancedData ? '...' : customer.points || 0}</div>
                 </div>
               </div>
 
-              {/* Call Analytics Section */}
-              <CallAnalyticsCard customer={customer} />
-              
-              {/* Main Content Layout */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* Left Column - Customer Info */}
+              {/* Main Content Layout - Simplified for CRM */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - Contact & Basic Info */}
                 <div className="space-y-6">
-                  {/* Customer Avatar & Basic Info */}
-                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border-2 border-white/30">
-                      {customer.profileImage ? (
-                        <img 
-                          src={customer.profileImage} 
-                          alt={customer.name}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <Users className="w-8 h-8 text-blue-600" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-bold text-gray-900">{customer.name}</h3>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 mt-1">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                          customer.colorTag === 'vip' ? 'bg-emerald-500/20 text-emerald-700' : 
-                          customer.colorTag === 'complainer' ? 'bg-rose-500/20 text-rose-700' : 
-                          customer.colorTag === 'purchased' ? 'bg-blue-500/20 text-blue-700' : 
-                          customer.colorTag === 'new' ? 'bg-purple-500/20 text-purple-700' : 
-                          'bg-gray-500/20 text-gray-700'
-                        }`}>
-                          <Tag size={10} />
-                          {customer.colorTag}
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-700">
-                          <Star size={10} />
-                          {customer.loyaltyLevel}
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-700">
-                          <Gift size={10} />
-                          {customer.points || 0} pts
-                        </span>
-                        {customer.callLoyaltyLevel && (
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                            customer.callLoyaltyLevel === 'VIP' ? 'bg-purple-500/20 text-purple-700' :
-                            customer.callLoyaltyLevel === 'Gold' ? 'bg-yellow-500/20 text-yellow-700' :
-                            customer.callLoyaltyLevel === 'Silver' ? 'bg-gray-500/20 text-gray-700' :
-                            customer.callLoyaltyLevel === 'Bronze' ? 'bg-orange-500/20 text-orange-700' :
-                            customer.callLoyaltyLevel === 'Basic' ? 'bg-blue-500/20 text-blue-700' :
-                            'bg-green-500/20 text-green-700'
-                          }`}>
-                            <Phone size={10} />
-                            {customer.callLoyaltyLevel}
-                          </span>
-                        )}
-                        {customer.gender && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-700">
-                            <UserCheck size={10} />
-                            {customer.gender}
-                          </span>
+                  {/* Contact Card - Prominent */}
+                  <div className="bg-white border-2 border-gray-200 rounded-xl p-5 shadow-sm">
+                    <div className="flex items-center gap-4 mb-5">
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold text-xl shadow-lg flex-shrink-0">
+                        {customer.profileImage ? (
+                          <img 
+                            src={customer.profileImage} 
+                            alt={customer.name}
+                            className="w-full h-full rounded-full object-cover"
+                          />
+                        ) : (
+                          customer.name.charAt(0).toUpperCase()
                         )}
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Information */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                      <Phone className="w-5 h-5 text-blue-600" />
-                      <h3 className="text-sm font-semibold text-gray-800">Contact Information</h3>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div className="flex items-center gap-3">
-                        <Phone className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm text-gray-600">Phone:</span>
-                        <span className="text-sm font-medium text-blue-600">{customer.phone || 'Not provided'}</span>
-                      </div>
-                      {customer.whatsapp && (
-                        <div className="flex items-center gap-3">
-                          <MessageSquare className="w-4 h-4 text-green-500" />
-                          <span className="text-sm text-gray-600">WhatsApp:</span>
-                          <span className="text-sm font-medium text-green-600">{customer.whatsapp}</span>
-                          {customer.whatsappOptOut && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                              <EyeOff className="w-3 h-3 mr-1" />
-                              Opted Out
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-bold text-gray-900 truncate">{customer.name}</h3>
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                          {customer.loyaltyLevel && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">
+                              <Star className="w-3 h-3" />
+                              {customer.loyaltyLevel}
                             </span>
                           )}
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                            customer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {customer.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Contact Information */}
+                    <div className="space-y-3 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <Phone className="w-4 h-4 text-blue-500" />
+                          <span>Phone</span>
+                        </div>
+                        <a 
+                          href={`tel:${customer.phone}`}
+                          className="text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                        >
+                          {customer.phone || 'Not provided'}
+                        </a>
+                      </div>
+                      {customer.whatsapp && (
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <MessageSquare className="w-4 h-4 text-green-500" />
+                            <span>WhatsApp</span>
+                          </div>
+                          <a 
+                            href={`https://wa.me/${customer.whatsapp.replace(/[^0-9]/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-semibold text-green-600 hover:text-green-700 hover:underline"
+                          >
+                            {customer.whatsapp}
+                          </a>
                         </div>
                       )}
                       {customer.email && (
-                        <div className="flex items-center gap-3">
-                          <Mail className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm text-gray-600">Email:</span>
-                          <span className="text-sm font-medium text-gray-900">{customer.email}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <Mail className="w-4 h-4 text-gray-500" />
+                            <span>Email</span>
+                          </div>
+                          <a 
+                            href={`mailto:${customer.email}`}
+                            className="text-sm font-semibold text-gray-900 hover:text-blue-600 hover:underline truncate max-w-[200px]"
+                            title={customer.email}
+                          >
+                            {customer.email}
+                          </a>
                         </div>
                       )}
                       {customer.city && (
-                        <div className="flex items-center gap-3">
-                          <MapPin className="w-4 h-4 text-gray-500" />
-                          <span className="text-sm text-gray-600">Location:</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-sm text-gray-600">
+                            <MapPin className="w-4 h-4 text-gray-500" />
+                            <span>Location</span>
+                          </div>
                           <span className="text-sm font-medium text-gray-900">{customer.city}</span>
                         </div>
                       )}
                     </div>
                   </div>
 
-                  {/* Personal Information */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                      <UserCheck className="w-5 h-5 text-green-600" />
-                      <h3 className="text-sm font-semibold text-gray-800">Personal Information</h3>
+                  {/* Customer Information - Consolidated */}
+                  <div className="bg-white border-2 border-gray-200 rounded-xl p-5 shadow-sm space-y-4">
+                    <div className="flex items-center gap-2 pb-3 border-b border-gray-200">
+                      <UserCheck className="w-5 h-5 text-blue-600" />
+                      <h3 className="text-sm font-semibold text-gray-800">Customer Information</h3>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {(customer.birthMonth && customer.birthDay) && (
-                        <div className="space-y-1">
-                          <span className="text-xs text-gray-500 uppercase tracking-wide">Birthday</span>
-                          <p className="text-sm font-medium text-gray-900">
-                            {customer.birthMonth}/{customer.birthDay}
-                          </p>
-                        </div>
-                      )}
-                      <div className="space-y-1">
-                        <span className="text-xs text-gray-500 uppercase tracking-wide">Account Status</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            customer.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {customer.isActive ? 'Active' : 'Inactive'}
-                          </span>
-                        </div>
-                        {customerStatus && (
-                          <p className="text-xs text-gray-600 mt-1">
-                            {customerStatus.statusReason}
-                          </p>
-                        )}
-                      </div>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <span className="text-xs text-gray-500 uppercase tracking-wide">Member Since</span>
                         <p className="text-sm font-medium text-gray-900">
-                          {loadingStatus ? 'Loading...' : 
+                          {loadingStatus ? '...' : 
                            customerStatus ? new Date(customerStatus.memberSince).toLocaleDateString() :
                            customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : 
                            customer.joinedDate ? new Date(customer.joinedDate).toLocaleDateString() : 
@@ -800,14 +823,14 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                       <div className="space-y-1">
                         <span className="text-xs text-gray-500 uppercase tracking-wide">Last Visit</span>
                         <p className="text-sm font-medium text-gray-900">
-                          {loadingStatus ? 'Loading...' : 
+                          {loadingStatus ? '...' : 
                            customerStatus && customerStatus.lastVisit ? new Date(customerStatus.lastVisit).toLocaleDateString() :
                            customer.lastVisit ? new Date(customer.lastVisit).toLocaleDateString() : 
                            customer.updatedAt ? new Date(customer.updatedAt).toLocaleDateString() : 
                            'Never'}
                         </p>
                         {customerStatus && customerStatus.daysSinceActivity !== null && (
-                          <p className="text-xs text-gray-600">
+                          <p className="text-xs text-gray-500">
                             {customerStatus.daysSinceActivity === 0 ? 'Today' :
                              customerStatus.daysSinceActivity === 1 ? '1 day ago' :
                              `${customerStatus.daysSinceActivity} days ago`}
@@ -835,329 +858,224 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                       {customer.notes && (
                         <div className="space-y-1 col-span-2">
                           <span className="text-xs text-gray-500 uppercase tracking-wide">Notes</span>
-                          <p className="text-sm font-medium text-gray-900">{customer.notes}</p>
-                        </div>
-                      )}
-                      {customer.birthday && (
-                        <div className="space-y-1">
-                          <span className="text-xs text-gray-500 uppercase tracking-wide">Birthday Date</span>
-                          <p className="text-sm font-medium text-gray-900">
-                            {new Date(customer.birthday).toLocaleDateString()}
-                          </p>
-                        </div>
-                      )}
-                      {customer.profileImage && (
-                        <div className="space-y-1 col-span-2">
-                          <span className="text-xs text-gray-500 uppercase tracking-wide">Profile Image</span>
-                          <div className="mt-2">
-                            <img 
-                              src={customer.profileImage} 
-                              alt="Profile" 
-                              className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
-                            />
-                          </div>
+                          <p className="text-sm text-gray-700 bg-gray-50 p-2 rounded-lg">{customer.notes}</p>
                         </div>
                       )}
                     </div>
                   </div>
-
-
-
-                  {/* Referral Information */}
-                  {(customer.referredBy || (customer.referrals && customer.referrals.length > 0) || referrals.length > 0) && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                        <Users className="w-5 h-5 text-purple-600" />
-                        <h3 className="text-sm font-semibold text-gray-800">Referral Information</h3>
-                      </div>
-                      <div className="grid grid-cols-1 gap-3">
-                        {customer.referredBy && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Referred By</span>
-                            <p className="text-sm font-medium text-blue-600">Customer ID: {customer.referredBy}</p>
-                          </div>
-                        )}
-                        {customer.referralSource && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Referral Source</span>
-                            <p className="text-sm font-medium text-gray-900">{customer.referralSource}</p>
-                          </div>
-                        )}
-                        {referrals.length > 0 && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Customers Referred ({referrals.length})</span>
-                            <div className="mt-2 space-y-2">
-                              {referrals.slice(0, 3).map((ref: any) => (
-                                <div key={ref.id} className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-900">{ref.name}</p>
-                                    <p className="text-xs text-gray-500">{ref.phone}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-xs text-gray-500">Joined: {new Date(ref.created_at).toLocaleDateString()}</p>
-                                    {ref.total_spent > 0 && (
-                                      <p className="text-xs font-medium text-green-600">{formatCurrency(ref.total_spent)}</p>
-                                    )}
-                                  </div>
-                                </div>
-                              ))}
-                              {referrals.length > 3 && (
-                                <p className="text-xs text-gray-500 text-center">+{referrals.length - 3} more referrals</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Branch & Staff Information */}
-                  {(customer.branchName || customer.createdByBranchName || customer.createdBy) && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                        <Globe className="w-5 h-5 text-indigo-600" />
-                        <h3 className="text-sm font-semibold text-gray-800">Branch & Registration Info</h3>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {customer.branchName && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Current Branch</span>
-                            <p className="text-sm font-medium text-gray-900">{customer.branchName}</p>
-                            {customer.isShared && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                Shared Customer
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {customer.createdByBranchName && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Registered At</span>
-                            <p className="text-sm font-medium text-gray-900">{customer.createdByBranchName}</p>
-                          </div>
-                        )}
-                        {customer.createdBy && (
-                          <div className="space-y-1 col-span-2">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Registered By Staff</span>
-                            <p className="text-sm font-medium text-gray-900">Staff ID: {customer.createdBy}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Purchase History Summary */}
-                  {(customer.totalSpent > 0 || customer.totalPurchases > 0 || customer.lastPurchaseDate) && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                        <ShoppingBag className="w-5 h-5 text-emerald-600" />
-                        <h3 className="text-sm font-semibold text-gray-800">Purchase History</h3>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {customer.totalSpent > 0 && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Total Spent</span>
-                            <p className="text-sm font-medium text-gray-900">{formatCurrency(customer.totalSpent)}</p>
-                          </div>
-                        )}
-                        {customer.totalPurchases > 0 && (
-                          <div className="space-y-1">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Total Purchases</span>
-                            <p className="text-sm font-medium text-gray-900">{customer.totalPurchases}</p>
-                          </div>
-                        )}
-                        {customer.lastPurchaseDate && (
-                          <div className="space-y-1 col-span-2">
-                            <span className="text-xs text-gray-500 uppercase tracking-wide">Last Purchase</span>
-                            <p className="text-sm font-medium text-gray-900">
-                              {new Date(customer.lastPurchaseDate).toLocaleDateString()}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
-                {/* Right Column - Quick Stats */}
+                {/* Middle Column - Stats & Status */}
                 <div className="space-y-6">
-                  {/* Customer Status */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                      <CheckCircle className="w-5 h-5 text-indigo-600" />
-                      <h3 className="text-sm font-semibold text-gray-800">Customer Status</h3>
+                  {/* Customer Status Summary */}
+                  <div className="bg-white border-2 border-gray-200 rounded-xl p-5 shadow-sm">
+                    <div className="flex items-center gap-2 pb-3 border-b border-gray-200 mb-4">
+                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                      <h3 className="text-sm font-semibold text-gray-800">Status Overview</h3>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <span className="text-xs text-gray-500 uppercase tracking-wide">Loyalty Level</span>
-                        <p className="text-sm font-medium text-gray-900">{customer.loyaltyLevel}</p>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Loyalty Level</span>
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-semibold bg-amber-100 text-amber-700">
+                          <Star className="w-3 h-3" />
+                          {customer.loyaltyLevel || 'N/A'}
+                        </span>
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-xs text-gray-500 uppercase tracking-wide">Total Devices</span>
-                        <p className="text-sm font-medium text-gray-900">{devices.length}</p>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Total Devices</span>
+                        <span className="text-sm font-bold text-gray-900">{devices.length}</span>
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-xs text-gray-500 uppercase tracking-wide">Active Repairs</span>
-                        <p className="text-sm font-medium text-orange-600">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Active Repairs</span>
+                        <span className="text-sm font-bold text-orange-600">
                           {devices.filter(d => ['assigned', 'diagnosis-started', 'awaiting-parts', 'in-repair', 'reassembled-testing'].includes(d.status)).length}
-                        </p>
+                        </span>
                       </div>
-                      <div className="space-y-1">
-                        <span className="text-xs text-gray-500 uppercase tracking-wide">Completed</span>
-                        <p className="text-sm font-medium text-green-600">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">Completed</span>
+                        <span className="text-sm font-bold text-green-600">
                           {devices.filter(d => d.status === 'done').length}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Call Analytics Summary */}
-                  {(customer.totalCalls || 0) > 0 && (
-                    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                      <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                        <Phone className="w-5 h-5 text-blue-600" />
-                        <h3 className="text-sm font-semibold text-gray-800">Call Summary</h3>
-                        {customer.callLoyaltyLevel && (
-                          <span className={`ml-auto inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            customer.callLoyaltyLevel === 'VIP' ? 'bg-purple-100 text-purple-800' :
-                            customer.callLoyaltyLevel === 'Gold' ? 'bg-yellow-100 text-yellow-800' :
-                            customer.callLoyaltyLevel === 'Silver' ? 'bg-gray-100 text-gray-800' :
-                            customer.callLoyaltyLevel === 'Bronze' ? 'bg-orange-100 text-orange-800' :
-                            'bg-blue-100 text-blue-800'
-                          }`}>
-                            {customer.callLoyaltyLevel}
-                          </span>
-                        )}
-                      </div>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Total Calls</span>
-                          <span className="text-sm font-semibold text-gray-900">{customer.totalCalls || 0}</span>
-                        </div>
-                        {(customer.incomingCalls || 0) > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Incoming</span>
-                            <span className="text-sm font-medium text-green-600">{customer.incomingCalls}</span>
-                          </div>
-                        )}
-                        {(customer.outgoingCalls || 0) > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Outgoing</span>
-                            <span className="text-sm font-medium text-blue-600">{customer.outgoingCalls}</span>
-                          </div>
-                        )}
-                        {(customer.missedCalls || 0) > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Missed</span>
-                            <span className="text-sm font-medium text-red-600">{customer.missedCalls}</span>
-                          </div>
-                        )}
-                        {(customer.avgCallDurationMinutes || 0) > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Avg Duration</span>
-                            <span className="text-sm font-medium text-gray-900">{customer.avgCallDurationMinutes.toFixed(1)} min</span>
-                          </div>
-                        )}
-                        {customer.lastCallDate && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-gray-600">Last Call</span>
-                            <span className="text-sm font-medium text-gray-900">
-                              {new Date(customer.lastCallDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Financial Summary */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                      <DollarSign className="w-5 h-5 text-green-600" />
-                      <h3 className="text-sm font-semibold text-gray-800">Financial Summary</h3>
-                    </div>
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Total Spent</span>
-                        <span className="text-sm font-semibold text-gray-900">
-                          {customer.totalSpent ? `Tsh ${customer.totalSpent.toLocaleString()}` : 'Tsh 0'}
-                        </span>
-                      </div>
-                      {(customer.totalPurchases || 0) > 0 && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-600">Total Purchases</span>
-                          <span className="text-sm font-semibold text-indigo-600">
-                            {customer.totalPurchases}
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Loyalty Points</span>
-                        <span className="text-sm font-semibold text-blue-600">
-                          {customer.loyaltyPoints || customer.points || 0}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-gray-600">Last Purchase</span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {customer.lastPurchaseDate ? new Date(customer.lastPurchaseDate).toLocaleDateString() : 'Never'}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Quick Actions */}
-                  <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                      <Zap className="w-5 h-5 text-purple-600" />
+                  {/* Quick Actions - Prominent */}
+                  <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 shadow-sm">
+                    <div className="flex items-center gap-2 pb-3 border-b border-blue-200 mb-4">
+                      <Zap className="w-5 h-5 text-blue-600" />
                       <h3 className="text-sm font-semibold text-gray-800">Quick Actions</h3>
                     </div>
                     <div className="space-y-2">
                       <button
-                        onClick={() => setShowSmsModal(true)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-sm font-medium"
+                        onClick={() => {
+                          setShowSmsModal(true);
+                          trackActivity('sms_opened');
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
                       >
                         <MessageSquare className="w-4 h-4" />
                         Send SMS
                       </button>
                       <button
-                        onClick={() => setShowPointsModal(true)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-sm font-medium"
+                        onClick={() => {
+                          setShowWhatsAppModal(true);
+                          trackActivity('whatsapp_opened');
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
                       >
-                        <Award className="w-4 h-4" />
-                        Add Points
+                        <MessageCircle className="w-4 h-4" />
+                        WhatsApp
                       </button>
                       <button
-                        onClick={() => setShowAppointmentModal(true)}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-sm font-medium"
+                        onClick={() => setShowPointsModal(true)}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
                       >
-                        <Calendar className="w-4 h-4" />
+                        <Gift className="w-4 h-4" />
+                        Manage Points
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAppointmentModal(true);
+                          trackActivity('appointment_modal_opened');
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+                      >
+                        <CalendarDays className="w-4 h-4" />
                         Book Appointment
                       </button>
                     </div>
                   </div>
                 </div>
+
+                {/* Right Column - Status & Actions */}
+                <div className="space-y-6">
+                  {/* Customer Tags & Segmentation */}
+                  <div className="bg-white border-2 border-gray-200 rounded-xl p-5 shadow-sm">
+                    <div className="flex items-center gap-2 pb-3 border-b border-gray-200 mb-4">
+                      <Tag className="w-5 h-5 text-purple-600" />
+                      <h3 className="text-sm font-semibold text-gray-800">Customer Tags</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {customer.colorTag && (
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
+                          customer.colorTag === 'vip' ? 'bg-emerald-100 text-emerald-700' : 
+                          customer.colorTag === 'complainer' ? 'bg-rose-100 text-rose-700' : 
+                          customer.colorTag === 'purchased' ? 'bg-blue-100 text-blue-700' : 
+                          customer.colorTag === 'new' ? 'bg-purple-100 text-purple-700' : 
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          <Tag className="w-3 h-3" />
+                          {customer.colorTag}
+                        </span>
+                      )}
+                      {customer.callLoyaltyLevel && (
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                          customer.callLoyaltyLevel === 'VIP' ? 'bg-purple-100 text-purple-800' :
+                          customer.callLoyaltyLevel === 'Gold' ? 'bg-yellow-100 text-yellow-800' :
+                          customer.callLoyaltyLevel === 'Silver' ? 'bg-gray-100 text-gray-800' :
+                          customer.callLoyaltyLevel === 'Bronze' ? 'bg-orange-100 text-orange-800' :
+                          'bg-blue-100 text-blue-800'
+                        }`}>
+                          <Phone className="w-3 h-3 mr-1" />
+                          {customer.callLoyaltyLevel}
+                        </span>
+                      )}
+                      {customer.branchName && customer.isShared && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <Globe className="w-3 h-3 mr-1" />
+                          Shared
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Call Analytics - Only if applicable */}
+                  {(customer.totalCalls || 0) > 0 && (
+                    <CallAnalyticsCard customer={customer} />
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-
-          {/* Activity Tab - Devices, Payments, Appointments, Communications */}
-          {activeTab === 'activity' && (
+          {/* Transactions Tab - All Sales & Payments */}
+          {activeTab === 'transactions' && (
             <div className="space-y-6">
-              {/* Devices Section */}
-              <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+              {/* Financial Summary */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border-2 border-green-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Total Spent</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {formatCurrency(customerAnalytics?.totalSpent || customer.totalSpent || 0).replace('Tsh ', '').replace('TZS ', '')}
+                  </div>
+                </div>
+                <div className="bg-white border-2 border-blue-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Orders</div>
+                  <div className="text-2xl font-bold text-blue-600">{posSales.length}</div>
+                </div>
+                <div className="bg-white border-2 border-purple-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Payments</div>
+                  <div className="text-2xl font-bold text-purple-600">{payments.length}</div>
+                </div>
+                <div className="bg-white border-2 border-amber-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Points</div>
+                  <div className="text-2xl font-bold text-amber-600">{customer.points || 0}</div>
+                </div>
+              </div>
+
+              {/* Sales/Orders Section */}
+              {posSales.length > 0 && (
+                <div className="bg-white border-2 border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <ShoppingBag className="w-6 h-6 text-blue-600" />
+                      <h3 className="text-lg font-semibold text-gray-800">Sales History</h3>
+                    </div>
+                    <div className="text-sm font-medium text-gray-600">
+                      {posSales.length} {posSales.length === 1 ? 'order' : 'orders'}
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50 border-b border-gray-200">
+                          <th className="text-left p-3 font-medium text-gray-700">Date</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Order ID</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Items</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Total</th>
+                          <th className="text-left p-3 font-medium text-gray-700">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {posSales.slice(0, 10).map((sale: any) => (
+                          <tr key={sale.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="p-3">{new Date(sale.created_at || sale.date).toLocaleDateString()}</td>
+                            <td className="p-3 font-medium text-blue-600">#{sale.id || sale.sale_id}</td>
+                            <td className="p-3">{sale.items_count || 'N/A'}</td>
+                            <td className="p-3 font-medium">{formatCurrency(sale.total_amount || sale.total || 0)}</td>
+                            <td className="p-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                sale.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                sale.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {sale.status || 'completed'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Repair History Section */}
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Smartphone className="w-6 h-6 text-blue-600" />
                     <h3 className="text-lg font-semibold text-gray-800">Repair History</h3>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <span>Total: {devices.length}</span>
-                    <span>•</span>
-                    <span>Active: {devices.filter(d => ['assigned', 'diagnosis-started', 'awaiting-parts', 'in-repair', 'reassembled-testing'].includes(d.status)).length}</span>
-                    <span>•</span>
-                    <span>Completed: {devices.filter(d => d.status === 'done').length}</span>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -1219,17 +1137,17 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Payments Section */}
-              <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CreditCard className="w-6 h-6 text-green-600" />
-                    <h3 className="text-lg font-semibold text-gray-800">Payment History</h3>
+              {/* Payment History Section */}
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="w-6 h-6 text-green-600" />
+                      <h3 className="text-lg font-semibold text-gray-800">Payment History</h3>
+                    </div>
+                    <div className="text-sm font-medium text-gray-600">
+                      {formatCurrency(payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0))} total
+                    </div>
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {payments.length} payments • {formatCurrency(payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0))} total
-                  </div>
-                </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
@@ -1275,73 +1193,157 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Appointments Section */}
-              <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CalendarDays className="w-6 h-6 text-purple-600" />
-                    <h3 className="text-lg font-semibold text-gray-800">Appointments</h3>
-                  </div>
-                  <GlassButton
-                    onClick={() => {/* TODO: Open appointment creation modal */}}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-                  >
-                    <CalendarDays className="w-4 h-4" />
-                    Schedule
-                  </GlassButton>
+              {payments.length === 0 && posSales.length === 0 && (
+                <div className="text-center py-12 text-gray-500">
+                  <Receipt className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="font-medium">No transactions found</p>
+                  <p className="text-sm">This customer hasn't made any purchases yet</p>
                 </div>
+              )}
+            </div>
+          )}
 
-                {loadingAdditionalData ? (
-                  <div className="text-center py-8 text-gray-500">Loading appointments...</div>
-                ) : appointments.length > 0 ? (
-                  <div className="space-y-3">
-                    {appointments.slice(0, 5).map(appointment => (
-                      <div key={appointment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                            <CalendarDays className="w-4 h-4 text-purple-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-gray-900">{appointment.service_type}</p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(appointment.appointment_date).toLocaleDateString()} at {appointment.appointment_time}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            appointment.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            appointment.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                            appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-red-100 text-red-800'
-                          }`}>
-                            {appointment.status}
-                          </span>
-                          <p className="text-xs text-gray-500 mt-1">{appointment.duration_minutes} min</p>
-                        </div>
-                      </div>
-                    ))}
-                    {appointments.length > 5 && (
-                      <div className="text-center text-sm text-gray-500">
-                        +{appointments.length - 5} more appointments
-                      </div>
-                    )}
+          {/* Repairs Tab - All Device/Repair History */}
+          {activeTab === 'repairs' && (
+            <div className="space-y-6">
+              {/* Stats Summary */}
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white border-2 border-blue-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Total Repairs</div>
+                  <div className="text-2xl font-bold text-blue-600">{devices.length}</div>
+                </div>
+                <div className="bg-white border-2 border-orange-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Active</div>
+                  <div className="text-2xl font-bold text-orange-600">
+                    {devices.filter(d => ['assigned', 'diagnosis-started', 'awaiting-parts', 'in-repair', 'reassembled-testing'].includes(d.status)).length}
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <CalendarDays className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                    <p>No appointments found</p>
-                    <p className="text-sm">Schedule the first appointment for this customer</p>
+                </div>
+                <div className="bg-white border-2 border-green-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Completed</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    {devices.filter(d => d.status === 'done').length}
                   </div>
-                )}
+                </div>
+                <div className="bg-white border-2 border-red-200 rounded-xl p-4 shadow-sm">
+                  <div className="text-xs font-medium text-gray-500 mb-1">Failed</div>
+                  <div className="text-2xl font-bold text-red-600">
+                    {devices.filter(d => d.status === 'failed').length}
+                  </div>
+                </div>
               </div>
 
-              {/* Communications Section */}
-              <div className="bg-white border border-gray-200 rounded-xl p-6 space-y-4">
+              {/* Devices Section */}
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-6 h-6 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-gray-800">Repair History</h3>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-left p-3 font-medium text-gray-700">Device</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Status</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Issue</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Created</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Total Paid</th>
+                        <th className="text-left p-3 font-medium text-gray-700">Points</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {devices.map(device => {
+                        const totalPaid = payments.filter(p => p.deviceId === device.id && p.status === 'completed')
+                          .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+                        return (
+                          <tr key={device.id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="p-3">
+                              <div>
+                                <div className="font-medium">{device.brand} {device.model}</div>
+                                <div className="text-xs text-gray-500">{device.serialNumber || 'No serial'}</div>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                device.status === 'done' ? 'bg-green-100 text-green-800' :
+                                device.status === 'failed' ? 'bg-red-100 text-red-800' :
+                                ['assigned', 'diagnosis-started', 'awaiting-parts', 'in-repair', 'reassembled-testing'].includes(device.status) ? 'bg-blue-100 text-blue-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {device.status.replace(/-/g, ' ')}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <div className="max-w-xs truncate" title={device.issueDescription}>
+                                {device.issueDescription}
+                              </div>
+                            </td>
+                            <td className="p-3">{new Date(device.createdAt).toLocaleDateString()}</td>
+                            <td className="p-3">
+                              {totalPaid > 0 ? formatCurrency(totalPaid) : '-'}
+                            </td>
+                            <td className="p-3">
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                {calculatePointsForDevice(device, customer.loyaltyLevel)} pts
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {devices.length === 0 && (
+                        <tr><td colSpan={6} className="text-center text-gray-500 py-8">No repair history found</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Communications Tab - All Messaging, Calls, Appointments */}
+          {activeTab === 'communications' && (
+            <div className="space-y-6">
+              {/* Quick Actions Bar */}
+              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
+                <button
+                  onClick={() => {
+                    setShowSmsModal(true);
+                    trackActivity('sms_opened');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  Send SMS
+                </button>
+                <button
+                  onClick={() => {
+                    setShowWhatsAppModal(true);
+                    trackActivity('whatsapp_opened');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  WhatsApp
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAppointmentModal(true);
+                    trackActivity('appointment_modal_opened');
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  Schedule Appointment
+                </button>
+              </div>
+
+              {/* Messages/Communications Section */}
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <MessageCircle className="w-6 h-6 text-green-600" />
-                    <h3 className="text-lg font-semibold text-gray-800">Recent Communications</h3>
+                    <h3 className="text-lg font-semibold text-gray-800">Message History</h3>
                   </div>
                 </div>
 
@@ -1349,12 +1351,12 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                   <div className="text-center py-8 text-gray-500">Loading communication history...</div>
                 ) : communicationHistory.length > 0 ? (
                   <div className="space-y-3">
-                    {communicationHistory.slice(0, 5).map((message, index) => (
+                    {communicationHistory.map((message, index) => (
                       <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
                           <MessageSquare className="w-4 h-4 text-green-600" />
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-medium text-gray-900">SMS</span>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -1372,11 +1374,6 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                         </div>
                       </div>
                     ))}
-                    {communicationHistory.length > 5 && (
-                      <div className="text-center text-sm text-gray-500">
-                        +{communicationHistory.length - 5} more messages
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
@@ -1386,14 +1383,68 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Appointments Section */}
+              <div className="bg-white border-2 border-gray-200 rounded-xl p-6 space-y-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CalendarDays className="w-6 h-6 text-purple-600" />
+                    <h3 className="text-lg font-semibold text-gray-800">Appointments</h3>
+                  </div>
+                </div>
+
+                {loadingAdditionalData ? (
+                  <div className="text-center py-8 text-gray-500">Loading appointments...</div>
+                ) : appointments.length > 0 ? (
+                  <div className="space-y-3">
+                    {appointments.map(appointment => (
+                      <div key={appointment.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                            <CalendarDays className="w-5 h-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{appointment.service_type}</p>
+                            <p className="text-sm text-gray-500">
+                              {new Date(appointment.appointment_date).toLocaleDateString()} at {appointment.appointment_time}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                            appointment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            appointment.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                            appointment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {appointment.status}
+                          </span>
+                          <p className="text-xs text-gray-500 mt-1">{appointment.duration_minutes} min</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <CalendarDays className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No appointments found</p>
+                    <p className="text-sm">Schedule the first appointment for this customer</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Call Analytics - If Available */}
+              {(customer.totalCalls || 0) > 0 && (
+                <CallAnalyticsCard customer={customer} />
+              )}
             </div>
           )}
 
           {/* Journey Tab - Customer Timeline */}
           {activeTab === 'journey' && (
-            <div className="bg-white border border-gray-200 rounded-xl p-6">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Customer Journey</h3>
+            <div className="bg-white border-2 border-gray-200 rounded-xl p-6 shadow-sm">
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Customer Journey</h3>
                 <p className="text-sm text-gray-600">Complete timeline of all interactions and activities</p>
               </div>
               <CustomerJourneyTimeline 
@@ -1405,88 +1456,74 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
 
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center justify-between pt-4 border-t border-gray-100 bg-gray-50 px-6 py-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <button
-              onClick={() => {
-                setShowSmsModal(true);
-                trackActivity('sms_opened');
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <MessageSquare className="w-4 h-4" />
-              SMS
-            </button>
+        {/* Fixed Action Buttons Footer */}
+        <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => {
+                  setShowSmsModal(true);
+                  trackActivity('sms_opened');
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+              >
+                <MessageSquare className="w-4 h-4" />
+                SMS
+              </button>
+              
+              <button
+                onClick={() => {
+                  setShowWhatsAppModal(true);
+                  trackActivity('whatsapp_opened');
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+              >
+                <MessageCircle className="w-4 h-4" />
+                WhatsApp
+              </button>
+
+              <button
+                onClick={() => setShowPointsModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+              >
+                <Gift className="w-4 h-4" />
+                Points
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowAppointmentModal(true);
+                  trackActivity('appointment_modal_opened');
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
+              >
+                <CalendarDays className="w-4 h-4" />
+                Schedule
+              </button>
+            </div>
             
-            <button
-              onClick={() => {
-                setShowWhatsAppModal(true);
-                trackActivity('whatsapp_opened');
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <MessageCircle className="w-4 h-4" />
-              WhatsApp
-            </button>
-
-            <button
-              onClick={() => setShowPointsModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <Gift className="w-4 h-4" />
-              Points
-            </button>
-
-            <button
-              onClick={() => {
-                setShowCheckinModal(true);
-                trackActivity('checkin_opened');
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <CheckCircle className="w-4 h-4" />
-              Check-in
-            </button>
-
-            <button
-              onClick={() => {
-                setShowAppointmentModal(true);
-                trackActivity('appointment_modal_opened');
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <CalendarDays className="w-4 h-4" />
-              Schedule
-            </button>
-
-            <button
-              onClick={() => setShowPreferencesModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <Settings className="w-4 h-4" />
-              Preferences
-            </button>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors text-sm font-medium"
-            >
-              Close
-            </button>
-            
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium text-sm"
-            >
-              <Edit className="w-4 h-4" />
-              Edit
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={onClose}
+                className="px-5 py-2.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors text-sm font-medium"
+              >
+                Close
+              </button>
+              
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-xl transition-all shadow-lg hover:shadow-xl font-semibold text-sm"
+              >
+                <Edit className="w-4 h-4" />
+                Edit
+              </button>
+            </div>
           </div>
         </div>
       </div>
+    </div>,
+    document.body
+      )}
 
       {/* SMS Modal */}
       <Modal isOpen={showSmsModal} onClose={() => { setShowSmsModal(false); setSmsMessage(''); setSmsResult(null); }} title="Send SMS" maxWidth="400px">
@@ -1975,7 +2012,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 };
 

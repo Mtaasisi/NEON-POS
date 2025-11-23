@@ -507,7 +507,9 @@ class EnhancedCacheManager {
   private async syncPendingOperations(): Promise<void> {
     try {
       const db = await this.init();
-      const pendingOps = await db.getAllFromIndex('pending_sync', 'synced', false);
+      // Get all pending operations and filter for unsynced ones
+      const allOps = await db.getAll('pending_sync');
+      const pendingOps = allOps.filter(op => op.synced === false);
       
       if (pendingOps.length === 0) {
         console.log('✅ [SmartCache] No pending operations to sync');

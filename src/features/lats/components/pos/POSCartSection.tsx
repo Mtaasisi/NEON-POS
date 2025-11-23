@@ -113,77 +113,107 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
           </div>
         </div>
 
-        {/* Customer Search Section - Fixed */}
+        {/* Customer Search Section - Fixed - Redesigned to match SetPricingModal */}
         <div className="flex-shrink-0 mb-6">
           {selectedCustomer ? (
-            <div className="p-4 bg-blue-50 rounded-lg border-2 border-blue-200 hover:border-blue-300 hover:shadow-md transition-all duration-300 animate-in fade-in slide-in-from-top-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="relative group">
-                    <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-base shadow-sm group-hover:scale-110 transition-transform duration-300">
-                      {selectedCustomer.name.charAt(0)}
-                    </div>
-                    <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full border-2 border-white flex items-center justify-center shadow-sm animate-bounce ${
-                      selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium'
-                        ? 'bg-amber-500' 
-                        : 'bg-emerald-500'
-                    }`}>
-                      <Crown className="w-3 h-3 text-white" />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900">{selectedCustomer.name}</div>
-                    <div className="text-sm text-gray-700 flex items-center gap-2 mt-0.5">
-                      <Phone className="w-3.5 h-3.5" />
-                      {selectedCustomer.phone}
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold transition-all duration-300 hover:scale-105 ${
+            <div className={`border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 ${
+              selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium'
+                ? 'border-amber-300 hover:border-amber-400 hover:shadow-md' 
+                : 'border-green-200 hover:border-green-300 hover:shadow-md'
+            }`}>
+              {/* Customer Header - Clickable */}
+              <div className="p-5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    {/* Avatar with Status Badge */}
+                    <div className="relative flex-shrink-0">
+                      <div className={`w-14 h-14 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg ${
                         selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium'
-                          ? 'bg-amber-100 text-amber-800 border-2 border-amber-300 hover:bg-amber-200' 
-                          : 'bg-emerald-100 text-emerald-800 border-2 border-emerald-300 hover:bg-emerald-200'
+                          ? 'bg-gradient-to-br from-amber-500 to-amber-600' 
+                          : 'bg-gradient-to-br from-blue-500 to-blue-600'
                       }`}>
-                        {selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium' ? 'VIP' : 'Active'}
-                      </span>
-                      <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-800 bg-white px-3 py-1 rounded-full border-2 border-gray-200 shadow-sm hover:scale-105 hover:border-blue-300 transition-all duration-300">
+                        {selectedCustomer.name.charAt(0).toUpperCase()}
+                      </div>
+                      {/* Status Indicator */}
+                      <div className={`absolute -top-1 -right-1 w-6 h-6 rounded-full border-2 border-white flex items-center justify-center shadow-md ${
+                        selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium'
+                          ? 'bg-amber-500' 
+                          : 'bg-emerald-500'
+                      }`}>
+                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    
+                    {/* Customer Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-lg font-bold text-gray-900 truncate">
+                          {selectedCustomer.name}
+                        </h3>
+                        {/* Status Badge */}
+                        {selectedCustomer.colorTag === 'vip' || selectedCustomer.loyaltyLevel === 'vip' || selectedCustomer.loyaltyLevel === 'premium' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500 text-white shadow-sm flex-shrink-0">
+                            <Crown className="w-3 h-3" />
+                            VIP
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-500 text-white shadow-sm flex-shrink-0">
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                        <Phone className="w-4 h-4 text-gray-500" />
+                        <span className="truncate">{selectedCustomer.phone}</span>
+                      </div>
+                      {/* Points Badge */}
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 w-fit">
                         <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></span>
-                        {selectedCustomer.points} points
-                      </span>
+                        <span className="text-xs font-semibold text-blue-700">{selectedCustomer.points || 0} points</span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      onShowCustomerDetails(selectedCustomer);
-                    }}
-                    className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
-                    title="View customer details"
-                  >
-                    <User className="w-5 h-5" />
-                  </button>
-                  {onEditCustomer && (
+                  
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={() => {
                         playClickSound();
-                        onEditCustomer(selectedCustomer);
+                        onShowCustomerDetails(selectedCustomer);
                       }}
-                      className="p-2 text-green-600 hover:bg-green-100 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95"
-                      title="Edit customer information"
+                      className="p-2.5 text-blue-600 hover:bg-blue-100 rounded-xl transition-all duration-200 hover:scale-110 active:scale-95"
+                      title="View customer details"
                     >
-                      <Edit3 className="w-5 h-5" />
+                      <User className="w-5 h-5" />
                     </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      playDeleteSound();
-                      onRemoveCustomer();
-                    }}
-                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all duration-200 hover:scale-110 active:scale-95 hover:rotate-6"
-                  >
-                    <XCircle className="w-5 h-5" />
-                  </button>
+                    {onEditCustomer && (
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          onEditCustomer(selectedCustomer);
+                        }}
+                        className="p-2.5 text-green-600 hover:bg-green-100 rounded-xl transition-all duration-200 hover:scale-110 active:scale-95"
+                        title="Edit customer information"
+                      >
+                        <Edit3 className="w-5 h-5" />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        playDeleteSound();
+                        onRemoveCustomer();
+                      }}
+                      className="p-2.5 text-red-600 hover:bg-red-100 rounded-xl transition-all duration-200 hover:scale-110 active:scale-95"
+                      title="Remove customer"
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

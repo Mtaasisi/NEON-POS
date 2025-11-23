@@ -267,11 +267,24 @@ const MobileClientDetail: React.FC = () => {
 
       // Fetch spare part usage (optional)
       try {
-        const { data: spareData } = await supabase
-          .from('lats_spare_part_usage')
-          .select('*')
-          .eq('customer_id', clientId)
-          .order('used_at', { ascending: false });
+        // Fetch device IDs for this customer first
+        const { data: devicesData } = await supabase
+          .from('devices')
+          .select('id')
+          .eq('customer_id', clientId);
+        
+        const deviceIds = devicesData?.map(d => d.id) || [];
+        
+        let spareData: any[] = [];
+        if (deviceIds.length > 0) {
+          const result = await supabase
+            .from('lats_spare_part_usage')
+            .select('*')
+            .in('device_id', deviceIds)
+            .order('created_at', { ascending: false });
+          
+          spareData = result.data || [];
+        }
 
         if (spareData) {
           setSparePartUsage(spareData);
@@ -1157,7 +1170,7 @@ const MobileClientDetail: React.FC = () => {
                       <div className="flex justify-between items-start">
                         <div className="flex-1">
                           <div className="text-[15px] font-semibold text-gray-900">{usage.spare_part_name || 'Spare Part'}</div>
-                          <div className="text-[13px] text-gray-500 mt-1">Qty: {usage.quantity || 1} • {new Date(usage.used_at).toLocaleDateString()}</div>
+                          <div className="text-[13px] text-gray-500 mt-1">Qty: {usage.quantity || 1} • {new Date(usage.created_at || usage.used_at).toLocaleDateString()}</div>
                         </div>
                         {usage.cost && <div className="text-[16px] font-bold text-gray-900">{formatCurrency(usage.cost)}</div>}
                       </div>

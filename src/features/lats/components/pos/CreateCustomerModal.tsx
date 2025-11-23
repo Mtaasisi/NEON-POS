@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, User, Phone, Mail, MapPin, Save, Loader2, Check, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { Customer } from '../../../customers/types';
@@ -171,35 +172,35 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
   // Prevent body scroll when modal is open
   useBodyScrollLock(isOpen);
 
+  // Additional scroll prevention for html element
+  React.useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
-    <>
-      {/* Backdrop - respects sidebar and topbar */}
-      <div 
-        className="fixed bg-black/50"
-        onClick={onClose}
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 35
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-4"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none'
-        }}
-      >
+  return createPortal(
+    <div 
+      className="fixed bg-black/50 flex items-center justify-center p-4"
+      style={{
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999,
+        overflow: 'hidden',
+        overscrollBehavior: 'none'
+      }}
+      onClick={onClose}
+    >
         <div 
           className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
@@ -439,7 +440,8 @@ const CreateCustomerModal: React.FC<CreateCustomerModalProps> = ({
       
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />
-    </>
+    </div>,
+    document.body
   );
 };
 

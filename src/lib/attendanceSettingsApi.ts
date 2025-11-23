@@ -84,15 +84,23 @@ export const getAttendanceSettings = async (): Promise<AttendanceSettings> => {
       .from('settings')
       .select('value')
       .eq('key', 'attendance')
-      .single();
+      .maybeSingle();
 
     if (error) {
-      console.error('Error fetching attendance settings:', error);
+      // Only log error if it's not a "no rows found" error
+      if (error.code !== 'PGRST116') {
+        console.error('Error fetching attendance settings:', error);
+      }
       return defaultAttendanceSettings;
     }
 
     if (data) {
-      return JSON.parse(data.value);
+      try {
+        return JSON.parse(data.value);
+      } catch (parseError) {
+        console.error('Error parsing attendance settings:', parseError);
+        return defaultAttendanceSettings;
+      }
     }
 
     return defaultAttendanceSettings;

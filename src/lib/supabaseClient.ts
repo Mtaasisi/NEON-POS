@@ -46,19 +46,25 @@ if (typeof window !== 'undefined') {
   const originalConsoleError = console.error;
   const originalConsoleWarn = console.warn;
   
+  // Enhanced error suppression for WebSocket connection errors
   console.error = (...args: any[]) => {
     const errorMsg = String(args[0] || '');
+    const fullMessage = args.map(a => String(a)).join(' ');
     
     // Suppress common WebSocket connection errors that are automatically retried
+    // These errors occur during initial connection attempts and are handled by the pool's retry mechanism
     if (
       errorMsg.includes('WebSocket connection to') ||
       errorMsg.includes('WebSocket is closed before the connection is established') ||
-      (errorMsg.includes('@neondatabase/serverless') && errorMsg.includes('Unhandled error'))
+      errorMsg.includes('Failed to construct \'WebSocket\'') ||
+      fullMessage.includes('wss://') && fullMessage.includes('neon.tech') && fullMessage.includes('failed') ||
+      (errorMsg.includes('@neondatabase/serverless') && errorMsg.includes('Unhandled error')) ||
+      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket'))
     ) {
-      // These errors are transient and will be retried automatically
-      // Only log in development mode as debug info
+      // These errors are transient and will be retried automatically by the pool
+      // Only log in development mode as debug info (not as error)
       if (import.meta.env.DEV) {
-        console.debug('🔄 WebSocket reconnecting (automatic)...', errorMsg.substring(0, 100));
+        console.debug('🔄 WebSocket connection attempt (automatic retry enabled)');
       }
       return;
     }
@@ -69,15 +75,39 @@ if (typeof window !== 'undefined') {
   
   console.warn = (...args: any[]) => {
     const warnMsg = String(args[0] || '');
+    const fullMessage = args.map(a => String(a)).join(' ');
     
     // Suppress WebSocket warning noise
-    if (warnMsg.includes('WebSocket connection to') || warnMsg.includes('WebSocket is closed')) {
-      return; // Silently ignore
+    if (
+      warnMsg.includes('WebSocket connection to') || 
+      warnMsg.includes('WebSocket is closed') ||
+      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket'))
+    ) {
+      return; // Silently ignore - these are expected during connection attempts
     }
     
     // Pass through all other warnings
     originalConsoleWarn.apply(console, args);
   };
+  
+  // Also suppress unhandled promise rejections from WebSocket connections
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    const errorMsg = reason?.message || String(reason || '');
+    
+    // Suppress WebSocket-related unhandled rejections
+    if (
+      errorMsg.includes('WebSocket') ||
+      errorMsg.includes('neon.tech') ||
+      errorMsg.includes('pooler')
+    ) {
+      // These are handled by the pool's retry mechanism
+      event.preventDefault();
+      if (import.meta.env.DEV) {
+        console.debug('🔄 Suppressed WebSocket unhandled rejection (will retry)');
+      }
+    }
+  });
 }
 
 // ✅ FIXED: Use WebSocket Pool for browser compatibility
@@ -108,18 +138,40 @@ try {
   
   // Add pool error handler to catch connection errors gracefully
   pool.on('error', (err: any) => {
-    console.warn('⚠️ Unexpected pool error (connection will be recreated):', err.message || err);
+    const errorMsg = err?.message || String(err || '');
+    
+    // Suppress expected WebSocket connection errors that are automatically retried
+    if (
+      errorMsg.includes('WebSocket') ||
+      errorMsg.includes('connection terminated') ||
+      errorMsg.includes('ECONNRESET') ||
+      errorMsg.includes('socket hang up')
+    ) {
+      // These are transient errors - the pool will automatically retry
+      // Only log in development mode
+      if (import.meta.env.DEV) {
+        console.debug('🔄 Pool connection error (will retry automatically):', errorMsg.substring(0, 100));
+      }
+      return;
+    }
+    
+    // Log unexpected errors
+    console.warn('⚠️ Unexpected pool error (connection will be recreated):', errorMsg);
     // Don't throw - let the pool handle reconnection
   });
   
-  // Add pool connection handler for debugging
+  // Add pool connection handler for debugging (only in dev mode to reduce noise)
   pool.on('connect', () => {
-    console.log('🔌 New database connection established');
+    if (import.meta.env.DEV) {
+      console.debug('🔌 New database connection established');
+    }
   });
   
-  // Add pool removal handler
+  // Add pool removal handler (only in dev mode)
   pool.on('remove', () => {
-    console.log('🔌 Database connection removed from pool');
+    if (import.meta.env.DEV) {
+      console.debug('🔌 Database connection removed from pool');
+    }
   });
   
   // Wrap pool.query in a sql-like interface for compatibility
@@ -300,14 +352,24 @@ const executeSql = async (query: string, params: any[] = [], suppressLogs: boole
     const isNetwork = isNetworkError(error);
     const isConnectionTerminated = errorMessage.toLowerCase().includes('connection terminated');
     const isTimeout = errorMessage.toLowerCase().includes('timeout');
+    const isWebSocketError = errorMessage.includes('WebSocket') || errorMessage.includes('wss://');
     
     // Determine if we should retry
     const shouldRetry = (
       (is400Error && retryCount < MAX_RETRIES) ||
       (isNetwork && retryCount < MAX_NETWORK_RETRIES) ||
       (isConnectionTerminated && retryCount < MAX_NETWORK_RETRIES) ||
-      (isTimeout && retryCount < MAX_NETWORK_RETRIES)
+      (isTimeout && retryCount < MAX_NETWORK_RETRIES) ||
+      (isWebSocketError && retryCount < MAX_NETWORK_RETRIES)
     );
+    
+    // Suppress WebSocket errors from logging (they're expected and will retry)
+    if (isWebSocketError && !suppressLogs) {
+      // Only log in dev mode as debug, not as error
+      if (isDevelopment && retryCount === 0) {
+        console.debug('🔄 WebSocket connection error (automatic retry enabled)');
+      }
+    }
     
     if (shouldRetry) {
       // Log timeout errors with specific guidance (only in dev mode and only on first attempt)

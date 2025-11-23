@@ -10,7 +10,7 @@ interface PendingRequest {
 
 class RequestDeduplicator {
   private pendingRequests: Map<string, PendingRequest> = new Map();
-  private readonly REQUEST_TIMEOUT = 30000; // 30 seconds
+  private readonly REQUEST_TIMEOUT = 90000; // 90 seconds (increased for Neon cold starts)
 
   /**
    * Deduplicate a request by key

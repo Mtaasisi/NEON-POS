@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
+import { addBranchFilter } from '../../../lib/branchAwareApi';
 import { 
   Building2, 
   MapPin, 
@@ -119,6 +120,7 @@ const StoreManagementSettings: React.FC = () => {
   const [isolationData, setIsolationData] = useState<any>(null);
   const [loadingDebug, setLoadingDebug] = useState(false);
 
+  // Create empty store template outside component to ensure stability
   const emptyStore: Store = useMemo(() => ({
     name: '',
     code: '',
@@ -134,7 +136,7 @@ const StoreManagementSettings: React.FC = () => {
     is_active: true,
     opening_time: '09:00',
     closing_time: '18:00',
-    
+
     // Data Isolation Defaults - Users must manually configure
     data_isolation_mode: 'hybrid',
     share_products: false,
@@ -143,7 +145,7 @@ const StoreManagementSettings: React.FC = () => {
     share_suppliers: false,
     share_categories: false,
     share_employees: false,
-    
+
     // Additional isolation defaults
     share_sales: false,
     share_purchase_orders: false,
@@ -171,10 +173,10 @@ const StoreManagementSettings: React.FC = () => {
     auto_sync_products: true,
     auto_sync_prices: true,
     require_approval_for_transfers: false,
-    
+
     // Pricing
     pricing_model: 'centralized',
-    
+
     // Permissions
     can_view_other_branches: false,
     can_transfer_to_branches: []
@@ -186,8 +188,17 @@ const StoreManagementSettings: React.FC = () => {
 
   // Memoize the store object passed to StoreForm to prevent unnecessary resets
   const storeForForm = useMemo(() => {
-    return editingStore || emptyStore;
-  }, [editingStore?.id, showAddForm, emptyStore]); // Only change when store ID changes or switching between add/edit
+    const result = editingStore || emptyStore;
+    console.log('🔄 [StoreManagementSettings] storeForForm created for ID:', result.id);
+    return result;
+  }, [editingStore?.id, showAddForm]); // Remove emptyStore dependency as it should be stable
+
+  // Memoize the onCancel callback to avoid hook ordering issues
+  const handleFormCancel = useCallback(() => {
+    console.log('🔄 [StoreManagementSettings] onCancel called');
+    setShowAddForm(false);
+    setEditingStore(null);
+  }, []);
 
   const loadStores = async () => {
     setLoading(true);
@@ -506,26 +517,35 @@ const StoreManagementSettings: React.FC = () => {
     }
   };
 
-  const StoreForm: React.FC<{ 
-    store: Store; 
-    onSave: (store: Store) => void; 
+  const StoreForm: React.FC<{
+    store: Store;
+    onSave: (store: Store) => void;
     onCancel: () => void;
-  }> = ({ 
-    store, 
-    onSave, 
+  }> = React.memo(({
+    store,
+    onSave,
     onCancel
   }) => {
+    console.log('🔄 [StoreForm] Component re-rendered with store ID:', store.id, 'store ref:', store);
+    // Declare refs before useState to avoid temporal dead zone
+    const stableFormDataRef = useRef<Store | null>(null); // Store stable form data reference
+    const initializedStoreIdRef = useRef<string | undefined>(store.id);
+    const formInitializedRef = useRef(false); // Track if form has been initialized to prevent resets
+    const lastStoreIdRef = useRef<string | undefined>(store.id); // Track last store ID to detect actual changes
+    const loadedStoreIdRef = useRef<string | null>(null); // Track which store data has been loaded to prevent reloading
+
     // Initialize formData with store prop, but never update it from store prop after mount
     // Use lazy initialization with a copy to prevent reference issues
-    const [formData, setFormData] = useState<Store>(() => ({ ...store }));
+    const [formData, setFormData] = useState<Store>(() => {
+      const initialData = { ...store };
+      stableFormDataRef.current = initialData;
+      return initialData;
+    });
     const [isSaving, setIsSaving] = useState(false);
     const [hasDraft, setHasDraft] = useState(false);
     const [lastSavedDraft, setLastSavedDraft] = useState<Date | null>(null);
     const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>([]);
     const [loadingUsers, setLoadingUsers] = useState(true);
-    const initializedStoreIdRef = useRef<string | undefined>(store.id);
-    const formInitializedRef = useRef(false); // Track if form has been initialized to prevent resets
-    const lastStoreIdRef = useRef<string | undefined>(store.id); // Track last store ID to detect actual changes
 
     const DRAFT_KEY = `store-draft-${store.id || 'new'}`;
 
@@ -551,38 +571,34 @@ const StoreManagementSettings: React.FC = () => {
       fetchUsers();
     }, []);
 
-    // Initialize form data ONLY once when component mounts or when switching to a DIFFERENT store
-    // COMPLETELY IGNORE store prop changes after initialization to prevent form resets
-    // This effect runs ONLY when store.id changes, and preserves form data when it doesn't
+    // CRITICAL FIX: Only update form data when store ID actually changes
     useEffect(() => {
       const currentStoreId = store.id;
-      const previousStoreId = lastStoreIdRef.current;
-      
-      // Only update formData if:
-      // 1. First mount (form not initialized), OR
-      // 2. Store ID actually changed (user switched to edit a different store)
-      if (!formInitializedRef.current) {
-        // First mount - initialize with store data
-        setFormData({ ...store }); // Create a copy to prevent reference issues
+      console.log('🔄 [StoreForm] useEffect triggered for store:', currentStoreId, 'previous:', initializedStoreIdRef.current);
+
+      // Only update form data if this is a different store than what we initialized with
+      if (initializedStoreIdRef.current !== currentStoreId) {
+        console.log('🔄 [StoreForm] Store ID changed from', initializedStoreIdRef.current, 'to', currentStoreId, '- resetting form');
+        const newData = { ...store };
+        setFormData(newData);
+        stableFormDataRef.current = newData;
         setHasDraft(false);
         setLastSavedDraft(null);
         initializedStoreIdRef.current = currentStoreId;
         lastStoreIdRef.current = currentStoreId;
+        loadedStoreIdRef.current = currentStoreId;
         formInitializedRef.current = true;
-      } else if (previousStoreId !== currentStoreId) {
-        // Store ID changed - user is switching to edit a different store
-        // Only reset form in this case
-        setFormData({ ...store }); // Create a copy to prevent reference issues
-        setHasDraft(false);
-        setLastSavedDraft(null);
+      } else if (!formInitializedRef.current) {
+        // First mount
+        console.log('🔄 [StoreForm] First mount - initializing form for store:', currentStoreId);
+        const newData = { ...store };
+        setFormData(newData);
+        stableFormDataRef.current = newData;
         initializedStoreIdRef.current = currentStoreId;
-        lastStoreIdRef.current = currentStoreId;
+        formInitializedRef.current = true;
       }
-      // If store.id is the same, DO NOTHING - formData remains unchanged
-      // If store.id is the same, DO NOTHING - preserve user's form input
-      // This prevents resets when parent re-renders with same store data
       // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [store.id]); // Only depend on store.id, not the entire store object
+    }, [store.id]); // Only depend on store.id to detect actual store changes
     
     // CRITICAL: Prevent form from resetting when store prop object reference changes
     // This ensures formData is NEVER updated from store prop after initialization
@@ -623,6 +639,7 @@ const StoreManagementSettings: React.FC = () => {
 
     const handleCancel = () => {
       clearDraft();
+      loadedStoreIdRef.current = null; // Reset loaded store ID when cancelling
       onCancel();
     };
 
@@ -913,23 +930,22 @@ const StoreManagementSettings: React.FC = () => {
               </label>
             </div>
 
-            {formData.allow_stock_transfer && (
-              <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Require Approval for Transfers</span>
-                  <p className="text-xs text-gray-500">Transfers need manager approval</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.require_approval_for_transfers}
-                    onChange={(e) => setFormData({ ...formData, require_approval_for_transfers: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                </label>
+            <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
+              <div>
+                <span className="text-sm font-medium text-gray-700">Require Approval for Transfers</span>
+                <p className="text-xs text-gray-500">Transfers need manager approval</p>
               </div>
-            )}
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.require_approval_for_transfers}
+                  onChange={(e) => setFormData({ ...formData, require_approval_for_transfers: e.target.checked })}
+                  disabled={!formData.allow_stock_transfer}
+                  className="sr-only peer"
+                />
+                <div className={`w-11 h-6 ${formData.allow_stock_transfer ? 'bg-gray-200 peer-focus:outline-none' : 'bg-gray-100 cursor-not-allowed'} rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600 ${!formData.allow_stock_transfer ? 'opacity-50' : ''}`}></div>
+              </label>
+            </div>
 
             <div className="flex items-center justify-between p-4 border-2 border-gray-200 rounded-lg hover:border-gray-300 transition-colors">
               <div>
@@ -1018,21 +1034,22 @@ const StoreManagementSettings: React.FC = () => {
               </select>
             </div>
 
-            {formData.pricing_model === 'location-specific' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tax Rate Override (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={formData.tax_rate_override || ''}
-                  onChange={(e) => setFormData({ ...formData, tax_rate_override: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors text-gray-900"
-                  placeholder="Leave empty to use default tax rate"
-                />
-              </div>
-            )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tax Rate Override (%)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.tax_rate_override || ''}
+                onChange={(e) => setFormData({ ...formData, tax_rate_override: parseFloat(e.target.value) })}
+                disabled={formData.pricing_model !== 'location-specific'}
+                className={`w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-green-500 transition-colors text-gray-900 ${
+                  formData.pricing_model !== 'location-specific' ? 'bg-gray-50 cursor-not-allowed opacity-50' : ''
+                }`}
+                placeholder={formData.pricing_model === 'location-specific' ? "Leave empty to use default tax rate" : "Only available for location-specific pricing"}
+              />
+            </div>
           </div>
           </div>
         </div>
@@ -1275,7 +1292,17 @@ const StoreManagementSettings: React.FC = () => {
         )}
       </div>
     );
-  };
+  }, (prevProps, nextProps) => {
+    // Only re-render if store ID changed
+    const shouldRerender = prevProps.store.id !== nextProps.store.id;
+    if (!shouldRerender) {
+      console.log('🔄 [StoreForm] Preventing re-render - store ID unchanged:', prevProps.store.id);
+    }
+    return !shouldRerender;
+  });
+
+  // Add display name for debugging
+  StoreForm.displayName = 'StoreForm';
 
   return (
     <div>
@@ -1310,10 +1337,7 @@ const StoreManagementSettings: React.FC = () => {
           key={editingStore?.id || 'new-store'}
           store={storeForForm}
           onSave={handleSaveStore}
-          onCancel={() => {
-            setShowAddForm(false);
-            setEditingStore(null);
-          }}
+          onCancel={handleFormCancel}
         />
       )}
 

@@ -609,50 +609,96 @@ export const useInventoryStore = create<InventoryState>()(
         console.log('🔄 Starting supplier load...');
         set({ isSuppliersLoading: true, error: null });
         
-        // Use Promise.race for timeout protection (increased to 15 seconds for cold starts)
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Supplier fetch timeout')), 15000)
-        );
+        // Use Promise.race for timeout protection (increased to 90 seconds for Neon cold starts)
+        // Neon databases can take 30-60 seconds to wake up from cold start
+        const SUPPLIER_FETCH_TIMEOUT = 90000; // 90 seconds
 
+        let retryCount = 0;
+        const MAX_RETRIES = 2; // Retry up to 2 times for timeout errors
+        
         try {
-          // Race between actual fetch and timeout - loading only active suppliers
-          const suppliers = await Promise.race([
-            getActiveSuppliersApi(),
-            timeoutPromise
-          ]);
-          
-          // Use data processor for consistent processing
-          const processedSuppliers = processSuppliersOnly(suppliers);
-          
-          console.log(`✅ Suppliers loaded successfully: ${processedSuppliers.length} suppliers`);
-          
-          // Warn if no suppliers found
-          if (processedSuppliers.length === 0) {
-            console.error('⚠️ CRITICAL: No suppliers found!');
-            console.error('🔧 FIX: Run MAKE-SUPPLIERS-WORK.sql in your database');
-            set({ 
-              suppliers: [], 
-              error: 'No suppliers found. Please run database setup.' 
-            });
-          } else {
-            set({ 
-              suppliers: processedSuppliers, 
-              lastDataLoadTime: Date.now(),
-              error: null
-            });
+          while (retryCount <= MAX_RETRIES) {
+            try {
+              // Create a new timeout promise for each retry attempt
+              const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Supplier fetch timeout - database may be cold starting. Please wait and try again.')), SUPPLIER_FETCH_TIMEOUT)
+              );
+              
+              // Race between actual fetch and timeout - loading only active suppliers
+              const suppliers = await Promise.race([
+                getActiveSuppliersApi(),
+                timeoutPromise
+              ]);
+            
+              // Use data processor for consistent processing
+              const processedSuppliers = processSuppliersOnly(suppliers);
+              
+              console.log(`✅ Suppliers loaded successfully: ${processedSuppliers.length} suppliers`);
+              
+              // Warn if no suppliers found
+              if (processedSuppliers.length === 0) {
+                console.error('⚠️ CRITICAL: No suppliers found!');
+                console.error('🔧 FIX: Run MAKE-SUPPLIERS-WORK.sql in your database');
+                set({ 
+                  suppliers: [], 
+                  error: 'No suppliers found. Please run database setup.' 
+                });
+              } else {
+                set({ 
+                  suppliers: processedSuppliers, 
+                  lastDataLoadTime: Date.now(),
+                  error: null
+                });
+              }
+              
+              // Update cache with longer duration for suppliers (5 minutes)
+              get().updateCache('suppliers', processedSuppliers);
+              latsAnalytics.track('suppliers_loaded', { count: processedSuppliers.length });
+              
+              // Success - break out of retry loop
+              break;
+            } catch (error: any) {
+              const errorMessage = error?.message || String(error);
+              const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('Timeout');
+              
+              if (isTimeout && retryCount < MAX_RETRIES) {
+                retryCount++;
+                const delay = Math.min(5000 * retryCount, 15000); // Exponential backoff, max 15s
+                console.warn(`⏱️ Supplier fetch timeout (attempt ${retryCount}/${MAX_RETRIES + 1}). Retrying in ${delay}ms...`);
+                console.warn('💡 This may be a cold start - Neon databases can take 30-60 seconds to wake up.');
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue; // Retry
+              }
+              
+              // Final error or non-timeout error
+              console.error('❌ Suppliers exception:', error);
+              if (isTimeout) {
+                console.error('⏱️ Supplier fetch timed out after all retries. Database may be cold starting.');
+                console.error('💡 Please wait 30-60 seconds and refresh the page.');
+              } else {
+                console.error('🔧 FIX: Run MAKE-SUPPLIERS-WORK.sql in your database');
+              }
+              set({ 
+                error: isTimeout 
+                  ? 'Supplier fetch timed out. Database may be cold starting. Please wait and refresh.'
+                  : 'Failed to load suppliers. Check database connection.',
+                suppliers: [] 
+              });
+              break; // Exit retry loop
+            }
           }
-          
-          // Update cache with longer duration for suppliers (5 minutes)
-          get().updateCache('suppliers', processedSuppliers);
-          latsAnalytics.track('suppliers_loaded', { count: processedSuppliers.length });
-        } catch (error) {
-          console.error('❌ Suppliers exception:', error);
-          console.error('🔧 FIX: Run MAKE-SUPPLIERS-WORK.sql in your database');
+        } catch (error: any) {
+          // Catch any unexpected errors that escape the inner try-catch
+          const errorMessage = error?.message || String(error);
+          console.error('❌ Unexpected error in loadSuppliers:', error);
           set({ 
-            error: 'Failed to load suppliers. Check database connection.',
+            error: errorMessage.includes('timeout') 
+              ? 'Supplier fetch timed out. Database may be cold starting. Please wait and refresh.'
+              : 'Failed to load suppliers. Check database connection.',
             suppliers: [] 
           });
         } finally {
+          // Always reset loading state, even if an error occurred
           set({ isSuppliersLoading: false });
         }
       },

@@ -353,14 +353,29 @@ const CustomerLoyaltyPage: React.FC = () => {
       }
 
       // Fetch spare part usage for this customer - TODAY ONLY
-      // First fetch usage records
-      const { data: spareData, error: spareError } = await supabase
-        .from('lats_spare_part_usage')
-        .select('*')
-        .eq('customer_id', customerId)
-        .gte('used_at', startOfDay.toISOString())
-        .lt('used_at', endOfDay.toISOString())
-        .order('used_at', { ascending: false });
+      // First fetch device IDs for this customer
+      const { data: devicesData } = await supabase
+        .from('devices')
+        .select('id')
+        .eq('customer_id', customerId);
+      
+      const deviceIds = devicesData?.map(d => d.id) || [];
+      
+      let spareData: any[] = [];
+      let spareError: any = null;
+      
+      if (deviceIds.length > 0) {
+        const result = await supabase
+          .from('lats_spare_part_usage')
+          .select('*')
+          .in('device_id', deviceIds)
+          .gte('created_at', startOfDay.toISOString())
+          .lt('created_at', endOfDay.toISOString())
+          .order('created_at', { ascending: false });
+        
+        spareData = result.data || [];
+        spareError = result.error;
+      }
       
       // Fetch spare part details separately to avoid SQL syntax issues
       if (!spareError && spareData && spareData.length > 0) {

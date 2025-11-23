@@ -354,7 +354,7 @@ const CartItem: React.FC<CartItemProps> = ({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between mb-2">
             <div className="flex-1 min-w-0">
-              <h3 className="text-base font-semibold text-lats-text truncate">
+              <h3 className="text-base font-semibold text-lats-text truncate min-w-0">
                 {product.name}
               </h3>
               <div className="flex items-center gap-2 text-sm text-lats-text-secondary mt-1">

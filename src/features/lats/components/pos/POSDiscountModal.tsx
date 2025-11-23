@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import { DollarSign, Percent, X, Keyboard, Tag, Trash2, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -155,10 +156,34 @@ const POSDiscountModal: React.FC<POSDiscountModalProps> = ({
   // Prevent body scroll when modal is open
   useBodyScrollLock(isOpen);
 
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4" 
+      style={{ 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        bottom: 0,
+        overflow: 'hidden',
+        overscrollBehavior: 'none'
+      }}
+      onClick={onClose}
+    >
       <div className="bg-white rounded-2xl w-full max-w-[95vw] sm:max-w-md shadow-2xl overflow-hidden relative max-h-[95vh] flex flex-col">
         {/* Close Button */}
         <button
@@ -298,6 +323,7 @@ const POSDiscountModal: React.FC<POSDiscountModalProps> = ({
                 onClick={() => handleKeyPress('0')}
                 className="aspect-square flex items-center justify-center rounded-lg font-semibold text-lg sm:text-xl transition-all duration-200 bg-gray-50 text-gray-900 hover:bg-orange-100 hover:text-orange-700 active:bg-orange-200 border border-gray-200 hover:border-orange-300 cursor-pointer shadow-sm hover:shadow-md active:scale-95"
               >
+                0
               </button>
               <button
                 onClick={handleBackspace}
@@ -335,7 +361,8 @@ const POSDiscountModal: React.FC<POSDiscountModalProps> = ({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

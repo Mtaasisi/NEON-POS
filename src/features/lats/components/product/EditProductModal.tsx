@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { z } from 'zod';
 import { toast } from 'react-hot-toast';
 import { X, Layers, Package } from 'lucide-react';
@@ -43,19 +43,28 @@ interface ProductVariant {
 // Validation schema for product form (same as AddProductModal)
 const productFormSchema = z.object({
   name: z.string().min(1, 'Product name must be provided').max(100, 'Product name must be less than 100 characters'),
-  description: z.string().max(200, 'Description must be less than 200 characters').optional(),
-  specification: z.string().max(1000, 'Specification must be less than 1000 characters').optional().refine((val) => {
-    if (!val) return true;
-    try {
-      JSON.parse(val);
-      return true;
-    } catch {
-      return false;
-    }
-  }, {
-    message: "Specification must be valid JSON"
-  }),
-  sku: z.string().max(50, 'SKU must be less than 50 characters').optional(),
+  description: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.string().max(200, 'Description must be less than 200 characters').optional()
+  ),
+  specification: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.string().max(1000, 'Specification must be less than 1000 characters').optional().refine((val) => {
+      if (!val || val.trim() === '') return true;
+      try {
+        JSON.parse(val);
+        return true;
+      } catch {
+        return false;
+      }
+    }, {
+      message: "Specification must be valid JSON"
+    })
+  ),
+  sku: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined ? undefined : val),
+    z.string().max(50, 'SKU must be less than 50 characters').optional()
+  ),
   categoryId: z.string().min(1, 'Category must be selected'),
   condition: z.enum(['new', 'used', 'refurbished'], {
     errorMap: () => ({ message: 'Please select a condition' })
@@ -120,6 +129,9 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
   const [nameExists, setNameExists] = useState(false);
   const [originalProductName, setOriginalProductName] = useState<string>('');
 
+  // Track loaded product to prevent reloading during editing
+  const loadedProductIdRef = useRef<string | null>(null);
+
   const { currentUser } = useAuth();
 
   // Handle variants toggle - Actually toggle the variants visibility
@@ -150,35 +162,74 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
   // Load product data when modal opens
   const loadProductData = useCallback(async () => {
-    if (!isOpen || !productId) return;
+    if (!productId) return;
+
+    // Prevent reloading if data is already loaded for this product
+    if (loadedProductIdRef.current === productId) {
+      console.log('🔄 [EditProductModal] Product data already loaded, skipping reload');
+      return;
+    }
+
+    // Reset loaded product ID if loading a different product
+    if (loadedProductIdRef.current && loadedProductIdRef.current !== productId) {
+      console.log('🔄 [EditProductModal] Loading different product, resetting loaded state');
+      loadedProductIdRef.current = null;
+    }
 
     setIsLoadingProduct(true);
     try {
       const product = await getProduct(productId, { forceRefresh: true });
-      
-      // Extract condition from attributes or use default
-      const condition = (product as any).attributes?.condition || 
-                       (product as any).condition || 
-                       'new';
+
+      // Extract condition from attributes or use default, ensure it's valid
+      const rawCondition = (product as any).attributes?.condition ||
+                           (product as any).condition ||
+                           'new';
+      const condition = ['new', 'used', 'refurbished'].includes(rawCondition)
+        ? rawCondition
+        : 'new';
 
       // Extract specification from attributes or direct field
-      const specification = (product as any).attributes?.specification || 
-                           (product as any).specification || 
-                           '';
+      const rawSpecification = (product as any).attributes?.specification ||
+                               (product as any).specification ||
+                               '';
+
+      // Handle specification - ensure it's a valid JSON string or empty
+      let specification = '';
+      if (rawSpecification) {
+        if (typeof rawSpecification === 'string') {
+          // If it's already a string, validate it's valid JSON
+          try {
+            JSON.parse(rawSpecification);
+            specification = rawSpecification;
+          } catch {
+            // If it's not valid JSON, stringify it
+            specification = JSON.stringify(rawSpecification);
+          }
+        } else {
+          // If it's an object, stringify it
+          specification = JSON.stringify(rawSpecification);
+        }
+      }
+
+      // Ensure categoryId is a string (handle null/undefined)
+      const categoryId = product.categoryId ? String(product.categoryId) : '';
 
       // Set form data
       setFormData({
         name: product.name || '',
         sku: product.sku || generateAutoSKU(),
-        categoryId: product.categoryId || '',
+        categoryId: categoryId,
         condition: condition as 'new' | 'used' | 'refurbished',
         description: product.description || '',
-        specification: typeof specification === 'string' ? specification : JSON.stringify(specification),
+        specification: specification,
         metadata: (product as any).metadata || {},
         variants: []
       });
 
       setOriginalProductName(product.name || '');
+
+      // Mark this product as loaded
+      loadedProductIdRef.current = productId;
 
       // Load variants
       if (product.variants && product.variants.length > 0) {
@@ -207,7 +258,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     } finally {
       setIsLoadingProduct(false);
     }
-  }, [isOpen, productId, onClose]);
+  }, [productId, onClose]);
 
   // Load categories when modal opens
   useEffect(() => {
@@ -240,6 +291,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       setUseVariants(false);
       setShowVariants(true);
       setOriginalProductName('');
+      loadedProductIdRef.current = null; // Reset loaded product ID when modal closes
     }
   }, [isOpen, loadProductData]);
 
@@ -290,13 +342,28 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         const errors: Record<string, string> = {};
+        console.error('Validation errors:', error.errors);
         error.errors.forEach(err => {
           if (err.path.length > 0) {
             errors[err.path[0]] = err.message;
           }
         });
         setCurrentErrors(errors);
-        toast.error('Please fix the validation errors');
+        
+        // Show specific error messages (limit to first 2 to avoid message overflow)
+        const errorMessages = error.errors.slice(0, 2).map(err => {
+          const field = err.path[0] || 'form';
+          return `${field}: ${err.message}`;
+        }).join(', ');
+        
+        console.error('Validation errors:', error.errors);
+        console.error('Form data that failed validation:', formData);
+        
+        if (errorMessages) {
+          toast.error(`Validation error: ${errorMessages}`);
+        } else {
+          toast.error('Please fix the validation errors');
+        }
         return;
       }
     }
@@ -392,17 +459,9 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
         await loadProducts(null, true);
       }
       
-      // Optionally refresh in background without blocking (non-blocking)
-      // This ensures data consistency without causing slow response warnings
-      setTimeout(async () => {
-        try {
-          // @ts-ignore
-          await loadProducts(null, true);
-          console.log('✅ [EditProductModal] Background product refresh completed');
-        } catch (error) {
-          console.warn('⚠️ [EditProductModal] Background refresh failed (non-critical):', error);
-        }
-      }, 1000);
+      // Note: Background refresh removed to prevent form reset during editing
+      // The product is already updated in the store via updateProductInStore
+      // This prevents the form from being reset while user is still editing
 
       toast.success('Product updated successfully!');
       

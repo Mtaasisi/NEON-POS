@@ -193,7 +193,7 @@ export const getSystemStatistics = async () => {
     const [customers, devices, payments, users] = await Promise.all([
       supabase.from('customers').select('id', { count: 'exact' }),
       supabase.from('devices').select('id', { count: 'exact' }),
-      supabase.from('payments').select('id', { count: 'exact' }),
+      supabase.from('customer_payments').select('id', { count: 'exact' }),
       supabase.from('users').select('id', { count: 'exact' })
     ]);
 

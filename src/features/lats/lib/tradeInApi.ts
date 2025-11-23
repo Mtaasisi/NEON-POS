@@ -126,19 +126,20 @@ export const createTradeInPrice = async (formData: TradeInPriceFormData) => {
       throw new Error('User authentication required to create trade-in price');
     }
 
-    // Verify the user exists in the users table to satisfy the foreign key constraint
+    // Verify the user exists in the auth_users table to satisfy the foreign key constraint
+    // The foreign key lats_trade_in_prices_created_by_fkey references auth_users(id)
     const { data: validUser, error: userError } = await supabase
-      .from('users')
+      .from('auth_users')
       .select('id')
       .eq('id', userData.user.id)
       .single();
 
-    // If user doesn't exist in users table, try to get any valid user or use fallback
-    let userId = userData.user.id;
+    // If user doesn't exist in auth_users table, try to get any valid user or use fallback
+    let userId: string | null = userData.user.id;
     if (userError || !validUser) {
-      // Try to get any active user from the users table
+      // Try to get any active user from the auth_users table
       const { data: anyUser } = await supabase
-        .from('users')
+        .from('auth_users')
         .select('id')
         .eq('is_active', true)
         .limit(1)
@@ -147,9 +148,22 @@ export const createTradeInPrice = async (formData: TradeInPriceFormData) => {
       if (anyUser) {
         userId = anyUser.id;
       } else {
-        // Last resort: use a default system user ID
+        // Last resort: use a default system user ID that should exist in auth_users
         userId = '00000000-0000-0000-0000-000000000001';
-        console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+        // Verify this fallback user exists in auth_users
+        const { data: fallbackUser } = await supabase
+          .from('auth_users')
+          .select('id')
+          .eq('id', userId)
+          .single();
+        
+        if (!fallbackUser) {
+          // If fallback user doesn't exist, set to null (allowed by ON DELETE SET NULL)
+          console.warn('⚠️ Authenticated user not found in auth_users table and fallback user not found, using NULL');
+          userId = null;
+        } else {
+          console.warn('⚠️ Authenticated user not found in auth_users table, using fallback user ID');
+        }
       }
     }
     
@@ -157,7 +171,7 @@ export const createTradeInPrice = async (formData: TradeInPriceFormData) => {
       .from('lats_trade_in_prices')
       .insert({
         ...formData,
-        created_by: userId,
+        ...(userId && { created_by: userId }),
       })
       .select()
       .single();
@@ -165,7 +179,7 @@ export const createTradeInPrice = async (formData: TradeInPriceFormData) => {
     if (error) {
       // If it's a foreign key constraint error, provide a more helpful message
       if (error.code === '23503' && error.message.includes('created_by_fkey')) {
-        throw new Error('User not found in system. Please ensure you are properly authenticated.');
+        throw new Error('User not found in auth_users table. Please ensure you are properly authenticated.');
       }
       throw error;
     }
@@ -186,9 +200,10 @@ export const updateTradeInPrice = async (id: string, formData: Partial<TradeInPr
     let updatedBy: string | undefined = undefined;
     
     if (userData?.user?.id) {
-      // Verify the user exists in the users table to satisfy the foreign key constraint
+      // Verify the user exists in the auth_users table to satisfy the foreign key constraint
+      // The foreign key lats_trade_in_prices_updated_by_fkey references auth_users(id)
       const { data: validUser } = await supabase
-        .from('users')
+        .from('auth_users')
         .select('id')
         .eq('id', userData.user.id)
         .single();
@@ -196,9 +211,9 @@ export const updateTradeInPrice = async (id: string, formData: Partial<TradeInPr
       if (validUser) {
         updatedBy = validUser.id;
       } else {
-        // Try to get any active user from the users table
+        // Try to get any active user from the auth_users table
         const { data: anyUser } = await supabase
-          .from('users')
+          .from('auth_users')
           .select('id')
           .eq('is_active', true)
           .limit(1)
@@ -220,7 +235,13 @@ export const updateTradeInPrice = async (id: string, formData: Partial<TradeInPr
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If it's a foreign key constraint error, provide a more helpful message
+      if (error.code === '23503' && error.message.includes('updated_by_fkey')) {
+        throw new Error('User not found in auth_users table. Please ensure you are properly authenticated.');
+      }
+      throw error;
+    }
     return { success: true, data: data as TradeInPrice };
   } catch (error) {
     console.error('Error updating trade-in price:', error);
@@ -410,11 +431,12 @@ export const createTradeInTransaction = async (formData: TradeInTransactionFormD
     // Get active branch (you may need to adjust this based on your branch context)
     const activeBranchId = localStorage.getItem('activeBranchId') || '00000000-0000-0000-0000-000000000001';
     
-    // Verify the user exists in the users table to satisfy the foreign key constraint
+    // Verify the user exists in the auth_users table to satisfy the foreign key constraint
+    // The foreign key lats_trade_in_transactions_created_by_fkey references auth_users(id)
     let userId: string | undefined = undefined;
     if (userData?.user?.id) {
       const { data: validUser } = await supabase
-        .from('users')
+        .from('auth_users')
         .select('id')
         .eq('id', userData.user.id)
         .single();
@@ -422,9 +444,9 @@ export const createTradeInTransaction = async (formData: TradeInTransactionFormD
       if (validUser) {
         userId = validUser.id;
       } else {
-        // Try to get any active user from the users table
+        // Try to get any active user from the auth_users table
         const { data: anyUser } = await supabase
-          .from('users')
+          .from('auth_users')
           .select('id')
           .eq('is_active', true)
           .limit(1)
@@ -435,7 +457,7 @@ export const createTradeInTransaction = async (formData: TradeInTransactionFormD
         } else {
           // Last resort: use a default system user ID
           userId = '00000000-0000-0000-0000-000000000001';
-          console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+          console.warn('⚠️ Authenticated user not found in auth_users table, using fallback user ID');
         }
       }
     }
@@ -540,11 +562,12 @@ export const approveTradeInTransaction = async (id: string) => {
   try {
     const { data: userData, error: authError } = await supabase.auth.getUser();
     
-    // Verify the user exists in the users table to satisfy the foreign key constraint
+    // Verify the user exists in the auth_users table to satisfy the foreign key constraint
+    // The foreign key lats_trade_in_transactions_approved_by_fkey references auth_users(id)
     let userId: string | undefined = undefined;
     if (userData?.user?.id) {
       const { data: validUser } = await supabase
-        .from('users')
+        .from('auth_users')
         .select('id')
         .eq('id', userData.user.id)
         .single();
@@ -552,9 +575,9 @@ export const approveTradeInTransaction = async (id: string) => {
       if (validUser) {
         userId = validUser.id;
       } else {
-        // Try to get any active user from the users table
+        // Try to get any active user from the auth_users table
         const { data: anyUser } = await supabase
-          .from('users')
+          .from('auth_users')
           .select('id')
           .eq('is_active', true)
           .limit(1)
@@ -734,11 +757,12 @@ export const createTradeInContract = async (
     
     const settings = settingsResult.data!;
     
-    // Verify the user exists in the users table to satisfy the foreign key constraint
+    // Verify the user exists in the auth_users table to satisfy the foreign key constraint
+    // The foreign key lats_trade_in_transactions_created_by_fkey references auth_users(id)
     let userId: string | undefined = undefined;
     if (userData?.user?.id) {
       const { data: validUser } = await supabase
-        .from('users')
+        .from('auth_users')
         .select('id')
         .eq('id', userData.user.id)
         .single();
@@ -746,9 +770,9 @@ export const createTradeInContract = async (
       if (validUser) {
         userId = validUser.id;
       } else {
-        // Try to get any active user from the users table
+        // Try to get any active user from the auth_users table
         const { data: anyUser } = await supabase
-          .from('users')
+          .from('auth_users')
           .select('id')
           .eq('is_active', true)
           .limit(1)
@@ -759,7 +783,7 @@ export const createTradeInContract = async (
         } else {
           // Last resort: use a default system user ID
           userId = '00000000-0000-0000-0000-000000000001';
-          console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+          console.warn('⚠️ Authenticated user not found in auth_users table, using fallback user ID');
         }
       }
     }
@@ -844,11 +868,12 @@ export const addDamageAssessment = async (formData: TradeInDamageAssessmentFormD
   try {
     const { data: userData, error: authError } = await supabase.auth.getUser();
     
-    // Verify the user exists in the users table to satisfy the foreign key constraint
+    // Verify the user exists in the auth_users table to satisfy the foreign key constraint
+    // The foreign key lats_trade_in_transactions_created_by_fkey references auth_users(id)
     let userId: string | undefined = undefined;
     if (userData?.user?.id) {
       const { data: validUser } = await supabase
-        .from('users')
+        .from('auth_users')
         .select('id')
         .eq('id', userData.user.id)
         .single();
@@ -856,9 +881,9 @@ export const addDamageAssessment = async (formData: TradeInDamageAssessmentFormD
       if (validUser) {
         userId = validUser.id;
       } else {
-        // Try to get any active user from the users table
+        // Try to get any active user from the auth_users table
         const { data: anyUser } = await supabase
-          .from('users')
+          .from('auth_users')
           .select('id')
           .eq('is_active', true)
           .limit(1)
@@ -869,7 +894,7 @@ export const addDamageAssessment = async (formData: TradeInDamageAssessmentFormD
         } else {
           // Last resort: use a default system user ID
           userId = '00000000-0000-0000-0000-000000000001';
-          console.warn('⚠️ Authenticated user not found in users table, using fallback user ID');
+          console.warn('⚠️ Authenticated user not found in auth_users table, using fallback user ID');
         }
       }
     }

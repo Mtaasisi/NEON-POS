@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Package, Plus, Trash2, DollarSign } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { getLatsProvider } from '../../lib/data/provider';
@@ -531,8 +532,14 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
 
   const stats = getTotalStats();
 
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]" role="dialog" aria-modal="true" aria-labelledby="pricing-modal-title">
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="pricing-modal-title"
+    >
       <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
         {/* Close Button */}
         <button
@@ -1024,7 +1031,8 @@ const SetPricingModal: React.FC<SetPricingModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

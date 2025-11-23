@@ -124,36 +124,21 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   if (!isOpen) return null;
 
   return createPortal(
-    <>
-      {/* Backdrop with macOS-style blur */}
+    <div
+      className="fixed animate-fadeIn flex items-start justify-center pt-16"
+      onClick={handleBackdropClick}
+      style={{
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999,
+        backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.25)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      }}
+    >
       <div
-        className="fixed animate-fadeIn"
-        onClick={handleBackdropClick}
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 35,
-          backgroundColor: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.25)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div
-        className="fixed flex items-start justify-center pt-16"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none',
-        }}
-      >
-        <div
           className={`
             relative w-full max-w-4xl mx-auto mb-8
             ${isDark ? 'bg-slate-900/95' : 'bg-white/95'}
@@ -374,8 +359,7 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           }
         `}</style>
       </div>
-      </div>
-    </>,
+      </div>,
     document.body
   );
 };

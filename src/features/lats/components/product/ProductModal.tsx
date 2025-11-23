@@ -899,34 +899,19 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
   };
 
   return createPortal(
-    <>
-      {/* Backdrop */}
+    <div 
+      className="fixed bg-black/30 backdrop-blur-sm animate-fade-in flex items-center justify-center p-2 sm:p-4 overflow-y-auto" 
+      style={{ 
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 99999
+      }}
+      onClick={onClose}
+    >
+      {/* Modal */}
       <div 
-        className="fixed bg-black/30 backdrop-blur-sm animate-fade-in"
-        onClick={onClose}
-        style={{
-          zIndex: 35,
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-2 sm:p-4 overflow-y-auto" 
-        style={{ 
-          zIndex: 50,
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          pointerEvents: 'none'
-        }}
-      >
-        {/* Modal */}
-        <div 
           className="relative bg-white rounded-lg sm:rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden flex flex-col my-2 sm:my-4 animate-scale-in"
           onClick={(e) => e.stopPropagation()}
           style={{ pointerEvents: 'auto' }}
@@ -3310,8 +3295,7 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
           </div>
         )}
         </div>
-      </div>
-    </>,
+      </div>,
     document.body
   );
 };

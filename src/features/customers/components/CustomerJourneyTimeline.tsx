@@ -137,9 +137,9 @@ const CustomerJourneyTimeline: React.FC<CustomerJourneyTimelineProps> = ({ custo
         });
       });
 
-      // Fetch POS sales
+      // Fetch POS sales (lats_sales has customer_id, not lats_receipts)
       const { data: sales } = await supabase
-        .from('lats_receipts')
+        .from('lats_sales')
         .select('*')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false });
@@ -157,9 +157,9 @@ const CustomerJourneyTimeline: React.FC<CustomerJourneyTimelineProps> = ({ custo
         });
       });
 
-      // Fetch payments
+      // Fetch payments (use customer_payments table, not payments)
       const { data: payments } = await supabase
-        .from('payments')
+        .from('customer_payments')
         .select('*')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false });

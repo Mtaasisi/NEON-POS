@@ -170,7 +170,7 @@ class SparePartsRelationshipService {
         .from('lats_spare_part_usage')
         .select('*')
         .eq('spare_part_id', sparePartId)
-        .order('used_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) {
@@ -210,7 +210,7 @@ class SparePartsRelationshipService {
         reason: item.reason,
         notes: item.notes,
         used_by: item.used_by,
-        created_at: item.used_at, // Map used_at to created_at
+        created_at: item.created_at || item.used_at, // Use created_at (fallback to used_at for backward compatibility)
         device: item.device_id ? deviceMap.get(item.device_id) : null
       }));
 
