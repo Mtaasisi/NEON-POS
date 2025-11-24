@@ -15,7 +15,7 @@
     "dev:auto": "concurrently \"npm run server-starter\" \"npm run dev\" --names \"starter,frontend\" --prefix name",
     "postbuild": "node fix-build-mime-types.mjs",
     "build": "tsc && vite build --mode development && node fix-build-mime-types.mjs",
-    "build:prod": "tsc && vite build --mode production && node fix-build-mime-types.mjs",
+    "build:prod": "node verify-build-config.mjs && tsc && vite build --mode production && node fix-build-mime-types.mjs",
     "build:hosting": "tsc && vite build --mode production && node fix-build-mime-types.mjs",
     "build:subdirectory": "VITE_BASE_PATH=/lats/ tsc && vite build --mode production && node fix-build-mime-types.mjs",
     "build:manual": "tsc && vite build --mode production && node setup-manual-hosting.mjs && node fix-build-mime-types.mjs",

@@ -714,16 +714,31 @@ const PurchaseOrdersPage: React.FC = () => {
               <p className="text-xs text-gray-600 mb-1">Total Value</p>
               <p className="text-2xl font-bold text-gray-900">
                 {formatCurrency(filteredOrders.reduce((sum: number, order: any) => {
-                  // Use totalAmount if available
+                  // Use totalAmountBaseCurrency (TZS) first - this is the correct value for multi-currency orders
+                  if (order.totalAmountBaseCurrency && order.totalAmountBaseCurrency > 0) {
+                    return sum + order.totalAmountBaseCurrency;
+                  }
+                  
+                  // Fallback: If base currency not available, use totalAmount and convert if needed
                   if (order.totalAmount && order.totalAmount > 0) {
+                    // If currency is not TZS, convert using exchange rate
+                    if (order.currency && order.currency !== 'TZS' && order.exchangeRate && order.exchangeRate > 0) {
+                      return sum + (order.totalAmount * order.exchangeRate);
+                    }
+                    // If already TZS or no currency specified, use as-is
                     return sum + order.totalAmount;
                   }
                   
-                  // Calculate from items
+                  // Calculate from items as last resort
                   if (order.items && order.items.length > 0) {
                     const totalFromItems = order.items.reduce((itemSum: number, item: any) => {
                       return itemSum + (item.totalPrice || (item.quantity * item.costPrice));
                     }, 0);
+                    
+                    // Convert to TZS if needed
+                    if (order.currency && order.currency !== 'TZS' && order.exchangeRate && order.exchangeRate > 0) {
+                      return sum + (totalFromItems * order.exchangeRate);
+                    }
                     return sum + totalFromItems;
                   }
                   

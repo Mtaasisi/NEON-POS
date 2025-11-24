@@ -91,6 +91,8 @@ import DailyClosingModal from '../components/modals/DailyClosingModal';
 import { usePOSClickSounds } from '../hooks/usePOSClickSounds';
 import { useDeviceDetection } from '../../../hooks/useDeviceDetection';
 import MobilePOSWrapper from '../components/pos/MobilePOSWrapper';
+import InvoiceTemplate from '../../../components/templates/InvoiceTemplate';
+import { FileText, Printer } from 'lucide-react';
 
 
 // Import lazy-loaded modal wrappers
@@ -344,6 +346,8 @@ const POSPageOptimized: React.FC = () => {
   const hasLoggedProductStatus = useRef(false);
   // Track if initial data load has been triggered
   const initialLoadTriggered = useRef(false);
+  // Track if we've attempted to auto-open customer selection modal
+  const hasAttemptedAutoOpen = useRef(false);
 
   // Track stock adjustments for products/variants when added to cart
   const [stockAdjustments, setStockAdjustments] = useState<Map<string, number>>(new Map());
@@ -502,6 +506,8 @@ const POSPageOptimized: React.FC = () => {
   const [showShareReceipt, setShowShareReceipt] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showShareReceiptModal, setShowShareReceiptModal] = useState(false);
+  const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+  const [createdInvoice, setCreatedInvoice] = useState<any>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -796,6 +802,29 @@ const POSPageOptimized: React.FC = () => {
       loadInitialData();
     }
   }, [dataLoaded, lastLoadTime, isCachingEnabled, loadProducts, loadCategories, loadSuppliers, loadSales, startLoading, updateProgress, completeLoading, failLoading]);
+
+  // Auto-open customer selection modal when POS page loads (similar to PO page)
+  useEffect(() => {
+    // Only show automatically if:
+    // 1. Customer profiles feature is enabled
+    // 2. No customer is currently selected
+    // 3. Initial data has been loaded
+    // 4. We haven't already attempted to open it
+    if (
+      isCustomerProfilesEnabled() &&
+      !selectedCustomer &&
+      dataLoaded &&
+      !hasAttemptedAutoOpen.current
+    ) {
+      // Small delay to ensure UI is ready
+      const timer = setTimeout(() => {
+        setShowCustomerSelectionModal(true);
+        hasAttemptedAutoOpen.current = true;
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isCustomerProfilesEnabled, selectedCustomer, dataLoaded]);
 
   // Monitor categories loading
   useEffect(() => {
@@ -2672,6 +2701,45 @@ const POSPageOptimized: React.FC = () => {
         totalAmount={totalAmount}
         onProcessPayment={handleProcessPayment}
         onClearCart={clearCart}
+        onPreviewInvoice={() => {
+          // Generate invoice preview from current cart
+          if (!selectedCustomer) {
+            toast.error('Please select a customer first to preview invoice');
+            return;
+          }
+          
+          if (cartItems.length === 0) {
+            toast.error('Add items to cart first');
+            return;
+          }
+
+          const invoiceData = {
+            invoiceNumber: `PREVIEW-${Date.now()}`,
+            invoiceDate: new Date().toISOString().split('T')[0],
+            customer: {
+              name: selectedCustomer.name,
+              address: selectedCustomer.address || '',
+              phone: selectedCustomer.phone || '',
+              email: selectedCustomer.email || '',
+              taxId: (selectedCustomer as any).taxId || ''
+            },
+            items: cartItems.map(item => ({
+              description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              total: item.totalPrice
+            })),
+            subtotal: totalAmount,
+            tax: taxAmount || 0,
+            discount: manualDiscount || 0,
+            total: finalAmount,
+            notes: 'This is a preview invoice. Prices may change before payment.',
+            terms: 'Net 30'
+          };
+          
+          setCreatedInvoice(invoiceData);
+          setShowInvoicePreview(true);
+        }}
         onScanQrCode={isQrCodeScannerEnabled ? startQrCodeScanner : () => {}}
         onAddCustomer={() => handleShowAddCustomerModal()}
         onViewReceipts={() => {
@@ -2786,6 +2854,45 @@ const POSPageOptimized: React.FC = () => {
               setManualDiscount(0);
               setDiscountValue('');
               setDiscountType('percentage');
+            }}
+            onPreviewInvoice={() => {
+              // Generate invoice preview from current cart
+              if (!selectedCustomer) {
+                toast.error('Please select a customer first to preview invoice');
+                return;
+              }
+              
+              if (cartItems.length === 0) {
+                toast.error('Add items to cart first');
+                return;
+              }
+
+              const invoiceData = {
+                invoiceNumber: `PREVIEW-${Date.now()}`,
+                invoiceDate: new Date().toISOString().split('T')[0],
+                customer: {
+                  name: selectedCustomer.name,
+                  address: selectedCustomer.address || '',
+                  phone: selectedCustomer.phone || '',
+                  email: selectedCustomer.email || '',
+                  taxId: (selectedCustomer as any).taxId || ''
+                },
+                items: cartItems.map(item => ({
+                  description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
+                  quantity: item.quantity,
+                  unitPrice: item.unitPrice,
+                  total: item.totalPrice
+                })),
+                subtotal: totalAmount,
+                tax: taxAmount || 0,
+                discount: manualDiscount || 0,
+                total: finalAmount,
+                notes: 'This is a preview invoice. Prices may change before payment.',
+                terms: 'Net 30'
+              };
+              
+              setCreatedInvoice(invoiceData);
+              setShowInvoicePreview(true);
             }}
             dynamicPricingEnabled={dynamicPricingSettings?.enable_dynamic_pricing}
             totalAmount={totalAmount}
@@ -3708,6 +3815,45 @@ const POSPageOptimized: React.FC = () => {
                         variant: 'primary',
                       },
                       {
+                        label: 'Create Invoice',
+                        onClick: () => {
+                          // Create invoice from sale data
+                          const invoiceData = {
+                            invoiceNumber: saleNumber || `INV-${Date.now()}`,
+                            invoiceDate: new Date().toISOString().split('T')[0],
+                            customer: selectedCustomer ? {
+                              name: selectedCustomer.name,
+                              address: selectedCustomer.address || '',
+                              phone: selectedCustomer.phone || '',
+                              email: selectedCustomer.email || '',
+                              taxId: (selectedCustomer as any).taxId || ''
+                            } : {
+                              name: 'Walk-in Customer',
+                              address: '',
+                              phone: '',
+                              email: '',
+                              taxId: ''
+                            },
+                            items: cartItems.map(item => ({
+                              description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
+                              quantity: item.quantity,
+                              unitPrice: item.unitPrice,
+                              total: item.totalPrice
+                            })),
+                            subtotal: totalAmount,
+                            tax: taxAmount || 0,
+                            discount: manualDiscount || 0,
+                            total: finalAmount,
+                            notes: '',
+                            terms: 'Net 30'
+                          };
+                          setCreatedInvoice(invoiceData);
+                          setShowInvoicePreview(true);
+                        },
+                        variant: 'primary',
+                        icon: FileText,
+                      },
+                      {
                         label: 'New Sale',
                         onClick: () => {
                           // Modal will close automatically
@@ -4242,6 +4388,66 @@ const POSPageOptimized: React.FC = () => {
           items: currentReceipt?.items || [],
         }}
       />
+
+      {/* Invoice Preview Modal */}
+      {showInvoicePreview && createdInvoice && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {createdInvoice.invoiceNumber.startsWith('PREVIEW') ? 'Invoice Preview' : 'Invoice'}
+                </h2>
+                {createdInvoice.invoiceNumber.startsWith('PREVIEW') && (
+                  <p className="text-sm text-blue-600 mt-1">Review prices before payment</p>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setShowInvoicePreview(false);
+                  setCreatedInvoice(null);
+                }}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto max-h-[calc(100vh-200px)]">
+              <InvoiceTemplate
+                invoiceNumber={createdInvoice.invoiceNumber}
+                invoiceDate={createdInvoice.invoiceDate}
+                customer={createdInvoice.customer}
+                items={createdInvoice.items}
+                subtotal={createdInvoice.subtotal}
+                tax={createdInvoice.tax}
+                discount={createdInvoice.discount}
+                total={createdInvoice.total}
+                notes={createdInvoice.notes}
+                terms={createdInvoice.terms}
+                onPrint={() => window.print()}
+              />
+            </div>
+            <div className="p-6 border-t border-gray-200 flex gap-4">
+              <button
+                onClick={() => {
+                  setShowInvoicePreview(false);
+                  setCreatedInvoice(null);
+                }}
+                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-2"
+              >
+                <Printer className="w-5 h-5" />
+                Print Invoice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Variant Selection Modal for IMEI/Cart Updates */}
       {showVariantSelectionModal && selectedProductForVariants && (

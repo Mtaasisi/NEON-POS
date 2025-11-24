@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat } from 'lucide-react';
+import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat, FileText } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantCartItem from './VariantCartItem';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
@@ -40,6 +40,7 @@ interface POSCartSectionProps {
   onShowTradeInModal?: () => void;
   onShowDiscountModal: () => void;
   onClearDiscount: () => void;
+  onPreviewInvoice?: () => void;
   dynamicPricingEnabled?: boolean;
   totalAmount: number;
   discountAmount: number;
@@ -67,6 +68,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   onShowTradeInModal,
   onShowDiscountModal,
   onClearDiscount,
+  onPreviewInvoice,
   dynamicPricingEnabled = false,
   totalAmount,
   discountAmount,
@@ -381,6 +383,22 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                   </button>
                 )}
               </div>
+
+              {/* Preview Invoice Button - Show before payment */}
+              {onPreviewInvoice && cartItems.length > 0 && (
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    onPreviewInvoice();
+                  }}
+                  disabled={!selectedCustomer}
+                  className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg mt-3 flex items-center justify-center gap-2"
+                  title={!selectedCustomer ? "Please select a customer first to preview invoice" : "Preview invoice with current prices"}
+                >
+                  <FileText className="w-5 h-5" />
+                  Preview Invoice
+                </button>
+              )}
 
               {/* Process Payment Button - Full Width, Prominent & Larger */}
               <button

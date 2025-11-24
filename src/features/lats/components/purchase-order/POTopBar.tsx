@@ -2,7 +2,7 @@
 import React from 'react';
 import { 
   ShoppingBag, FileText, Plus, Package, RefreshCw, CheckCircle, 
-  Trash2, DollarSign, Truck, Coins, Building, Save
+  Trash2, DollarSign, Truck, Coins, Building, Save, User
 } from 'lucide-react';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { formatMoney, Currency } from '../../lib/purchaseOrderUtils';

@@ -8,8 +8,8 @@ import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import POTopBar from '../components/purchase-order/POTopBar';
 import {
   Search, QrCode, Plus, CheckCircle, XCircle, RefreshCw,
-  User, Phone, Command, Truck, Coins, DollarSign, ShoppingBag, AlertTriangle, X, Building, ShoppingCart, Package,
-  Keyboard, Upload, Bookmark, FileSpreadsheet, History, ChevronDown, ChevronUp, Loader2,
+  User, Phone, Mail, Command, Truck, Coins, DollarSign, ShoppingBag, AlertTriangle, X, Building, ShoppingCart, Package,
+  Keyboard, Upload, Bookmark, FileSpreadsheet, FileText, History, ChevronDown, ChevronUp, Loader2,
   Eye, Edit, Printer
 } from 'lucide-react';
 
@@ -2428,17 +2428,41 @@ const POcreate: React.FC = () => {
                        </div>
                      )}
                    </div>
-                ) : (
-                  <button
-                    onClick={() => setShowSupplierSearch(true)}
-                    className="w-full flex items-center justify-center gap-3 p-4 text-base border-2 border-orange-200 rounded-xl bg-white text-gray-900 hover:border-orange-300 hover:shadow-lg transition-all duration-200"
-                  >
-                    <Search className="w-5 h-5 text-orange-500" />
-                    <span className="text-gray-600">Select Supplier</span>
-                    <Plus className="w-4 h-4 text-orange-500" />
-                  </button>
-                )}
-              </div>
+                   ) : (
+                     <div 
+                       className="bg-gradient-to-br from-orange-50 via-amber-50 to-orange-50 rounded-xl border-2 border-dashed border-orange-300 shadow-md hover:shadow-lg transition-all duration-300 cursor-pointer"
+                       onClick={() => {
+                         playClickSound();
+                         setShowSupplierSearch(true);
+                       }}
+                     >
+                       <div className="p-6 text-center">
+                         <div className="flex flex-col items-center gap-4">
+                           <div className="w-16 h-16 bg-gradient-to-br from-orange-500 via-amber-500 to-orange-600 rounded-full flex items-center justify-center text-white shadow-lg">
+                             <Building className="w-8 h-8" />
+                           </div>
+                           <div>
+                             <h3 className="text-lg font-semibold text-gray-900 mb-1">Select Supplier</h3>
+                             <p className="text-sm text-gray-600">Choose a supplier to create purchase order</p>
+                             <p className="text-xs text-gray-500 mt-2">Click here or press Ctrl+Shift+S</p>
+                           </div>
+                           <button
+                             onClick={(e) => {
+                               e.stopPropagation();
+                               playClickSound();
+                               setShowSupplierSearch(true);
+                             }}
+                             className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-lg font-medium hover:from-orange-600 hover:to-amber-600 transition-all duration-200 shadow-md hover:shadow-lg"
+                           >
+                             <Plus className="w-5 h-5" />
+                             <span>Select Supplier</span>
+                           </button>
+                         </div>
+                       </div>
+                     </div>
+                   )}
+                 </div>
+               </div>
 
               {/* Low Stock Suggestions Widget */}
               <div className="mb-4">
@@ -2463,7 +2487,6 @@ const POcreate: React.FC = () => {
                   />
                 </div>
               )}
-              </div>
 
               {/* Cart Items */}
               <div className="flex-1 overflow-y-auto">

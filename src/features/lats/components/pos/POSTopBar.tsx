@@ -30,6 +30,7 @@ interface POSTopBarProps {
   totalAmount: number;
   onProcessPayment: () => void;
   onClearCart: () => void;
+  onPreviewInvoice?: () => void;
   onScanQrCode: () => void;
   onAddCustomer: () => void;
   onViewReceipts: () => void;
@@ -57,6 +58,7 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   totalAmount,
   onProcessPayment,
   onClearCart,
+  onPreviewInvoice,
   onScanQrCode,
   onAddCustomer,
   onViewReceipts,
@@ -292,6 +294,19 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
             {/* Cart Actions - Show when cart has items */}
               {cartItemsCount > 0 && (
               <div className="flex items-center gap-2">
+                {onPreviewInvoice && (
+                  <button
+                    onClick={onPreviewInvoice}
+                    disabled={!hasSelectedCustomer}
+                    className="flex items-center justify-center gap-2 px-4 py-3 min-w-[100px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-400 disabled:to-gray-400 text-white transition-all duration-300 shadow-sm hover:shadow-md"
+                    title={!hasSelectedCustomer ? "Please select a customer first" : "Preview invoice with current prices"}
+                  >
+                    <FileText size={18} />
+                    <span className="hidden md:inline text-sm font-medium">Invoice</span>
+                    <span className="md:hidden text-xs font-medium">Inv</span>
+                  </button>
+                )}
+                
                 <button
                   onClick={handleProcessPayment}
                   disabled={isProcessingPayment || !hasSelectedCustomer}

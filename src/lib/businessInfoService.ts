@@ -44,9 +44,21 @@ class BusinessInfoService {
         };
         this.cacheTimestamp = now;
         
-
+        // Log successful fetch (development only)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Business info loaded from database:', {
+            name: this.cachedInfo.name,
+            phone: this.cachedInfo.phone,
+            email: this.cachedInfo.email,
+            website: this.cachedInfo.website,
+            address: this.cachedInfo.address,
+            hasLogo: !!this.cachedInfo.logo
+          });
+        }
         
         return this.cachedInfo;
+      } else if (error) {
+        console.warn('⚠️ Error loading business info from lats_pos_general_settings:', error);
       }
     } catch (err) {
       console.warn('⚠️ Could not load business info from lats_pos_general_settings:', err);
