@@ -1819,7 +1819,7 @@ const PaymentAccountManagement: React.FC = () => {
                                 )}
                               </div>
                             );
-                          })}
+                          )})}
                       </div>
                     )}
                   </div>
