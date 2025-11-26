@@ -1936,89 +1936,102 @@ const POSPageOptimized: React.FC = () => {
         // Don't return, just show warning
       }
 
-      // Validate IMEI Variants are selected for items that require them
-      const itemsRequiringIMEIVariants = await Promise.all(
-        cartItems.map(async (item) => {
-          try {
-            console.log('🔍 Checking IMEI requirement for item:', {
-              productName: item.productName,
-              variantId: item.variantId,
-              variantName: item.variantName,
-              selectedSerialNumbers: item.selectedSerialNumbers,
-              selectedIMEIVariants: item.selectedIMEIVariants
-            });
+      // ✅ OPTIMIZED: Validate IMEI Variants - batch all queries instead of per-item
+      const itemsRequiringIMEIVariants = await (async () => {
+        try {
+          // Separate items by type for batch processing
+          const itemsWithVariants = cartItems.filter(item => item.variantId && item.variantId !== 'default');
+          const itemsWithoutVariants = cartItems.filter(item => !item.variantId || item.variantId === 'default');
+          
+          const variantIds = itemsWithVariants.map(item => item.variantId);
+          const productIds = itemsWithoutVariants.map(item => item.productId);
 
-            // Check if this specific variant requires IMEI selection
-            let requiresIMEI = false;
+          // Batch query 1: Get all variant attributes and check for IMEI children in one query
+          const variantDataMap = new Map();
+          if (variantIds.length > 0) {
+            const { data: variants } = await supabase
+              .from('lats_product_variants')
+              .select('id, variant_attributes, parent_variant_id, variant_type')
+              .in('id', variantIds)
+              .eq('is_active', true);
 
-            if (item.variantId && item.variantId !== 'default') {
-              // First check if this variant has IMEI child variants
-              const { count: imeiChildrenCount } = await supabase
+            variants?.forEach(v => variantDataMap.set(v.id, v));
+
+            // Batch query 2: Check for IMEI children for all parent variants at once
+            const parentVariantIds = Array.from(new Set(variantIds));
+            if (parentVariantIds.length > 0) {
+              const { data: imeiChildren } = await supabase
                 .from('lats_product_variants')
-                .select('id', { count: 'exact', head: true })
-                .eq('parent_variant_id', item.variantId)
+                .select('parent_variant_id')
+                .in('parent_variant_id', parentVariantIds)
                 .eq('variant_type', 'imei_child')
                 .eq('is_active', true)
                 .gt('quantity', 0);
 
-              if ((imeiChildrenCount || 0) > 0) {
-                // Variant has IMEI children, requires IMEI selection
-                console.log(`📱 Variant ${item.variantId} has ${imeiChildrenCount} IMEI children - REQUIRES IMEI selection`);
-                requiresIMEI = true;
-              } else {
-                // Check if this variant itself is an IMEI variant
-                const { data: variant } = await supabase
-                  .from('lats_product_variants')
-                  .select('variant_attributes')
-                  .eq('id', item.variantId)
-                  .eq('is_active', true)
-                  .single();
-
-                console.log(`📱 Variant ${item.variantId} IMEI check:`, {
-                  hasIMEIAttribute: !!variant?.variant_attributes?.imei,
-                  variantAttributes: variant?.variant_attributes
-                });
-
-                // If it's an IMEI variant, no further selection needed
-                // If it's not an IMEI variant and has no IMEI children, no selection needed
-                requiresIMEI = false;
-              }
-            } else {
-              // No specific variant selected (default variant)
-              // Check if the product has any variants that require IMEI
-              const { data: imeiVariants } = await supabase
-                .from('lats_product_variants')
-                .select('id')
-                .eq('product_id', item.productId)
-                .not("variant_attributes->>'imei'", 'is', null)
-                .eq('is_active', true)
-                .gt('quantity', 0)
-                .limit(1);
-
-              requiresIMEI = imeiVariants && imeiVariants.length > 0;
+              const parentsWithIMEIChildren = new Set(imeiChildren?.map(c => c.parent_variant_id) || []);
+              
+              // Update variant data map with IMEI children info
+              variants?.forEach(v => {
+                if (parentsWithIMEIChildren.has(v.id)) {
+                  variantDataMap.set(v.id, { ...v, hasIMEIChildren: true });
+                }
+              });
             }
-
-            if (requiresIMEI) {
-              // Check if IMEI variants are selected
-              const hasSelected = item.selectedIMEIVariants && item.selectedIMEIVariants.length > 0;
-
-              console.log(`⚠️ Item ${item.productName} (${item.variantName}) REQUIRES IMEI - hasSelected: ${hasSelected}`);
-
-              return {
-                item,
-                requiresIMEI: true,
-                hasSelected: hasSelected
-              };
-            }
-
-            console.log(`✅ Item ${item.productName} (${item.variantName}) does NOT require IMEI`);
-            return null;
-          } catch (error) {
-            console.warn('Error checking IMEI variants for item:', item, error);
-            return null;
           }
-        })
-      );
+
+          // Batch query 3: Check products without variants for IMEI requirements
+          const productsWithIMEI = new Set();
+          if (productIds.length > 0) {
+            const { data: imeiVariants } = await supabase
+              .from('lats_product_variants')
+              .select('product_id')
+              .in('product_id', productIds)
+              .not("variant_attributes->>'imei'", 'is', null)
+              .eq('is_active', true)
+              .gt('quantity', 0);
+
+            imeiVariants?.forEach(v => productsWithIMEI.add(v.product_id));
+          }
+
+          // Process results
+          return cartItems.map(item => {
+            try {
+              let requiresIMEI = false;
+
+              if (item.variantId && item.variantId !== 'default') {
+                const variantData = variantDataMap.get(item.variantId);
+                if (variantData?.hasIMEIChildren) {
+                  requiresIMEI = true;
+                } else {
+                  // Check if variant itself has IMEI attribute
+                  requiresIMEI = false; // Already an IMEI variant, no selection needed
+                }
+              } else {
+                // Check if product has IMEI variants
+                requiresIMEI = productsWithIMEI.has(item.productId);
+              }
+
+              if (requiresIMEI) {
+                const hasSelected = item.selectedIMEIVariants && item.selectedIMEIVariants.length > 0;
+                return {
+                  item,
+                  requiresIMEI: true,
+                  hasSelected: hasSelected
+                };
+              }
+
+              return null;
+            } catch (error) {
+              console.warn('Error processing IMEI check for item:', item, error);
+              return null;
+            }
+          });
+        } catch (error) {
+          console.warn('Error in batch IMEI validation:', error);
+          // Fallback to original behavior if batch fails
+          return cartItems.map(() => null);
+        }
+      })();
 
       const itemsMissingIMEI = itemsRequiringIMEIVariants
         .filter(result => result !== null && result.requiresIMEI && !result.hasSelected);
@@ -3767,27 +3780,37 @@ const POSPageOptimized: React.FC = () => {
               }
             }
 
-            // ✅ PRE-PAYMENT STOCK VALIDATION: Validate all items have sufficient stock before processing payment
+            // ✅ OPTIMIZED: PRE-PAYMENT STOCK VALIDATION - batch check all items at once
             // This prevents payment processing when stock is insufficient
             console.log('🔍 Pre-payment stock validation for', validCartItems.length, 'items...');
-            const stockValidationErrors: string[] = [];
             
-            for (const item of validCartItems) {
-              const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
-              
-              if (!stockCheck.available) {
-                const errorMsg = `${item.productName} (${item.variantName}): ${stockCheck.error || 'Insufficient stock'}`;
+            // Batch stock check - validate all items in parallel
+            const stockChecks = await Promise.all(
+              validCartItems.map(item => 
+                saleProcessingService.checkStockAvailability(item.variantId, item.quantity)
+                  .then(result => ({ item, result }))
+                  .catch(error => ({ item, result: { available: false, error: error.message } }))
+              )
+            );
+            
+            const stockValidationErrors: string[] = [];
+            const itemsWithInsufficientStock: typeof validCartItems = [];
+            
+            stockChecks.forEach(({ item, result }) => {
+              if (!result.available) {
+                const errorMsg = `${item.productName} (${item.variantName}): ${result.error || 'Insufficient stock'}`;
                 stockValidationErrors.push(errorMsg);
+                itemsWithInsufficientStock.push(item);
                 console.error('❌ Pre-payment stock validation failed:', {
                   productName: item.productName,
                   variantName: item.variantName,
                   variantId: item.variantId,
                   requestedQuantity: item.quantity,
-                  availableStock: stockCheck.availableStock,
-                  error: stockCheck.error
+                  availableStock: result.availableStock,
+                  error: result.error
                 });
               }
-            }
+            });
             
             if (stockValidationErrors.length > 0) {
               const errorMessage = `Cannot process payment. Stock issues detected:\n${stockValidationErrors.join('\n')}`;
@@ -3795,13 +3818,9 @@ const POSPageOptimized: React.FC = () => {
               toast.error(errorMessage, { duration: 6000 });
               
               // Remove items with insufficient stock from cart
-              const itemsToKeep: typeof validCartItems = [];
-              for (const item of validCartItems) {
-                const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
-                if (stockCheck.available) {
-                  itemsToKeep.push(item);
-                }
-              }
+              const itemsToKeep = validCartItems.filter(item => 
+                !itemsWithInsufficientStock.some(badItem => badItem.variantId === item.variantId)
+              );
               
               if (itemsToKeep.length < validCartItems.length) {
                 setCartItems(itemsToKeep);

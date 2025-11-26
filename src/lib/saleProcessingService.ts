@@ -400,6 +400,31 @@ class SaleProcessingService {
       const variantDataMap = new Map(variants?.map(v => [v.id, v]) || []);
       const inventoryItemMap = new Map(inventoryItems?.map(i => [i.id, i]) || []);
 
+      // ✅ OPTIMIZED: Pre-fetch all parent variant children in batch
+      const parentVariantIds = Array.from(new Set(
+        items
+          .map(item => {
+            const variantData = variantDataMap.get(item.variantId);
+            return (variantData?.is_parent || variantData?.variant_type === 'parent') ? item.variantId : null;
+          })
+          .filter((id): id is string => id !== null)
+      ));
+      
+      const parentChildrenStockMap = new Map<string, number>();
+      if (parentVariantIds.length > 0) {
+        const { data: allChildren } = await supabase
+          .from('lats_product_variants')
+          .select('parent_variant_id, quantity')
+          .in('parent_variant_id', parentVariantIds)
+          .eq('is_active', true);
+        
+        // Calculate total stock for each parent variant
+        allChildren?.forEach(child => {
+          const current = parentChildrenStockMap.get(child.parent_variant_id) || 0;
+          parentChildrenStockMap.set(child.parent_variant_id, current + (child.quantity || 0));
+        });
+      }
+
       // Validate stock and calculate costs in single pass
       const itemsWithCosts: SaleItem[] = [];
       
@@ -526,17 +551,12 @@ class SaleProcessingService {
           continue; // Skip to next item
         }
         
-        // For parent variants, calculate stock from children
+        // ✅ OPTIMIZED: For parent variants, use pre-fetched children stock
         let availableStock = variantData.quantity;
         if (variantData.is_parent || variantData.variant_type === 'parent') {
           console.warn('⚠️ Attempting to sell parent variant - stock calculated from children');
-          const { data: children } = await supabase
-            .from('lats_product_variants')
-            .select('quantity')
-            .eq('parent_variant_id', item.variantId)
-            .eq('is_active', true);
-          
-          availableStock = children?.reduce((sum, child) => sum + (child.quantity || 0), 0) || 0;
+          // Use pre-fetched children stock from batch query
+          availableStock = parentChildrenStockMap.get(item.variantId) || 0;
         }
         
         if (availableStock < item.quantity) {
