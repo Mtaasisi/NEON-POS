@@ -230,6 +230,162 @@ class SaleProcessingService {
     }
   }
 
+  // ✅ OPTIMIZED: Batch check stock availability for multiple items at once
+  // This is much faster than checking items sequentially
+  async checkStockAvailabilityBatch(items: Array<{ variantId: string; quantity: number; productName?: string; variantName?: string }>): Promise<{
+    results: Array<{ variantId: string; available: boolean; availableStock: number; error?: string }>;
+    allAvailable: boolean;
+  }> {
+    try {
+      if (items.length === 0) {
+        return { results: [], allAvailable: true };
+      }
+
+      const variantIds = items.map(item => item.variantId).filter(id => isValidUuid(id));
+      
+      if (variantIds.length === 0) {
+        return {
+          results: items.map(item => ({
+            variantId: item.variantId,
+            available: false,
+            availableStock: 0,
+            error: 'Invalid variant ID format'
+          })),
+          allAvailable: false
+        };
+      }
+
+      // Batch query all variants and inventory items at once
+      const [variantsResult, inventoryResult] = await Promise.all([
+        supabase
+          .from('lats_product_variants')
+          .select('id, quantity, is_parent, variant_type, parent_variant_id, is_active')
+          .in('id', variantIds),
+        supabase
+          .from('inventory_items')
+          .select('id, status, product_id, variant_id')
+          .in('id', variantIds)
+      ]);
+
+      const variants = variantsResult.data || [];
+      const inventoryItems = inventoryResult.data || [];
+
+      // Create maps for quick lookup
+      const variantMap = new Map(variants.map(v => [v.id, v]));
+      const inventoryMap = new Map(inventoryItems.map(i => [i.id, i]));
+
+      // Get parent variant IDs that need child stock calculation
+      const parentVariantIds = variants
+        .filter(v => (v.is_parent || v.variant_type === 'parent') && v.id)
+        .map(v => v.id);
+
+      // Batch query children for all parent variants at once
+      let childrenMap = new Map<string, number>();
+      if (parentVariantIds.length > 0) {
+        const { data: children } = await supabase
+          .from('lats_product_variants')
+          .select('parent_variant_id, quantity')
+          .in('parent_variant_id', parentVariantIds)
+          .eq('is_active', true);
+
+        if (children) {
+          children.forEach(child => {
+            if (child.parent_variant_id) {
+              const current = childrenMap.get(child.parent_variant_id) || 0;
+              childrenMap.set(child.parent_variant_id, current + (child.quantity || 0));
+            }
+          });
+        }
+      }
+
+      // Check each item
+      const results = items.map(item => {
+        const variant = variantMap.get(item.variantId);
+        const inventoryItem = inventoryMap.get(item.variantId);
+
+        // Handle inventory items (serial number devices)
+        if (inventoryItem && !variant) {
+          if (inventoryItem.status !== 'available') {
+            return {
+              variantId: item.variantId,
+              available: false,
+              availableStock: 0,
+              error: `Item is not available for sale (status: ${inventoryItem.status})`
+            };
+          }
+          if (item.quantity > 1) {
+            return {
+              variantId: item.variantId,
+              available: false,
+              availableStock: 1,
+              error: 'Serial number devices can only be sold one at a time'
+            };
+          }
+          return {
+            variantId: item.variantId,
+            available: true,
+            availableStock: 1
+          };
+        }
+
+        // Handle regular variants
+        if (!variant) {
+          return {
+            variantId: item.variantId,
+            available: false,
+            availableStock: 0,
+            error: 'Variant not found'
+          };
+        }
+
+        if (variant.is_active === false) {
+          return {
+            variantId: item.variantId,
+            available: false,
+            availableStock: 0,
+            error: 'Variant is not active'
+          };
+        }
+
+        // Calculate available stock (from children if parent variant)
+        let availableStock = variant.quantity || 0;
+        if (variant.is_parent || variant.variant_type === 'parent') {
+          availableStock = childrenMap.get(item.variantId) || 0;
+        }
+
+        if (availableStock < item.quantity) {
+          return {
+            variantId: item.variantId,
+            available: false,
+            availableStock,
+            error: `Insufficient stock. Available: ${availableStock}, Requested: ${item.quantity}`
+          };
+        }
+
+        return {
+          variantId: item.variantId,
+          available: true,
+          availableStock
+        };
+      });
+
+      const allAvailable = results.every(r => r.available);
+
+      return { results, allAvailable };
+    } catch (error) {
+      console.error('❌ Error in batch stock check:', error);
+      return {
+        results: items.map(item => ({
+          variantId: item.variantId,
+          available: false,
+          availableStock: 0,
+          error: error instanceof Error ? error.message : 'Failed to check stock availability'
+        })),
+        allAvailable: false
+      };
+    }
+  }
+
   // Process a complete sale with all necessary operations
   async processSale(saleData: Omit<SaleData, 'id' | 'saleNumber' | 'createdAt'>): Promise<ProcessSaleResult> {
     try {

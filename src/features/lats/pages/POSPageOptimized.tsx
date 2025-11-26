@@ -3767,52 +3767,66 @@ const POSPageOptimized: React.FC = () => {
               }
             }
 
-            // ✅ PRE-PAYMENT STOCK VALIDATION: Validate all items have sufficient stock before processing payment
+            // ✅ OPTIMIZED PRE-PAYMENT STOCK VALIDATION: Batch check all items at once (much faster!)
             // This prevents payment processing when stock is insufficient
-            console.log('🔍 Pre-payment stock validation for', validCartItems.length, 'items...');
-            const stockValidationErrors: string[] = [];
+            // Note: Stock is already validated when items are added to cart, but we do a final check here
+            // to catch any changes that might have occurred between adding to cart and payment
+            console.log('🔍 Pre-payment stock validation for', validCartItems.length, 'items (batch check)...');
             
-            for (const item of validCartItems) {
-              const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
-              
-              if (!stockCheck.available) {
-                const errorMsg = `${item.productName} (${item.variantName}): ${stockCheck.error || 'Insufficient stock'}`;
-                stockValidationErrors.push(errorMsg);
-                console.error('❌ Pre-payment stock validation failed:', {
-                  productName: item.productName,
-                  variantName: item.variantName,
-                  variantId: item.variantId,
-                  requestedQuantity: item.quantity,
-                  availableStock: stockCheck.availableStock,
-                  error: stockCheck.error
-                });
-              }
-            }
+            // ✅ PERFORMANCE FIX: Use batch stock check instead of sequential loop
+            // This reduces N database queries to just 2-3 queries total
+            const batchStockCheck = await saleProcessingService.checkStockAvailabilityBatch(
+              validCartItems.map(item => ({
+                variantId: item.variantId,
+                quantity: item.quantity,
+                productName: item.productName,
+                variantName: item.variantName
+              }))
+            );
             
-            if (stockValidationErrors.length > 0) {
-              const errorMessage = `Cannot process payment. Stock issues detected:\n${stockValidationErrors.join('\n')}`;
-              console.error('❌ Pre-payment stock validation failed:', stockValidationErrors);
-              toast.error(errorMessage, { duration: 6000 });
-              
-              // Remove items with insufficient stock from cart
+            if (!batchStockCheck.allAvailable) {
+              const stockValidationErrors: string[] = [];
               const itemsToKeep: typeof validCartItems = [];
+              
+              // Map results back to items
+              const stockResultMap = new Map(
+                batchStockCheck.results.map(r => [r.variantId, r])
+              );
+              
               for (const item of validCartItems) {
-                const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
-                if (stockCheck.available) {
+                const stockResult = stockResultMap.get(item.variantId);
+                if (stockResult && stockResult.available) {
                   itemsToKeep.push(item);
-                }
-              }
-              
-              if (itemsToKeep.length < validCartItems.length) {
-                setCartItems(itemsToKeep);
-                if (itemsToKeep.length === 0) {
-                  toast.error('All items were removed due to insufficient stock. Please add items to cart.');
                 } else {
-                  toast(`${validCartItems.length - itemsToKeep.length} item(s) removed due to insufficient stock.`, { icon: '⚠️' });
+                  const errorMsg = `${item.productName} (${item.variantName}): ${stockResult?.error || 'Insufficient stock'}`;
+                  stockValidationErrors.push(errorMsg);
+                  console.error('❌ Pre-payment stock validation failed:', {
+                    productName: item.productName,
+                    variantName: item.variantName,
+                    variantId: item.variantId,
+                    requestedQuantity: item.quantity,
+                    availableStock: stockResult?.availableStock || 0,
+                    error: stockResult?.error
+                  });
                 }
               }
               
-              return; // Stop payment processing
+              if (stockValidationErrors.length > 0) {
+                const errorMessage = `Cannot process payment. Stock issues detected:\n${stockValidationErrors.join('\n')}`;
+                console.error('❌ Pre-payment stock validation failed:', stockValidationErrors);
+                toast.error(errorMessage, { duration: 6000 });
+                
+                if (itemsToKeep.length < validCartItems.length) {
+                  setCartItems(itemsToKeep);
+                  if (itemsToKeep.length === 0) {
+                    toast.error('All items were removed due to insufficient stock. Please add items to cart.');
+                  } else {
+                    toast(`${validCartItems.length - itemsToKeep.length} item(s) removed due to insufficient stock.`, { icon: '⚠️' });
+                  }
+                }
+                
+                return; // Stop payment processing
+              }
             }
             
             console.log('✅ Pre-payment stock validation passed for all items');
