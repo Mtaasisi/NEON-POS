@@ -3718,19 +3718,23 @@ const POSPageOptimized: React.FC = () => {
             // This catches deleted/moved variants early and provides better UX
             // Note: Query without branch/is_active filters to match sale processing service behavior
             // ✅ FIX: Check both lats_product_variants AND inventory_items (for serial number devices)
+            // ✅ OPTIMIZATION: Parallelize both queries for better performance
             const variantIds = validCartItems.map(item => item.variantId);
             
-            // Check lats_product_variants table
-            const { data: existingVariants, error: variantCheckError } = await supabase
-              .from('lats_product_variants')
-              .select('id, is_active, branch_id, is_shared, variant_type')
-              .in('id', variantIds);
+            // Check both tables in parallel for better performance
+            const [variantCheckResult, inventoryCheckResult] = await Promise.all([
+              supabase
+                .from('lats_product_variants')
+                .select('id, is_active, branch_id, is_shared, variant_type')
+                .in('id', variantIds),
+              supabase
+                .from('inventory_items')
+                .select('id, status, variant_id, product_id')
+                .in('id', variantIds)
+            ]);
 
-            // ✅ FIX: Also check inventory_items table for serial number devices (legacy items)
-            const { data: existingInventoryItems, error: inventoryCheckError } = await supabase
-              .from('inventory_items')
-              .select('id, status, variant_id, product_id')
-              .in('id', variantIds);
+            const { data: existingVariants, error: variantCheckError } = variantCheckResult;
+            const { data: existingInventoryItems, error: inventoryCheckError } = inventoryCheckResult;
 
             if (variantCheckError || inventoryCheckError) {
               console.warn('⚠️ Error checking variant existence (will be validated by sale service):', variantCheckError || inventoryCheckError);
@@ -3769,22 +3773,41 @@ const POSPageOptimized: React.FC = () => {
 
             // ✅ PRE-PAYMENT STOCK VALIDATION: Validate all items have sufficient stock before processing payment
             // This prevents payment processing when stock is insufficient
+            // ✅ OPTIMIZATION: Parallelize stock checks for better performance
             console.log('🔍 Pre-payment stock validation for', validCartItems.length, 'items...');
-            const stockValidationErrors: string[] = [];
             
-            for (const item of validCartItems) {
-              const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
-              
-              if (!stockCheck.available) {
-                const errorMsg = `${item.productName} (${item.variantName}): ${stockCheck.error || 'Insufficient stock'}`;
+            // Check stock availability for all items in parallel
+            const stockCheckResults = await Promise.all(
+              validCartItems.map(item => 
+                saleProcessingService.checkStockAvailability(item.variantId, item.quantity)
+                  .then(result => ({ item, result }))
+                  .catch(error => ({ 
+                    item, 
+                    result: { 
+                      available: false, 
+                      availableStock: 0, 
+                      error: error instanceof Error ? error.message : 'Unknown error' 
+                    } 
+                  }))
+              )
+            );
+            
+            // Process results and identify items with insufficient stock
+            const stockValidationErrors: string[] = [];
+            const itemsWithStockIssues: typeof validCartItems = [];
+            
+            for (const { item, result } of stockCheckResults) {
+              if (!result.available) {
+                const errorMsg = `${item.productName} (${item.variantName}): ${result.error || 'Insufficient stock'}`;
                 stockValidationErrors.push(errorMsg);
+                itemsWithStockIssues.push(item);
                 console.error('❌ Pre-payment stock validation failed:', {
                   productName: item.productName,
                   variantName: item.variantName,
                   variantId: item.variantId,
                   requestedQuantity: item.quantity,
-                  availableStock: stockCheck.availableStock,
-                  error: stockCheck.error
+                  availableStock: result.availableStock,
+                  error: result.error
                 });
               }
             }
@@ -3795,13 +3818,10 @@ const POSPageOptimized: React.FC = () => {
               toast.error(errorMessage, { duration: 6000 });
               
               // Remove items with insufficient stock from cart
-              const itemsToKeep: typeof validCartItems = [];
-              for (const item of validCartItems) {
-                const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
-                if (stockCheck.available) {
-                  itemsToKeep.push(item);
-                }
-              }
+              // ✅ OPTIMIZATION: Reuse stock check results instead of checking again
+              const itemsToKeep = validCartItems.filter(item => 
+                !itemsWithStockIssues.some(issueItem => issueItem.id === item.id)
+              );
               
               if (itemsToKeep.length < validCartItems.length) {
                 setCartItems(itemsToKeep);
