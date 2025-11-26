@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { Bell, Mail, Phone, MessageCircle, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useSettingsSave } from '../../../context/SettingsSaveContext';
 
 interface NotificationSettingsProps {
   isActive?: boolean;
 }
 
 const NotificationSettings: React.FC<NotificationSettingsProps> = ({ isActive }) => {
+  const { registerSaveHandler, unregisterSaveHandler, setHasChanges } = useSettingsSave();
   const [settings, setSettings] = useState({
     emailNotifications: true,
     smsNotifications: false,
@@ -20,18 +22,42 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({ isActive })
     marketingEmails: false
   });
 
-  const handleSave = () => {
+  useEffect(() => {
+    const handleSave = async () => {
     localStorage.setItem('notificationSettings', JSON.stringify(settings));
     toast.success('Notification settings saved');
   };
+    
+    registerSaveHandler('notification-settings', handleSave);
+    return () => unregisterSaveHandler('notification-settings');
+  }, [settings, registerSaveHandler, unregisterSaveHandler]);
+
+  useEffect(() => {
+    setHasChanges(true);
+  }, [settings, setHasChanges]);
 
   return (
-    <div className="space-y-6">
-      <GlassCard className="p-6">
-        <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
-          <Bell className="w-5 h-5 text-indigo-600" />
-          Notification Preferences
-        </h3>
+    <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+      {/* Icon Header - Fixed - Matching Store Management style */}
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-yellow-600 rounded-full flex items-center justify-center shadow-lg">
+            <Bell className="w-8 h-8 text-white" />
+          </div>
+          
+          {/* Text */}
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">Notification Preferences</h3>
+            <p className="text-sm text-gray-600">Configure notification channels and preferences</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="py-6">
+          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
 
         <div className="space-y-6">
           {/* Notification Channels */}
@@ -130,17 +156,9 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({ isActive })
             </div>
           </div>
         </div>
-
-        <div className="flex justify-end mt-6">
-          <GlassButton
-            onClick={handleSave}
-            className="flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            Save Notification Settings
-          </GlassButton>
         </div>
-      </GlassCard>
+      </div>
+      </div>
     </div>
   );
 };

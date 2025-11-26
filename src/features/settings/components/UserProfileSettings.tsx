@@ -6,6 +6,7 @@ import { User, Mail, Phone, MapPin, Save, Building2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { businessInfoService } from '../../../lib/businessInfoService';
+import { useSettingsSave } from '../../../context/SettingsSaveContext';
 
 interface UserProfileSettingsProps {
   isActive: boolean;
@@ -13,6 +14,7 @@ interface UserProfileSettingsProps {
 
 const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ isActive }) => {
   const { user } = useAuth();
+  const { registerSaveHandler, unregisterSaveHandler, setHasChanges } = useSettingsSave();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -61,12 +63,10 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ isActive }) =
     }
   };
 
-  const handleSave = async () => {
-    if (!settingsId) {
-      toast.error('Settings ID not found');
-      return;
-    }
+  useEffect(() => {
+    if (!settingsId) return;
 
+  const handleSave = async () => {
     try {
       setSaving(true);
       // @ts-ignore - Neon query builder implements thenable interface
@@ -97,6 +97,16 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ isActive }) =
       setSaving(false);
     }
   };
+    
+    registerSaveHandler('user-profile-settings', handleSave);
+    return () => unregisterSaveHandler('user-profile-settings');
+  }, [formData, settingsId, registerSaveHandler, unregisterSaveHandler]);
+
+  useEffect(() => {
+    if (settingsId) {
+      setHasChanges(true);
+    }
+  }, [formData, settingsId, setHasChanges]);
 
   if (!isActive) return null;
 
@@ -109,15 +119,27 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ isActive }) =
   }
 
   return (
-    <div className="space-y-6">
-      <GlassCard className="p-6">
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-            <Building2 className="w-5 h-5 text-indigo-600" />
-            Business Profile Information
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">Update your business information below</p>
+    <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+      {/* Icon Header - Fixed - Matching Store Management style */}
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+            <Building2 className="w-8 h-8 text-white" />
+          </div>
+          
+          {/* Text */}
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">Business Profile Information</h3>
+            <p className="text-sm text-gray-600">Update your business information below</p>
+          </div>
         </div>
+      </div>
+
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="py-6">
+          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -189,28 +211,9 @@ const UserProfileSettings: React.FC<UserProfileSettingsProps> = ({ isActive }) =
               className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
             />
           </div>
+          </div>
         </div>
-
-        <div className="flex justify-end mt-6">
-          <GlassButton
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Save Changes
-              </>
-            )}
-          </GlassButton>
-        </div>
-      </GlassCard>
+      </div>
     </div>
   );
 };

@@ -30,6 +30,7 @@ import AddProductModal from '../components/product/AddProductModal';
 import PurchaseCartItem from '../components/purchase-order/PurchaseCartItem';
 import ProductDetailModal from '../components/purchase-order/ProductDetailModal';
 import OrderManagementModal from '../components/purchase-order/OrderManagementModal';
+import InstallmentManagementModal from '../components/pos/InstallmentManagementModal';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
 import LoadingSpinner from '../../../components/ui/LoadingSpinner';
@@ -787,6 +788,7 @@ const POcreate: React.FC = () => {
   const [showShippingConfigModal, setShowShippingConfigModal] = useState(false);
   const [createdPurchaseOrder, setCreatedPurchaseOrder] = useState<any>(null);
   const [showOrderManagementModal, setShowOrderManagementModal] = useState(false);
+  const [showInstallmentManagementModal, setShowInstallmentManagementModal] = useState(false);
   const [showComprehensivePaymentModal, setShowComprehensivePaymentModal] = useState(false);
   const [showPOAnalyticsModal, setShowPOAnalyticsModal] = useState(false);
   const [showPOCollaborationModal, setShowPOCollaborationModal] = useState(false);
@@ -2010,6 +2012,7 @@ const POcreate: React.FC = () => {
         onAddSupplier={() => setShowAddSupplierModal(true)}
         onAddProduct={() => setShowAddProductModal(true)}
         onViewPurchaseOrders={() => setShowOrderManagementModal(true)}
+        onOpenInstallmentManagement={() => setShowInstallmentManagementModal(true)}
         isCreatingPO={isCreatingPO}
         isSavingDraft={isSavingDraft}
         hasSelectedSupplier={!!selectedSupplier}
@@ -2807,6 +2810,12 @@ const POcreate: React.FC = () => {
       <OrderManagementModal
         isOpen={showOrderManagementModal}
         onClose={() => setShowOrderManagementModal(false)}
+      />
+
+      {/* Installment Management Modal */}
+      <InstallmentManagementModal
+        isOpen={showInstallmentManagementModal}
+        onClose={() => setShowInstallmentManagementModal(false)}
       />
 
       {/* Draft Modal */}

@@ -74,6 +74,108 @@ class InstallmentService {
     };
   }
 
+  // Validate and get valid branch_id from lats_branches
+  private async getValidBranchId(branchId?: string): Promise<string | undefined> {
+    if (!branchId) {
+      console.log('ℹ️ [InstallmentService] No branch_id provided, will use default or NULL');
+      return undefined;
+    }
+
+    // Check if branch exists in lats_branches
+    const { data: branch, error } = await supabase
+      .from('lats_branches')
+      .select('id')
+      .eq('id', branchId)
+      .single();
+
+    if (error || !branch) {
+      console.warn('⚠️ [InstallmentService] Branch ID not found in lats_branches:', branchId);
+      console.log('🔄 [InstallmentService] Attempting to sync branch from store_locations...');
+      
+      // Try to sync the branch from store_locations to lats_branches
+      const { data: storeLocation } = await supabase
+        .from('store_locations')
+        .select('id, name, is_active, created_at, updated_at')
+        .eq('id', branchId)
+        .single();
+
+      if (storeLocation) {
+        // Insert into lats_branches
+        const { data: syncedBranch, error: syncError } = await supabase
+          .from('lats_branches')
+          .insert({
+            id: storeLocation.id,
+            name: storeLocation.name,
+            is_active: storeLocation.is_active,
+            created_at: storeLocation.created_at,
+            updated_at: storeLocation.updated_at
+          })
+          .select('id')
+          .single();
+
+        if (syncError) {
+          // If insert fails (maybe due to conflict), try to get existing branch
+          const { data: existingBranch } = await supabase
+            .from('lats_branches')
+            .select('id')
+            .eq('id', branchId)
+            .single();
+
+          if (existingBranch) {
+            console.log('✅ [InstallmentService] Branch found after sync attempt');
+            return existingBranch.id;
+          }
+
+          console.error('❌ [InstallmentService] Failed to sync branch:', syncError);
+          // Fallback: get default branch or first active branch
+          return await this.getDefaultBranchId();
+        }
+
+        console.log('✅ [InstallmentService] Branch synced successfully');
+        return syncedBranch.id;
+      } else {
+        console.warn('⚠️ [InstallmentService] Branch not found in store_locations either');
+        return await this.getDefaultBranchId();
+      }
+    }
+
+    console.log('✅ [InstallmentService] Branch ID validated:', branchId);
+    return branch.id;
+  }
+
+  // Get default branch ID from lats_branches
+  private async getDefaultBranchId(): Promise<string | undefined> {
+    // Try to get main branch first
+    const { data: mainBranch } = await supabase
+      .from('lats_branches')
+      .select('id')
+      .eq('is_active', true)
+      .order('is_main', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (mainBranch) {
+      console.log('✅ [InstallmentService] Using default branch:', mainBranch.id);
+      return mainBranch.id;
+    }
+
+    // If no main branch, get first active branch
+    const { data: firstBranch } = await supabase
+      .from('lats_branches')
+      .select('id')
+      .eq('is_active', true)
+      .limit(1)
+      .single();
+
+    if (firstBranch) {
+      console.log('✅ [InstallmentService] Using first active branch:', firstBranch.id);
+      return firstBranch.id;
+    }
+
+    console.warn('⚠️ [InstallmentService] No active branches found, branch_id will be NULL');
+    return undefined;
+  }
+
   // Create installment plan
   async createInstallmentPlan(
     input: CreateInstallmentPlanInput,
@@ -83,8 +185,14 @@ class InstallmentService {
     console.log('🏦 [InstallmentService] createInstallmentPlan called');
     console.log('📥 [InstallmentService] Input:', JSON.stringify(input, null, 2));
     console.log('👤 [InstallmentService] User ID:', userId);
+    console.log('🏢 [InstallmentService] Branch ID provided:', branchId);
     
     try {
+      // Validate and get valid branch_id
+      console.log('🔍 [InstallmentService] Validating branch_id...');
+      const validBranchId = await this.getValidBranchId(branchId);
+      console.log('✅ [InstallmentService] Valid branch_id:', validBranchId);
+
       console.log('🔢 [InstallmentService] Generating plan number...');
       const planNumber = await this.generatePlanNumber();
       console.log('✅ [InstallmentService] Plan number generated:', planNumber);
@@ -131,7 +239,7 @@ class InstallmentService {
         notes: input.notes,
         status: 'active',
         created_by: userId,
-        branch_id: branchId
+        branch_id: validBranchId
       };
       
       console.log('📤 [InstallmentService] Plan data to insert:', JSON.stringify(planData, null, 2));
@@ -180,10 +288,18 @@ class InstallmentService {
           console.log('✅ [InstallmentService] Down payment recorded successfully');
         }
 
-        // Update finance account
+        // Update finance account and create transaction
         console.log('🏦 [InstallmentService] Updating finance account:', input.account_id);
-        await this.updateFinanceAccount(input.account_id, input.down_payment);
-        console.log('✅ [InstallmentService] Finance account updated');
+        await this.updateFinanceAccount(
+          input.account_id, 
+          input.down_payment,
+          `Down payment for installment plan ${planNumber}`,
+          `${planNumber}-DOWN`,
+          'installment_plan',
+          plan.id,
+          branchId
+        );
+        console.log('✅ [InstallmentService] Finance account updated and transaction recorded');
       } else {
         console.log('ℹ️ [InstallmentService] No down payment to record');
       }
@@ -224,11 +340,73 @@ class InstallmentService {
         installmentsPaid: plan.installments_paid,
         totalInstallments: plan.number_of_installments,
         totalPaid: plan.total_paid,
-        balanceDue: plan.balance_due
+        balanceDue: plan.balance_due,
+        status: plan.status
       });
 
-      // Calculate installment number
-      const installmentNumber = plan.installments_paid + 1;
+      // Validate plan status
+      if (plan.status === 'completed') {
+        console.error('❌ [Installment Payment] Plan is already completed');
+        return { success: false, error: 'This installment plan is already completed. No further payments can be recorded.' };
+      }
+
+      if (plan.status === 'cancelled') {
+        console.error('❌ [Installment Payment] Plan is cancelled');
+        return { success: false, error: 'This installment plan has been cancelled. Payments cannot be recorded.' };
+      }
+
+      // Validate payment amount
+      const balanceDue = Number(plan.balance_due || 0);
+      const paymentAmount = Number(input.amount || 0);
+      
+      if (paymentAmount <= 0) {
+        console.error('❌ [Installment Payment] Invalid payment amount:', paymentAmount);
+        return { success: false, error: 'Payment amount must be greater than zero.' };
+      }
+
+      if (paymentAmount > balanceDue) {
+        console.error('❌ [Installment Payment] Payment amount exceeds balance:', { paymentAmount, balanceDue });
+        return { success: false, error: `Payment amount (${this.formatCurrency(paymentAmount)}) cannot exceed the remaining balance (${this.formatCurrency(balanceDue)}).` };
+      }
+
+      // Get existing payments to determine the next installment number
+      const { data: existingPayments, error: paymentsError } = await supabase
+        .from('installment_payments')
+        .select('installment_number')
+        .eq('installment_plan_id', input.installment_plan_id)
+        .eq('status', 'paid');
+
+      if (paymentsError) {
+        console.error('❌ [Installment Payment] Error fetching existing payments:', paymentsError);
+        // Continue with fallback calculation
+      }
+
+      // Calculate next installment number based on unique paid installments
+      const paidInstallmentNumbers = existingPayments 
+        ? new Set(existingPayments.map(p => p.installment_number))
+        : new Set();
+      
+      // Find the next unpaid installment number
+      let installmentNumber = 1;
+      for (let i = 1; i <= plan.number_of_installments; i++) {
+        if (!paidInstallmentNumbers.has(i)) {
+          installmentNumber = i;
+          break;
+        }
+      }
+
+      // If all installments are paid, check if this is an overpayment
+      if (paidInstallmentNumbers.size >= plan.number_of_installments) {
+        if (balanceDue > 0) {
+          // Allow overpayment if there's still a balance
+          installmentNumber = plan.number_of_installments;
+          console.log('⚠️ [Installment Payment] All installments paid, but balance remains. Recording as final payment.');
+        } else {
+          console.error('❌ [Installment Payment] All installments paid and balance is zero');
+          return { success: false, error: 'All installments have been paid and the balance is zero. This plan is complete.' };
+        }
+      }
+
       const dueDate = plan.next_payment_date;
 
       console.log('💰 [Installment Payment] Recording payment...', {
@@ -264,9 +442,20 @@ class InstallmentService {
       
       console.log('✅ [Installment Payment] Payment recorded:', payment);
 
-      // Update finance account
+      // Get plan details for transaction metadata
+      const planForTransaction = await this.getInstallmentPlanById(input.installment_plan_id);
+      
+      // Update finance account and create transaction
       console.log('💼 [Installment Payment] Updating finance account...');
-      await this.updateFinanceAccount(input.account_id, input.amount);
+      await this.updateFinanceAccount(
+        input.account_id, 
+        input.amount,
+        `Installment payment #${installmentNumber} for plan ${planForTransaction?.plan_number || 'N/A'}`,
+        input.reference_number || `INS-PAY-${Date.now().toString().slice(-8)}`,
+        'installment_payment',
+        payment.id,
+        planForTransaction?.branch_id
+      );
 
       // Calculate next payment date
       const schedule = this.calculateSchedule(
@@ -280,14 +469,32 @@ class InstallmentService {
         newNextPaymentDate: schedule.nextPaymentDate
       });
 
+      // Check if plan will be completed after this payment
+      // Get updated plan to check actual installments_paid after trigger
+      const updatedPlan = await this.getInstallmentPlanById(input.installment_plan_id);
+      const willBeCompleted = updatedPlan && (
+        (paidInstallmentNumbers.size + 1 >= plan.number_of_installments) ||
+        (Number(updatedPlan.balance_due || 0) <= 0)
+      );
+      
       // Update next payment date only (installments_paid, total_paid, balance_due are auto-updated by DB trigger)
-      const isCompleted = (plan.installments_paid + 1) >= plan.number_of_installments;
-      const updateData = {
-        next_payment_date: isCompleted ? null : schedule.nextPaymentDate,
+      const isCompleted = willBeCompleted || false;
+      const updateData: any = {
         updated_at: new Date().toISOString()
       };
       
-      console.log('🔄 [Installment Payment] Updating plan next payment date:', updateData);
+      if (isCompleted) {
+        // When plan is completed, set next_payment_date to end_date (cannot be null due to NOT NULL constraint)
+        // Also set completion_date and status
+        updateData.next_payment_date = plan.end_date;
+        updateData.completion_date = new Date().toISOString().split('T')[0]; // Today's date in YYYY-MM-DD format
+        updateData.status = 'completed';
+      } else {
+        // When plan is not completed, set next payment date to calculated schedule
+        updateData.next_payment_date = schedule.nextPaymentDate;
+      }
+      
+      console.log('🔄 [Installment Payment] Updating plan:', updateData);
       console.log('ℹ️  [Installment Payment] Note: total_paid, balance_due, and installments_paid are auto-updated by database trigger');
       
       const { error: updateError } = await supabase
@@ -324,12 +531,12 @@ class InstallmentService {
   // Get all installment plans
   async getAllInstallmentPlans(branchId?: string): Promise<InstallmentPlan[]> {
     try {
+      // First, fetch plans with customer data
       let query = supabase
         .from('customer_installment_plans')
         .select(`
           *,
-          customer:customers!customer_id(id, name, phone, email),
-          sale:lats_sales!sale_id(id, sale_number, total_amount)
+          customer:customers!customer_id(id, name, phone, email)
         `)
         .order('created_at', { ascending: false });
 
@@ -341,7 +548,25 @@ class InstallmentService {
 
       if (error) throw error;
       
-      // Transform data to ensure numeric fields are properly typed
+      // Get unique sale IDs from plans
+      const saleIds = [...new Set((data || [])
+        .map(plan => plan.sale_id)
+        .filter(Boolean))];
+
+      // Fetch sales data separately if there are any sale IDs
+      let salesMap = new Map();
+      if (saleIds.length > 0) {
+        const { data: sales, error: salesError } = await supabase
+          .from('lats_sales')
+          .select('id, sale_number, total_amount')
+          .in('id', saleIds);
+
+        if (!salesError && sales) {
+          salesMap = new Map(sales.map(sale => [sale.id, sale]));
+        }
+      }
+      
+      // Transform data and merge sale information
       const plans = (data || []).map(plan => ({
         ...plan,
         total_amount: Number(plan.total_amount || 0),
@@ -356,6 +581,7 @@ class InstallmentService {
         late_fee_applied: Number(plan.late_fee_applied || 0),
         days_overdue: Number(plan.days_overdue || 0),
         reminder_count: Number(plan.reminder_count || 0),
+        sale: plan.sale_id ? salesMap.get(plan.sale_id) || null : null,
       })) as InstallmentPlan[];
       
       return plans;
@@ -372,13 +598,23 @@ class InstallmentService {
         .from('customer_installment_plans')
         .select(`
           *,
-          customer:customers!customer_id(id, name, phone, email),
-          sale:lats_sales!sale_id(id, sale_number, total_amount)
+          customer:customers!customer_id(id, name, phone, email)
         `)
         .eq('id', planId)
         .single();
 
       if (error) throw error;
+      
+      // Fetch sale data separately if sale_id exists
+      let sale = null;
+      if (data.sale_id) {
+        const { data: saleData } = await supabase
+          .from('lats_sales')
+          .select('id, sale_number, total_amount')
+          .eq('id', data.sale_id)
+          .single();
+        sale = saleData || null;
+      }
       
       // Fetch payments separately for this plan
       const { data: payments } = await supabase
@@ -402,6 +638,7 @@ class InstallmentService {
         late_fee_applied: Number(data.late_fee_applied || 0),
         days_overdue: Number(data.days_overdue || 0),
         reminder_count: Number(data.reminder_count || 0),
+        sale: sale,
         payments: payments || []
       } as InstallmentPlan;
       
@@ -637,11 +874,19 @@ class InstallmentService {
   // PRIVATE HELPER METHODS
   // ================================================
 
-  private async updateFinanceAccount(accountId: string, amount: number): Promise<void> {
+  private async updateFinanceAccount(
+    accountId: string, 
+    amount: number, 
+    description?: string,
+    referenceNumber?: string,
+    relatedEntityType?: string,
+    relatedEntityId?: string,
+    branchId?: string
+  ): Promise<void> {
     try {
       const { data: account, error: fetchError } = await supabase
         .from('finance_accounts')
-        .select('balance')
+        .select('balance, branch_id')
         .eq('id', accountId)
         .single();
 
@@ -650,8 +895,12 @@ class InstallmentService {
         return;
       }
 
-      const newBalance = Number(account.balance) + amount;
+      const balanceBefore = Number(account.balance);
+      const newBalance = balanceBefore + amount;
+      // Validate branch_id before using it
+      const accountBranchId = await this.getValidBranchId(branchId || account.branch_id);
 
+      // Update finance account balance
       const { error: updateError } = await supabase
         .from('finance_accounts')
         .update({
@@ -662,6 +911,31 @@ class InstallmentService {
 
       if (updateError) {
         console.error('Error updating finance account:', updateError);
+        return;
+      }
+
+      // Create account transaction record
+      const { error: transactionError } = await supabase
+        .from('account_transactions')
+        .insert({
+          account_id: accountId,
+          transaction_type: amount > 0 ? 'income' : 'expense',
+          amount: Math.abs(amount),
+          balance_before: balanceBefore,
+          balance_after: newBalance,
+          description: description || `Installment payment: ${amount > 0 ? 'Received' : 'Paid'} ${Math.abs(amount)}`,
+          reference_number: referenceNumber || `INS-${Date.now().toString().slice(-8)}`,
+          related_entity_type: relatedEntityType || 'installment_payment',
+          related_entity_id: relatedEntityId,
+          branch_id: accountBranchId,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      if (transactionError) {
+        console.error('Error creating account transaction:', transactionError);
+      } else {
+        console.log('✅ Account transaction recorded successfully');
       }
     } catch (error) {
       console.error('Error in updateFinanceAccount:', error);

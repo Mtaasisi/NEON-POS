@@ -185,6 +185,7 @@ import { getPendingActions, clearPendingActions } from './lib/offlineSync';
 import PreloadIndicator from './components/PreloadIndicator';
 import BackgroundDataLoader from './components/BackgroundDataLoader';
 import ProductPreloader from './components/ProductPreloader';
+import InstallmentPreloader from './components/InstallmentPreloader';
 import { POSSettingsDatabaseSetup } from './components/POSSettingsDatabaseSetup';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { StorageLocationPickerProvider } from './features/lats/components/storage/StorageLocationPickerProvider';
@@ -1250,6 +1251,7 @@ function App() {
                                       <LoadingProgressWrapper />
                                       <BackgroundDataLoader />
                                       <ProductPreloader />
+                                      <InstallmentPreloader />
                                       <PreloadIndicator />
                                       <ErrorManager />
                                     </MobileOnlyRedirect>

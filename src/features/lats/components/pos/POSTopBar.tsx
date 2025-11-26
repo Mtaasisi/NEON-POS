@@ -22,6 +22,7 @@ import {
   Settings,
   Monitor,
   Smartphone,
+  Calendar,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -51,6 +52,7 @@ interface POSTopBarProps {
   onReports?: () => void;
   onRefreshData?: () => void;
   onSettings?: () => void;
+  onOpenInstallments?: () => void;
 }
 
 const POSTopBar: React.FC<POSTopBarProps> = ({
@@ -79,6 +81,7 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   onReports,
   onRefreshData,
   onSettings,
+  onOpenInstallments,
 }) => {
   const { currentUser, logout } = useAuth();
   const { playPaymentSound, playDeleteSound, playClickSound } = usePOSClickSounds();
@@ -331,6 +334,20 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
 
             {/* Primary Actions */}
             <div className="hidden md:flex items-center gap-2">
+              {onOpenInstallments && (
+                <button
+                  onClick={() => {
+                    playClickSound();
+                    onOpenInstallments();
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                  title="Installment Plans"
+                >
+                  <Calendar size={18} />
+                  <span className="hidden lg:inline">Installments</span>
+                </button>
+              )}
+
               {onPaymentTracking && (
                 <button
                   onClick={() => {
@@ -344,6 +361,7 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                   <span className="text-sm font-medium">Payments</span>
                 </button>
               )}
+
 
               {onCloseDay && canCloseDay && !isDailyClosed && (
                 <button

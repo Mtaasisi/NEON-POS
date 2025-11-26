@@ -46,6 +46,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { ShoppingCart, X, CheckCircle, User, Package, DollarSign } from 'lucide-react';
 import { useCustomers } from '../../../context/CustomersContext';
@@ -80,6 +81,7 @@ import LoadingSpinner from '../../../components/ui/LoadingSpinner';
 // Lazy load TradeInCalculator to avoid circular dependency issues with getAllSpareParts
 const TradeInCalculator = React.lazy(() => import('../components/pos/TradeInCalculator'));
 import PaymentTrackingModal from '../components/pos/PaymentTrackingModal';
+import InstallmentManagementModal from '../components/pos/InstallmentManagementModal';
 import PaymentsPopupModal from '../../../components/PaymentsPopupModal';
 import { supabase } from '../../../lib/supabaseClient';
 import { usePaymentMethodsContext } from '../../../context/PaymentMethodsContext';
@@ -276,7 +278,7 @@ const POSPageOptimized: React.FC = () => {
   const { currentUser } = useAuth();
   
   // Get current branch
-  const { currentBranch } = useBranch();
+  const { currentBranch, loading: branchLoading } = useBranch();
   
   // Success modal for sale completion
   const successModal = useSuccessModal();
@@ -508,6 +510,22 @@ const POSPageOptimized: React.FC = () => {
   const [showShareReceiptModal, setShowShareReceiptModal] = useState(false);
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<any>(null);
+  const [additionalCustomerInfo, setAdditionalCustomerInfo] = useState({
+    companyName: '',
+    additionalNotes: '',
+    receiverName: '',
+    receiverAddress: '',
+    receiverPhone: ''
+  });
+  const [paymentInfo, setPaymentInfo] = useState({
+    paymentMethod: '',
+    paymentReference: '',
+    transactionId: '',
+    paidAmount: 0,
+    balance: 0,
+    paymentDate: ''
+  });
+  const [showAdditionalInfoForm, setShowAdditionalInfoForm] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<any>(null);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
@@ -637,6 +655,9 @@ const POSPageOptimized: React.FC = () => {
 
   // Payment tracking
   const [showPaymentTracking, setShowPaymentTracking] = useState(false);
+  
+  // Installment management
+  const [showInstallmentManagement, setShowInstallmentManagement] = useState(false);
 
   // Settings modal refs
   const settingsModalRef = useRef<POSSettingsModalRef>(null);
@@ -733,14 +754,29 @@ const POSPageOptimized: React.FC = () => {
         const startTime = Date.now();
         updateProgress(jobId, 10);
 
+        // Check if products are already preloaded (from ProductPreloader)
+        const hasPreloadedProducts = dbProducts.length > 0;
+        
+        if (hasPreloadedProducts) {
+          console.log(`⚡ [POS] Using ${dbProducts.length} preloaded products - instant load!`);
+          updateProgress(jobId, 50);
+        } else {
+          console.log('📡 [POS] No preloaded products found, loading from database...');
+        }
+
         // CRITICAL: Load only essential data first (products + categories)
+        // If products are preloaded, only load categories (products will use cache)
+        const productLoadPromise = hasPreloadedProducts 
+          ? Promise.resolve() // Skip product load if already preloaded
+          : loadProducts({ page: 1, limit: 200 }); // Load products if not preloaded
+        
         const results = await Promise.allSettled([
-          loadProducts({ page: 1, limit: 200 }),  // Load products first
+          productLoadPromise,
           loadCategories()                         // Categories needed for display
         ]);
 
         const loadTime = Date.now() - startTime;
-        console.log(`✅ [POS] Essential data loaded in ${loadTime}ms`);
+        console.log(`✅ [POS] Essential data loaded in ${loadTime}ms${hasPreloadedProducts ? ' (products were preloaded)' : ''}`);
         updateProgress(jobId, 60);
 
         // Detect cold start (Neon database waking up)
@@ -982,6 +1018,7 @@ const POSPageOptimized: React.FC = () => {
     }
     setShowSalesAnalytics(true);
   };
+
 
   const handleUnifiedSearch = (query: string) => {
     const jobId = startLoading('Searching products...');
@@ -1509,26 +1546,32 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
-      // Check stock availability - use ORIGINAL stock (before cart adjustments)
-      // The variant may have adjusted stock from our stock tracking, so use _originalQuantity
-      const originalStock = variant?._originalQuantity ?? variant?.stockQuantity ?? variant?.quantity ?? product.stockQuantity ?? product.quantity ?? 0;
-      const availableStock = originalStock;
+      // ✅ IMPROVED: Check stock availability using the service method
+      // This properly handles parent variants by calculating stock from children
+      const stockCheck = await saleProcessingService.checkStockAvailability(variant.id, quantity);
       
-      console.log('🔍 Stock check:', {
+      if (!stockCheck.available) {
+        const errorMessage = stockCheck.error || 'Insufficient stock';
+        toast.error(`${product.name}: ${errorMessage}`);
+        console.error('❌ Stock check failed:', {
         productName: product.name,
         variantName: variant?.name,
-        originalStock,
-        availableStock,
-        variantStockQuantity: variant?.stockQuantity,
-        variantQuantity: variant?.quantity,
-        productStockQuantity: product.stockQuantity,
-        productQuantity: product.quantity
-      });
-      
-      if (availableStock <= 0) {
-        toast.error(`${product.name} is out of stock`);
+          variantId: variant.id,
+          requestedQuantity: quantity,
+          availableStock: stockCheck.availableStock,
+          error: stockCheck.error
+        });
         return;
       }
+
+      const availableStock = stockCheck.availableStock;
+      
+      console.log('✅ Stock check passed:', {
+        productName: product.name,
+        variantName: variant?.name,
+        availableStock,
+        requestedQuantity: quantity
+      });
 
       const existingItem = cartItems.find(item => 
         item.productId === product.id && 
@@ -1536,9 +1579,17 @@ const POSPageOptimized: React.FC = () => {
       );
 
       if (existingItem) {
-        // Check if adding more would exceed ORIGINAL available stock
-        if (existingItem.quantity + quantity > availableStock) {
-          toast.error(`Only ${availableStock} units available for ${product.name}`);
+        // Check if adding more would exceed available stock
+        const totalRequested = existingItem.quantity + quantity;
+        if (totalRequested > availableStock) {
+          toast.error(`Only ${availableStock} units available for ${product.name}. You already have ${existingItem.quantity} in cart.`);
+          return;
+        }
+        
+        // Re-validate stock for the new total quantity
+        const updatedStockCheck = await saleProcessingService.checkStockAvailability(variant.id, totalRequested);
+        if (!updatedStockCheck.available) {
+          toast.error(`${product.name}: ${updatedStockCheck.error || 'Insufficient stock for requested quantity'}`);
           return;
         }
         
@@ -1625,7 +1676,7 @@ const POSPageOptimized: React.FC = () => {
     }
   }, [canAddToCart, cartItems, checkForIMEIVariants, stockAdjustments]);
 
-  const updateCartItemQuantity = useCallback((itemId: string, quantity: number) => {
+  const updateCartItemQuantity = useCallback(async (itemId: string, quantity: number) => {
     try {
       // Validate inputs
       if (!itemId) {
@@ -1650,9 +1701,20 @@ const POSPageOptimized: React.FC = () => {
         return;
       }
 
-      // Check stock availability
-      if (quantity > existingItem.availableQuantity) {
-        toast.error(`Only ${existingItem.availableQuantity} units available`);
+      // ✅ IMPROVED: Check stock availability using the service method
+      // This properly handles parent variants by calculating stock from children
+      const stockCheck = await saleProcessingService.checkStockAvailability(existingItem.variantId, quantity);
+      
+      if (!stockCheck.available) {
+        const errorMessage = stockCheck.error || 'Insufficient stock';
+        toast.error(`${existingItem.productName}: ${errorMessage}`);
+        console.error('❌ Stock check failed for quantity update:', {
+          productName: existingItem.productName,
+          variantId: existingItem.variantId,
+          requestedQuantity: quantity,
+          availableStock: stockCheck.availableStock,
+          error: stockCheck.error
+        });
         return;
       }
 
@@ -2328,6 +2390,7 @@ const POSPageOptimized: React.FC = () => {
           onClose={() => setShowSalesAnalytics(false)}
         />
 
+
         <PaymentTrackingModal
           isOpen={showPaymentTracking}
           onClose={() => setShowPaymentTracking(false)}
@@ -2723,12 +2786,55 @@ const POSPageOptimized: React.FC = () => {
               email: selectedCustomer.email || '',
               taxId: (selectedCustomer as any).taxId || ''
             },
-            items: cartItems.map(item => ({
-              description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              total: item.totalPrice
-            })),
+            items: cartItems.map(item => {
+              // Find product and variant to get specifications
+              const product = products.find(p => p.id === item.productId);
+              const variant = product?.variants?.find((v: any) => v.id === item.variantId);
+              
+              // Extract specifications from product or variant
+              let specifications: string | Record<string, any> | undefined;
+              
+              // Try variant attributes first, then product specification, then product attributes
+              if (variant?.attributes?.specification) {
+                                try {
+                                  const parsed = JSON.parse(variant.attributes.specification);
+                                  specifications = typeof parsed === 'object' ? parsed : variant.attributes.specification;
+                                } catch {
+                                  specifications = variant.attributes.specification;
+                                }
+                              } else if ((product as any)?.specification) {
+                                try {
+                                  const parsed = JSON.parse((product as any).specification);
+                                  specifications = typeof parsed === 'object' ? parsed : (product as any).specification;
+                                } catch {
+                                  specifications = (product as any).specification;
+                                }
+                              } else if (product?.attributes?.specification) {
+                                try {
+                                  const parsed = JSON.parse(product.attributes.specification);
+                                  specifications = typeof parsed === 'object' ? parsed : product.attributes.specification;
+                                } catch {
+                                  specifications = product.attributes.specification;
+                                }
+                              } else if (variant?.attributes && Object.keys(variant.attributes).length > 0) {
+                                // Use variant attributes as specifications if no explicit specification field
+                                const attrs = { ...variant.attributes };
+                                delete attrs.imei; // Remove IMEI from specifications
+                                delete attrs.is_legacy;
+                                delete attrs.is_imei_child;
+                                if (Object.keys(attrs).length > 0) {
+                                  specifications = attrs;
+                                }
+                              }
+              
+              return {
+                description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                total: item.totalPrice,
+                specifications: specifications
+              };
+            }),
             subtotal: totalAmount,
             tax: taxAmount || 0,
             discount: manualDiscount || 0,
@@ -2764,6 +2870,7 @@ const POSPageOptimized: React.FC = () => {
         onReports={() => handleShowSalesAnalytics()}
         onRefreshData={handleRefreshData}
         onSettings={() => setShowSettings(true)}
+        onOpenInstallments={() => setShowInstallmentManagement(true)}
         todaysSales={todaysSales}
         isDailyClosed={isDailyClosed}
         onCloseDay={() => setShowDailyClosingModal(true)}
@@ -2877,12 +2984,55 @@ const POSPageOptimized: React.FC = () => {
                   email: selectedCustomer.email || '',
                   taxId: (selectedCustomer as any).taxId || ''
                 },
-                items: cartItems.map(item => ({
-                  description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
-                  quantity: item.quantity,
-                  unitPrice: item.unitPrice,
-                  total: item.totalPrice
-                })),
+                items: cartItems.map(item => {
+                  // Find product and variant to get specifications
+                  const product = products.find(p => p.id === item.productId);
+                  const variant = product?.variants?.find((v: any) => v.id === item.variantId);
+                  
+                  // Extract specifications from product or variant
+                  let specifications: string | Record<string, any> | undefined;
+                  
+                  // Try variant attributes first, then product specification, then product attributes
+                  if (variant?.attributes?.specification) {
+                                    try {
+                                      const parsed = JSON.parse(variant.attributes.specification);
+                                      specifications = typeof parsed === 'object' ? parsed : variant.attributes.specification;
+                                    } catch {
+                                      specifications = variant.attributes.specification;
+                                    }
+                                  } else if ((product as any)?.specification) {
+                                    try {
+                                      const parsed = JSON.parse((product as any).specification);
+                                      specifications = typeof parsed === 'object' ? parsed : (product as any).specification;
+                                    } catch {
+                                      specifications = (product as any).specification;
+                                    }
+                                  } else if (product?.attributes?.specification) {
+                                    try {
+                                      const parsed = JSON.parse(product.attributes.specification);
+                                      specifications = typeof parsed === 'object' ? parsed : product.attributes.specification;
+                                    } catch {
+                                      specifications = product.attributes.specification;
+                                    }
+                                  } else if (variant?.attributes && Object.keys(variant.attributes).length > 0) {
+                                    // Use variant attributes as specifications if no explicit specification field
+                                    const attrs = { ...variant.attributes };
+                                    delete attrs.imei; // Remove IMEI from specifications
+                                    delete attrs.is_legacy;
+                                    delete attrs.is_imei_child;
+                                    if (Object.keys(attrs).length > 0) {
+                                      specifications = attrs;
+                                    }
+                                  }
+                  
+                  return {
+                    description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    total: item.totalPrice,
+                    specifications: specifications
+                  };
+                }),
                 subtotal: totalAmount,
                 tax: taxAmount || 0,
                 discount: manualDiscount || 0,
@@ -3305,6 +3455,12 @@ const POSPageOptimized: React.FC = () => {
         />
       )}
 
+      {/* Installment Management Modal */}
+      <InstallmentManagementModal
+        isOpen={showInstallmentManagement}
+        onClose={() => setShowInstallmentManagement(false)}
+      />
+
       {/* POS Sale Summary Modal */}
       {showPOSSummaryModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -3554,7 +3710,7 @@ const POSPageOptimized: React.FC = () => {
             if (validCartItems.length < cartItems.length) {
               // Update cart to remove invalid items
               setCartItems(validCartItems);
-              toast.warning(`Removed ${cartItems.length - validCartItems.length} invalid item(s) from cart. Please review and try again.`);
+              toast(`Removed ${cartItems.length - validCartItems.length} invalid item(s) from cart. Please review and try again.`, { icon: '⚠️' });
               return;
             }
 
@@ -3582,9 +3738,9 @@ const POSPageOptimized: React.FC = () => {
               // It has more sophisticated error handling
             } else {
               // Combine IDs from both tables
-              const variantIdsSet = new Set(existingVariants?.map(v => v.id) || []);
-              const inventoryIdsSet = new Set(existingInventoryItems?.map(i => i.id) || []);
-              const existingVariantIds = new Set([...variantIdsSet, ...inventoryIdsSet]);
+              const variantIdsSet = new Set(existingVariants?.map((v: any) => v.id) || []);
+              const inventoryIdsSet = new Set(existingInventoryItems?.map((i: any) => i.id) || []);
+              const existingVariantIds = new Set([...Array.from(variantIdsSet), ...Array.from(inventoryIdsSet)]);
               
               const missingVariants = validCartItems.filter(item => !existingVariantIds.has(item.variantId));
 
@@ -3606,10 +3762,60 @@ const POSPageOptimized: React.FC = () => {
                   return;
                 }
                 
-                toast.warning(`Some items in your cart are no longer available: ${missingItems}. They have been removed. Please review and try again.`);
+                toast(`Some items in your cart are no longer available: ${missingItems}. They have been removed. Please review and try again.`, { icon: '⚠️' });
                 return;
               }
             }
+
+            // ✅ PRE-PAYMENT STOCK VALIDATION: Validate all items have sufficient stock before processing payment
+            // This prevents payment processing when stock is insufficient
+            console.log('🔍 Pre-payment stock validation for', validCartItems.length, 'items...');
+            const stockValidationErrors: string[] = [];
+            
+            for (const item of validCartItems) {
+              const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
+              
+              if (!stockCheck.available) {
+                const errorMsg = `${item.productName} (${item.variantName}): ${stockCheck.error || 'Insufficient stock'}`;
+                stockValidationErrors.push(errorMsg);
+                console.error('❌ Pre-payment stock validation failed:', {
+                  productName: item.productName,
+                  variantName: item.variantName,
+                  variantId: item.variantId,
+                  requestedQuantity: item.quantity,
+                  availableStock: stockCheck.availableStock,
+                  error: stockCheck.error
+                });
+              }
+            }
+            
+            if (stockValidationErrors.length > 0) {
+              const errorMessage = `Cannot process payment. Stock issues detected:\n${stockValidationErrors.join('\n')}`;
+              console.error('❌ Pre-payment stock validation failed:', stockValidationErrors);
+              toast.error(errorMessage, { duration: 6000 });
+              
+              // Remove items with insufficient stock from cart
+              const itemsToKeep: typeof validCartItems = [];
+              for (const item of validCartItems) {
+                const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
+                if (stockCheck.available) {
+                  itemsToKeep.push(item);
+                }
+              }
+              
+              if (itemsToKeep.length < validCartItems.length) {
+                setCartItems(itemsToKeep);
+                if (itemsToKeep.length === 0) {
+                  toast.error('All items were removed due to insufficient stock. Please add items to cart.');
+                } else {
+                  toast(`${validCartItems.length - itemsToKeep.length} item(s) removed due to insufficient stock.`, { icon: '⚠️' });
+                }
+              }
+              
+              return; // Stop payment processing
+            }
+            
+            console.log('✅ Pre-payment stock validation passed for all items');
 
             // Prepare sale data for database with multiple payments
             const saleData = {
@@ -3834,12 +4040,55 @@ const POSPageOptimized: React.FC = () => {
                               email: '',
                               taxId: ''
                             },
-                            items: cartItems.map(item => ({
-                              description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
-                              quantity: item.quantity,
-                              unitPrice: item.unitPrice,
-                              total: item.totalPrice
-                            })),
+                            items: cartItems.map(item => {
+                              // Find product and variant to get specifications
+                              const product = products.find(p => p.id === item.productId);
+                              const variant = product?.variants?.find((v: any) => v.id === item.variantId);
+                              
+                              // Extract specifications from product or variant
+                              let specifications: string | Record<string, any> | undefined;
+                              
+                              // Try variant attributes first, then product specification, then product attributes
+                              if (variant?.attributes?.specification) {
+                                try {
+                                  const parsed = JSON.parse(variant.attributes.specification);
+                                  specifications = typeof parsed === 'object' ? parsed : variant.attributes.specification;
+                                } catch {
+                                  specifications = variant.attributes.specification;
+                                }
+                              } else if ((product as any)?.specification) {
+                                try {
+                                  const parsed = JSON.parse((product as any).specification);
+                                  specifications = typeof parsed === 'object' ? parsed : (product as any).specification;
+                                } catch {
+                                  specifications = (product as any).specification;
+                                }
+                              } else if (product?.attributes?.specification) {
+                                try {
+                                  const parsed = JSON.parse(product.attributes.specification);
+                                  specifications = typeof parsed === 'object' ? parsed : product.attributes.specification;
+                                } catch {
+                                  specifications = product.attributes.specification;
+                                }
+                              } else if (variant?.attributes && Object.keys(variant.attributes).length > 0) {
+                                // Use variant attributes as specifications if no explicit specification field
+                                const attrs = { ...variant.attributes };
+                                delete attrs.imei; // Remove IMEI from specifications
+                                delete attrs.is_legacy;
+                                delete attrs.is_imei_child;
+                                if (Object.keys(attrs).length > 0) {
+                                  specifications = attrs;
+                                }
+                              }
+                              
+                              return {
+                                description: `${item.productName}${item.variantName ? ` - ${item.variantName}` : ''}`,
+                                quantity: item.quantity,
+                                unitPrice: item.unitPrice,
+                                total: item.totalPrice,
+                                specifications: specifications
+                              };
+                            }),
                             subtotal: totalAmount,
                             tax: taxAmount || 0,
                             discount: manualDiscount || 0,
@@ -3881,31 +4130,82 @@ const POSPageOptimized: React.FC = () => {
               }
             } else {
               console.error('Sale processing failed:', result.error);
-              throw new Error(result.error || 'Failed to process sale');
+              
+              // ✅ IMPROVED: Better error handling for stock-related errors
+              const errorMessage = result.error || 'Failed to process sale';
+              
+              // Check if it's a stock-related error
+              const isStockError = errorMessage.toLowerCase().includes('insufficient stock') ||
+                                  errorMessage.toLowerCase().includes('out of stock') ||
+                                  errorMessage.toLowerCase().includes('stock') ||
+                                  errorMessage.toLowerCase().includes('available:') ||
+                                  errorMessage.toLowerCase().includes('requested:');
+              
+              if (isStockError) {
+                // For stock errors, show detailed error and don't process payment
+                console.error('❌ Stock error detected during sale processing:', errorMessage);
+                toast.error(`Cannot complete sale: ${errorMessage}`, { duration: 6000 });
+                
+                // Remove items with insufficient stock from cart
+                const errorParts = errorMessage.match(/for (.+?) \(/);
+                if (errorParts && errorParts[1]) {
+                  const productName = errorParts[1];
+                  const updatedCartItems = cartItems.filter(item => 
+                    !item.productName.includes(productName)
+                  );
+                  
+                  if (updatedCartItems.length < cartItems.length) {
+                    setCartItems(updatedCartItems);
+                    toast(`Removed "${productName}" from cart due to insufficient stock.`, { icon: '⚠️' });
+                  }
+                }
+                
+                throw new Error(errorMessage);
+              } else {
+                throw new Error(errorMessage);
+              }
             }
             
           } catch (error) {
             console.error('Error processing payment:', error);
             
-            // Only throw critical errors that actually prevent payment completion
+            // ✅ IMPROVED: Enhanced error handling with stock error detection
             if (error instanceof Error) {
+              const errorMessage = error.message.toLowerCase();
+              
+              // Check if it's a stock-related error
+              const isStockError = errorMessage.includes('insufficient stock') ||
+                                  errorMessage.includes('out of stock') ||
+                                  errorMessage.includes('stock') ||
+                                  errorMessage.includes('available:') ||
+                                  errorMessage.includes('requested:');
+              
               // Check if it's a critical error that should stop the payment
               const criticalErrors = [
-                'Customer information is required',
-                'No payment data received',
-                'Failed to process sale',
-                'Database connection error',
-                'Invalid payment method'
+                'customer information is required',
+                'no payment data received',
+                'database connection error',
+                'invalid payment method',
+                'variant not found',
+                'invalid variant'
               ];
               
               const isCriticalError = criticalErrors.some(criticalError => 
-                error.message.toLowerCase().includes(criticalError.toLowerCase())
-              );
+                errorMessage.includes(criticalError)
+              ) || isStockError;
               
-              if (isCriticalError) {
+              if (isCriticalError || isStockError) {
+                // Show detailed error message for stock errors
+                if (isStockError) {
+                  toast.error(`Payment failed: ${error.message}`, { duration: 6000 });
+                  console.error('❌ Stock error prevented payment:', error.message);
+                } else {
+                  toast.error(`Payment failed: ${error.message}`, { duration: 4000 });
+                }
                 throw error; // This will be caught by the modal and show error toast
               } else {
                 // For non-critical errors, log them but don't fail the payment
+                console.warn('⚠️ Non-critical error during payment processing:', error.message);
 
                 // Continue with successful payment flow
                 const displayAmount = totalPaid || finalAmount;
@@ -3920,7 +4220,10 @@ const POSPageOptimized: React.FC = () => {
                 setShowPaymentModal(false);
               }
             } else {
-              throw error; // Unknown error type, throw it
+              // Unknown error type
+              const errorMsg = error instanceof Error ? error.message : 'Unknown error occurred';
+              toast.error(`Payment failed: ${errorMsg}`, { duration: 4000 });
+              throw error;
             }
           }
         }}
@@ -4390,29 +4693,217 @@ const POSPageOptimized: React.FC = () => {
       />
 
       {/* Invoice Preview Modal */}
-      {showInvoicePreview && createdInvoice && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full my-8">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {createdInvoice.invoiceNumber.startsWith('PREVIEW') ? 'Invoice Preview' : 'Invoice'}
-                </h2>
-                {createdInvoice.invoiceNumber.startsWith('PREVIEW') && (
-                  <p className="text-sm text-blue-600 mt-1">Review prices before payment</p>
+      {showInvoicePreview && createdInvoice && createPortal(
+        <div 
+          className="fixed bg-black/60 flex items-center justify-center p-4 z-[100000]" 
+          style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+          role="dialog" 
+          aria-modal="true" 
+          aria-labelledby="invoice-modal-title"
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-[1400px] max-h-[90vh] flex flex-col overflow-hidden relative">
+            {/* Close Button */}
+            <button
+              onClick={() => {
+                setShowInvoicePreview(false);
+                setCreatedInvoice(null);
+                // Reset additional information
+                setAdditionalCustomerInfo({
+                  companyName: '',
+                  additionalNotes: '',
+                  receiverName: '',
+                  receiverAddress: '',
+                  receiverPhone: ''
+                });
+                setPaymentInfo({
+                  paymentMethod: '',
+                  paymentReference: '',
+                  transactionId: '',
+                  paidAmount: 0,
+                  balance: 0,
+                  paymentDate: ''
+                });
+                setShowAdditionalInfoForm(false);
+              }}
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Icon Header - Fixed */}
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                {/* Icon */}
+                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <FileText className="w-8 h-8 text-white" />
+                </div>
+                
+                {/* Text */}
+                <div>
+                  <h3 id="invoice-modal-title" className="text-2xl font-bold text-gray-900 mb-3">
+                    {createdInvoice.invoiceNumber.startsWith('PREVIEW') ? 'Invoice Preview' : 'Invoice'}
+                  </h3>
+                  {createdInvoice.invoiceNumber.startsWith('PREVIEW') && (
+                    <p className="text-sm text-blue-600">Review prices before payment</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Scrollable Content Section */}
+            <div className="flex-1 overflow-y-auto px-4 py-6">
+              {/* Additional Information Form - Collapsible */}
+              <div className="mb-4 border border-gray-200 rounded-xl bg-gray-50">
+                <button
+                  onClick={() => setShowAdditionalInfoForm(!showAdditionalInfoForm)}
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-100 transition-colors rounded-t-xl"
+                >
+                  <span className="font-semibold text-gray-700">Additional Information</span>
+                  <svg
+                    className={`w-5 h-5 text-gray-600 transition-transform ${showAdditionalInfoForm ? 'rotate-180' : ''}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {showAdditionalInfoForm && (
+                  <div className="p-4 space-y-4 border-t border-gray-200">
+                    {/* Additional Customer Information */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Customer/Receiver Information</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Company Name</label>
+                          <input
+                            type="text"
+                            value={additionalCustomerInfo.companyName}
+                            onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, companyName: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Receiver Name</label>
+                          <input
+                            type="text"
+                            value={additionalCustomerInfo.receiverName}
+                            onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, receiverName: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="If different from customer"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Receiver Address</label>
+                          <textarea
+                            value={additionalCustomerInfo.receiverAddress}
+                            onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, receiverAddress: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={2}
+                            placeholder="If different from customer address"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Receiver Phone</label>
+                          <input
+                            type="text"
+                            value={additionalCustomerInfo.receiverPhone}
+                            onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, receiverPhone: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Additional Notes</label>
+                          <textarea
+                            value={additionalCustomerInfo.additionalNotes}
+                            onChange={(e) => setAdditionalCustomerInfo({ ...additionalCustomerInfo, additionalNotes: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows={2}
+                            placeholder="Any additional information about the customer"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Payment Information */}
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3">Payment Information</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Payment Method</label>
+                          <select
+                            value={paymentInfo.paymentMethod}
+                            onChange={(e) => setPaymentInfo({ ...paymentInfo, paymentMethod: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Select method</option>
+                            <option value="Cash">Cash</option>
+                            <option value="M-Pesa">M-Pesa</option>
+                            <option value="Bank Transfer">Bank Transfer</option>
+                            <option value="Card">Card</option>
+                            <option value="ZenoPay">ZenoPay</option>
+                            <option value="Installment">Installment</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Payment Date</label>
+                          <input
+                            type="date"
+                            value={paymentInfo.paymentDate}
+                            onChange={(e) => setPaymentInfo({ ...paymentInfo, paymentDate: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Payment Reference</label>
+                          <input
+                            type="text"
+                            value={paymentInfo.paymentReference}
+                            onChange={(e) => setPaymentInfo({ ...paymentInfo, paymentReference: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Reference number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Transaction ID</label>
+                          <input
+                            type="text"
+                            value={paymentInfo.transactionId}
+                            onChange={(e) => setPaymentInfo({ ...paymentInfo, transactionId: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="Transaction ID"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Paid Amount (TZS)</label>
+                          <input
+                            type="number"
+                            value={paymentInfo.paidAmount || ''}
+                            onChange={(e) => setPaymentInfo({ ...paymentInfo, paidAmount: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Balance (TZS)</label>
+                          <input
+                            type="number"
+                            value={paymentInfo.balance || ''}
+                            onChange={(e) => setPaymentInfo({ ...paymentInfo, balance: parseFloat(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
-              <button
-                onClick={() => {
-                  setShowInvoicePreview(false);
-                  setCreatedInvoice(null);
-                }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <div className="p-6 overflow-y-auto max-h-[calc(100vh-200px)]">
+
               <InvoiceTemplate
                 invoiceNumber={createdInvoice.invoiceNumber}
                 invoiceDate={createdInvoice.invoiceDate}
@@ -4425,28 +4916,52 @@ const POSPageOptimized: React.FC = () => {
                 notes={createdInvoice.notes}
                 terms={createdInvoice.terms}
                 onPrint={() => window.print()}
+                additionalCustomerInfo={Object.values(additionalCustomerInfo).some(v => v) ? additionalCustomerInfo : undefined}
+                paymentInfo={Object.values(paymentInfo).some(v => v !== '' && v !== 0) ? paymentInfo : undefined}
               />
             </div>
-            <div className="p-6 border-t border-gray-200 flex gap-4">
+
+            {/* Fixed Action Buttons Footer */}
+            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+              <div className="flex gap-4">
               <button
                 onClick={() => {
                   setShowInvoicePreview(false);
                   setCreatedInvoice(null);
+                  // Reset additional information
+                  setAdditionalCustomerInfo({
+                    companyName: '',
+                    additionalNotes: '',
+                    receiverName: '',
+                    receiverAddress: '',
+                    receiverPhone: ''
+                  });
+                  setPaymentInfo({
+                    paymentMethod: '',
+                    paymentReference: '',
+                    transactionId: '',
+                    paidAmount: 0,
+                    balance: 0,
+                    paymentDate: ''
+                  });
+                  setShowAdditionalInfoForm(false);
                 }}
-                className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
+                className="flex-1 px-6 py-3.5 border-2 border-gray-300 text-gray-700 hover:bg-gray-100 rounded-xl transition-colors font-semibold"
               >
                 Close
               </button>
-              <button
-                onClick={() => window.print()}
-                className="flex-1 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-2"
-              >
-                <Printer className="w-5 h-5" />
-                Print Invoice
-              </button>
+                <button
+                  onClick={() => window.print()}
+                  className="flex-1 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors font-semibold shadow-lg flex items-center justify-center gap-2"
+                >
+                  <Printer className="w-5 h-5" />
+                  Print Invoice
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Variant Selection Modal for IMEI/Cart Updates */}

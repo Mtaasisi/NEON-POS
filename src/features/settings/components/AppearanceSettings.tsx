@@ -5,6 +5,7 @@ import { Palette, Sun, Moon, Monitor, Save, Check, Type } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useTheme, Theme } from '../../../context/ThemeContext';
 import { useGeneralSettings } from '../../../hooks/usePOSSettings';
+import { useSettingsSave } from '../../../context/SettingsSaveContext';
 
 interface AppearanceSettingsProps {
   isActive: boolean;
@@ -13,6 +14,7 @@ interface AppearanceSettingsProps {
 const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => {
   const { theme: currentTheme, setTheme } = useTheme();
   const { settings: generalSettings, updateSettings, loading } = useGeneralSettings();
+  const { registerSaveHandler, unregisterSaveHandler, setHasChanges } = useSettingsSave();
   
   const [selectedTheme, setSelectedTheme] = useState<Theme>(currentTheme);
   const [accentColor, setAccentColor] = useState(() => 
@@ -71,21 +73,45 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => 
     }
   };
 
-  const handleSave = () => {
+  useEffect(() => {
+    const handleSave = async () => {
     // Save other appearance settings
     localStorage.setItem('accentColor', accentColor);
     toast.success('Appearance settings saved successfully');
   };
+    
+    registerSaveHandler('appearance-settings', handleSave);
+    return () => unregisterSaveHandler('appearance-settings');
+  }, [accentColor, registerSaveHandler, unregisterSaveHandler]);
+
+  useEffect(() => {
+    setHasChanges(true);
+  }, [accentColor, setHasChanges]);
 
   if (!isActive) return null;
 
   return (
-    <div className="space-y-6">
-      <GlassCard className="p-6">
-        <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
-          <Palette className="w-5 h-5 text-indigo-600" />
-          Appearance Settings
-        </h3>
+    <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+      {/* Icon Header - Fixed - Matching Store Management style */}
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-pink-600 rounded-full flex items-center justify-center shadow-lg">
+            <Palette className="w-8 h-8 text-white" />
+          </div>
+          
+          {/* Text */}
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">Appearance Settings</h3>
+            <p className="text-sm text-gray-600">Customize theme, colors, and font size</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="py-6">
+          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
 
         <div className="space-y-6">
           {/* Theme Selection */}
@@ -161,29 +187,13 @@ const AppearanceSettings: React.FC<AppearanceSettingsProps> = ({ isActive }) => 
                 <option value="medium">Medium (16px) - Default ⭐</option>
                 <option value="large">Large (18px) - Comfortable</option>
               </select>
-              <p className="text-xs text-gray-500 italic">
-                💡 Changes apply immediately across all pages and components
-              </p>
             </div>
           </div>
         </div>
-
-        <div className="flex justify-end mt-6">
-          <GlassButton
-            onClick={handleSave}
-            className="flex items-center gap-2"
-          >
-            <Save className="w-4 h-4" />
-            Save Accent Color
-          </GlassButton>
-        </div>
         
-        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>💡 Pro Tip:</strong> Font size changes are saved automatically and apply instantly across your entire app!
-          </p>
         </div>
-      </GlassCard>
+      </div>
+      </div>
     </div>
   );
 };

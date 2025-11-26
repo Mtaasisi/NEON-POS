@@ -5,7 +5,7 @@
  * Admins have access to all widgets, while technician and customer-care have restricted access.
  */
 
-export type UserRole = 'admin' | 'technician' | 'customer-care' | 'manager' | 'sales' | 'user';
+export type UserRole = 'admin' | 'technician' | 'customer-care' | 'manager' | 'sales' | 'user' | 'store-keeper';
 
 export interface RoleWidgetPermissions {
   // Charts
@@ -306,6 +306,98 @@ const technicianQuickActionPermissions: RoleQuickActionPermissions = {
 };
 
 /**
+ * Widget permissions for Store Keeper role
+ * Store keepers see inventory and stock-related widgets
+ */
+const storeKeeperWidgetPermissions: RoleWidgetPermissions = {
+  // Charts - Inventory and stock focused
+  revenueTrendChart: false,
+  deviceStatusChart: false,
+  appointmentsTrendChart: false,
+  stockLevelChart: true, // Core feature
+  performanceMetricsChart: false,
+  customerActivityChart: false,
+  salesFunnelChart: false,
+  purchaseOrderChart: true, // Core feature
+  salesChart: false,
+  paymentMethodsChart: false,
+  salesByCategoryChart: false,
+  profitMarginChart: false,
+  
+  // Widgets - Inventory and stock focused
+  appointmentWidget: false,
+  employeeWidget: false,
+  notificationWidget: true,
+  financialWidget: false,
+  analyticsWidget: false,
+  serviceWidget: false,
+  reminderWidget: false,
+  customerInsightsWidget: false,
+  systemHealthWidget: false,
+  inventoryWidget: true, // Core feature
+  activityFeedWidget: true,
+  purchaseOrderWidget: true, // Core feature
+  chatWidget: false,
+  salesWidget: false,
+  topProductsWidget: true, // Useful for inventory management
+  expensesWidget: false,
+  staffPerformanceWidget: false,
+};
+
+/**
+ * Quick Action permissions for Store Keeper role
+ */
+const storeKeeperQuickActionPermissions: RoleQuickActionPermissions = {
+  // Core Business Features
+  devices: false,
+  addDevice: false,
+  customers: false,
+  inventory: true, // Core feature
+  appointments: false,
+  purchaseOrders: true, // Core feature - view and receive
+  payments: false,
+  adGenerator: false,
+  pos: false,
+  reports: true, // Inventory reports
+  employees: false,
+  whatsapp: false,
+  settings: false,
+  search: true,
+  loyalty: false,
+  backup: false,
+  
+  // SMS & Communication
+  sms: false,
+  bulkSms: false,
+  smsLogs: false,
+  smsSettings: false,
+  
+  // Import/Export
+  excelImport: false,
+  excelTemplates: false,
+  productExport: true, // Can export inventory data
+  customerImport: false,
+  
+  // Advanced System Features
+  userManagement: false,
+  databaseSetup: false,
+  integrationSettings: false,
+  integrationsTest: false,
+  aiTraining: false,
+  bluetoothPrinter: false,
+  
+  // Business Management
+  categoryManagement: false,
+  supplierManagement: false,
+  storeLocations: false,
+  
+  // Advanced Analytics & Reports
+  reminders: false,
+  mobile: true,
+  myAttendance: true,
+};
+
+/**
  * Quick Action permissions for Customer Care role
  */
 const customerCareQuickActionPermissions: RoleQuickActionPermissions = {
@@ -367,6 +459,7 @@ export const ROLE_WIDGET_PERMISSIONS: Record<UserRole, RoleWidgetPermissions> = 
   'customer-care': customerCareWidgetPermissions,
   manager: adminWidgetPermissions, // Managers get admin-level access
   sales: customerCareWidgetPermissions, // Sales get customer-care level access
+  'store-keeper': storeKeeperWidgetPermissions,
   user: technicianWidgetPermissions, // Default users get technician-level access
 };
 
@@ -379,6 +472,7 @@ export const ROLE_QUICK_ACTION_PERMISSIONS: Record<UserRole, RoleQuickActionPerm
   'customer-care': customerCareQuickActionPermissions,
   manager: adminQuickActionPermissions, // Managers get admin-level access
   sales: customerCareQuickActionPermissions, // Sales get customer-care level access
+  'store-keeper': storeKeeperQuickActionPermissions,
   user: technicianQuickActionPermissions, // Default users get technician-level access
 };
 
@@ -435,6 +529,8 @@ export function getDashboardTitleForRole(role: string): string {
       return 'Manager Dashboard';
     case 'sales':
       return 'Sales Dashboard';
+    case 'store-keeper':
+      return 'Store Keeper Dashboard';
     default:
       return 'Dashboard';
   }
@@ -457,6 +553,8 @@ export function getDashboardDescriptionForRole(role: string, userName?: string):
       return `${greeting} - Oversee operations`;
     case 'sales':
       return `${greeting} - Track sales and customers`;
+    case 'store-keeper':
+      return `${greeting} - Manage inventory and stock`;
     default:
       return greeting;
   }

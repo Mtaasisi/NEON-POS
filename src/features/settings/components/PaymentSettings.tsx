@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
+import { useSettingsSave } from '../../../context/SettingsSaveContext';
 
 interface PaymentSettingsProps {
   isActive?: boolean;
@@ -29,6 +30,7 @@ interface ExpenseCategory {
 }
 
 const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
+  const { registerSaveHandler, unregisterSaveHandler, setHasChanges } = useSettingsSave();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab') as 'gateway' | 'categories' | 'preferences' | 'notifications' | 'currency' | 'refunds' | 'reports' | null;
   const [activeTab, setActiveTab] = useState<'gateway' | 'categories' | 'preferences' | 'notifications' | 'currency' | 'refunds' | 'reports'>(tabFromUrl || 'categories');
@@ -270,35 +272,24 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
     setCategoryForm({ name: '', description: '', icon: 'Package', color: 'blue' });
   };
 
-  const saveGatewaySettings = () => {
+  useEffect(() => {
+    const handleSave = async () => {
     localStorage.setItem('paymentGatewaySettings', JSON.stringify(gatewaySettings));
-    toast.success('Gateway settings saved');
-  };
-
-  const savePreferences = () => {
     localStorage.setItem('paymentPreferences', JSON.stringify(preferences));
-    toast.success('Preferences saved');
-  };
-
-  const saveNotificationSettings = () => {
     localStorage.setItem('paymentNotifications', JSON.stringify(notificationSettings));
-    toast.success('Notification settings saved');
-  };
-
-  const saveCurrencySettings = () => {
     localStorage.setItem('paymentCurrency', JSON.stringify(currencySettings));
-    toast.success('Currency settings saved');
-  };
-
-  const saveRefundSettings = () => {
     localStorage.setItem('paymentRefunds', JSON.stringify(refundSettings));
-    toast.success('Refund settings saved');
-  };
-
-  const saveReportSettings = () => {
     localStorage.setItem('paymentReports', JSON.stringify(reportSettings));
-    toast.success('Report settings saved');
-  };
+      toast.success('All payment settings saved');
+    };
+    
+    registerSaveHandler('payment-settings', handleSave);
+    return () => unregisterSaveHandler('payment-settings');
+  }, [gatewaySettings, preferences, notificationSettings, currencySettings, refundSettings, reportSettings, registerSaveHandler, unregisterSaveHandler]);
+
+  useEffect(() => {
+    setHasChanges(true);
+  }, [gatewaySettings, preferences, notificationSettings, currencySettings, refundSettings, reportSettings, setHasChanges]);
 
   const testConnection = () => {
     toast.success('Testing payment connection...');
@@ -338,42 +329,56 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Settings</h2>
-        <p className="text-gray-600">Manage payment gateways, expense categories, and payment preferences</p>
+    <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+      {/* Icon Header - Fixed - Matching Store Management style */}
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center shadow-lg">
+            <CreditCard className="w-8 h-8 text-white" />
+          </div>
+          
+          {/* Text */}
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Payment Settings</h2>
+            <p className="text-sm text-gray-600">Manage payment gateways, expense categories, and payment preferences</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="mt-6 border-b-2 border-gray-200">
+          <nav className="flex space-x-2 overflow-x-auto">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabChange(tab.id as any)}
+                  className={`
+                    flex items-center gap-2 py-3 px-4 border-b-2 font-semibold text-sm transition-all whitespace-nowrap rounded-t-xl
+                    ${activeTab === tab.id
+                      ? 'border-green-500 text-green-700 bg-green-50'
+                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    }
+                  `}
+                >
+                  <Icon className="w-5 h-5" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex space-x-4 overflow-x-auto">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id as any)}
-                className={`
-                  flex items-center gap-2 py-4 px-3 border-b-2 font-medium text-sm transition-colors whitespace-nowrap
-                  ${activeTab === tab.id
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }
-                `}
-              >
-                <Icon className="w-5 h-5" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="py-6">
 
-      {/* Tab Content */}
-      {/* ==================== EXPENSE CATEGORIES TAB ==================== */}
-      {activeTab === 'categories' && (
-        <GlassCard className="p-6">
+          {/* Tab Content */}
+          {/* ==================== EXPENSE CATEGORIES TAB ==================== */}
+          {activeTab === 'categories' && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
@@ -464,7 +469,6 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
             <div className="text-center py-8 bg-gray-50 rounded-lg">
               <Tag className="w-12 h-12 text-gray-400 mx-auto mb-2" />
               <p className="text-gray-600">No expense categories yet</p>
-              <p className="text-sm text-gray-500">Click "Add Category" to create your first one</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -528,12 +532,12 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
               ))}
             </div>
           )}
-        </GlassCard>
-      )}
+            </div>
+          )}
 
-      {/* ==================== PAYMENT GATEWAY TAB ==================== */}
-      {activeTab === 'gateway' && (
-        <GlassCard className="p-6">
+          {/* ==================== PAYMENT GATEWAY TAB ==================== */}
+          {activeTab === 'gateway' && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
             <Shield className="w-5 h-5 text-indigo-600" />
             Payment Gateway Configuration
@@ -606,22 +610,13 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
               )}
             </div>
 
-            <div className="flex justify-end">
-              <GlassButton
-                onClick={saveGatewaySettings}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Save Gateway Settings
-              </GlassButton>
-            </div>
           </div>
-        </GlassCard>
-      )}
+            </div>
+          )}
 
-      {/* ==================== PREFERENCES TAB ==================== */}
-      {activeTab === 'preferences' && (
-        <GlassCard className="p-6">
+          {/* ==================== PREFERENCES TAB ==================== */}
+          {activeTab === 'preferences' && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
             <CreditCard className="w-5 h-5 text-indigo-600" />
             Payment Preferences
@@ -730,22 +725,13 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <GlassButton
-                onClick={savePreferences}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Save Preferences
-              </GlassButton>
-            </div>
           </div>
-        </GlassCard>
-      )}
+            </div>
+          )}
 
-      {/* ==================== NOTIFICATIONS & RECEIPTS TAB ==================== */}
-      {activeTab === 'notifications' && (
-        <GlassCard className="p-6">
+          {/* ==================== NOTIFICATIONS & RECEIPTS TAB ==================== */}
+          {activeTab === 'notifications' && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
             <Mail className="w-5 h-5 text-indigo-600" />
             Payment Notifications & Receipts
@@ -893,22 +879,13 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <GlassButton
-                onClick={saveNotificationSettings}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Save Notification Settings
-              </GlassButton>
-            </div>
           </div>
-        </GlassCard>
-      )}
+            </div>
+          )}
 
-      {/* ==================== CURRENCY MANAGEMENT TAB ==================== */}
-      {activeTab === 'currency' && (
-        <GlassCard className="p-6">
+          {/* ==================== CURRENCY MANAGEMENT TAB ==================== */}
+          {activeTab === 'currency' && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
             <Globe className="w-5 h-5 text-indigo-600" />
             Multi-Currency Management
@@ -1025,12 +1002,6 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <AlertCircle className="w-5 h-5 text-blue-600" />
-                  <p className="text-sm text-blue-800">
-                    Last updated manually. Click save to apply new rates.
-                  </p>
-                </div>
               </div>
             )}
 
@@ -1075,21 +1046,14 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
                   Refresh Rates Now
                 </GlassButton>
               )}
-              <GlassButton
-                onClick={saveCurrencySettings}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Save Currency Settings
-              </GlassButton>
             </div>
           </div>
-        </GlassCard>
-      )}
+            </div>
+          )}
 
-      {/* ==================== REFUNDS & DISPUTES TAB ==================== */}
-      {activeTab === 'refunds' && (
-        <GlassCard className="p-6">
+          {/* ==================== REFUNDS & DISPUTES TAB ==================== */}
+          {activeTab === 'refunds' && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
             <RotateCcw className="w-5 h-5 text-indigo-600" />
             Refunds & Dispute Management
@@ -1231,22 +1195,13 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
               )}
             </div>
 
-            <div className="flex justify-end">
-              <GlassButton
-                onClick={saveRefundSettings}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Save Refund Settings
-              </GlassButton>
-            </div>
           </div>
-        </GlassCard>
-      )}
+            </div>
+          )}
 
-      {/* ==================== PAYMENT REPORTS TAB ==================== */}
-      {activeTab === 'reports' && (
-        <GlassCard className="p-6">
+          {/* ==================== PAYMENT REPORTS TAB ==================== */}
+          {activeTab === 'reports' && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-800 flex items-center gap-2 mb-6">
             <BarChart3 className="w-5 h-5 text-indigo-600" />
             Payment Reports & Analytics
@@ -1415,18 +1370,11 @@ const PaymentSettings: React.FC<PaymentSettingsProps> = ({ isActive }) => {
               </p>
             </div>
 
-            <div className="flex justify-end">
-              <GlassButton
-                onClick={saveReportSettings}
-                className="flex items-center gap-2"
-              >
-                <Save className="w-4 h-4" />
-                Save Report Settings
-              </GlassButton>
-            </div>
           </div>
-        </GlassCard>
-      )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

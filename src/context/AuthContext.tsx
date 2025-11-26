@@ -94,6 +94,8 @@ function mapUserFromSupabase(user: any): any {
         return ['view_devices', 'update_device_status', 'view_customers', 'view_spare_parts'];
       case 'customer-care':
         return ['view_customers', 'create_customers', 'edit_customers', 'view_devices', 'assign_devices'];
+      case 'store-keeper':
+        return ['view_inventory', 'view_stock_history', 'adjust_stock', 'view_purchase_orders', 'edit_purchase_orders', 'view_reports'];
       default:
         return ['view_devices', 'update_device_status', 'view_customers'];
     }

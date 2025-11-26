@@ -29,7 +29,7 @@ interface GeneralSettingsContextType {
   refreshSettings: () => Promise<void>;
 }
 
-const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
+export const GeneralSettingsContext = createContext<GeneralSettingsContextType | undefined>(undefined);
 
 export const useGeneralSettingsContext = () => {
   const context = useContext(GeneralSettingsContext);

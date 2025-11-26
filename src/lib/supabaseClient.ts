@@ -50,6 +50,7 @@ if (typeof window !== 'undefined') {
   console.error = (...args: any[]) => {
     const errorMsg = String(args[0] || '');
     const fullMessage = args.map(a => String(a)).join(' ');
+    const allArgsString = fullMessage.toLowerCase();
     
     // Suppress common WebSocket connection errors that are automatically retried
     // These errors occur during initial connection attempts and are handled by the pool's retry mechanism
@@ -57,9 +58,12 @@ if (typeof window !== 'undefined') {
       errorMsg.includes('WebSocket connection to') ||
       errorMsg.includes('WebSocket is closed before the connection is established') ||
       errorMsg.includes('Failed to construct \'WebSocket\'') ||
-      fullMessage.includes('wss://') && fullMessage.includes('neon.tech') && fullMessage.includes('failed') ||
+      fullMessage.includes('wss://') && (fullMessage.includes('neon.tech') || fullMessage.includes('neon')) && (fullMessage.includes('failed') || fullMessage.includes('error')) ||
       (errorMsg.includes('@neondatabase/serverless') && errorMsg.includes('Unhandled error')) ||
-      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket'))
+      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket')) ||
+      (allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
+      (allArgsString.includes('websocket') && allArgsString.includes('neon')) ||
+      (allArgsString.includes('wss://') && allArgsString.includes('pooler') && allArgsString.includes('failed'))
     ) {
       // These errors are transient and will be retried automatically by the pool
       // Only log in development mode as debug info (not as error)
@@ -76,14 +80,21 @@ if (typeof window !== 'undefined') {
   console.warn = (...args: any[]) => {
     const warnMsg = String(args[0] || '');
     const fullMessage = args.map(a => String(a)).join(' ');
+    const allArgsString = fullMessage.toLowerCase();
     
-    // Suppress WebSocket warning noise
+    // Suppress WebSocket warning noise and slow database response warnings
     if (
       warnMsg.includes('WebSocket connection to') || 
       warnMsg.includes('WebSocket is closed') ||
-      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket'))
+      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket')) ||
+      (allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
+      (allArgsString.includes('websocket') && allArgsString.includes('neon')) ||
+      warnMsg.includes('Slow database response') ||
+      warnMsg.includes('possible cold start') ||
+      warnMsg.includes('Cold start detected') ||
+      fullMessage.includes('Database was asleep')
     ) {
-      return; // Silently ignore - these are expected during connection attempts
+      return; // Silently ignore - these are expected during connection attempts or cold starts
     }
     
     // Pass through all other warnings

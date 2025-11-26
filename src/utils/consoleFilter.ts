@@ -177,6 +177,31 @@ export function initConsoleFilter() {
   console.error = (...args: any[]) => {
     const message = args.join(' ');
     
+    // Helper function to check if error is from browser extension
+    const isExtensionError = (msg: string): boolean => {
+      const lowerMsg = msg.toLowerCase();
+      return !!(
+        lowerMsg.includes('extension context invalidated') ||
+        lowerMsg.includes('chrome-extension://') ||
+        lowerMsg.includes('moz-extension://') ||
+        lowerMsg.includes('content.js') ||
+        lowerMsg.includes('extension context') ||
+        lowerMsg.match(/content\.js:\d+/) ||
+        (msg.includes('at ') && msg.includes('content.js'))
+      );
+    };
+    
+    // Suppress browser extension errors (these are harmless and happen when extensions reload)
+    if (isExtensionError(message)) {
+      return; // Silent suppression - extension reloads don't affect app functionality
+    }
+    
+    // Check error object stack if present
+    const errorObj = args.find(arg => arg instanceof Error);
+    if (errorObj && errorObj.stack && isExtensionError(errorObj.stack)) {
+      return; // Silent suppression
+    }
+    
     // Suppress Neon 400 errors from network stack
     if (message.includes('neon.tech') && (message.includes('400') || message.includes('Bad Request'))) {
       return; // Silent suppression - these are handled by retry logic
@@ -224,26 +249,67 @@ if (import.meta.env.MODE !== 'test') {
   // Log that filter is active (using original console before it's wrapped)
   originalConsole.log('✅ Console filter initialized - debug logs will be suppressed');
   
-  // Also suppress network errors logged to console
+  // Also suppress network errors and extension errors logged to console
   if (typeof window !== 'undefined') {
-    // Create a global error event listener to suppress Neon 400s and WebSocket errors
+    // Helper function to check if error is from browser extension
+    const isExtensionError = (msg: string, source?: string, stack?: string): boolean => {
+      const text = `${msg} ${source || ''} ${stack || ''}`.toLowerCase();
+      return !!(
+        text.includes('extension context invalidated') ||
+        text.includes('chrome-extension://') ||
+        text.includes('moz-extension://') ||
+        text.includes('content.js') ||
+        text.includes('extension context') ||
+        (source && (
+          source.includes('chrome-extension://') ||
+          source.includes('moz-extension://') ||
+          source.includes('content.js')
+        ))
+      );
+    };
+    
+    // Create a global error event listener to suppress extension errors, Neon 400s and WebSocket errors
     window.addEventListener('error', (event) => {
-      if (event.message && (
-        event.message.includes('neon.tech') || 
-        event.message.includes('400') ||
-        event.message.includes('Bad Request') ||
-        (event.message.includes('WebSocket') && (event.message.includes('neon.tech') || event.message.includes('failed') || event.message.includes('closed before'))) ||
-        event.message.includes('network connection was lost') ||
-        event.message.includes('Connection timeout') ||
-        event.message.includes('WebSocket connection to')
+      const errorMessage = event.message || '';
+      const errorSource = event.filename || '';
+      const errorStack = event.error?.stack || '';
+      
+      // Suppress browser extension errors first
+      if (isExtensionError(errorMessage, errorSource, errorStack)) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        return false;
+      }
+      
+      // Suppress Neon and network errors
+      if (errorMessage && (
+        errorMessage.includes('neon.tech') || 
+        errorMessage.includes('400') ||
+        errorMessage.includes('Bad Request') ||
+        (errorMessage.includes('WebSocket') && (errorMessage.includes('neon.tech') || errorMessage.includes('failed') || errorMessage.includes('closed before'))) ||
+        errorMessage.includes('network connection was lost') ||
+        errorMessage.includes('Connection timeout') ||
+        errorMessage.includes('WebSocket connection to')
       )) {
         event.preventDefault();
         return false;
       }
     }, true);
     
-    // Suppress unhandledrejection for Neon errors
+    // Suppress unhandledrejection for extension errors and Neon errors
     window.addEventListener('unhandledrejection', (event) => {
+      // Check for extension errors
+      const reason = event.reason?.toString() || '';
+      const errorStack = event.reason?.stack || '';
+      
+      if (isExtensionError(reason, undefined, errorStack)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      }
+      
+      // Check for Neon errors
       if (event.reason && typeof event.reason === 'object') {
         const message = JSON.stringify(event.reason);
         if (message.includes('neon.tech') && (message.includes('400') || message.includes('WebSocket') || message.includes('timeout'))) {
@@ -261,7 +327,7 @@ if (import.meta.env.MODE !== 'test') {
           return false;
         }
       }
-    });
+    }, true);
   }
 }
 

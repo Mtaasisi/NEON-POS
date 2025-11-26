@@ -1,7 +1,7 @@
 // Role-Based Access Control (RBAC) utility for LATS module
 import { hasPermission as checkUserPermission, hasRole as checkUserRole } from '../../../lib/permissionUtils';
 
-export type UserRole = 'admin' | 'customer-care' | 'technician' | 'viewer';
+export type UserRole = 'admin' | 'customer-care' | 'technician' | 'viewer' | 'store-keeper';
 
 export interface Permission {
   resource: string;
@@ -23,20 +23,20 @@ export interface User {
 // Define permissions for LATS module
 const LATS_PERMISSIONS: Permission[] = [
   // Inventory Management
-  { resource: 'inventory', action: 'view', roles: ['admin', 'customer-care', 'technician'] },
+  { resource: 'inventory', action: 'view', roles: ['admin', 'customer-care', 'technician', 'store-keeper'] },
   { resource: 'inventory', action: 'create', roles: ['admin'] },
   { resource: 'inventory', action: 'edit', roles: ['admin'] },
   { resource: 'inventory', action: 'delete', roles: ['admin'] },
   { resource: 'inventory', action: 'manage', roles: ['admin'] },
 
   // Categories
-  { resource: 'categories', action: 'view', roles: ['admin', 'customer-care', 'technician'] },
+  { resource: 'categories', action: 'view', roles: ['admin', 'customer-care', 'technician', 'store-keeper'] },
   { resource: 'categories', action: 'create', roles: ['admin'] },
   { resource: 'categories', action: 'edit', roles: ['admin'] },
   { resource: 'categories', action: 'delete', roles: ['admin'] },
 
   // Brands
-  { resource: 'brands', action: 'view', roles: ['admin', 'customer-care', 'technician'] },
+  { resource: 'brands', action: 'view', roles: ['admin', 'customer-care', 'technician', 'store-keeper'] },
   { resource: 'brands', action: 'create', roles: ['admin'] },
   { resource: 'brands', action: 'edit', roles: ['admin'] },
   { resource: 'brands', action: 'delete', roles: ['admin'] },
@@ -48,22 +48,22 @@ const LATS_PERMISSIONS: Permission[] = [
   { resource: 'suppliers', action: 'delete', roles: ['admin'] },
 
   // Products
-  { resource: 'products', action: 'view', roles: ['admin', 'technician'] },
+  { resource: 'products', action: 'view', roles: ['admin', 'technician', 'store-keeper'] },
   { resource: 'products', action: 'create', roles: ['admin'] },
   { resource: 'products', action: 'edit', roles: ['admin'] },
   { resource: 'products', action: 'delete', roles: ['admin'] },
 
   // Stock Management
-  { resource: 'stock', action: 'view', roles: ['admin', 'technician'] },
-  { resource: 'stock', action: 'adjust', roles: ['admin', 'technician'] },
-  { resource: 'stock', action: 'history', roles: ['admin'] },
+  { resource: 'stock', action: 'view', roles: ['admin', 'technician', 'store-keeper'] },
+  { resource: 'stock', action: 'adjust', roles: ['admin', 'technician', 'store-keeper'] },
+  { resource: 'stock', action: 'history', roles: ['admin', 'store-keeper'] },
 
   // Purchase Orders
-  { resource: 'purchase-orders', action: 'view', roles: ['admin'] },
+  { resource: 'purchase-orders', action: 'view', roles: ['admin', 'store-keeper'] },
   { resource: 'purchase-orders', action: 'create', roles: ['admin'] },
-  { resource: 'purchase-orders', action: 'edit', roles: ['admin'] },
+  { resource: 'purchase-orders', action: 'edit', roles: ['admin', 'store-keeper'] },
   { resource: 'purchase-orders', action: 'delete', roles: ['admin'] },
-  { resource: 'purchase-orders', action: 'receive', roles: ['admin'] },
+  { resource: 'purchase-orders', action: 'receive', roles: ['admin', 'store-keeper'] },
 
   // Spare Parts
   { resource: 'spare-parts', action: 'view', roles: ['admin', 'technician'] },
@@ -91,8 +91,8 @@ const LATS_PERMISSIONS: Permission[] = [
   { resource: 'sales', action: 'refund', roles: ['admin'] },
 
   // Reports
-  { resource: 'reports', action: 'view', roles: ['admin', 'customer-care'] },
-  { resource: 'reports', action: 'export', roles: ['admin', 'customer-care'] },
+  { resource: 'reports', action: 'view', roles: ['admin', 'customer-care', 'store-keeper'] },
+  { resource: 'reports', action: 'export', roles: ['admin', 'customer-care', 'store-keeper'] },
   { resource: 'reports', action: 'daily-close', roles: ['admin', 'customer-care'] },
 
   // Analytics
@@ -113,9 +113,9 @@ const LATS_ROUTE_PERMISSIONS: RoutePermission[] = [
   // Inventory routes
   { path: '/lats/inventory/management', roles: ['admin'] },
   { path: '/lats/inventory/new', roles: ['admin'] },
-  { path: '/lats/inventory/products', roles: ['admin', 'technician'] },
+  { path: '/lats/inventory/products', roles: ['admin', 'technician', 'store-keeper'] },
   { path: '/lats/inventory/products/:id/edit', roles: ['admin'] },
-  { path: '/lats/inventory/purchase-orders', roles: ['admin'] },
+  { path: '/lats/inventory/purchase-orders', roles: ['admin', 'store-keeper'] },
   { path: '/lats/inventory/purchase-orders/new', roles: ['admin'] },
 
   // Product routes
@@ -381,7 +381,7 @@ class RBACManager {
    * Get all available roles
    */
   getAvailableRoles(): UserRole[] {
-    return ['admin', 'customer-care', 'technician', 'viewer'];
+    return ['admin', 'customer-care', 'technician', 'viewer', 'store-keeper'];
   }
 
   /**
@@ -389,9 +389,10 @@ class RBACManager {
    */
   getRoleHierarchy(): Record<UserRole, UserRole[]> {
     return {
-      'admin': ['admin', 'customer-care', 'technician', 'viewer'],
+      'admin': ['admin', 'customer-care', 'technician', 'viewer', 'store-keeper'],
       'customer-care': ['customer-care', 'viewer'],
       'technician': ['technician', 'viewer'],
+      'store-keeper': ['store-keeper', 'viewer'],
       'viewer': ['viewer']
     };
   }

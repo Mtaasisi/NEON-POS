@@ -1,11 +1,42 @@
-import { useGeneralSettingsContext } from '../context/GeneralSettingsContext';
+import { useContext } from 'react';
+import { GeneralSettingsContext } from '../context/GeneralSettingsContext';
+import type { GeneralSettings } from '../lib/posSettingsApi';
+
+/**
+ * Default values to use when context is not available
+ */
+const defaultContextValues = {
+  formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+  formatDate: (date: Date) => date.toLocaleDateString(),
+  formatTime: (date: Date) => date.toLocaleTimeString(),
+  showProductImages: true,
+  showStockLevels: true,
+  showPrices: true,
+  showBarcodes: true,
+  productsPerPage: 20,
+  productsPerRow: 4,
+  autoCompleteSearch: true,
+  confirmDelete: true,
+  showConfirmations: true,
+  enableSoundEffects: true,
+  enableAnimations: true,
+  settings: null as GeneralSettings | null,
+  loading: false,
+  error: null as string | null,
+  refreshSettings: async () => {},
+  applyTheme: (_theme: 'light' | 'dark' | 'auto') => {},
+  applyLanguage: (_language: 'en' | 'sw' | 'fr') => {},
+  applyCurrency: (_currency: string) => {},
+  applyTimezone: (_timezone: string) => {}
+};
 
 /**
  * Hook for easy access to general settings in UI components
  * This provides a simplified interface for common UI operations
+ * Gracefully handles cases where the context might not be available yet
  */
 export const useGeneralSettingsUI = () => {
-  const context = useGeneralSettingsContext();
+  const context = useContext(GeneralSettingsContext) || defaultContextValues;
 
   return {
     // Formatting functions

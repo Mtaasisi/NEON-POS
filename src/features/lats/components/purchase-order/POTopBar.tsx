@@ -2,7 +2,7 @@
 import React from 'react';
 import { 
   ShoppingBag, FileText, Plus, Package, RefreshCw, CheckCircle, 
-  Trash2, DollarSign, Truck, Coins, Building, Save, User
+  Trash2, DollarSign, Truck, Coins, Building, Save, User, Calendar
 } from 'lucide-react';
 import GlassButton from '../../../shared/components/ui/GlassButton';
 import { formatMoney, Currency } from '../../lib/purchaseOrderUtils';
@@ -19,6 +19,7 @@ interface POTopBarProps {
   onAddSupplier?: () => void;
   onAddProduct?: () => void;
   onViewPurchaseOrders?: () => void;
+  onOpenInstallmentManagement?: () => void;
   isCreatingPO: boolean;
   isSavingDraft?: boolean;
   hasSelectedSupplier: boolean;
@@ -36,6 +37,7 @@ const POTopBar: React.FC<POTopBarProps> = ({
   onAddSupplier,
   onAddProduct,
   onViewPurchaseOrders,
+  onOpenInstallmentManagement,
   isCreatingPO,
   isSavingDraft = false,
   hasSelectedSupplier
@@ -50,6 +52,18 @@ const POTopBar: React.FC<POTopBarProps> = ({
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           {/* Main Action Buttons */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Installment Plans */}
+            {onOpenInstallmentManagement && (
+              <GlassButton
+                onClick={onOpenInstallmentManagement}
+                variant="outline"
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30 hover:border-white/50"
+                icon={<Calendar size={18} />}
+              >
+                <span className="hidden sm:inline">Installments</span>
+              </GlassButton>
+            )}
+
             {/* View Purchase Orders */}
             {onViewPurchaseOrders && (
               <GlassButton

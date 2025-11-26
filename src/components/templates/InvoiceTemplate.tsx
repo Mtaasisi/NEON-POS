@@ -8,6 +8,7 @@ interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   total: number;
+  specifications?: string | Record<string, any>; // Product specifications
 }
 
 interface InvoiceTemplateProps {
@@ -29,6 +30,21 @@ interface InvoiceTemplateProps {
   notes?: string;
   terms?: string;
   onPrint?: () => void;
+  additionalCustomerInfo?: {
+    companyName?: string;
+    additionalNotes?: string;
+    receiverName?: string;
+    receiverAddress?: string;
+    receiverPhone?: string;
+  };
+  paymentInfo?: {
+    paymentMethod?: string;
+    paymentReference?: string;
+    transactionId?: string;
+    paidAmount?: number;
+    balance?: number;
+    paymentDate?: string;
+  };
 }
 
 const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
@@ -43,7 +59,9 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
   total,
   notes,
   terms,
-  onPrint
+  onPrint,
+  additionalCustomerInfo,
+  paymentInfo
 }) => {
   const { businessInfo, loading, error } = useBusinessInfo();
   const [paymentAccounts, setPaymentAccounts] = useState<FinanceAccount[]>([]);
@@ -97,46 +115,54 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
   };
 
   return (
-    <div className="max-w-6xl mx-auto bg-white shadow-lg overflow-hidden" style={{ fontFamily: 'Arial, sans-serif' }}>
+    <div className="invoice-container mx-auto bg-white shadow-lg overflow-hidden" style={{ 
+      fontFamily: 'Arial, sans-serif',
+      width: '1128px',
+      minHeight: '1536px',
+      maxWidth: '1128px'
+    }}>
       {/* Two Column Layout */}
-      <div className="flex" style={{ minHeight: '100%' }}>
-        {/* Left Column - Gradient Orange to Purple Background */}
-        <div className="w-2/5 bg-gradient-to-b from-orange-500 via-orange-600 to-purple-700 text-white flex flex-col justify-between relative overflow-hidden" style={{ padding: '40px 40px', minHeight: '100%' }}>
-          {/* Decorative Circles */}
-          <div className="absolute top-12 right-12 w-32 h-32 bg-gradient-to-br from-orange-300 to-purple-500 rounded-full opacity-30 blur-xl"></div>
-          <div className="absolute top-48 right-24 w-24 h-24 bg-gradient-to-br from-orange-400 to-purple-600 rounded-full opacity-25 blur-lg"></div>
-          <div className="absolute bottom-48 left-12 w-20 h-20 bg-gradient-to-br from-orange-300 to-purple-500 rounded-full opacity-20 blur-lg"></div>
-
+      <div className="flex" style={{ minHeight: '1536px' }}>
+        {/* Left Column - Black Background */}
+        <div className="text-white flex flex-col justify-between relative overflow-hidden" style={{ 
+          width: '370px',
+          paddingTop: '80px',
+          paddingLeft: '45px',
+          paddingRight: '35px',
+          paddingBottom: '0',
+          minHeight: '1536px',
+          backgroundColor: 'black'
+        }}>
           <div className="relative z-10 flex flex-col" style={{ height: '100%', justifyContent: 'space-between' }}>
             <div style={{ flex: '1 1 auto', minHeight: 0 }}>
               {/* Business Header */}
               <div style={{ marginBottom: '32px' }}>
-                <h1 className="text-4xl font-bold" style={{ fontFamily: 'cursive, serif', fontWeight: 400, marginBottom: '16px', fontSize: '36px' }}>
-                  {businessInfo.name || 'Your Business'}
-                </h1>
                 {businessInfo.logo && (
                   <img 
                     src={businessInfo.logo} 
                     alt={businessInfo.name}
-                    className="h-20 w-20 bg-white rounded-full p-2 object-contain"
-                    style={{ marginTop: '8px' }}
+                    className="object-contain"
+                    style={{ width: '100%', maxWidth: '180px', height: 'auto', display: 'block', marginBottom: '12px', marginLeft: 'auto', marginRight: 'auto' }}
                   />
                 )}
+                <h1 className="font-bold" style={{ fontFamily: 'Arial, sans-serif', fontWeight: 700, fontSize: '16px', textAlign: 'center', width: '100%' }}>
+                  {businessInfo.name || 'Your Business'}
+                </h1>
               </div>
 
               {/* Invoice To Section */}
               <div style={{ marginBottom: '28px' }}>
-                <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '12px', fontSize: '10px' }}>INVOICE TO:</p>
-                <h2 className="text-4xl font-bold leading-tight" style={{ marginBottom: '16px', fontSize: '36px', lineHeight: '1.2' }}>{customer.name.toUpperCase()}</h2>
+                <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '12px', fontSize: '10px', textAlign: 'left' }}>INVOICE TO:</p>
+                <h2 className="text-4xl font-bold leading-tight" style={{ marginBottom: '16px', fontSize: '28px', lineHeight: '1.2', textAlign: 'left' }}>{customer.name.toUpperCase()}</h2>
                 <div style={{ marginTop: '12px' }}>
                   <div style={{ marginBottom: '12px' }}>
-                    <p className="opacity-90 text-xs uppercase" style={{ marginBottom: '4px', fontSize: '10px', letterSpacing: '1px' }}>Date</p>
-                    <p className="font-semibold text-base" style={{ fontSize: '16px' }}>{new Date(invoiceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    <p className="opacity-90 text-xs uppercase" style={{ marginBottom: '4px', fontSize: '10px', letterSpacing: '1px', textAlign: 'left' }}>Date</p>
+                    <p className="font-semibold text-base" style={{ fontSize: '16px', textAlign: 'left' }}>{new Date(invoiceDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                   </div>
                   {dueDate && (
                     <div>
-                      <p className="opacity-90 text-xs uppercase" style={{ marginBottom: '4px', fontSize: '10px', letterSpacing: '1px' }}>Issue</p>
-                      <p className="font-semibold text-base" style={{ fontSize: '16px' }}>{new Date(dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                      <p className="opacity-90 text-xs uppercase" style={{ marginBottom: '4px', fontSize: '10px', letterSpacing: '1px', textAlign: 'left' }}>Issue</p>
+                      <p className="font-semibold text-base" style={{ fontSize: '16px', textAlign: 'left' }}>{new Date(dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                     </div>
                   )}
                 </div>
@@ -145,17 +171,55 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
               {/* Address Section */}
               {customer.address && (
                 <div style={{ marginBottom: '20px' }}>
-                  <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '8px', fontSize: '10px' }}>Address</p>
-                  <p className="text-sm leading-relaxed" style={{ fontSize: '13px', lineHeight: '1.5' }}>{customer.address}</p>
+                  <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '8px', fontSize: '10px', textAlign: 'left' }}>Address</p>
+                  <p className="text-sm leading-relaxed" style={{ fontSize: '13px', lineHeight: '1.5', textAlign: 'left' }}>{customer.address}</p>
                 </div>
               )}
 
               {/* Phone Section */}
               {customer.phone && (
                 <div style={{ marginBottom: '20px' }}>
-                  <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '8px', fontSize: '10px' }}>Phone</p>
-                  <p className="text-sm" style={{ fontSize: '13px' }}>{customer.phone}</p>
-                  {customer.email && <p className="text-sm" style={{ fontSize: '13px', marginTop: '6px' }}>{customer.email}</p>}
+                  <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '8px', fontSize: '10px', textAlign: 'left' }}>Phone</p>
+                  <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>{customer.phone}</p>
+                  {customer.email && <p className="text-sm" style={{ fontSize: '13px', marginTop: '6px', textAlign: 'left' }}>{customer.email}</p>}
+                </div>
+              )}
+
+              {/* Additional Customer Information */}
+              {additionalCustomerInfo && (
+                <div style={{ marginBottom: '20px' }}>
+                  {additionalCustomerInfo.companyName && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Company</p>
+                      <p className="text-sm font-semibold" style={{ fontSize: '13px', textAlign: 'left' }}>{additionalCustomerInfo.companyName}</p>
+                    </div>
+                  )}
+                  {additionalCustomerInfo.additionalNotes && (
+                    <div style={{ marginBottom: '12px' }}>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Notes</p>
+                      <p className="text-sm" style={{ fontSize: '13px', lineHeight: '1.5', textAlign: 'left' }}>{additionalCustomerInfo.additionalNotes}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Receiver Information (if different from customer) */}
+              {additionalCustomerInfo?.receiverName && (
+                <div style={{ marginBottom: '20px', paddingTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                  <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '12px', fontSize: '10px', textAlign: 'left' }}>RECEIVER:</p>
+                  <h3 className="text-xl font-bold" style={{ marginBottom: '8px', fontSize: '20px', lineHeight: '1.2', textAlign: 'left' }}>{additionalCustomerInfo.receiverName.toUpperCase()}</h3>
+                  {additionalCustomerInfo.receiverAddress && (
+                    <div style={{ marginBottom: '8px' }}>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '1px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Address</p>
+                      <p className="text-sm" style={{ fontSize: '13px', lineHeight: '1.5', textAlign: 'left' }}>{additionalCustomerInfo.receiverAddress}</p>
+                    </div>
+                  )}
+                  {additionalCustomerInfo.receiverPhone && (
+                    <div>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '1px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Phone</p>
+                      <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>{additionalCustomerInfo.receiverPhone}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -164,26 +228,26 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
                 <div style={{ marginBottom: '20px' }}>
                   {businessInfo.address && (
                     <div style={{ marginBottom: '10px' }}>
-                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px' }}>Business Address</p>
-                      <p className="text-sm" style={{ fontSize: '13px', lineHeight: '1.4' }}>{businessInfo.address}</p>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Business Address</p>
+                      <p className="text-sm" style={{ fontSize: '13px', lineHeight: '1.4', textAlign: 'left' }}>{businessInfo.address}</p>
                     </div>
                   )}
                   {businessInfo.phone && (
                     <div style={{ marginBottom: '10px' }}>
-                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px' }}>Business Phone</p>
-                      <p className="text-sm" style={{ fontSize: '13px' }}>{businessInfo.phone}</p>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Business Phone</p>
+                      <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>{businessInfo.phone}</p>
                     </div>
                   )}
                   {businessInfo.email && (
                     <div style={{ marginBottom: '10px' }}>
-                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px' }}>Business Email</p>
-                      <p className="text-sm" style={{ fontSize: '13px' }}>{businessInfo.email}</p>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Business Email</p>
+                      <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>{businessInfo.email}</p>
                     </div>
                   )}
                   {businessInfo.website && (
                     <div style={{ marginBottom: '10px' }}>
-                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px' }}>Website</p>
-                      <p className="text-sm" style={{ fontSize: '13px' }}>{businessInfo.website}</p>
+                      <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '4px', fontSize: '10px', textAlign: 'left' }}>Website</p>
+                      <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>{businessInfo.website}</p>
                     </div>
                   )}
                 </div>
@@ -191,91 +255,167 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
             </div>
 
             {/* Payment Method Section - Always visible at bottom */}
-            <div style={{ marginTop: 'auto', paddingTop: '24px' }}>
-              <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '16px', fontSize: '10px' }}>Payment Method</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div style={{ flexShrink: 0, paddingTop: '20px', marginTop: 'auto' }}>
+              <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '12px', fontSize: '10px', textAlign: 'left' }}>Payment Method</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {primaryBankAccount?.bank_name ? (
-                  <p className="text-sm" style={{ fontSize: '13px' }}>Your Bank: {primaryBankAccount.bank_name}</p>
+                  <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Your Bank: {primaryBankAccount.bank_name}</p>
                 ) : (
-                  <p className="text-sm" style={{ fontSize: '13px' }}>Your Bank: Sample Bank Name</p>
+                  <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Your Bank: Sample Bank Name</p>
                 )}
                 {primaryBankAccount?.account_number ? (
-                  <p className="text-sm" style={{ fontSize: '13px' }}>Bank Account: {primaryBankAccount.account_number}</p>
+                  <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Bank Account: {primaryBankAccount.account_number}</p>
                 ) : (
-                  <p className="text-sm" style={{ fontSize: '13px' }}>Bank Account: 1234567890</p>
+                  <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Bank Account: 1234567890</p>
                 )}
-                <p className="text-sm" style={{ fontSize: '13px' }}>Swift Code: SWIFT123456</p>
-                <p className="text-sm" style={{ fontSize: '13px' }}>Card Payment: Accepted</p>
-                <p className="text-sm" style={{ fontSize: '13px' }}>Paypal: yourbusiness@email.com</p>
-                <p className="text-sm" style={{ fontSize: '13px' }}>Master Card: Accepted</p>
+                <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Swift Code: SWIFT123456</p>
+                <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Card Payment: Accepted</p>
+                <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Paypal: yourbusiness@email.com</p>
+                <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Master Card: Accepted</p>
               </div>
+
+              {/* Payment Information (if provided) */}
+              {paymentInfo && (
+                <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                  <p className="text-xs uppercase opacity-90" style={{ letterSpacing: '2px', marginBottom: '12px', fontSize: '10px', textAlign: 'left' }}>Payment Information</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {paymentInfo.paymentMethod && (
+                      <p className="text-sm font-semibold" style={{ fontSize: '13px', textAlign: 'left' }}>Method: {paymentInfo.paymentMethod}</p>
+                    )}
+                    {paymentInfo.paymentReference && (
+                      <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Reference: {paymentInfo.paymentReference}</p>
+                    )}
+                    {paymentInfo.transactionId && (
+                      <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Transaction ID: {paymentInfo.transactionId}</p>
+                    )}
+                    {paymentInfo.paidAmount !== undefined && (
+                      <p className="text-sm font-semibold" style={{ fontSize: '13px', textAlign: 'left' }}>Paid: {formatCurrencySimple(paymentInfo.paidAmount)}</p>
+                    )}
+                    {paymentInfo.balance !== undefined && (
+                      <p className="text-sm font-semibold" style={{ fontSize: '13px', textAlign: 'left' }}>Balance: {formatCurrencySimple(paymentInfo.balance)}</p>
+                    )}
+                    {paymentInfo.paymentDate && (
+                      <p className="text-sm" style={{ fontSize: '13px', textAlign: 'left' }}>Date: {new Date(paymentInfo.paymentDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Right Column - White Background */}
-        <div className="w-3/5 bg-white flex flex-col" style={{ padding: '48px 60px' }}>
-          {/* Invoice Header */}
-          <div style={{ marginBottom: '40px' }}>
+        <div className="bg-white flex flex-col" style={{ 
+          width: '758px',
+          padding: '60px',
+          minHeight: '1536px'
+        }}>
+          {/* Invoice Header - Fixed Height 180px */}
+          <div style={{ height: '180px', marginBottom: '0' }}>
             <h2 className="text-6xl font-bold text-black lowercase" style={{ fontWeight: 700, letterSpacing: '-2px', marginBottom: '16px', fontSize: '64px', lineHeight: '1' }}>invoice.</h2>
             <p className="text-gray-600" style={{ fontSize: '13px', marginTop: '8px' }}>
               Account No. <span className="font-semibold text-black">{invoiceNumber.replace(/[^0-9]/g, '') || '987654321'}</span>
             </p>
           </div>
 
-          {/* Receiver Address Section */}
-          <div style={{ marginBottom: '32px', backgroundColor: '#F3F4F6', padding: '20px', borderRadius: '4px' }}>
-            <p className="text-xs uppercase font-semibold text-gray-700" style={{ letterSpacing: '1px', marginBottom: '12px', fontSize: '10px' }}>RECEIVER ADDRESS</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <p className="text-sm font-semibold text-gray-900" style={{ fontSize: '14px' }}>{customer.name}</p>
-              {customer.address && (
-                <p className="text-sm text-gray-700" style={{ fontSize: '13px', lineHeight: '1.6' }}>{customer.address}</p>
-              )}
-              {customer.phone && (
-                <p className="text-sm text-gray-700" style={{ fontSize: '13px' }}>Phone: {customer.phone}</p>
-              )}
-              {customer.email && (
-                <p className="text-sm text-gray-700" style={{ fontSize: '13px' }}>Email: {customer.email}</p>
-              )}
-              {customer.taxId && (
-                <p className="text-sm text-gray-700" style={{ fontSize: '13px' }}>Tax ID: {customer.taxId}</p>
-              )}
-            </div>
-          </div>
+        {/* Items Table - 40px space before, 650px width, exact column widths */}
+          <div style={{ marginTop: '40px', marginBottom: '32px' }}>
+            <table className="border-collapse" style={{ 
+              borderSpacing: 0, 
+              width: '650px',
+              tableLayout: 'fixed'
+            }}>
+            <thead>
+                <tr className="bg-gray-600 text-white" style={{ height: '55px' }}>
+                  <th className="text-left font-semibold text-sm text-white" style={{ 
+                    padding: '16px 20px', 
+                    fontSize: '13px', 
+                    fontWeight: 600,
+                    width: '420px'
+                  }}>Description</th>
+                  <th className="text-center font-semibold text-sm text-white" style={{ 
+                    padding: '16px 20px', 
+                    fontSize: '13px', 
+                    fontWeight: 600, 
+                    width: '80px'
+                  }}>Qty</th>
+                  <th className="text-right font-semibold text-sm text-white" style={{ 
+                    padding: '16px 20px', 
+                    fontSize: '13px', 
+                    fontWeight: 600, 
+                    width: '150px'
+                  }}>Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, index) => {
+                // Format specifications
+                let specificationsText = '';
+                if (item.specifications) {
+                  if (typeof item.specifications === 'string') {
+                    specificationsText = item.specifications;
+                  } else if (typeof item.specifications === 'object') {
+                    // Format as key-value pairs
+                    specificationsText = Object.entries(item.specifications)
+                      .filter(([key]) => key !== '_raw')
+                      .map(([key, value]) => `${key}: ${value}`)
+                      .join(', ');
+                    
+                    // If no key-value pairs but has _raw, use that
+                    if (!specificationsText && item.specifications._raw) {
+                      specificationsText = item.specifications._raw;
+                    }
+                  }
+                }
 
-          {/* Items Table */}
-          <div style={{ marginBottom: '32px' }}>
-            <table className="w-full border-collapse" style={{ borderSpacing: 0, width: '100%' }}>
-              <thead>
-                <tr className="bg-gray-600 text-white">
-                  <th className="text-left font-semibold text-sm text-white" style={{ padding: '16px 20px', fontSize: '13px', fontWeight: 600 }}>Description</th>
-                  <th className="text-center font-semibold text-sm text-white" style={{ padding: '16px 20px', fontSize: '13px', fontWeight: 600, width: '80px' }}>Qty</th>
-                  <th className="text-right font-semibold text-sm text-white" style={{ padding: '16px 20px', fontSize: '13px', fontWeight: 600, width: '140px' }}>Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={index} className="border-b border-gray-200">
-                    <td className="text-gray-900 text-sm" style={{ padding: '20px', lineHeight: '1.6', fontSize: '13px' }}>{item.description}</td>
-                    <td className="text-center text-gray-900 text-sm" style={{ padding: '20px', fontSize: '13px' }}>{item.quantity}</td>
-                    <td className="text-right font-semibold text-gray-900 text-sm" style={{ padding: '20px', fontSize: '13px' }}>{formatCurrencySimple(item.total)}</td>
+                return (
+                  <tr key={index} className="border-b border-gray-200" style={{ height: '115px' }}>
+                    <td className="text-gray-900 text-sm" style={{ 
+                      padding: '20px', 
+                      lineHeight: '1.6', 
+                      fontSize: '13px',
+                      width: '420px',
+                      verticalAlign: 'top'
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: 500, marginBottom: specificationsText ? '4px' : 0 }}>{item.description}</div>
+                        {specificationsText && (
+                          <div style={{ fontSize: '11px', color: '#6B7280', marginTop: '4px', lineHeight: '1.4' }}>
+                            {specificationsText}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="text-center text-gray-900 text-sm" style={{ 
+                      padding: '20px', 
+                      fontSize: '13px',
+                      width: '80px',
+                      verticalAlign: 'top'
+                    }}>{item.quantity}</td>
+                    <td className="text-right font-semibold text-gray-900 text-sm" style={{ 
+                      padding: '20px', 
+                      fontSize: '13px',
+                      width: '150px',
+                      verticalAlign: 'top'
+                    }}>{formatCurrencySimple(item.total)}</td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
           {/* Totals Summary */}
           <div style={{ marginBottom: '40px' }}>
             <div className="bg-gray-400 text-white flex justify-between items-center" style={{ padding: '16px 24px', backgroundColor: '#9CA3AF' }}>
               <span className="font-semibold" style={{ fontSize: '13px' }}>Sub Total</span>
               <span className="font-semibold" style={{ fontSize: '13px' }}>{formatCurrencySimple(subtotal)}</span>
-            </div>
+              </div>
             <div className="bg-gray-500 text-white flex justify-between items-center" style={{ padding: '16px 24px', backgroundColor: '#6B7280' }}>
               <span className="font-semibold" style={{ fontSize: '15px' }}>Total (Include Tax)</span>
               <span className="font-semibold" style={{ fontSize: '18px' }}>{formatCurrencySimple(total)}</span>
-            </div>
           </div>
+        </div>
 
           {/* Terms & Conditions and Signature */}
           <div style={{ marginBottom: '40px' }}>
@@ -287,7 +427,7 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
                 </p>
               </div>
               <div className="text-right" style={{ minWidth: '150px', flexShrink: 0 }}>
-                <div>
+              <div>
                   <div className="text-gray-900 font-semibold" style={{ fontFamily: 'cursive, serif', marginBottom: '4px', fontSize: '16px' }}>{customer.name}</div>
                   <div className="text-gray-600" style={{ fontSize: '11px' }}>Manager</div>
                 </div>
@@ -295,22 +435,30 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="mt-auto border-t border-gray-200" style={{ paddingTop: '40px', marginTop: 'auto', borderTop: '1px solid #E5E7EB' }}>
+        {/* Footer - Fixed Height 250px */}
+          <div className="mt-auto border-t border-gray-200" style={{ 
+            height: '250px',
+            paddingTop: '40px', 
+            marginTop: 'auto', 
+            borderTop: '1px solid #E5E7EB',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
             <p className="text-center text-gray-600 uppercase" style={{ letterSpacing: '3px', fontSize: '11px', color: '#4B5563' }}>Thank You For The Business</p>
           </div>
 
-          {/* Print Button */}
-          {onPrint && (
-            <div className="flex justify-center mt-6 no-print">
-              <button
-                onClick={onPrint}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg"
-              >
-                Print Invoice
-              </button>
-            </div>
-          )}
+        {/* Print Button */}
+        {onPrint && (
+          <div className="flex justify-center mt-6 no-print">
+            <button
+              onClick={onPrint}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg"
+            >
+              Print Invoice
+            </button>
+          </div>
+        )}
         </div>
       </div>
 
@@ -322,6 +470,37 @@ const InvoiceTemplate: React.FC<InvoiceTemplateProps> = ({
           body {
             print-color-adjust: exact;
             -webkit-print-color-adjust: exact;
+          }
+          @page {
+            size: A4;
+            margin: 0;
+          }
+          /* Scale to A4 for printing: 1128px → 794px (210mm at 96dpi) */
+          .invoice-container {
+            transform: scale(0.704);
+            transform-origin: top left;
+            width: 1128px;
+            height: 1536px;
+          }
+        }
+        @media screen {
+          .invoice-container {
+            width: 1128px;
+            min-height: 1536px;
+            margin: 0 auto;
+          }
+        }
+        @media (max-width: 1200px) {
+          /* Responsive scaling for smaller screens */
+          .invoice-container {
+            transform: scale(0.9);
+            transform-origin: top left;
+          }
+        }
+        @media (max-width: 1024px) {
+          .invoice-container {
+            transform: scale(0.8);
+            transform-origin: top left;
           }
         }
       `}</style>

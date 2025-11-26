@@ -492,9 +492,13 @@ const DashboardCustomizationSettings: React.FC = () => {
 
   if (loading || !rolePermissions) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-        <span className="ml-3 text-gray-600">Loading dashboard settings...</span>
+      <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm">
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading dashboard settings...</p>
+          </div>
+        </div>
       </div>
     );
   }
@@ -569,171 +573,169 @@ const DashboardCustomizationSettings: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <LayoutDashboard className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">Dashboard Settings</h2>
-              <p className="text-sm text-gray-600">Customize your dashboard - Click items to add or remove</p>
-            </div>
+    <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+      {/* Icon Header - Fixed - Matching SetPricingModal style */}
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+            <LayoutDashboard className="w-8 h-8 text-white" />
           </div>
           
-          {/* Summary Badge */}
-          <div className="flex gap-2">
-            <div className="px-3 py-1.5 bg-blue-50 rounded-lg">
-              <p className="text-xs text-blue-600 font-medium">
-                {enabledQuickActionsCount + enabledChartsCount + enabledWidgetsCount} items enabled
-              </p>
+          {/* Text and Actions */}
+          <div className="flex items-center justify-between flex-1">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">Dashboard Settings</h2>
+              <p className="text-sm text-gray-600">Customize your dashboard</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Summary Badge */}
+              <div className="px-4 py-2 bg-blue-50 border-2 border-blue-200 rounded-xl">
+                <p className="text-sm text-blue-600 font-semibold">
+                  {enabledQuickActionsCount + enabledChartsCount + enabledWidgetsCount} items enabled
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Role Info Banner */}
-        <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+        <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl">
           <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-blue-600" />
-            <p className="text-sm text-blue-800">
+            <Shield className="w-5 h-5 text-blue-600" />
+            <p className="text-sm text-blue-800 font-medium">
               <span className="font-semibold">Your Role: {getRoleDisplayName(currentUser?.role || '')}</span> - 
               You can customize {allowedQuickActions.length} quick actions and {allowedWidgets.length} widgets
             </p>
           </div>
         </div>
 
-        <div className="flex gap-3">
+        {/* Action Buttons */}
+        <div className="flex gap-3 mt-6">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 font-medium"
+            className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all disabled:opacity-50 font-semibold shadow-lg hover:shadow-xl"
           >
-            <Save size={18} />
+            <Save size={20} />
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
           <button
             onClick={handleReset}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            className="flex items-center gap-2 px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 transition-all font-semibold shadow-sm"
           >
-            <RotateCcw size={18} />
+            <RotateCcw size={20} />
             Reset to Defaults
           </button>
         </div>
       </div>
 
-      {/* Quick Actions Section */}
-      {allowedQuickActions.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-blue-600" />
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="space-y-6 py-6">
+
+          {/* Quick Actions Section */}
+          {allowedQuickActions.length > 0 && (
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <Zap className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Quick Actions</h3>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-semibold text-blue-600">{enabledQuickActionsCount} of {allowedQuickActions.length}</span> enabled
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => toggleAllQuickActions(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-green-50 text-green-700 rounded-xl hover:bg-green-100 transition-colors font-semibold border-2 border-green-200"
+                  >
+                    <CheckCircle2 size={16} />
+                    Enable All
+                  </button>
+                  <button
+                    onClick={() => toggleAllQuickActions(false)}
+                    className="flex items-center gap-1.5 px-4 py-2 text-sm bg-red-50 text-red-700 rounded-xl hover:bg-red-100 transition-colors font-semibold border-2 border-red-200"
+                  >
+                    <XCircle size={16} />
+                    Disable All
+                  </button>
+                </div>
               </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-                <p className="text-sm text-gray-600">
-                  <span className="font-semibold text-blue-600">{enabledQuickActionsCount} of {allowedQuickActions.length}</span> enabled
-                </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {allowedQuickActions.map(item => {
+                  const Icon = item.icon;
+                  const isEnabled = dashboardSettings.quickActions[item.key];
+
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => toggleQuickAction(item.key)}
+                      className={`group p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden ${
+                        isEnabled
+                          ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-blue-50 shadow-sm hover:shadow-md'
+                          : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'
+                      }`}
+                    >
+                      {/* Status Badge */}
+                      <div className={`absolute top-2 right-2 px-2.5 py-1 rounded-full text-xs font-bold ${
+                        isEnabled 
+                          ? 'bg-green-500 text-white shadow-sm' 
+                          : 'bg-gray-300 text-gray-600'
+                      }`}>
+                        {isEnabled ? 'Enabled' : 'Disabled'}
+                      </div>
+
+                      <div className="flex items-start gap-3 mb-2 mt-2">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                          isEnabled 
+                            ? 'bg-indigo-600 shadow-lg shadow-indigo-200' 
+                            : 'bg-gray-300 group-hover:bg-indigo-400'
+                        }`}>
+                          <Icon className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      
+                      <h4 className={`font-semibold text-sm mb-1 ${
+                        isEnabled ? 'text-indigo-900' : 'text-gray-700'
+                      }`}>
+                        {item.label}
+                      </h4>
+                      <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
+
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => toggleAllQuickActions(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium"
-              >
-                <CheckCircle2 size={16} />
-                Enable All
-              </button>
-              <button
-                onClick={() => toggleAllQuickActions(false)}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors font-medium"
-              >
-                <XCircle size={16} />
-                Disable All
-              </button>
-            </div>
-          </div>
+          )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {allowedQuickActions.map(item => {
-              const Icon = item.icon;
-              const isEnabled = dashboardSettings.quickActions[item.key];
-
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => toggleQuickAction(item.key)}
-                  className={`group p-4 rounded-xl border-2 transition-all text-left relative overflow-hidden ${
-                    isEnabled
-                      ? 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-blue-50 shadow-sm hover:shadow-md'
-                      : 'border-gray-200 bg-white hover:border-indigo-300 hover:bg-indigo-50/30'
-                  }`}
-                >
-                  {/* Status Badge */}
-                  <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-                    isEnabled 
-                      ? 'bg-green-500 text-white' 
-                      : 'bg-gray-300 text-gray-600'
-                  }`}>
-                    {isEnabled ? 'Enabled' : 'Disabled'}
+          {/* Dashboard Preview - Only Enabled Widgets */}
+          {orderedWidgets.filter(w => dashboardSettings.widgets[w.key]).length > 0 && (
+            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border-2 border-green-300 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
+                    <LayoutDashboard className="w-6 h-6 text-white" />
                   </div>
-
-                  <div className="flex items-start gap-3 mb-2 mt-2">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                      isEnabled 
-                        ? 'bg-indigo-600 shadow-lg shadow-indigo-200' 
-                        : 'bg-gray-300 group-hover:bg-indigo-400'
-                    }`}>
-                      <Icon className="w-5 h-5 text-white" />
-                    </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                      Dashboard Preview
+                      <span className="px-3 py-1 rounded-full text-sm font-semibold bg-green-600 text-white shadow-sm">
+                        {totalEnabledWidgets} Active
+                      </span>
+                    </h3>
+                    <p className="text-sm text-gray-700 font-medium mt-1">
+                      This shows EXACTLY how your dashboard looks with real gaps - Resize widgets to fill empty spaces
+                    </p>
                   </div>
-                  
-                  <h4 className={`font-semibold text-sm mb-1 ${
-                    isEnabled ? 'text-indigo-900' : 'text-gray-700'
-                  }`}>
-                    {item.label}
-                  </h4>
-                  <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
-
-                  {/* Click Instruction */}
-                  <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                    isEnabled 
-                      ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                      : 'text-indigo-600 opacity-0 group-hover:opacity-100'
-                  }`}>
-                    <MousePointerClick size={12} />
-                    {isEnabled ? 'Click to disable' : 'Click to enable'}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Dashboard Preview - Only Enabled Widgets */}
-      {orderedWidgets.filter(w => dashboardSettings.widgets[w.key]).length > 0 && (
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-sm border-2 border-green-300 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 flex items-center justify-center shadow-lg">
-                <LayoutDashboard className="w-6 h-6 text-white" />
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  Dashboard Preview
-                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-green-600 text-white shadow-sm">
-                    {totalEnabledWidgets} Active
-                  </span>
-                </h3>
-                <p className="text-sm text-gray-700 font-medium mt-1">
-                  This shows EXACTLY how your dashboard looks with real gaps - Resize widgets to fill empty spaces
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Show widgets with REAL gaps by simulating row-by-row placement */}
           {(() => {
@@ -870,212 +872,195 @@ const DashboardCustomizationSettings: React.FC = () => {
                           : 'border-gray-200 bg-white'
                       } ${getResponsiveClass()}`}
                     >
-                    {/* Main Card - Click to toggle */}
-                    <button
-                      onClick={() => toggleWidget(item.key)}
-                      className="w-full p-4 text-left group"
-                    >
-                      {/* Status Badge */}
-                      <div className="absolute top-2 right-2 flex gap-1 flex-wrap justify-end max-w-[70%]">
-                        <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                          isEnabled 
-                            ? 'bg-green-500 text-white' 
-                            : 'bg-gray-300 text-gray-600'
-                        }`}>
-                          {isEnabled ? 'Enabled' : 'Disabled'}
-                        </div>
-                        {isEnabled && (
-                          <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${colorScheme.sizeBg} text-white`}>
-                            {currentSize === 'small' ? 'Small' : currentSize === 'large' ? 'Large' : 'Medium'}
+                      {/* Main Card - Click to toggle */}
+                      <button
+                        onClick={() => toggleWidget(item.key)}
+                        className="w-full p-4 text-left group"
+                      >
+                        {/* Status Badge */}
+                        <div className="absolute top-2 right-2 flex gap-1 flex-wrap justify-end max-w-[70%]">
+                          <div className={`px-2.5 py-1 rounded-full text-xs font-bold shadow-sm ${
+                            isEnabled 
+                              ? 'bg-green-500 text-white' 
+                              : 'bg-gray-300 text-gray-600'
+                          }`}>
+                            {isEnabled ? 'Enabled' : 'Disabled'}
                           </div>
-                        )}
-                        <div className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-600 text-white">
-                          {isChart ? '📊 Chart' : '📦 Widget'}
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 mb-2 mt-2">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                          isEnabled 
-                            ? colorScheme.iconBg
-                            : `bg-gray-300 ${colorScheme.iconHover}`
-                        }`}>
-                          <Icon className="w-5 h-5 text-white" />
-                        </div>
-                      </div>
-                      
-                      <h4 className={`font-semibold text-sm mb-1 ${
-                        isEnabled ? colorScheme.text : 'text-gray-700'
-                      }`}>
-                        {item.label}
-                      </h4>
-
-                      {/* Click Instruction */}
-                      <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                        isEnabled 
-                          ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                          : `${colorScheme.hoverText} opacity-0 group-hover:opacity-100`
-                      }`}>
-                        <MousePointerClick size={12} />
-                        {isEnabled ? 'Click to remove' : 'Click to enable'}
-                      </div>
-                    </button>
-
-                    {/* Size Selector - Only show if enabled */}
-                    {isEnabled && (
-                      <div className={`px-4 pb-4 pt-2 border-t ${colorScheme.borderBottom}`}>
-                        <div className="flex items-center justify-between">
-                          <span className={`text-xs font-medium ${colorScheme.sizeLabel}`}>Widget Size:</span>
-                          <div className="flex gap-1">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setWidgetSize(item.key, 'small');
-                              }}
-                              className={`p-1.5 rounded ${
-                                currentSize === 'small'
-                                  ? colorScheme.sizeActive
-                                  : colorScheme.sizeButtons
-                              } transition-colors`}
-                              title="Small (1 column)"
-                            >
-                              <Minimize2 size={14} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setWidgetSize(item.key, 'medium');
-                              }}
-                              className={`p-1.5 rounded ${
-                                currentSize === 'medium'
-                                  ? colorScheme.sizeActive
-                                  : colorScheme.sizeButtons
-                              } transition-colors`}
-                              title="Medium (2 columns)"
-                            >
-                              <Square size={14} />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setWidgetSize(item.key, 'large');
-                              }}
-                              className={`p-1.5 rounded ${
-                                currentSize === 'large'
-                                  ? colorScheme.sizeActive
-                                  : colorScheme.sizeButtons
-                              } transition-colors`}
-                              title="Large (3 columns)"
-                            >
-                              <Maximize2 size={14} />
-                            </button>
+                          {isEnabled && (
+                            <div className={`px-2.5 py-1 rounded-full text-xs font-bold ${colorScheme.sizeBg} text-white shadow-sm`}>
+                              {currentSize === 'small' ? 'Small' : currentSize === 'large' ? 'Large' : 'Medium'}
+                            </div>
+                          )}
+                          <div className="px-2.5 py-1 rounded-full text-xs font-bold bg-gray-600 text-white shadow-sm border border-gray-700">
+                            {isChart ? '📊 Chart' : '📦 Widget'}
                           </div>
                         </div>
-                      </div>
-                    )}
+
+                        <div className="flex items-start gap-3 mb-2 mt-2">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                            isEnabled 
+                              ? colorScheme.iconBg
+                              : `bg-gray-300 ${colorScheme.iconHover}`
+                          }`}>
+                            <Icon className="w-5 h-5 text-white" />
+                          </div>
+                        </div>
+                        
+                        <h4 className={`font-semibold text-sm mb-1 ${
+                          isEnabled ? colorScheme.text : 'text-gray-700'
+                        }`}>
+                          {item.label}
+                        </h4>
+
+                      </button>
+
+                      {/* Size Selector - Only show if enabled */}
+                      {isEnabled && (
+                        <div className={`px-4 pb-4 pt-2 border-t ${colorScheme.borderBottom}`}>
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-medium ${colorScheme.sizeLabel}`}>Widget Size:</span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWidgetSize(item.key, 'small');
+                                }}
+                                className={`p-1.5 rounded ${
+                                  currentSize === 'small'
+                                    ? colorScheme.sizeActive
+                                    : colorScheme.sizeButtons
+                                } transition-colors`}
+                                title="Small (1 column)"
+                              >
+                                <Minimize2 size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWidgetSize(item.key, 'medium');
+                                }}
+                                className={`p-1.5 rounded ${
+                                  currentSize === 'medium'
+                                    ? colorScheme.sizeActive
+                                    : colorScheme.sizeButtons
+                                } transition-colors`}
+                                title="Medium (2 columns)"
+                              >
+                                <Square size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWidgetSize(item.key, 'large');
+                                }}
+                                className={`p-1.5 rounded ${
+                                  currentSize === 'large'
+                                    ? colorScheme.sizeActive
+                                    : colorScheme.sizeButtons
+                                } transition-colors`}
+                                title="Large (3 columns)"
+                              >
+                                <Maximize2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             ));
           })()}
-        </div>
-      )}
+            </div>
+          )}
 
-      {/* Available Widgets - Disabled Widgets */}
-      {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).length > 0 && (
-        <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl shadow-sm border-2 border-gray-300 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-r from-gray-500 to-slate-500 flex items-center justify-center shadow-lg">
-                <Package className="w-6 h-6 text-white" />
+          {/* Available Widgets - Disabled Widgets */}
+          {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).length > 0 && (
+            <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl border-2 border-gray-300 shadow-sm p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-r from-gray-500 to-slate-500 flex items-center justify-center shadow-lg">
+                    <Package className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                      Available Widgets
+                      <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-600 text-white shadow-sm">
+                        {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).length} Available
+                      </span>
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    allWidgets.forEach(widget => {
+                      setDashboardSettings(prev => ({
+                        ...prev,
+                        widgets: {
+                          ...prev.widgets,
+                          [widget.key]: true
+                        }
+                      }));
+                    });
+                  }}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all font-semibold shadow-lg hover:shadow-xl"
+                >
+                  <Plus size={18} />
+                  Add All to Dashboard
+                </button>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                  Available Widgets
-                  <span className="px-3 py-1 rounded-full text-sm font-semibold bg-gray-600 text-white shadow-sm">
-                    {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).length} Available
-                  </span>
-                </h3>
-                <p className="text-sm text-gray-700 font-medium mt-1">
-                  Click any widget below to add it to your dashboard
-                </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).map(item => {
+                  const Icon = item.icon;
+                  const isEnabled = dashboardSettings.widgets[item.key];
+                  const isChart = item.category === 'Charts';
+
+                  // Color scheme based on category
+                  const colorScheme = isChart ? {
+                    border: 'border-purple-300',
+                    bg: 'bg-white',
+                    iconBg: 'bg-purple-500',
+                    text: 'text-gray-700',
+                    badge: 'bg-purple-100 text-purple-700'
+                  } : {
+                    border: 'border-blue-300',
+                    bg: 'bg-white',
+                    iconBg: 'bg-blue-500',
+                    text: 'text-gray-700',
+                    badge: 'bg-blue-100 text-blue-700'
+                  };
+
+                  return (
+                    <button
+                      key={item.key}
+                      onClick={() => toggleWidget(item.key)}
+                      className={`rounded-xl border-2 transition-all relative overflow-hidden hover:shadow-md hover:scale-105 p-4 text-left group ${colorScheme.border} ${colorScheme.bg}`}
+                    >
+                      {/* Type Badge */}
+                      <div className="absolute top-2 right-2">
+                        <div className={`px-2.5 py-1 rounded-full text-xs font-bold border ${colorScheme.badge} border-gray-200`}>
+                          {isChart ? '📊 Chart' : '📦 Widget'}
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 mb-2 mt-2">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${colorScheme.iconBg} shadow-md`}>
+                          <Icon className="w-5 h-5 text-white" />
+                        </div>
+                      </div>
+                      
+                      <h4 className={`font-semibold text-sm mb-1 ${colorScheme.text}`}>
+                        {item.label}
+                      </h4>
+
+                    </button>
+                  );
+                })}
               </div>
             </div>
-            <button
-              onClick={() => {
-                allWidgets.forEach(widget => {
-                  setDashboardSettings(prev => ({
-                    ...prev,
-                    widgets: {
-                      ...prev.widgets,
-                      [widget.key]: true
-                    }
-                  }));
-                });
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
-            >
-              <Plus size={18} />
-              Add All to Dashboard
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).map(item => {
-              const Icon = item.icon;
-              const isEnabled = dashboardSettings.widgets[item.key];
-              const isChart = item.category === 'Charts';
-
-              // Color scheme based on category
-              const colorScheme = isChart ? {
-                border: 'border-purple-300',
-                bg: 'bg-white',
-                iconBg: 'bg-purple-500',
-                text: 'text-gray-700',
-                badge: 'bg-purple-100 text-purple-700'
-              } : {
-                border: 'border-blue-300',
-                bg: 'bg-white',
-                iconBg: 'bg-blue-500',
-                text: 'text-gray-700',
-                badge: 'bg-blue-100 text-blue-700'
-              };
-
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => toggleWidget(item.key)}
-                  className={`rounded-xl border-2 transition-all relative overflow-hidden hover:shadow-md hover:scale-105 p-4 text-left group ${colorScheme.border} ${colorScheme.bg}`}
-                >
-                  {/* Type Badge */}
-                  <div className="absolute top-2 right-2">
-                    <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${colorScheme.badge}`}>
-                      {isChart ? '📊 Chart' : '📦 Widget'}
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 mb-2 mt-2">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${colorScheme.iconBg} shadow-md`}>
-                      <Icon className="w-5 h-5 text-white" />
-                    </div>
-                  </div>
-                  
-                  <h4 className={`font-semibold text-sm mb-1 ${colorScheme.text}`}>
-                    {item.label}
-                  </h4>
-
-                  {/* Click Instruction */}
-                  <div className="mt-3 flex items-center gap-1 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Plus size={12} />
-                    Click to add
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+          )}
 
       {/* Widget Order Section (Temporarily Hidden - Use Unified Preview Above) */}
       {false && otherWidgets.length > 0 && (
@@ -1223,15 +1208,6 @@ const DashboardCustomizationSettings: React.FC = () => {
                       {item.label}
                     </h4>
 
-                    {/* Click Instruction */}
-                    <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                      isEnabled 
-                        ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                        : 'text-green-600 opacity-0 group-hover:opacity-100'
-                    }`}>
-                      <MousePointerClick size={12} />
-                      {isEnabled ? 'Click to disable' : 'Click to enable'}
-                    </div>
                   </button>
 
                   {/* Size Selector - Only show if enabled */}
@@ -1293,44 +1269,9 @@ const DashboardCustomizationSettings: React.FC = () => {
         </div>
       )}
 
-      {/* Widget Order Section */}
-      <WidgetOrderSettings className="mt-8" />
+          {/* Widget Order Section */}
+          <WidgetOrderSettings className="mt-8" />
 
-      {/* Info Box */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 mt-8">
-        <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-            <Info className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-blue-900 mb-2 text-base">💡 How to Use</h4>
-            <ul className="text-sm text-blue-800 space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">✅</span>
-                <span><strong>Dashboard Preview</strong> shows REAL gaps and empty spaces - exactly like your actual dashboard!</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">📏</span>
-                <span><strong>See the gaps?</strong> Change widget sizes to Large to fill empty spaces, or keep Small/Medium if you like the gaps</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">➕</span>
-                <span><strong>Available Widgets</strong> (gray section) - click any widget to add it and see how it affects the layout</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">🎨</span>
-                <span><strong>Resize instantly:</strong> Click Small (1 col) / Medium (2 cols) / Large (3 cols - full width) buttons</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">📊</span>
-                <span>Purple = <strong>Charts</strong>, Blue = <strong>Widgets</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">💾</span>
-                <span>Click <strong>"Save Changes"</strong> when you're happy with the layout!</span>
-              </li>
-            </ul>
-          </div>
         </div>
       </div>
     </div>

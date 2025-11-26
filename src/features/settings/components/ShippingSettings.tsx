@@ -10,12 +10,14 @@ import shippingApi, {
   ShippingMethod, 
   ShippingSettings as ShippingSettingsType 
 } from '../../../lib/shippingApi';
+import { useSettingsSave } from '../../../context/SettingsSaveContext';
 
 interface ShippingSettingsProps {
   isActive?: boolean;
 }
 
 const ShippingSettings: React.FC<ShippingSettingsProps> = ({ isActive = true }) => {
+  const { registerSaveHandler, unregisterSaveHandler, setHasChanges } = useSettingsSave();
   const [activeTab, setActiveTab] = useState<'agents' | 'methods' | 'defaults'>('agents');
   const [agents, setAgents] = useState<ShippingAgent[]>([]);
   const [methods, setMethods] = useState<ShippingMethod[]>([]);
@@ -178,10 +180,11 @@ const ShippingSettings: React.FC<ShippingSettingsProps> = ({ isActive = true }) 
   };
 
   // Settings operations
-  const handleSaveSettings = async () => {
-    try {
+  useEffect(() => {
       if (!settings) return;
 
+    const handleSaveSettings = async () => {
+      try {
       setSaving(true);
       await shippingApi.settings.save(settings);
       toast.success('Settings saved successfully');
@@ -193,6 +196,16 @@ const ShippingSettings: React.FC<ShippingSettingsProps> = ({ isActive = true }) 
       setSaving(false);
     }
   };
+    
+    registerSaveHandler('shipping-settings', handleSaveSettings);
+    return () => unregisterSaveHandler('shipping-settings');
+  }, [settings, registerSaveHandler, unregisterSaveHandler]);
+
+  useEffect(() => {
+    if (settings) {
+      setHasChanges(true);
+    }
+  }, [settings, setHasChanges]);
 
   const toggleShippingMethod = (method: string) => {
     setAgentForm(prev => ({
@@ -205,68 +218,77 @@ const ShippingSettings: React.FC<ShippingSettingsProps> = ({ isActive = true }) 
 
   if (loading) {
     return (
-      <GlassCard className="p-6">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600">Loading shipping settings...</p>
           </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <GlassCard className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Shipping Management</h2>
-            <p className="text-gray-600 mt-1">
-              Manage shipping agents, methods, and default settings for purchase orders
-            </p>
+    <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+      {/* Icon Header - Fixed - Matching Store Management style */}
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-orange-600 rounded-full flex items-center justify-center shadow-lg">
+            <Truck className="w-8 h-8 text-white" />
           </div>
-          <Truck className="w-12 h-12 text-blue-600" />
+          
+          {/* Text */}
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Shipping Management</h2>
+            <p className="text-sm text-gray-600">Manage shipping agents, methods, and default settings for purchase orders</p>
+          </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mt-6">
-          <button
-            onClick={() => setActiveTab('agents')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'agents'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <Building className="w-4 h-4" />
-            Shipping Agents
-          </button>
-          <button
-            onClick={() => setActiveTab('methods')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'methods'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <Truck className="w-4 h-4" />
-            Shipping Methods
-          </button>
-          <button
-            onClick={() => setActiveTab('defaults')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-              activeTab === 'defaults'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <MapPin className="w-4 h-4" />
-            Default Settings
-          </button>
+        <div className="mt-6 border-b-2 border-gray-200">
+          <nav className="flex space-x-2 overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('agents')}
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-semibold text-sm transition-all whitespace-nowrap rounded-t-xl ${
+                activeTab === 'agents'
+                  ? 'border-orange-500 text-orange-700 bg-orange-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <Building className="w-5 h-5" />
+              Shipping Agents
+            </button>
+            <button
+              onClick={() => setActiveTab('methods')}
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-semibold text-sm transition-all whitespace-nowrap rounded-t-xl ${
+                activeTab === 'methods'
+                  ? 'border-orange-500 text-orange-700 bg-orange-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <Truck className="w-5 h-5" />
+              Shipping Methods
+            </button>
+            <button
+              onClick={() => setActiveTab('defaults')}
+              className={`flex items-center gap-2 py-3 px-4 border-b-2 font-semibold text-sm transition-all whitespace-nowrap rounded-t-xl ${
+                activeTab === 'defaults'
+                  ? 'border-orange-500 text-orange-700 bg-orange-50'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <MapPin className="w-5 h-5" />
+              Default Settings
+            </button>
+          </nav>
         </div>
-      </GlassCard>
+      </div>
+
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="py-6">
 
       {/* Agents Tab */}
       {activeTab === 'agents' && (
@@ -654,20 +676,12 @@ const ShippingSettings: React.FC<ShippingSettingsProps> = ({ isActive = true }) 
               </div>
             </div>
 
-            {/* Save Button */}
-            <div className="flex justify-end pt-4 border-t border-gray-200">
-              <button
-                onClick={handleSaveSettings}
-                disabled={saving}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                <Save className="w-4 h-4" />
-                {saving ? 'Saving...' : 'Save Settings'}
-              </button>
-            </div>
           </div>
         </GlassCard>
       )}
+
+        </div>
+      </div>
 
       {/* Agent Form Modal */}
       {showAgentForm && (

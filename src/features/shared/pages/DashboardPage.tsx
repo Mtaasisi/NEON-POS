@@ -38,6 +38,16 @@ import {
   TopProductsWidget,
   ExpensesWidget,
   StaffPerformanceWidget,
+  LoyaltyWidget,
+  TradeInWidget,
+  InstallmentsWidget,
+  SMSWidget,
+  SparePartsWidget,
+  StorageRoomsWidget,
+  StockTransfersWidget,
+  SpecialOrdersWidget,
+  BackupWidget,
+  RepairWidget,
   RevenueTrendChart,
   DeviceStatusChart,
   AppointmentsTrendChart,
@@ -120,7 +130,13 @@ const DashboardPageContent: React.FC = () => {
           'customerInsightsWidget', 'serviceWidget', 'reminderWidget',
           'systemHealthWidget', 'inventoryWidget', 'activityFeedWidget',
           'purchaseOrderWidget', 'chatWidget', 'salesWidget', 'topProductsWidget',
-          'expensesWidget', 'staffPerformanceWidget'
+          'expensesWidget', 'staffPerformanceWidget',
+          // New feature widgets
+          'tradeInWidget', 'installmentsWidget', 'loyaltyWidget', 'smsWidget',
+          'sparePartsWidget', 'storageRoomsWidget', 'stockTransfersWidget',
+          'specialOrdersWidget', 'backupWidget', 'repairWidget',
+          // AI-powered widgets
+          'aiInsightsWidget', 'predictiveAnalyticsWidget', 'alertSystemWidget'
         ];
         const filteredOrder = DEFAULT_WIDGET_ORDER.filter((widget: string) => isWidgetEnabled(widget as any));
         setWidgetOrder(filteredOrder);
@@ -837,6 +853,17 @@ const DashboardPageContent: React.FC = () => {
             'systemHealthWidget': SystemHealthWidget,
             'inventoryWidget': InventoryWidget,
             'activityFeedWidget': ActivityFeedWidget,
+            // New feature widgets
+            'tradeInWidget': TradeInWidget,
+            'installmentsWidget': InstallmentsWidget,
+            'loyaltyWidget': LoyaltyWidget,
+            'smsWidget': SMSWidget,
+            'sparePartsWidget': SparePartsWidget,
+            'storageRoomsWidget': StorageRoomsWidget,
+            'stockTransfersWidget': StockTransfersWidget,
+            'specialOrdersWidget': SpecialOrdersWidget,
+            'backupWidget': BackupWidget,
+            'repairWidget': RepairWidget,
             // Enhanced AI-powered widgets
             'aiInsightsWidget': AIInsightsWidget,
             'predictiveAnalyticsWidget': PredictiveAnalyticsWidget,

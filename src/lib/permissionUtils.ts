@@ -99,6 +99,14 @@ export const ROLE_PERMISSIONS = {
     'access_pos', 'process_sales', 'apply_discounts',
     'view_reports'
   ],
+  'store-keeper': [
+    'view_inventory',
+    'view_stock_history',
+    'adjust_stock',
+    'view_purchase_orders',
+    'edit_purchase_orders', // For receiving stock
+    'view_reports' // Inventory reports only
+  ],
   user: [
     'view_devices', 'view_customers'
   ]
@@ -113,6 +121,7 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/lats/inventory/products/:id/edit': ['edit_products'],
   '/lats/inventory/purchase-orders': ['view_purchase_orders'],
   '/lats/inventory/purchase-orders/new': ['create_purchase_orders'],
+  '/lats/inventory/stock-transfer': ['view_inventory', 'adjust_stock'],
   '/lats/add-product': ['add_products'],
   '/lats/spare-parts': ['view_spare_parts'],
   '/lats/reports': ['view_reports'],

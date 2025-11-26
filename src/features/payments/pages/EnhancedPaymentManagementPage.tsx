@@ -761,16 +761,6 @@ Reference: ${transaction.reference || 'N/A'}`;
                           ? 'No payment transactions have been recorded yet.'
                           : 'No transactions match your current filters.'}
                       </p>
-                      {historyTransactions.length === 0 && (
-                        <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm text-gray-700 max-w-md mx-auto">
-                          <p className="font-medium mb-2">💡 To see payment history:</p>
-                          <ul className="text-left space-y-1">
-                            <li>• Process payments through the POS</li>
-                            <li>• Record purchase order payments</li>
-                            <li>• Complete device repair payments</li>
-                          </ul>
-                        </div>
-                      )}
                       {historyTransactions.length > 0 && (
                         <GlassButton 
                           onClick={() => setHistoryFilter({ status: 'all', provider: 'all', dateRange: '30', source: 'all' })}

@@ -15,6 +15,16 @@ export { SalesWidget } from './SalesWidget';
 export { TopProductsWidget } from './TopProductsWidget';
 export { ExpensesWidget } from './ExpensesWidget';
 export { StaffPerformanceWidget } from './StaffPerformanceWidget';
+export { LoyaltyWidget } from './LoyaltyWidget';
+export { TradeInWidget } from './TradeInWidget';
+export { InstallmentsWidget } from './InstallmentsWidget';
+export { SMSWidget } from './SMSWidget';
+export { SparePartsWidget } from './SparePartsWidget';
+export { StorageRoomsWidget } from './StorageRoomsWidget';
+export { StockTransfersWidget } from './StockTransfersWidget';
+export { SpecialOrdersWidget } from './SpecialOrdersWidget';
+export { BackupWidget } from './BackupWidget';
+export { RepairWidget } from './RepairWidget';
 
 // Chart Components
 export { RevenueTrendChart } from './RevenueTrendChart';

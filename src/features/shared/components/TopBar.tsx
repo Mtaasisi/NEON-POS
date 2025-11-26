@@ -74,6 +74,7 @@ import ActivityCounter from './ui/ActivityCounter';
 import GlassButton from './ui/GlassButton';
 import SearchDropdown from './SearchDropdown';
 import CacheClearButton from '../../../components/CacheClearButton';
+import RefreshButton from '../../../components/RefreshButton';
 import SimpleBranchSelector from '../../../components/SimpleBranchSelector';
 import QuickExpenseModal from '../../../components/QuickExpenseModal';
 import QuickReminderModal from '../../../components/QuickReminderModal';
@@ -93,6 +94,7 @@ import ImportEmployeesFromUsersModal from '../../employees/components/ImportEmpl
 import TransferModal from '../../payments/components/TransferModal';
 import BulkSMSModal from '../../reports/components/BulkSMSModal';
 import DailyReportModal from './DailyReportModal';
+import InstallmentManagementModal from '../../lats/components/pos/InstallmentManagementModal';
 
 interface TopBarProps {
   onMenuToggle: () => void;
@@ -118,6 +120,7 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
   const [showBulkSMSModal, setShowBulkSMSModal] = useState(false);
   const [showDailyReportModal, setShowDailyReportModal] = useState(false);
   const [showUserSelector, setShowUserSelector] = useState(false);
+  const [showInstallmentManagementModal, setShowInstallmentManagementModal] = useState(false);
   const [availableTestUsers, setAvailableTestUsers] = useState<any[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [reportType, setReportType] = useState<'daily' | 'monthly'>('daily');
@@ -414,6 +417,409 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
 
   const quickActions = getQuickActions();
 
+  // Get dynamic quick access buttons based on current route
+  const getContextualQuickActions = useMemo(() => {
+    const path = location.pathname;
+    const userPermissions = currentUser?.permissions || [];
+    const hasAll = userPermissions.includes('all');
+    const role = currentUser?.role;
+
+    interface QuickActionButton {
+      label: string;
+      icon: React.ReactNode;
+      path: string;
+      color: string;
+      hoverColor: string;
+      permission?: string | string[];
+    }
+
+    const actions: QuickActionButton[] = [];
+
+    // Inventory-related pages
+    if (path.includes('/lats/unified-inventory') || path.includes('/lats/inventory')) {
+      if (hasAll || role === 'admin' || userPermissions.includes('manage_inventory')) {
+        actions.push(
+          {
+            label: 'Stock Transfer',
+            icon: <ArrowRightLeft size={18} />,
+            path: '/lats/stock-transfer',
+            color: 'from-sky-500 to-blue-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Purchase Orders',
+            icon: <Truck size={18} />,
+            path: '/lats/purchase-orders',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          },
+          {
+            label: 'Suppliers',
+            icon: <Building size={18} />,
+            path: '/supplier-management',
+            color: 'from-amber-500 to-orange-600',
+            hoverColor: 'hover:from-orange-600 hover:to-orange-700',
+          },
+          {
+            label: 'Storage Rooms',
+            icon: <Warehouse size={18} />,
+            path: '/lats/storage-rooms',
+            color: 'from-purple-500 to-purple-600',
+            hoverColor: 'hover:from-purple-600 hover:to-purple-700',
+          },
+          {
+            label: 'Categories',
+            icon: <Layers size={18} />,
+            path: '/lats/inventory-management?tab=categories',
+            color: 'from-green-500 to-emerald-600',
+            hoverColor: 'hover:from-green-600 hover:to-emerald-700',
+          }
+        );
+      }
+    }
+
+    // POS-related pages
+    if (path.includes('/pos')) {
+      if (hasAll || role === 'admin' || role === 'customer-care') {
+        actions.push(
+          {
+            label: 'Inventory',
+            icon: <Package size={18} />,
+            path: '/lats/unified-inventory',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          },
+          {
+            label: 'Customers',
+            icon: <Users size={18} />,
+            path: '/customers',
+            color: 'from-purple-500 to-purple-600',
+            hoverColor: 'hover:from-purple-600 hover:to-purple-700',
+          },
+          {
+            label: 'Sales Reports',
+            icon: <BarChart3 size={18} />,
+            path: '/lats/sales-reports',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Loyalty',
+            icon: <Crown size={18} />,
+            path: '/lats/loyalty',
+            color: 'from-yellow-500 to-amber-600',
+            hoverColor: 'hover:from-yellow-600 hover:to-amber-700',
+          }
+        );
+      }
+    }
+
+    // Customer-related pages
+    if (path.includes('/customers')) {
+      if (hasAll || role === 'admin' || role === 'customer-care' || role === 'technician') {
+        actions.push(
+          {
+            label: 'Add Customer',
+            icon: <UserPlus size={18} />,
+            path: '/customers',
+            color: 'from-emerald-500 to-green-600',
+            hoverColor: 'hover:from-green-600 hover:to-emerald-700',
+          },
+          {
+            label: 'Appointments',
+            icon: <Calendar size={18} />,
+            path: '/appointments',
+            color: 'from-pink-500 to-rose-600',
+            hoverColor: 'hover:from-rose-600 hover:to-rose-700',
+          },
+          {
+            label: 'SMS Centre',
+            icon: <MessageSquare size={18} />,
+            path: '/sms',
+            color: 'from-indigo-500 to-indigo-600',
+            hoverColor: 'hover:from-indigo-600 hover:to-indigo-700',
+          },
+          {
+            label: 'POS',
+            icon: <ShoppingCart size={18} />,
+            path: '/pos',
+            color: 'from-emerald-500 to-teal-600',
+            hoverColor: 'hover:from-emerald-600 hover:to-teal-700',
+          }
+        );
+      }
+    }
+
+    // Device-related pages
+    if (path.includes('/devices')) {
+      if (hasAll || role === 'admin' || role === 'customer-care' || role === 'technician') {
+        actions.push(
+          {
+            label: 'Add Device',
+            icon: <Smartphone size={18} />,
+            path: '/devices/new',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Customers',
+            icon: <Users size={18} />,
+            path: '/customers',
+            color: 'from-purple-500 to-purple-600',
+            hoverColor: 'hover:from-purple-600 hover:to-purple-700',
+          },
+          {
+            label: 'Reminders',
+            icon: <Clock size={18} />,
+            path: '/reminders',
+            color: 'from-yellow-500 to-amber-600',
+            hoverColor: 'hover:from-yellow-600 hover:to-amber-700',
+          },
+          {
+            label: 'Appointments',
+            icon: <Calendar size={18} />,
+            path: '/appointments',
+            color: 'from-pink-500 to-rose-600',
+            hoverColor: 'hover:from-rose-600 hover:to-rose-700',
+          }
+        );
+      }
+    }
+
+    // Purchase Orders pages
+    if (path.includes('/purchase-orders') || path.includes('/purchase-order')) {
+      if (hasAll || role === 'admin' || userPermissions.includes('manage_inventory')) {
+        actions.push(
+          {
+            label: 'Create PO',
+            icon: <Plus size={18} />,
+            path: '/lats/purchase-order/create',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          },
+          {
+            label: 'Inventory',
+            icon: <Package size={18} />,
+            path: '/lats/unified-inventory',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Suppliers',
+            icon: <Building size={18} />,
+            path: '/supplier-management',
+            color: 'from-amber-500 to-orange-600',
+            hoverColor: 'hover:from-orange-600 hover:to-orange-700',
+          },
+          {
+            label: 'Stock Transfer',
+            icon: <ArrowRightLeft size={18} />,
+            path: '/lats/stock-transfer',
+            color: 'from-sky-500 to-blue-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          }
+        );
+      }
+    }
+
+    // Reports/Analytics pages
+    if (path.includes('/reports') || path.includes('/analytics') || path.includes('/sales-reports')) {
+      if (hasAll || role === 'admin') {
+        actions.push(
+          {
+            label: 'Sales Reports',
+            icon: <BarChart3 size={18} />,
+            path: '/lats/sales-reports',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'POS',
+            icon: <ShoppingCart size={18} />,
+            path: '/pos',
+            color: 'from-emerald-500 to-teal-600',
+            hoverColor: 'hover:from-emerald-600 hover:to-teal-700',
+          },
+          {
+            label: 'Inventory',
+            icon: <Package size={18} />,
+            path: '/lats/unified-inventory',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          },
+          {
+            label: 'Dashboard',
+            icon: <LayoutDashboard size={18} />,
+            path: '/dashboard',
+            color: 'from-slate-500 to-slate-600',
+            hoverColor: 'hover:from-slate-600 hover:to-slate-700',
+          }
+        );
+      }
+    }
+
+    // Storage Rooms pages
+    if (path.includes('/storage-rooms')) {
+      if (hasAll || role === 'admin') {
+        actions.push(
+          {
+            label: 'Inventory',
+            icon: <Package size={18} />,
+            path: '/lats/unified-inventory',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          },
+          {
+            label: 'Stock Transfer',
+            icon: <ArrowRightLeft size={18} />,
+            path: '/lats/stock-transfer',
+            color: 'from-sky-500 to-blue-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Purchase Orders',
+            icon: <Truck size={18} />,
+            path: '/lats/purchase-orders',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          }
+        );
+      }
+    }
+
+    // Supplier Management pages
+    if (path.includes('/supplier-management') || path.includes('/suppliers')) {
+      if (hasAll || role === 'admin' || userPermissions.includes('manage_suppliers')) {
+        actions.push(
+          {
+            label: 'Purchase Orders',
+            icon: <Truck size={18} />,
+            path: '/lats/purchase-orders',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          },
+          {
+            label: 'Inventory',
+            icon: <Package size={18} />,
+            path: '/lats/unified-inventory',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Create PO',
+            icon: <Plus size={18} />,
+            path: '/lats/purchase-order/create',
+            color: 'from-emerald-500 to-green-600',
+            hoverColor: 'hover:from-green-600 hover:to-emerald-700',
+          }
+        );
+      }
+    }
+
+    // Appointments pages
+    if (path.includes('/appointments')) {
+      if (hasAll || role === 'admin' || role === 'customer-care' || role === 'technician') {
+        actions.push(
+          {
+            label: 'Customers',
+            icon: <Users size={18} />,
+            path: '/customers',
+            color: 'from-purple-500 to-purple-600',
+            hoverColor: 'hover:from-purple-600 hover:to-purple-700',
+          },
+          {
+            label: 'Devices',
+            icon: <Smartphone size={18} />,
+            path: '/devices',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Reminders',
+            icon: <Clock size={18} />,
+            path: '/reminders',
+            color: 'from-yellow-500 to-amber-600',
+            hoverColor: 'hover:from-yellow-600 hover:to-amber-700',
+          },
+          {
+            label: 'Create',
+            icon: <CalendarPlus size={18} />,
+            path: '/appointments',
+            color: 'from-pink-500 to-rose-600',
+            hoverColor: 'hover:from-rose-600 hover:to-rose-700',
+          }
+        );
+      }
+    }
+
+    // Reminders pages
+    if (path.includes('/reminders')) {
+      if (hasAll || role === 'admin' || role === 'customer-care' || role === 'technician') {
+        actions.push(
+          {
+            label: 'Appointments',
+            icon: <Calendar size={18} />,
+            path: '/appointments',
+            color: 'from-pink-500 to-rose-600',
+            hoverColor: 'hover:from-rose-600 hover:to-rose-700',
+          },
+          {
+            label: 'Devices',
+            icon: <Smartphone size={18} />,
+            path: '/devices',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          },
+          {
+            label: 'Customers',
+            icon: <Users size={18} />,
+            path: '/customers',
+            color: 'from-purple-500 to-purple-600',
+            hoverColor: 'hover:from-purple-600 hover:to-purple-700',
+          }
+        );
+      }
+    }
+
+    // Dashboard - show common quick actions
+    if (path === '/dashboard' || path === '/') {
+      if (hasAll || role === 'admin' || role === 'customer-care') {
+        actions.push(
+          {
+            label: 'POS',
+            icon: <ShoppingCart size={18} />,
+            path: '/pos',
+            color: 'from-emerald-500 to-teal-600',
+            hoverColor: 'hover:from-emerald-600 hover:to-teal-700',
+          },
+          {
+            label: 'Inventory',
+            icon: <Package size={18} />,
+            path: '/lats/unified-inventory',
+            color: 'from-orange-500 to-amber-600',
+            hoverColor: 'hover:from-orange-600 hover:to-amber-700',
+          },
+          {
+            label: 'Customers',
+            icon: <Users size={18} />,
+            path: '/customers',
+            color: 'from-purple-500 to-purple-600',
+            hoverColor: 'hover:from-purple-600 hover:to-purple-700',
+          },
+          {
+            label: 'Reports',
+            icon: <BarChart3 size={18} />,
+            path: '/lats/sales-reports',
+            color: 'from-blue-500 to-indigo-600',
+            hoverColor: 'hover:from-blue-600 hover:to-indigo-700',
+          }
+        );
+      }
+    }
+
+    return actions;
+  }, [location.pathname, currentUser]);
+
   const createMenuOptions = useMemo(() => {
     const options: Array<{
       key: string;
@@ -693,8 +1099,40 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
             {/* Divider */}
             <div className={`h-8 w-px mx-1 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
 
+            {/* Dynamic Quick Access Buttons - Context-aware */}
+            {getContextualQuickActions.length > 0 && (
+              <>
+                <div className="flex items-center gap-2">
+                  {getContextualQuickActions.slice(0, 4).map((action, index) => (
+                    <button
+                      key={`${action.path}-${index}`}
+                      onClick={() => navigate(action.path)}
+                      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r ${action.color} ${action.hoverColor} text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium whitespace-nowrap`}
+                      title={action.label}
+                    >
+                      {action.icon}
+                      <span className="hidden xl:inline">{action.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className={`h-8 w-px mx-1 ${isDark ? 'bg-slate-700' : 'bg-gray-200'}`}></div>
+              </>
+            )}
+
             {/* Business Actions Group */}
             <div className="flex items-center gap-2">
+              {/* Installment Plans Button */}
+              {(currentUser?.role === 'admin' || currentUser?.permissions?.includes('all') || currentUser?.permissions?.includes('view_installments')) && (
+                <button
+                  onClick={() => setShowInstallmentManagementModal(true)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white transition-all duration-200 shadow-sm hover:shadow-md font-medium"
+                  title="Installment Plans"
+                >
+                  <Calendar size={18} />
+                  <span className="hidden lg:inline">Installments</span>
+                </button>
+              )}
+
               {/* Purchase Order Button - Admins & Inventory Managers */}
               {(currentUser?.role === 'admin' || currentUser?.permissions?.includes('manage_inventory') || currentUser?.permissions?.includes('all')) && (
                 <button
@@ -947,6 +1385,14 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
                 <Maximize2 size={18} className={isDark ? 'text-gray-200' : 'text-gray-700'} />
               )}
             </button>
+
+            {/* Refresh Button - Clear all caches and refresh */}
+            <RefreshButton
+              variant="icon"
+              size="md"
+              showConfirmation={true}
+              className={`${isDark ? 'bg-slate-800/60 hover:bg-slate-700/60 border-slate-600' : 'bg-white/80 hover:bg-white border-gray-200'} ${isDark ? 'text-gray-200 hover:text-blue-400' : 'text-gray-700 hover:text-blue-600'}`}
+            />
 
             {/* Notifications */}
             <div className="relative" ref={notificationsRef}>
@@ -1392,6 +1838,12 @@ const TopBar: React.FC<TopBarProps> = ({ onMenuToggle, isMenuOpen, isNavCollapse
           toast.success('Report submitted successfully!');
           setShowDailyReportModal(false);
         }}
+      />
+
+      {/* Installment Management Modal */}
+      <InstallmentManagementModal
+        isOpen={showInstallmentManagementModal}
+        onClose={() => setShowInstallmentManagementModal(false)}
       />
 
     </header>

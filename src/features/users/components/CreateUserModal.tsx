@@ -110,6 +110,7 @@ export const ROLE_DEFAULT_PERMISSIONS: Record<string, string[]> = {
   manager: ['dashboard', 'pos', 'reports', 'inventory_view', 'inventory_add', 'inventory_edit', 'inventory_adjust', 'inventory_history', 'customers_view', 'customers_add', 'customers_edit', 'customers_history', 'devices_view', 'devices_add', 'devices_edit', 'sales_process', 'sales_refund', 'sales_discount', 'financial_reports', 'payments_view', 'employees'],
   technician: ['dashboard', 'devices_view', 'devices_add', 'devices_edit', 'spare_parts', 'customers_view', 'inventory_view'],
   'customer-care': ['dashboard', 'pos', 'customers_view', 'customers_add', 'customers_edit', 'customers_history', 'devices_view', 'devices_add', 'appointments', 'whatsapp', 'sms'],
+  'store-keeper': ['dashboard', 'inventory_view', 'inventory_adjust', 'inventory_history', 'reports'],
   user: ['dashboard', 'inventory_view', 'customers_view']
 };
 
@@ -120,7 +121,7 @@ const createUserSchema = z.object({
   email: z.string().email('Invalid email address'),
   username: z.string().min(3, 'Username must be at least 3 characters').optional(),
   phone: z.string().optional(),
-  role: z.enum(['admin', 'manager', 'technician', 'customer-care', 'user']),
+  role: z.enum(['admin', 'manager', 'technician', 'customer-care', 'store-keeper', 'user']),
   department: z.string().optional(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirmPassword: z.string(),
@@ -264,6 +265,7 @@ const CreateUserModal: React.FC<CreateUserModalProps> = ({
     { value: 'manager', label: 'Manager', description: 'Department management' },
     { value: 'technician', label: 'Technician', description: 'Device repairs' },
     { value: 'customer-care', label: 'Customer Care', description: 'Customer support' },
+    { value: 'store-keeper', label: 'Store Keeper', description: 'Inventory and stock management' },
     { value: 'user', label: 'User', description: 'Basic access' }
   ];
 

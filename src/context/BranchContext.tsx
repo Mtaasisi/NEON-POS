@@ -270,6 +270,21 @@ export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 export const useBranch = (): BranchContextType => {
   const context = useContext(BranchContext);
   if (context === undefined) {
+    // During HMR (Hot Module Reload), context can be temporarily undefined
+    // Return a safe default to prevent crashes during development
+    if (import.meta.env.DEV) {
+      console.warn('useBranch: Context temporarily unavailable during HMR, returning default values');
+      return {
+        currentBranch: null,
+        availableBranches: [],
+        loading: true,
+        switchBranch: async () => {},
+        canAccessBranch: () => false,
+        isDataShared: () => true,
+        getBranchFilterClause: () => '',
+        refreshBranches: async () => {},
+      };
+    }
     throw new Error('useBranch must be used within a BranchProvider');
   }
   return context;

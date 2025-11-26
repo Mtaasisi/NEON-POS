@@ -8,6 +8,7 @@ import AccountThumbnail from './AccountThumbnail';
 import ManualTransactionModal from './ManualTransactionModal';
 import TransferModal from './TransferModal';
 import TransactionReversalModal from './TransactionReversalModal';
+import TransactionDetailsModal from './TransactionDetailsModal';
 import ScheduledTransfersView from './ScheduledTransfersView';
 import { 
   Settings, Plus, Edit3, Trash2, Save, X, 
@@ -15,8 +16,12 @@ import {
   TrendingUp, TrendingDown, Eye, EyeOff, Wallet,
   BarChart3, DollarSign, CreditCard, Building, Smartphone,
   History, Filter, Calendar, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
-  RepeatIcon
+  RepeatIcon, Download, FileText, Search, ChevronDown, ChevronUp,
+  Copy, ExternalLink, Info, ArrowRight, User, Phone, Mail, MapPin
 } from 'lucide-react';
+
+// Alias for FileText to avoid conflicts
+const FileTextIcon = FileText;
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
 import { addBranchFilter, createWithBranch, getCurrentBranchId } from '../../../lib/branchAwareApi';
@@ -37,6 +42,8 @@ interface Transaction {
   reference_number?: string;
   metadata?: any;
   account_id: string;
+  related_entity_type?: string;
+  related_entity_id?: string;
 }
 
 interface AccountWithTransactions extends FinanceAccount {
@@ -65,6 +72,11 @@ const PaymentAccountManagement: React.FC = () => {
     start: '',
     end: '',
   });
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [filtersExpanded, setFiltersExpanded] = useState<boolean>(false);
+  const [expandedTransaction, setExpandedTransaction] = useState<string | null>(null);
+  const [saleDetails, setSaleDetails] = useState<Record<string, any>>({});
+  const [loadingSaleDetails, setLoadingSaleDetails] = useState<Record<string, boolean>>({});
 
   // Manual transaction modal state
   const [showManualTransactionModal, setShowManualTransactionModal] = useState(false);
@@ -76,6 +88,10 @@ const PaymentAccountManagement: React.FC = () => {
   // Reversal modal state
   const [showReversalModal, setShowReversalModal] = useState(false);
   const [reversalTransaction, setReversalTransaction] = useState<Transaction | null>(null);
+
+  // Transaction details modal state
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [showTransactionDetailsModal, setShowTransactionDetailsModal] = useState(false);
 
   // View state - toggle between accounts and scheduled transfers
   const [activeView, setActiveView] = useState<'accounts' | 'scheduled'>('accounts');
@@ -93,6 +109,17 @@ const PaymentAccountManagement: React.FC = () => {
   });
 
   // Format currency with NaN protection
+  const formatTransactionType = (transactionType: string): string => {
+    const typeMap: Record<string, string> = {
+      'payment_received': 'received',
+      'payment_made': 'paid',
+      'transfer_in': 'transfer in',
+      'transfer_out': 'transfer out',
+    };
+    
+    return typeMap[transactionType] || transactionType.replace(/_/g, ' ');
+  };
+
   const formatMoney = (amount: number | undefined | null, currency: string = 'TZS') => {
     const safeAmount = Number(amount);
     if (!isFinite(safeAmount) || isNaN(safeAmount)) {
@@ -159,6 +186,28 @@ const PaymentAccountManagement: React.FC = () => {
     };
   }, [filteredAccounts]);
 
+  // Helper function to apply branch filtering for account transactions
+  // This handles the case where accounts might be shared or transactions might have NULL branch_id
+  const applyTransactionBranchFilter = async (
+    query: any,
+    accountBranchId: string | null,
+    isAccountShared: boolean
+  ) => {
+    const currentBranchId = getCurrentBranchId();
+    
+    // If no branch selected, show all transactions
+    if (!currentBranchId) {
+      return query;
+    }
+    
+    // If account is shared or belongs to current branch, show all transactions for this account
+    if (isAccountShared || accountBranchId === currentBranchId) {
+      return query; // Already filtered by account_id, no need for additional branch filter
+    }
+    
+    // Otherwise, filter by branch_id but include NULL for backward compatibility
+    return query.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+  };
 
   // Fetch accounts with transaction data
   const fetchAccounts = useCallback(async () => {
@@ -175,23 +224,31 @@ const PaymentAccountManagement: React.FC = () => {
       // Get transaction data for each account
       const accountsWithTransactions: AccountWithTransactions[] = await Promise.all(
         paymentAccounts.map(async (account) => {
-          // Get recent transactions with branch filtering
+          // Get recent transactions with proper branch filtering
           let recentQuery = supabase
             .from('account_transactions')
             .select('*')
             .eq('account_id', account.id)
             .order('created_at', { ascending: false })
             .limit(5);
-          const filteredRecentQuery = await addBranchFilter(recentQuery, 'payments');
-          const { data: transactions } = await filteredRecentQuery;
+          recentQuery = await applyTransactionBranchFilter(
+            recentQuery,
+            account.branch_id || null,
+            account.is_shared || false
+          );
+          const { data: transactions } = await recentQuery;
 
-          // Calculate totals with branch filtering
+          // Calculate totals with proper branch filtering
           let totalsQuery = supabase
             .from('account_transactions')
             .select('transaction_type, amount')
             .eq('account_id', account.id);
-          const filteredTotalsQuery = await addBranchFilter(totalsQuery, 'payments');
-          const { data: allTransactions } = await filteredTotalsQuery;
+          totalsQuery = await applyTransactionBranchFilter(
+            totalsQuery,
+            account.branch_id || null,
+            account.is_shared || false
+          );
+          const { data: allTransactions } = await totalsQuery;
 
           // Transaction types that increase balance (money in)
           const totalReceived = allTransactions
@@ -265,22 +322,24 @@ const PaymentAccountManagement: React.FC = () => {
     console.log('✅ handleAccountChange completed');
   }, [refreshPaymentMethods, fetchAccounts]);
 
-  // Initial load and auto-refresh every 30 seconds
+  // Initial load only - auto-refresh disabled
   useEffect(() => {
     fetchAccounts();
     
-    // 🔄 AUTO-REFRESH: Update balances every 30 seconds
-    console.log('🔄 Setting up automatic balance refresh (every 30s)');
-    const refreshInterval = setInterval(() => {
-      console.log('💳 Auto-refreshing account balances...');
-      fetchAccounts();
-    }, 30000); // 30 seconds
-    
-    // Cleanup interval on unmount
-    return () => {
-      console.log('⏹️ Stopping automatic balance refresh');
-      clearInterval(refreshInterval);
-    };
+    // 🔄 AUTO-REFRESH DISABLED: Update balances every 30 seconds
+    // Auto-refresh has been disabled to prevent page from auto-refreshing
+    // Uncomment below to re-enable auto-refresh:
+    // console.log('🔄 Setting up automatic balance refresh (every 30s)');
+    // const refreshInterval = setInterval(() => {
+    //   console.log('💳 Auto-refreshing account balances...');
+    //   fetchAccounts();
+    // }, 30000); // 30 seconds
+    // 
+    // // Cleanup interval on unmount
+    // return () => {
+    //   console.log('⏹️ Stopping automatic balance refresh');
+    //   clearInterval(refreshInterval);
+    // };
   }, [fetchAccounts]);
 
   // Handle form input changes
@@ -490,22 +549,75 @@ const PaymentAccountManagement: React.FC = () => {
   const loadAccountTransactions = async (accountId: string) => {
     setIsLoadingTransactions(true);
     try {
+      console.log('🔄 Loading transactions for account:', accountId);
+      
+      // First, get the account to check its branch_id and sharing status
+      const { data: accountData, error: accountError } = await supabase
+        .from('finance_accounts')
+        .select('id, branch_id, is_shared')
+        .eq('id', accountId)
+        .single();
+
+      if (accountError) {
+        console.error('❌ Error fetching account:', accountError);
+        throw accountError;
+      }
+
+      console.log('📋 Account data:', { 
+        accountId, 
+        branch_id: accountData?.branch_id, 
+        is_shared: accountData?.is_shared 
+      });
+
+      // Build query with proper branch filtering
       let query = supabase
         .from('account_transactions')
         .select('*')
         .eq('account_id', accountId)
         .order('created_at', { ascending: false });
 
-      // Apply branch filtering for proper isolation
-      const filteredQuery = await addBranchFilter(query, 'payments');
+      // Apply branch filtering based on account's sharing status
+      query = await applyTransactionBranchFilter(
+        query,
+        accountData?.branch_id || null,
+        accountData?.is_shared || false
+      );
 
-      const { data, error } = await filteredQuery;
+      const { data, error } = await query;
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error loading transactions:', error);
+        throw error;
+      }
+
+      console.log(`✅ Loaded ${data?.length || 0} transactions for account ${accountId}`);
+      if (data && data.length > 0) {
+        console.log('📋 Sample transactions:', data.slice(0, 3).map(t => ({
+          id: t.id,
+          type: t.transaction_type,
+          amount: t.amount,
+          branch_id: t.branch_id,
+          created_at: t.created_at
+        })));
+      } else {
+        console.log('⚠️ No transactions found. Checking if transactions exist in database...');
+        // Debug query: check if any transactions exist for this account without branch filtering
+        const { data: allData } = await supabase
+          .from('account_transactions')
+          .select('id, transaction_type, amount, branch_id, created_at')
+          .eq('account_id', accountId)
+          .limit(5);
+        console.log(`🔍 Total transactions in DB (no branch filter): ${allData?.length || 0}`);
+        if (allData && allData.length > 0) {
+          console.log('📋 Sample transactions from DB:', allData);
+        }
+      }
+      
       setAccountTransactions(data || []);
     } catch (error) {
-      console.error('Error loading account transactions:', error);
+      console.error('❌ Error loading account transactions:', error);
       toast.error('Failed to load transaction history');
+      setAccountTransactions([]);
     } finally {
       setIsLoadingTransactions(false);
     }
@@ -606,7 +718,7 @@ const PaymentAccountManagement: React.FC = () => {
         {activeView === 'scheduled' ? (
           <ScheduledTransfersView onRefresh={fetchAccounts} />
         ) : (
-          <>
+          <React.Fragment>
         {/* Currency Filter */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between">
@@ -1157,320 +1269,569 @@ const PaymentAccountManagement: React.FC = () => {
           </div>
         </div>
       )}
+        </React.Fragment>
+      )}
 
       {/* Transaction History Modal */}
       {showHistoryModal && selectedAccount && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+            {/* Close Button */}
+            <button
+              onClick={() => setShowHistoryModal(false)}
+              className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              aria-label="Close modal"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
             {/* Modal Header */}
-            <div className="relative p-8 border-b border-gray-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="p-4 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl shadow-lg shadow-blue-500/30">
-                    <History className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900">Transaction History</h3>
-                    <p className="text-sm text-gray-600 mt-0.5">{selectedAccount.name}</p>
-                  </div>
+            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+              <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+                  <History className="w-8 h-8 text-white" />
                 </div>
-                <button
-                  onClick={() => setShowHistoryModal(false)}
-                  className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-white/80 rounded-xl transition-all"
-                >
-                  <X size={22} />
-                </button>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Transaction History</h3>
+                  <p className="text-sm text-gray-600 font-medium">{selectedAccount.name}</p>
+                </div>
               </div>
             </div>
 
             {/* Account Summary */}
-            <div className="p-8 bg-gradient-to-br from-gray-50 to-gray-100 border-b border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-5">
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Initial Balance</div>
-                  <div className="text-xl font-bold text-gray-700">{formatMoney(selectedAccount.initialBalance || 0, selectedAccount.currency)}</div>
-                  <div className="text-xs text-gray-500 mt-1">Starting amount</div>
-                </div>
-                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 p-5 rounded-2xl border border-emerald-200 hover:shadow-md transition-shadow">
-                  <div className="text-xs text-emerald-700 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                    <TrendingUp size={14} />
-                    Received
+            <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+              <div className="py-4 space-y-4">
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                  <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-indigo-600" />
+                    Account Summary
+                  </h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <p className="text-xs font-medium text-gray-600 mb-1">Initial Balance</p>
+                      <p className="text-xl font-bold text-gray-900">{formatMoney(selectedAccount.initialBalance || 0, selectedAccount.currency)}</p>
+                    </div>
+                    <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200">
+                      <p className="text-xs font-medium text-emerald-700 mb-1 flex items-center gap-1.5">
+                        <TrendingUp size={14} />
+                        Received
+                      </p>
+                      <p className="text-xl font-bold text-emerald-900">{formatMoney(selectedAccount.totalReceived, selectedAccount.currency)}</p>
+                    </div>
+                    <div className="p-4 bg-red-50 rounded-xl border border-red-200">
+                      <p className="text-xs font-medium text-red-700 mb-1 flex items-center gap-1.5">
+                        <TrendingDown size={14} />
+                        Spent
+                      </p>
+                      <p className="text-xl font-bold text-red-900">{formatMoney(selectedAccount.totalSpent, selectedAccount.currency)}</p>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                      <p className="text-xs font-medium text-blue-700 mb-1">Current Balance</p>
+                      <p className="text-xl font-bold text-blue-900">{formatMoney(selectedAccount.balance, selectedAccount.currency)}</p>
+                    </div>
                   </div>
-                  <div className="text-xl font-bold text-emerald-900">{formatMoney(selectedAccount.totalReceived, selectedAccount.currency)}</div>
-                  <div className="text-xs text-emerald-600 mt-1">Money in</div>
                 </div>
-                <div className="bg-gradient-to-br from-red-50 to-red-100 p-5 rounded-2xl border border-red-200 hover:shadow-md transition-shadow">
-                  <div className="text-xs text-red-700 font-semibold uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                    <TrendingDown size={14} />
-                    Spent
-                  </div>
-                  <div className="text-xl font-bold text-red-900">{formatMoney(selectedAccount.totalSpent, selectedAccount.currency)}</div>
-                  <div className="text-xs text-red-600 mt-1">Money out</div>
-                </div>
-                <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-5 rounded-2xl border border-blue-200 hover:shadow-md transition-shadow">
-                  <div className="text-xs text-blue-700 font-semibold uppercase tracking-wide mb-2">Current Balance</div>
-                  <div className="text-2xl font-bold text-blue-900">{formatMoney(selectedAccount.balance, selectedAccount.currency)}</div>
-                  <div className="text-xs text-blue-600 mt-1">Available now</div>
-                </div>
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-                  <div className="text-xs text-gray-500 font-semibold uppercase tracking-wide mb-2">Total Transactions</div>
-                  <div className="text-2xl font-bold text-gray-900">{accountTransactions.length}</div>
-                  <div className="text-xs text-gray-500 mt-1">All time</div>
-                </div>
-              </div>
-            </div>
 
-            {/* Filter Bar */}
-            <div className="p-6 bg-white border-b border-gray-200">
-              <div className="space-y-4">
-                {/* Type Filter and Export Buttons */}
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-3 flex-1">
-                    <Filter size={18} className="text-gray-400" />
-                    <select
-                      value={transactionTypeFilter}
-                      onChange={(e) => setTransactionTypeFilter(e.target.value)}
-                      className="px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 text-sm font-medium bg-white"
-                    >
-                      <option value="all">All Transactions</option>
-                      <option value="payment_received">Money In</option>
-                      <option value="expense">Expenses</option>
-                      <option value="payment_made">Payments Made</option>
-                      <option value="transfer_in">Transfers In</option>
-                      <option value="transfer_out">Transfers Out</option>
-                    </select>
-                  </div>
-                  
-                  {/* Export Buttons */}
-                  <div className="flex gap-2">
+                {/* Search and Filter Bar */}
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                  <div className="flex items-center gap-4 mb-4">
+                    {/* Search Bar - Left Side */}
+                    <div className="flex-1 min-w-[300px]">
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search transactions by description, reference, amount..."
+                          className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
+                        />
+                        {searchQuery && (
+                          <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                          >
+                            <X className="w-4 h-4 text-gray-400" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Filter Toggle Button */}
                     <button
-                      onClick={() => {
-                        if (!selectedAccount) return;
-                        const filtered = accountTransactions.filter(t => {
-                          if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
-                          if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
-                          if (dateFilter.end) {
-                            const endDate = new Date(dateFilter.end);
-                            endDate.setHours(23, 59, 59, 999);
-                            if (new Date(t.created_at) > endDate) return false;
-                          }
-                          return true;
-                        });
-                        exportToCSV(filtered, {
-                          accountName: selectedAccount.name,
-                          currency: selectedAccount.currency || 'TZS',
-                          dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
-                        });
-                        toast.success('CSV exported successfully');
-                      }}
-                      className="px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-lg transition-all text-sm font-medium"
+                      onClick={() => setFiltersExpanded(!filtersExpanded)}
+                      className={`px-4 py-3 border-2 rounded-xl transition-all flex items-center gap-2 ${
+                        filtersExpanded
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                      }`}
                     >
-                      📊 CSV
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (!selectedAccount) return;
-                        const filtered = accountTransactions.filter(t => {
-                          if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
-                          if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
-                          if (dateFilter.end) {
-                            const endDate = new Date(dateFilter.end);
-                            endDate.setHours(23, 59, 59, 999);
-                            if (new Date(t.created_at) > endDate) return false;
-                          }
-                          return true;
-                        });
-                        exportToPDF(filtered, {
-                          accountName: selectedAccount.name,
-                          currency: selectedAccount.currency || 'TZS',
-                          dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
-                        });
-                        toast.success('PDF opened in new window');
-                      }}
-                      className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-all text-sm font-medium"
-                    >
-                      📄 PDF
+                      <Filter className="w-5 h-5" />
+                      {filtersExpanded ? (
+                        <>
+                          <span className="text-sm font-semibold">Hide Filters</span>
+                          <ChevronUp className="w-4 h-4" />
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-sm font-semibold">Filters</span>
+                          <ChevronDown className="w-4 h-4" />
+                        </>
+                      )}
                     </button>
                   </div>
                   
-                  <div className="text-sm text-gray-500 bg-gray-100 px-4 py-2.5 rounded-xl font-medium">
-                    {transactionTypeFilter === 'all' 
-                      ? `${accountTransactions.length} transactions`
-                      : `${accountTransactions.filter(t => t.transaction_type === transactionTypeFilter).length} transactions`
-                    }
-                  </div>
+                  {/* Expandable Filters Section */}
+                  {filtersExpanded && (
+                    <div className="pt-4 border-t border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                      {/* Filter Row */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Transaction Type Filter */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Transaction Type</label>
+                        <select
+                          value={transactionTypeFilter}
+                          onChange={(e) => setTransactionTypeFilter(e.target.value)}
+                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
+                        >
+                          <option value="all">All Transactions</option>
+                          <option value="payment_received">Money In</option>
+                          <option value="expense">Expenses</option>
+                          <option value="payment_made">Payments Made</option>
+                          <option value="transfer_in">Transfers In</option>
+                          <option value="transfer_out">Transfers Out</option>
+                        </select>
+                      </div>
+                      
+                        {/* Date Range - Start */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Start Date</label>
+                          <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                              type="date"
+                              value={dateFilter.start}
+                              onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
+                              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
+                              placeholder="Start date"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Date Range - End */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">End Date</label>
+                          <div className="relative">
+                            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                              type="date"
+                              value={dateFilter.end}
+                              onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
+                              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
+                              placeholder="End date"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Action Row */}
+                      <div className="flex items-center justify-between gap-4 pt-4 border-t border-gray-200">
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-3">
+                          {(dateFilter.start || dateFilter.end || searchQuery) && (
+                            <button
+                              onClick={() => {
+                                setDateFilter({ start: '', end: '' });
+                                setSearchQuery('');
+                                setTransactionTypeFilter('all');
+                              }}
+                              className="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all"
+                            >
+                              Clear All
+                            </button>
+                          )}
+                        <button
+                          onClick={() => {
+                            if (!selectedAccount) return;
+                            const filtered = accountTransactions.filter(t => {
+                              if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                              if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                              if (dateFilter.end) {
+                                const endDate = new Date(dateFilter.end);
+                                endDate.setHours(23, 59, 59, 999);
+                                if (new Date(t.created_at) > endDate) return false;
+                              }
+                                if (searchQuery) {
+                                  const query = searchQuery.toLowerCase();
+                                  const matchesDescription = t.description?.toLowerCase().includes(query);
+                                  const matchesReference = t.reference_number?.toLowerCase().includes(query);
+                                  const matchesAmount = formatMoney(t.amount, selectedAccount.currency).toLowerCase().includes(query);
+                                  if (!matchesDescription && !matchesReference && !matchesAmount) return false;
+                              }
+                              return true;
+                            });
+                            exportToCSV(filtered, {
+                              accountName: selectedAccount.name,
+                              currency: selectedAccount.currency || 'TZS',
+                              dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
+                            });
+                            toast.success('CSV exported successfully');
+                          }}
+                            className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center gap-2"
+                        >
+                            <Download className="w-4 h-4" />
+                            CSV
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!selectedAccount) return;
+                            const filtered = accountTransactions.filter(t => {
+                              if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                              if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                              if (dateFilter.end) {
+                                const endDate = new Date(dateFilter.end);
+                                endDate.setHours(23, 59, 59, 999);
+                                if (new Date(t.created_at) > endDate) return false;
+                              }
+                                if (searchQuery) {
+                                  const query = searchQuery.toLowerCase();
+                                  const matchesDescription = t.description?.toLowerCase().includes(query);
+                                  const matchesReference = t.reference_number?.toLowerCase().includes(query);
+                                  const matchesAmount = formatMoney(t.amount, selectedAccount.currency).toLowerCase().includes(query);
+                                  if (!matchesDescription && !matchesReference && !matchesAmount) return false;
+                              }
+                              return true;
+                            });
+                            exportToPDF(filtered, {
+                              accountName: selectedAccount.name,
+                              currency: selectedAccount.currency || 'TZS',
+                              dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
+                            });
+                            toast.success('PDF opened in new window');
+                          }}
+                            className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center gap-2"
+                        >
+                            <FileText className="w-4 h-4" />
+                            PDF
+                        </button>
+                      </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                {/* Date Range Filter */}
-                <div className="flex items-center gap-4">
-                  <Calendar size={18} className="text-gray-400" />
-                  <div className="flex items-center gap-3 flex-1">
-                    <input
-                      type="date"
-                      value={dateFilter.start}
-                      onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                      className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      placeholder="Start date"
-                    />
-                    <span className="text-gray-500">to</span>
-                    <input
-                      type="date"
-                      value={dateFilter.end}
-                      onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                      className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      placeholder="End date"
-                    />
-                    {(dateFilter.start || dateFilter.end) && (
-                      <button
-                        onClick={() => setDateFilter({ start: '', end: '' })}
-                        className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-all"
-                      >
-                        Clear
-                      </button>
+
+                {/* Transactions List */}
+                <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+                  <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <History className="w-5 h-5 text-indigo-600" />
+                    Transactions
+                    {accountTransactions.length > 0 && (
+                      <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl">
+                        <span className="text-sm font-semibold text-indigo-700">
+                          {accountTransactions.length} transaction{accountTransactions.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    )}
+                  </h4>
+                  <div className="space-y-3">
+                    {isLoadingTransactions ? (
+                      <div className="flex flex-col items-center justify-center py-16">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
+                        <span className="mt-4 text-gray-600 font-medium">Loading transactions...</span>
+                      </div>
+                    ) : accountTransactions.length === 0 ? (
+                      <div className="text-center py-16">
+                        <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl mb-4">
+                          <History size={36} className="text-gray-400" />
+                        </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">No transactions yet</h3>
+                        <p className="text-gray-500">This account has no transaction history.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                        {accountTransactions
+                          .filter(t => {
+                            // Filter by transaction type
+                            if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) {
+                              return false;
+                            }
+                            // Filter by date range
+                            if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) {
+                              return false;
+                            }
+                            if (dateFilter.end) {
+                              const endDate = new Date(dateFilter.end);
+                              endDate.setHours(23, 59, 59, 999); // Include the entire end date
+                              if (new Date(t.created_at) > endDate) {
+                          return false;
+                        }
+                      }
+                            // Filter by search query
+                            if (searchQuery) {
+                              const query = searchQuery.toLowerCase();
+                              const matchesDescription = t.description?.toLowerCase().includes(query);
+                              const matchesReference = t.reference_number?.toLowerCase().includes(query);
+                              const matchesAmount = formatMoney(t.amount, selectedAccount?.currency || 'TZS').toLowerCase().includes(query);
+                              if (!matchesDescription && !matchesReference && !matchesAmount) {
+                                return false;
+                              }
+                            }
+                            return true;
+                          })
+                          .map((transaction, index) => {
+                            const isIncome = transaction.transaction_type === 'income';
+                            const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+                            const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
+                            const isReversed = transaction.metadata?.reversed;
+                            const isPartial = transaction.metadata?.is_partial || 
+                                             transaction.metadata?.partial || 
+                                             (transaction.description?.toLowerCase().includes('partial') ?? false);
+                            
+                            const isExpanded = expandedTransaction === transaction.id;
+                            
+                            return (
+                              <div 
+                                key={transaction.id} 
+                                className={`group relative rounded-2xl border-2 transition-all duration-300 ${
+                                  isExpanded
+                                    ? 'border-indigo-500 shadow-xl'
+                                    : isReversed
+                                    ? 'bg-white border-gray-300 opacity-60 hover:shadow-md'
+                                    : isPartial
+                                    ? 'bg-white border-yellow-400 shadow-md hover:shadow-lg'
+                                    : isIncoming
+                                    ? 'bg-white border-green-300 shadow-md hover:shadow-lg'
+                                    : isOutgoing
+                                    ? 'bg-white border-red-300 shadow-md hover:shadow-lg'
+                                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                                }`}
+                              >
+                                {/* Header - Clickable */}
+                                <div 
+                                  className="flex items-center justify-between p-5 cursor-pointer"
+                                  onClick={() => setExpandedTransaction(isExpanded ? null : transaction.id)}
+                                >
+                                  {/* Left Section */}
+                                  <div className="flex items-center gap-4 flex-1">
+                                    {/* Expand/Collapse Icon */}
+                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
+                                      isExpanded ? 'bg-indigo-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
+                                    }`}>
+                                      <ChevronDown 
+                                        className={`w-5 h-5 transition-transform duration-200 ${
+                                          isExpanded ? 'rotate-180' : ''
+                                        }`}
+                                      />
+                                        </div>
+                                    
+                                    {/* Transaction Type Icon - Circular Badge */}
+                                    <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center shadow-lg ${
+                                      isReversed
+                                        ? 'bg-gray-400'
+                                        : isPartial
+                                        ? 'bg-gradient-to-br from-yellow-500 to-yellow-600'
+                                        : isIncome
+                                        ? 'bg-gradient-to-br from-yellow-500 to-yellow-600'
+                                        : isIncoming
+                                        ? 'bg-gradient-to-br from-green-500 to-green-600'
+                                        : isOutgoing
+                                        ? 'bg-gradient-to-br from-red-500 to-red-600'
+                                        : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                    } text-white`}>
+                                      {isPartial && !isReversed ? (
+                                        <DollarSign className="w-6 h-6" />
+                                      ) : isIncoming && !isReversed ? (
+                                        <ArrowDownRight className="w-6 h-6" />
+                                      ) : isOutgoing && !isReversed ? (
+                                        <ArrowUpRight className="w-6 h-6" />
+                                      ) : (
+                                        <History className="w-6 h-6" />
+                                      )}
+                                      {isReversed && (
+                                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-gray-500 rounded-full flex items-center justify-center border-2 border-white">
+                                          <X className="w-3 h-3 text-white" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Description and Details */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <h4 className="text-base font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
+                                          {transaction.description || 'No description'}
+                                        </h4>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                                          <Calendar className="w-3.5 h-3.5" />
+                                        {new Date(transaction.created_at).toLocaleString()}
+                                      </div>
+                                        
+                                      {transaction.reference_number && (
+                                          <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                                          Ref: {transaction.reference_number}
+                                          </span>
+                                      )}
+                                        
+                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase ${
+                                          isPartial && !isReversed
+                                            ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                                            : isIncoming && !isReversed
+                                            ? 'bg-green-100 text-green-800 border border-green-200'
+                                            : isOutgoing && !isReversed
+                                            ? 'bg-red-100 text-red-800 border border-red-200'
+                                            : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                      }`}>
+                                          {formatTransactionType(transaction.transaction_type)}
+                                        </span>
+                                        
+                                        {isReversed && (
+                                          <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                                            Reversed
+                                        </span>
+                                        )}
+                                      </div>
+                                      </div>
+                                    </div>
+                                    
+                                  {/* Right Section - Amount */}
+                                  <div className="flex-shrink-0 text-right ml-4">
+                                    <div className={`text-2xl font-bold mb-1 ${
+                                      isReversed
+                                        ? 'text-gray-500'
+                                        : isPartial
+                                        ? 'text-yellow-700'
+                                        : isIncoming
+                                        ? 'text-green-700'
+                                        : isOutgoing
+                                        ? 'text-red-700'
+                                        : 'text-gray-900'
+                                      }`}>
+                                      {isPartial && !isReversed && '~'}
+                                      {isIncoming && !isReversed && !isPartial && '+'}
+                                      {isOutgoing && !isReversed && !isPartial && '-'}
+                                        {formatMoney(transaction.amount, selectedAccount.currency)}
+                                      </div>
+                                    
+                                    <div className="text-xs text-gray-500 font-medium">
+                                      Balance: {formatMoney(transaction.balance_after, selectedAccount.currency)}
+                                    </div>
+                                    </div>
+                                  </div>
+                                  
+                                {/* Separator Line - Only show when expanded */}
+                                {isExpanded && (
+                                  <div className="mt-0 pt-5 border-t-2 border-gray-200 relative">
+                                    <div className="absolute top-0 left-0 right-0 flex items-center justify-center -mt-3">
+                                      <span className="bg-white px-5 py-1.5 text-xs text-gray-500 font-semibold uppercase tracking-wider rounded-full border border-gray-200 shadow-sm">Transaction Details</span>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Expanded Content */}
+                                {isExpanded && (
+                                  <TransactionExpandedContent
+                                    transaction={transaction}
+                                    selectedAccount={selectedAccount}
+                                    formatMoney={formatMoney}
+                                    saleDetails={saleDetails[transaction.id]}
+                                    loadingSaleDetails={loadingSaleDetails[transaction.id]}
+                                    onFetchSaleDetails={async (saleId: string) => {
+                                      if (saleDetails[transaction.id]) return; // Already loaded
+                                      setLoadingSaleDetails(prev => ({ ...prev, [transaction.id]: true }));
+                                      try {
+                                        const { data: saleData, error: saleError } = await supabase
+                                          .from('lats_sales')
+                                          .select('*')
+                                          .eq('id', saleId)
+                                          .single();
+                                        
+                                        if (saleError) throw saleError;
+                                        
+                                        // Fetch customer
+                                        let customerData = null;
+                                        if (saleData.customer_id) {
+                                          const { data: customer } = await supabase
+                                            .from('customers')
+                                            .select('*')
+                                            .eq('id', saleData.customer_id)
+                                            .single();
+                                          customerData = customer;
+                                        }
+                                        
+                                        // Fetch cashier
+                                        let cashierName = 'Unknown';
+                                        if (saleData.sold_by) {
+                                          const { data: userData } = await supabase
+                                            .from('users')
+                                            .select('full_name, email')
+                                            .eq('email', saleData.sold_by)
+                                            .single();
+                                          cashierName = userData?.full_name || userData?.email || saleData.sold_by;
+                                        } else if (saleData.created_by) {
+                                          const nameFromEmail = saleData.created_by.split('@')[0].replace(/[._]/g, ' ');
+                                          cashierName = nameFromEmail.charAt(0).toUpperCase() + nameFromEmail.slice(1);
+                                        }
+                                        
+                                        // Fetch sale items
+                                        const { data: saleItems } = await supabase
+                                          .from('lats_sale_items')
+                                          .select('*')
+                                          .eq('sale_id', saleId);
+                                        
+                                        // Fetch products and variants
+                                        const productIds = [...new Set(saleItems?.map(item => item.product_id).filter(Boolean) || [])];
+                                        const variantIds = [...new Set(saleItems?.map(item => item.variant_id).filter(Boolean) || [])];
+                                        
+                                        const [productsResult, variantsResult] = await Promise.all([
+                                          productIds.length > 0 ? supabase.from('lats_products').select('*').in('id', productIds) : { data: [] },
+                                          variantIds.length > 0 ? supabase.from('lats_product_variants').select('*').in('id', variantIds) : { data: [] }
+                                        ]);
+                                        
+                                        const productsMap = new Map((productsResult.data || []).map((p: any) => [p.id, p]));
+                                        const variantsMap = new Map((variantsResult.data || []).map((v: any) => [v.id, v]));
+                                        
+                                        const enhancedItems = (saleItems || []).map((item: any) => ({
+                                          ...item,
+                                          product: productsMap.get(item.product_id),
+                                          variant: variantsMap.get(item.variant_id),
+                                          profit: item.total_price - ((item.cost_price || 0) * item.quantity)
+                                        }));
+                                        
+                                        setSaleDetails(prev => ({
+                                          ...prev,
+                                          [transaction.id]: {
+                                            ...saleData,
+                                            customer: customerData,
+                                            cashierName,
+                                            items: enhancedItems
+                                          }
+                                        }));
+                                      } catch (error) {
+                                        console.error('Error fetching sale details:', error);
+                                      } finally {
+                                        setLoadingSaleDetails(prev => ({ ...prev, [transaction.id]: false }));
+                                      }
+                                    }}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Transactions List */}
-            <div className="flex-1 overflow-y-auto p-8">
-              {isLoadingTransactions ? (
-                <div className="flex flex-col items-center justify-center py-16">
-                  <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent"></div>
-                  <span className="mt-4 text-gray-600 font-medium">Loading transactions...</span>
-                </div>
-              ) : accountTransactions.length === 0 ? (
-                <div className="text-center py-16">
-                  <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl mb-4">
-                    <History size={36} className="text-gray-400" />
-                  </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">No transactions yet</h3>
-                  <p className="text-gray-500">This account has no transaction history.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {accountTransactions
-                    .filter(t => {
-                      // Filter by transaction type
-                      if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) {
-                        return false;
-                      }
-                      // Filter by date range
-                      if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) {
-                        return false;
-                      }
-                      if (dateFilter.end) {
-                        const endDate = new Date(dateFilter.end);
-                        endDate.setHours(23, 59, 59, 999); // Include the entire end date
-                        if (new Date(t.created_at) > endDate) {
-                          return false;
-                        }
-                      }
-                      return true;
-                    })
-                    .map((transaction) => {
-                      const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
-                      const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
-                      
-                      return (
-                        <div 
-                          key={transaction.id} 
-                          className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                {isIncoming && (
-                                  <div className="p-1 bg-green-100 rounded">
-                                    <ArrowDownRight size={14} className="text-green-600" />
-                                  </div>
-                                )}
-                                {isOutgoing && (
-                                  <div className="p-1 bg-red-100 rounded">
-                                    <ArrowUpRight size={14} className="text-red-600" />
-                                  </div>
-                                )}
-                                <h4 className="font-medium text-gray-900">{transaction.description || 'No description'}</h4>
-                              </div>
-                              
-                              <div className="flex items-center gap-4 text-sm text-gray-600">
-                                <div className="flex items-center gap-1">
-                                  <Calendar size={12} />
-                                  {new Date(transaction.created_at).toLocaleString()}
-                                </div>
-                                {transaction.reference_number && (
-                                  <div className="text-xs bg-gray-100 px-2 py-1 rounded">
-                                    Ref: {transaction.reference_number}
-                                  </div>
-                                )}
-                                <div className={`text-xs px-2 py-1 rounded capitalize ${
-                                  isIncoming ? 'bg-green-100 text-green-700' : 
-                                  isOutgoing ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {transaction.transaction_type.replace('_', ' ')}
-                                </div>
-                              </div>
-                              
-                              {/* Show metadata if it's a PO payment */}
-                              {transaction.metadata?.type === 'purchase_order_payment' && (
-                                <div className="mt-2 text-xs text-gray-500 flex items-center gap-2">
-                                  <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded">
-                                    PO: {transaction.metadata.po_reference}
-                                  </span>
-                                  {transaction.metadata.supplier && (
-                                    <span>Supplier: {transaction.metadata.supplier}</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            
-                            <div className="text-right ml-4">
-                              <div className={`text-xl font-bold ${
-                                isIncoming ? 'text-green-600' : 
-                                isOutgoing ? 'text-red-600' : 'text-gray-900'
-                              }`}>
-                                {isIncoming && '+'}
-                                {isOutgoing && '-'}
-                                {formatMoney(transaction.amount, selectedAccount.currency)}
-                              </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                Balance: {formatMoney(transaction.balance_after, selectedAccount.currency)}
-                              </div>
-                            </div>
-                            
-                            {/* Reverse Button */}
-                            {!transaction.metadata?.reversed && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReversalTransaction(transaction);
-                                  setShowReversalModal(true);
-                                }}
-                                className="px-3 py-1.5 text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 hover:text-orange-900 rounded-lg transition-all font-medium border border-orange-200"
-                                title="Reverse this transaction"
-                              >
-                                Reverse
-                              </button>
-                            )}
-                            {transaction.metadata?.reversed && (
-                              <span className="px-3 py-1.5 text-xs bg-gray-100 text-gray-500 rounded-lg font-medium border border-gray-200">
-                                Reversed
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
-
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
               <button
+                type="button"
                 onClick={() => setShowHistoryModal(false)}
-                className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors font-medium"
+                className="w-full px-6 py-3.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl text-lg"
               >
                 Close
               </button>
@@ -1478,7 +1839,617 @@ const PaymentAccountManagement: React.FC = () => {
           </div>
         </div>
       )}
-      </>
+
+      {/* Manual Transaction Modal */}
+      {showManualTransactionModal && manualTransactionAccount && (
+        <ManualTransactionModal
+          account={manualTransactionAccount}
+          onClose={() => {
+            setShowManualTransactionModal(false);
+            setManualTransactionAccount(null);
+          }}
+          onSuccess={() => {
+            fetchAccounts();
+          }}
+        />
+      )}
+
+      {/* Transfer Modal */}
+      {showTransferModal && (
+        <TransferModal
+          accounts={accounts}
+          onClose={() => setShowTransferModal(false)}
+          onSuccess={() => {
+            fetchAccounts();
+          }}
+        />
+      )}
+
+      {/* Transaction Reversal Modal */}
+      {showReversalModal && reversalTransaction && selectedAccount && (
+        <TransactionReversalModal
+          transaction={reversalTransaction}
+          account={selectedAccount}
+          onClose={() => {
+            setShowReversalModal(false);
+            setReversalTransaction(null);
+          }}
+          onSuccess={() => {
+            loadAccountTransactions(selectedAccount.id);
+            fetchAccounts();
+          }}
+        />
+      )}
+
+      {/* Transaction Details Modal */}
+      {showTransactionDetailsModal && selectedTransaction && (
+        <TransactionDetailsModal
+          transaction={selectedTransaction}
+          account={selectedAccount}
+          onClose={() => {
+            setShowTransactionDetailsModal(false);
+            setSelectedTransaction(null);
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// Transaction Expanded Content Component
+interface TransactionExpandedContentProps {
+  transaction: Transaction;
+  selectedAccount: AccountWithTransactions | null;
+  formatMoney: (amount: number, currency?: string) => string;
+  saleDetails: any;
+  loadingSaleDetails: boolean;
+  onFetchSaleDetails: (saleId: string) => Promise<void>;
+}
+
+const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
+  transaction,
+  selectedAccount,
+  formatMoney,
+  saleDetails,
+  loadingSaleDetails,
+  onFetchSaleDetails
+}) => {
+  const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
+  const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
+  const isReversed = transaction.metadata?.reversed;
+  const isPartial = transaction.metadata?.is_partial || 
+                   transaction.metadata?.partial || 
+                   (transaction.description?.toLowerCase().includes('partial') ?? false);
+  
+  // Get sale ID from metadata or related_entity fields
+  const saleId = transaction.metadata?.sale_id || 
+                 transaction.metadata?.saleId ||
+                 (transaction.related_entity_type === 'sale' ? transaction.related_entity_id : null) ||
+                 (transaction.metadata?.related_entity_type === 'sale' ? transaction.metadata?.related_entity_id : null);
+  
+  // Fetch sale details when expanded and sale_id exists
+  React.useEffect(() => {
+    if (saleId && !saleDetails && !loadingSaleDetails) {
+      onFetchSaleDetails(saleId);
+    }
+  }, [saleId, saleDetails, loadingSaleDetails, onFetchSaleDetails]);
+  
+  return (
+    <div className="px-5 pb-5 pt-2 space-y-4">
+                                    {/* Balance Impact Section */}
+                                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border-2 border-purple-200">
+                                      <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-3">
+                                        <TrendingUp className="w-5 h-5 text-purple-600" />
+                                        Balance Impact
+                                      </h4>
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                          <div className="text-center">
+                                            <div className="text-xs text-gray-600 mb-1">Before</div>
+                                            <div className="text-lg font-bold text-purple-700">{formatMoney(transaction.balance_before, selectedAccount.currency)}</div>
+                                          </div>
+                                          <ArrowRight className="w-6 h-6 text-gray-400" />
+                                          <div className={`text-center ${isIncoming ? 'text-yellow-700' : isOutgoing ? 'text-red-700' : 'text-gray-700'}`}>
+                                            <div className="text-xs text-gray-600 mb-1">Change</div>
+                                            <div className="text-lg font-bold">
+                                              {isIncoming && !isReversed && !isPartial && '+'}
+                                              {isOutgoing && !isReversed && !isPartial && '-'}
+                                              {isPartial && !isReversed && '~'}
+                                              {formatMoney(transaction.amount, selectedAccount.currency)}
+                                            </div>
+                                          </div>
+                                          <ArrowRight className="w-6 h-6 text-gray-400" />
+                                          <div className="text-center">
+                                            <div className="text-xs text-gray-600 mb-1">After</div>
+                                            <div className="text-lg font-bold text-indigo-700">{formatMoney(transaction.balance_after, selectedAccount.currency)}</div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Transaction Details Section - Additional Info */}
+                                    <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
+                                      <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-3">
+                                        <Info className="w-5 h-5 text-indigo-600" />
+                                        Additional Details
+                                      </h4>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                          <div className="text-xs text-gray-500 font-medium mb-1">Account</div>
+                                          <div className="text-sm font-semibold text-gray-900">
+                                            {selectedAccount?.name || 'Unknown Account'}
+                                          </div>
+                                          <div className="text-xs text-gray-600 mt-1">
+                                            {selectedAccount?.type || 'N/A'} • {selectedAccount?.currency || 'TZS'}
+                                          </div>
+                                        </div>
+                                        {transaction.reference_number && (
+                                          <div>
+                                            <div className="text-xs text-gray-500 font-medium mb-1">Reference Number</div>
+                                            <div className="text-sm font-semibold text-gray-900 font-mono bg-gray-50 px-2 py-1 rounded border border-gray-200">
+                                              {transaction.reference_number}
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Customer Information */}
+                                        {(transaction.metadata?.customer_name || transaction.metadata?.customer_id || transaction.metadata?.customer) && (
+                                          <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                            <div className="text-xs text-blue-600 font-medium mb-2 flex items-center gap-1">
+                                              <User className="w-3.5 h-3.5" />
+                                              Customer
+                                            </div>
+                                            <div className="text-sm font-semibold text-gray-900 mb-2">
+                                              {transaction.metadata?.customer_name || transaction.metadata?.customer?.name || 'Unknown Customer'}
+                                            </div>
+                                            <div className="space-y-1">
+                                              {transaction.metadata?.customer_phone && (
+                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
+                                                  <Phone className="w-3 h-3" />
+                                                  {transaction.metadata.customer_phone}
+                                                </div>
+                                              )}
+                                              {transaction.metadata?.customer_email && (
+                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
+                                                  <Mail className="w-3 h-3" />
+                                                  {transaction.metadata.customer_email}
+                                                </div>
+                                              )}
+                                              {transaction.metadata?.customer_address && (
+                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
+                                                  <MapPin className="w-3 h-3" />
+                                                  {transaction.metadata.customer_address}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Supplier Information */}
+                                        {transaction.metadata?.supplier && (
+                                          <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
+                                            <div className="text-xs text-purple-600 font-medium mb-2 flex items-center gap-1">
+                                              <Building className="w-3.5 h-3.5" />
+                                              Supplier
+                                            </div>
+                                            <div className="text-sm font-semibold text-gray-900 mb-2">
+                                              {typeof transaction.metadata.supplier === 'string' 
+                                                ? transaction.metadata.supplier 
+                                                : transaction.metadata.supplier.name || 'Unknown Supplier'}
+                                            </div>
+                                            <div className="space-y-1">
+                                              {transaction.metadata?.supplier_phone && (
+                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
+                                                  <Phone className="w-3 h-3" />
+                                                  {transaction.metadata.supplier_phone}
+                                                </div>
+                                              )}
+                                              {transaction.metadata?.supplier_email && (
+                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
+                                                  <Mail className="w-3 h-3" />
+                                                  {transaction.metadata.supplier_email}
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Payment Method */}
+                                        {transaction.metadata?.payment_method && (
+                                          <div>
+                                            <div className="text-xs text-gray-500 font-medium mb-1">Payment Method</div>
+                                            <div className="text-sm font-semibold text-gray-900">
+                                              {transaction.metadata.payment_method}
+                                            </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Source Type */}
+                                        {transaction.metadata?.type && (
+                                          <div>
+                                            <div className="text-xs text-gray-500 font-medium mb-1">Source Type</div>
+                                            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                              {transaction.metadata.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                        </span>
+                                          </div>
+                                        )}
+                                        
+                                        {/* PO Reference */}
+                                        {transaction.metadata?.po_reference && (
+                                          <div>
+                                            <div className="text-xs text-gray-500 font-medium mb-1">Purchase Order</div>
+                                            <div className="text-sm font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded border border-purple-200 font-mono">
+                                              {transaction.metadata.po_reference}
+                                            </div>
+                                      </div>
+                                    )}
+                                        
+                                        {/* Sale Reference */}
+                                        {transaction.metadata?.sale_reference && (
+                                          <div>
+                                            <div className="text-xs text-gray-500 font-medium mb-1">Sale Reference</div>
+                                            <div className="text-sm font-semibold text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200 font-mono">
+                                              {transaction.metadata.sale_reference}
+                                  </div>
+                                          </div>
+                                        )}
+                                        
+                                        {/* Notes */}
+                                        {transaction.metadata?.notes && (
+                                          <div className="md:col-span-2">
+                                            <div className="text-xs text-gray-500 font-medium mb-1 flex items-center gap-1">
+                                              <FileTextIcon className="w-3.5 h-3.5" />
+                                              Notes
+                                </div>
+                                            <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
+                                              {transaction.metadata.notes}
+                              </div>
+                                          </div>
+                                        )}
+                              </div>
+                            </div>
+                            
+
+
+                                    {/* Sale Details Section */}
+                                    {saleId && (
+                                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl border-2 border-blue-200">
+                                        {loadingSaleDetails ? (
+                                          <div className="flex items-center justify-center py-8">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                                            <span className="ml-3 text-gray-600">Loading sale details...</span>
+                                          </div>
+                                        ) : saleDetails ? (
+                                          <div className="space-y-5">
+                                            {/* Sale Information */}
+                                            <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                              <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+                                                <FileTextIcon className="w-5 h-5 text-blue-600" />
+                                                Sale Information
+                                              </h4>
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                  <div className="text-xs text-gray-500 font-medium mb-1">Sale Number</div>
+                                                  <div className="text-sm font-semibold text-gray-900 font-mono">{saleDetails.sale_number}</div>
+                                                </div>
+                                                <div>
+                                                  <div className="text-xs text-gray-500 font-medium mb-1">Status</div>
+                                                  <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                                                    saleDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                    saleDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                    'bg-red-100 text-red-800'
+                                                  }`}>
+                                                    {saleDetails.status}
+                                                  </span>
+                                      </div>
+                                                <div>
+                                                  <div className="text-xs text-gray-500 font-medium mb-1">Cashier</div>
+                                                  <div className="text-sm font-semibold text-gray-900">{saleDetails.cashierName || 'Unknown'}</div>
+                                    </div>
+                                                <div>
+                                                  <div className="text-xs text-gray-500 font-medium mb-1">Date & Time</div>
+                                                  <div className="text-sm font-semibold text-gray-900">
+                                                    {new Date(saleDetails.created_at).toLocaleString('en-TZ', {
+                                                      year: 'numeric',
+                                                      month: 'short',
+                                                      day: 'numeric',
+                                                      hour: '2-digit',
+                                                      minute: '2-digit'
+                                                    })}
+                                                  </div>
+                                                </div>
+                                    </div>
+                                  </div>
+                                  
+                                            {/* Customer Information */}
+                                            {saleDetails.customer && (
+                                              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                                <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+                                                  <User className="w-5 h-5 text-blue-600" />
+                                                  Customer Information
+                                                </h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                  <div>
+                                                    <div className="text-xs text-gray-500 font-medium mb-1">Name</div>
+                                                    <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                                                      {saleDetails.customer.name}
+                                                      {saleDetails.customer.customer_tag && (
+                                                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                          {saleDetails.customer.customer_tag.toUpperCase()}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                  {saleDetails.customer.phone && (
+                                                    <div>
+                                                      <div className="text-xs text-gray-500 font-medium mb-1">Phone</div>
+                                                      <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                                                        <Phone className="w-3.5 h-3.5" />
+                                                        {saleDetails.customer.phone}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {saleDetails.customer.email && (
+                                                    <div>
+                                                      <div className="text-xs text-gray-500 font-medium mb-1">Email</div>
+                                                      <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                                                        <Mail className="w-3.5 h-3.5" />
+                                                        {saleDetails.customer.email}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {saleDetails.customer.city && (
+                                                    <div>
+                                                      <div className="text-xs text-gray-500 font-medium mb-1">Location</div>
+                                                      <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
+                                                        <MapPin className="w-3.5 h-3.5" />
+                                                        {saleDetails.customer.city}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {saleDetails.customer.loyalty_level && (
+                                                    <div>
+                                                      <div className="text-xs text-gray-500 font-medium mb-1">Loyalty Level</div>
+                                                      <div className="text-sm font-semibold text-gray-900">{saleDetails.customer.loyalty_level}</div>
+                                                    </div>
+                                                  )}
+                                                  {saleDetails.customer.total_spent !== undefined && (
+                                                    <div>
+                                                      <div className="text-xs text-gray-500 font-medium mb-1">Total Spent</div>
+                                                      <div className="text-sm font-semibold text-gray-900">{formatMoney(saleDetails.customer.total_spent || 0, selectedAccount?.currency)}</div>
+                                                    </div>
+                                                  )}
+                                                  {saleDetails.customer.points !== undefined && (
+                                                    <div>
+                                                      <div className="text-xs text-gray-500 font-medium mb-1">Points</div>
+                                                      <div className="text-sm font-semibold text-gray-900">{saleDetails.customer.points || 0}</div>
+                                                    </div>
+                                                  )}
+                                                  {saleDetails.customer.last_visit && (
+                                                    <div>
+                                                      <div className="text-xs text-gray-500 font-medium mb-1">Last Visit</div>
+                                                      <div className="text-sm font-semibold text-gray-900">
+                                                        {new Date(saleDetails.customer.last_visit).toLocaleString('en-TZ', {
+                                                          year: 'numeric',
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                          hour: '2-digit',
+                                                          minute: '2-digit'
+                                                        })}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {/* Payment Information */}
+                                            <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                              <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+                                                <CreditCard className="w-5 h-5 text-blue-600" />
+                                                Payment Information
+                                              </h4>
+                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                  <div className="text-xs text-gray-500 font-medium mb-1">Payment Method(s)</div>
+                                                  <div className="text-sm font-semibold text-gray-900">
+                                                    {saleDetails.payment_method ? (
+                                                      typeof saleDetails.payment_method === 'string' ? (
+                                                        saleDetails.payment_method
+                                                      ) : (
+                                                        saleDetails.payment_method.method || saleDetails.payment_method.type || 'Unknown'
+                                                      )
+                                                    ) : 'Cash'}
+                                                  </div>
+                                                </div>
+                                                <div>
+                                                  <div className="text-xs text-gray-500 font-medium mb-1">Total Amount</div>
+                                                  <div className="text-sm font-semibold text-gray-900">{formatMoney(saleDetails.total_amount || 0, selectedAccount?.currency)}</div>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            {/* Financial Summary */}
+                                            <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                              <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+                                                <DollarSign className="w-5 h-5 text-blue-600" />
+                                                Financial Summary
+                                              </h4>
+                                              <div className="space-y-2">
+                                                <div className="flex justify-between items-center">
+                                                  <span className="text-sm text-gray-600">Subtotal:</span>
+                                                  <span className="text-sm font-semibold text-gray-900">{formatMoney(saleDetails.subtotal || saleDetails.total_amount || 0, selectedAccount?.currency)}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                                  <span className="text-sm font-semibold text-gray-900">Total:</span>
+                                                  <span className="text-sm font-bold text-gray-900">{formatMoney(saleDetails.total_amount || 0, selectedAccount?.currency)}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+
+                                            {/* Sale Items */}
+                                            {saleDetails.items && saleDetails.items.length > 0 && (
+                                              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                                <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+                                                  <FileTextIcon className="w-5 h-5 text-blue-600" />
+                                                  Sale Items ({saleDetails.items.length})
+                                                </h4>
+                                                <div className="overflow-x-auto">
+                                                  <table className="w-full text-sm">
+                                                    <thead>
+                                                      <tr className="border-b border-gray-200">
+                                                        <th className="text-left py-2 px-3 font-semibold text-gray-700">Product</th>
+                                                        <th className="text-left py-2 px-3 font-semibold text-gray-700">SKU</th>
+                                                        <th className="text-center py-2 px-3 font-semibold text-gray-700">Qty</th>
+                                                        <th className="text-right py-2 px-3 font-semibold text-gray-700">Unit Price</th>
+                                                        <th className="text-right py-2 px-3 font-semibold text-gray-700">Total</th>
+                                                        <th className="text-right py-2 px-3 font-semibold text-gray-700">Profit</th>
+                                                      </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                      {saleDetails.items.map((item: any, idx: number) => (
+                                                        <tr key={idx} className="border-b border-gray-100">
+                                                          <td className="py-3 px-3">
+                                                            <div className="font-semibold text-gray-900">{item.product?.name || 'Unknown Product'}</div>
+                                                            {item.variant && (
+                                                              <div className="text-xs text-gray-500 mt-1">
+                                                                Variant: {item.variant.variant_name || item.variant.name || item.variant.sku || 'N/A'}
+                                                              </div>
+                                                            )}
+                                                            {item.product?.category_id && (
+                                                              <div className="text-xs text-gray-400 mt-0.5">
+                                                                {item.product.category_name || 'Accessories'}
+                                                              </div>
+                                                            )}
+                                                          </td>
+                                                          <td className="py-3 px-3 text-gray-600 font-mono text-xs">
+                                                            {item.variant?.sku || item.product?.sku || item.sku || 'N/A'}
+                                                          </td>
+                                                          <td className="py-3 px-3 text-center text-gray-900 font-semibold">{item.quantity || 1}</td>
+                                                          <td className="py-3 px-3 text-right text-gray-900 font-semibold">
+                                                            {formatMoney(item.unit_price || (item.total_price / (item.quantity || 1)), selectedAccount?.currency)}
+                                                          </td>
+                                                          <td className="py-3 px-3 text-right text-gray-900 font-semibold">
+                                                            {formatMoney(item.total_price || 0, selectedAccount?.currency)}
+                                                          </td>
+                                                          <td className="py-3 px-3 text-right text-green-700 font-semibold">
+                                                            {formatMoney(item.profit || 0, selectedAccount?.currency)}
+                                                          </td>
+                                                        </tr>
+                                                      ))}
+                                                    </tbody>
+                                                  </table>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    )}
+
+                                    {/* Action Buttons Section */}
+                                    <div className="mt-5 pt-5 border-t-2 border-gray-200">
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedTransaction(transaction);
+                                            setShowTransactionDetailsModal(true);
+                                          }}
+                                          className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                                        >
+                                          <Eye className="w-4 h-4" />
+                                          View Details
+                                        </button>
+                                        
+                                        {!isReversed && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReversalTransaction(transaction);
+                                        setShowReversalModal(true);
+                                      }}
+                                            className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                                    >
+                                            <RepeatIcon className="w-4 h-4" />
+                                      Reverse
+                                    </button>
+                                  )}
+                                        
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigator.clipboard.writeText(transaction.id);
+                                            toast.success('Transaction ID copied to clipboard');
+                                          }}
+                                          className="px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                                        >
+                                          <Copy className="w-4 h-4" />
+                                          Copy ID
+                                        </button>
+                                        
+                                        {transaction.reference_number && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              navigator.clipboard.writeText(transaction.reference_number);
+                                              toast.success('Reference number copied to clipboard');
+                                            }}
+                                            className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                                          >
+                                            <Copy className="w-4 h-4" />
+                                            Copy Ref
+                                          </button>
+                                  )}
+                                </div>
+                                    </div>
+                                )}
+                                
+                                {/* Connecting Line */}
+                                {index < accountTransactions.filter(t => {
+                                  if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                                  if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                                  if (dateFilter.end) {
+                                    const endDate = new Date(dateFilter.end);
+                                    endDate.setHours(23, 59, 59, 999);
+                                    if (new Date(t.created_at) > endDate) return false;
+                                  }
+                                  if (searchQuery) {
+                                    const query = searchQuery.toLowerCase();
+                                    const matchesDescription = t.description?.toLowerCase().includes(query);
+                                    const matchesReference = t.reference_number?.toLowerCase().includes(query);
+                                    const matchesAmount = formatMoney(t.amount, selectedAccount?.currency || 'TZS').toLowerCase().includes(query);
+                                    if (!matchesDescription && !matchesReference && !matchesAmount) return false;
+                                  }
+                                  return true;
+                                }).length - 1 && (
+                                  <div className={`absolute left-7 top-full w-0.5 h-3 ${
+                                    isReversed ? 'bg-gray-300' : isPartial ? 'bg-yellow-300' : isIncome ? 'bg-yellow-300' : isIncoming ? 'bg-green-300' : isOutgoing ? 'bg-red-300' : 'bg-gray-300'
+                                  }`} />
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowHistoryModal(false)}
+                className="w-full px-6 py-3.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl text-lg"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Manual Transaction Modal */}
@@ -1525,6 +2496,16 @@ const PaymentAccountManagement: React.FC = () => {
           }}
         />
       )}
+
+      {/* Transaction Details Modal */}
+      <TransactionDetailsModal
+        isOpen={showTransactionDetailsModal}
+        onClose={() => {
+          setShowTransactionDetailsModal(false);
+          setSelectedTransaction(null);
+        }}
+        transaction={selectedTransaction}
+      />
     </div>
   );
 };

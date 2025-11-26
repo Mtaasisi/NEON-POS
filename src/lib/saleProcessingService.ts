@@ -114,6 +114,122 @@ class SaleProcessingService {
     }
   }
 
+  // Public method to check stock availability before adding to cart
+  // This handles parent variants correctly by calculating stock from children
+  async checkStockAvailability(variantId: string, requestedQuantity: number): Promise<{
+    available: boolean;
+    availableStock: number;
+    error?: string;
+  }> {
+    try {
+      // Validate variantId format
+      if (!isValidUuid(variantId)) {
+        return {
+          available: false,
+          availableStock: 0,
+          error: 'Invalid variant ID format'
+        };
+      }
+
+      // Check if variant exists in lats_product_variants
+      const { data: variant, error: variantError } = await supabase
+        .from('lats_product_variants')
+        .select('id, quantity, is_parent, variant_type, parent_variant_id, is_active')
+        .eq('id', variantId)
+        .maybeSingle();
+
+      // Check if variant exists in inventory_items (legacy serial number devices)
+      const { data: inventoryItem, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .select('id, status, product_id, variant_id')
+        .eq('id', variantId)
+        .maybeSingle();
+
+      // If neither found, return error
+      if (!variant && !inventoryItem) {
+        return {
+          available: false,
+          availableStock: 0,
+          error: 'Variant not found'
+        };
+      }
+
+      // Handle inventory items (serial number devices)
+      if (inventoryItem && !variant) {
+        if (inventoryItem.status !== 'available') {
+          return {
+            available: false,
+            availableStock: 0,
+            error: `Item is not available for sale (status: ${inventoryItem.status})`
+          };
+        }
+        // Inventory items are single units
+        if (requestedQuantity > 1) {
+          return {
+            available: false,
+            availableStock: 1,
+            error: 'Serial number devices can only be sold one at a time'
+          };
+        }
+        return {
+          available: true,
+          availableStock: 1
+        };
+      }
+
+      // Handle regular variants
+      if (!variant) {
+        return {
+          available: false,
+          availableStock: 0,
+          error: 'Variant not found'
+        };
+      }
+
+      // Check if variant is active
+      if (variant.is_active === false) {
+        return {
+          available: false,
+          availableStock: 0,
+          error: 'Variant is not active'
+        };
+      }
+
+      // For parent variants, calculate stock from children
+      let availableStock = variant.quantity || 0;
+      if (variant.is_parent || variant.variant_type === 'parent') {
+        const { data: children } = await supabase
+          .from('lats_product_variants')
+          .select('quantity')
+          .eq('parent_variant_id', variantId)
+          .eq('is_active', true);
+        
+        availableStock = children?.reduce((sum, child) => sum + (child.quantity || 0), 0) || 0;
+      }
+
+      // Check if requested quantity is available
+      if (availableStock < requestedQuantity) {
+        return {
+          available: false,
+          availableStock,
+          error: `Insufficient stock. Available: ${availableStock}, Requested: ${requestedQuantity}`
+        };
+      }
+
+      return {
+        available: true,
+        availableStock
+      };
+    } catch (error) {
+      console.error('❌ Error checking stock availability:', error);
+      return {
+        available: false,
+        availableStock: 0,
+        error: error instanceof Error ? error.message : 'Failed to check stock availability'
+      };
+    }
+  }
+
   // Process a complete sale with all necessary operations
   async processSale(saleData: Omit<SaleData, 'id' | 'saleNumber' | 'createdAt'>): Promise<ProcessSaleResult> {
     try {
@@ -134,9 +250,13 @@ class SaleProcessingService {
       
       console.log('✅ User authenticated:', authResult.user?.email);
 
-      // Validate customer information - customer selection is required
+      // Validate customer information - customer selection is optional (walk-in customers allowed)
+      // In production, we allow null customerId for walk-in customers
+      const isProduction = import.meta.env.MODE === 'production' || import.meta.env.PROD;
       if (!saleData.customerId) {
-        return { success: false, error: 'Please select a customer before creating a sale' };
+        console.warn('⚠️ No customer selected - processing as walk-in customer');
+        // Allow walk-in customers - customerId can be null
+        // The database schema should allow null customer_id for walk-in sales
       }
 
       // 1. Combined stock validation and cost calculation (ultra-optimized)
@@ -590,6 +710,20 @@ class SaleProcessingService {
   // Save sale to database
   private async saveSaleToDatabase(saleData: SaleData): Promise<{ success: boolean; saleId?: string; sale?: SaleData; error?: string }> {
     try {
+      // Validate environment in production
+      const isProduction = import.meta.env.MODE === 'production' || import.meta.env.PROD;
+      if (isProduction) {
+        const dbUrl = import.meta.env.VITE_DATABASE_URL;
+        if (!dbUrl) {
+          console.error('❌ PRODUCTION ERROR: VITE_DATABASE_URL is not configured!');
+          return {
+            success: false,
+            error: 'Database configuration error. Please contact your administrator.'
+          };
+        }
+        console.log('✅ Production environment detected. Database URL configured.');
+      }
+      
       // Generate sale number
       const saleNumber = this.generateSaleNumber();
 
@@ -599,6 +733,14 @@ class SaleProcessingService {
       
       if (!authResult.success) {
         console.error('❌ Authentication failed:', authResult.error);
+        
+        // Enhanced error for production
+        if (isProduction) {
+          console.error('🚨 PRODUCTION AUTH ERROR:');
+          console.error('   User authentication failed in production environment.');
+          console.error('   This may indicate session expiration or authentication service issue.');
+        }
+        
         return { 
           success: false, 
           error: authResult.error || 'Authentication required. Please log in to process sales.' 
@@ -660,6 +802,12 @@ class SaleProcessingService {
       // 🔒 Get current branch for sale assignment
       const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
       console.log('🏪 [saveSale] Assigning sale to branch:', currentBranchId);
+      
+      // Warn if branch_id is missing in production (but don't fail - some setups may not use branches)
+      if (isProduction && !currentBranchId) {
+        console.warn('⚠️ PRODUCTION WARNING: No branch_id found in localStorage. Sale will be created without branch assignment.');
+        console.warn('   If your database requires branch_id, this may cause a foreign key constraint error.');
+      }
 
       // Properly format payment_method for JSONB column
       // Ensure it's a valid object and will be properly handled by Supabase
@@ -667,7 +815,7 @@ class SaleProcessingService {
 
       const saleInsertData = {
         sale_number: saleNumber,
-        customer_id: saleData.customerId, // Customer ID is required - validated above
+        customer_id: saleData.customerId || null, // Customer ID is optional (null for walk-in customers)
         total_amount: saleData.total,
         payment_method: paymentMethodFormatted, // JSONB column - Supabase handles the conversion
         payment_status: saleData.paymentStatus || 'completed',
@@ -695,20 +843,72 @@ class SaleProcessingService {
         .single();
 
       if (saleError1) {
+        // Enhanced error logging for production debugging
+        const isProduction = import.meta.env.MODE === 'production' || import.meta.env.PROD;
+        const errorCode = saleError1.code || '';
+        const errorMessage = saleError1.message || '';
+        const errorDetails = saleError1.details || '';
+        const errorHint = saleError1.hint || '';
+        
         console.error('❌ Error creating sale with full data:', saleError1);
         console.error('❌ Sale insert data that failed:', JSON.stringify(saleInsertData, null, 2));
         console.error('❌ Full error details:', {
-          message: saleError1.message,
-          details: saleError1.details,
-          hint: saleError1.hint,
-          code: saleError1.code
+          message: errorMessage,
+          details: errorDetails,
+          hint: errorHint,
+          code: errorCode
         });
+        
+        // Production-specific diagnostics
+        if (isProduction) {
+          console.error('🔍 PRODUCTION DIAGNOSTICS:');
+          console.error('   Environment:', import.meta.env.MODE);
+          console.error('   Database URL configured:', !!import.meta.env.VITE_DATABASE_URL);
+          console.error('   User authenticated:', !!authResult.user);
+          console.error('   User email:', authResult.user?.email);
+          console.error('   Branch ID:', currentBranchId);
+          console.error('   Customer ID:', saleData.customerId);
+          
+          // Check for common production issues
+          if (errorCode === '42501' || errorMessage.includes('permission denied') || errorMessage.includes('row-level security')) {
+            console.error('🚨 RLS POLICY ISSUE DETECTED:');
+            console.error('   The database Row Level Security (RLS) policy is blocking the insert.');
+            console.error('   Solution: Check RLS policies on lats_sales table in production database.');
+            console.error('   Run: SELECT * FROM pg_policies WHERE tablename = \'lats_sales\';');
+          }
+          
+          if (errorCode === '23503' || errorMessage.includes('foreign key')) {
+            console.error('🚨 FOREIGN KEY CONSTRAINT ISSUE:');
+            console.error('   A referenced record (customer_id, branch_id, etc.) does not exist.');
+            console.error('   Check if customer_id exists:', saleData.customerId || '(null - walk-in customer)');
+            console.error('   Check if branch_id exists:', currentBranchId || '(null - no branch assigned)');
+            if (!currentBranchId) {
+              console.error('   💡 TIP: If branch_id is required, ensure a branch is selected before creating sales.');
+            }
+            if (!saleData.customerId) {
+              console.error('   💡 TIP: This is a walk-in customer (customer_id is null). Ensure your database allows null customer_id.');
+            }
+          }
+          
+          if (errorCode === '23505' || errorMessage.includes('unique constraint')) {
+            console.error('🚨 UNIQUE CONSTRAINT ISSUE:');
+            console.error('   Sale number already exists:', saleNumber);
+            console.error('   This should not happen - sale number generation may have collision.');
+          }
+          
+          if (errorMessage.includes('connection') || errorMessage.includes('timeout') || errorMessage.includes('network')) {
+            console.error('🚨 DATABASE CONNECTION ISSUE:');
+            console.error('   Cannot connect to database in production.');
+            console.error('   Check VITE_DATABASE_URL environment variable.');
+            console.error('   Verify database is accessible from production server.');
+          }
+        }
 
         // Try with reduced data - essential fields only
         console.log('🔄 Trying with reduced field set...');
         const reducedData = {
           sale_number: saleNumber,
-          customer_id: saleData.customerId,
+          customer_id: saleData.customerId || null, // Allow null for walk-in customers
           total_amount: saleData.total,
           payment_method: paymentMethodFormatted, // JSONB column - Supabase handles the conversion
           payment_status: saleData.paymentStatus || 'completed',
@@ -732,7 +932,32 @@ class SaleProcessingService {
 
         if (fallbackError) {
           console.error('❌ Fallback insert also failed:', fallbackError);
-          return { success: false, error: `Failed to create sale: ${saleError1.message}. Fallback also failed: ${fallbackError.message}` };
+          
+          // Enhanced error message for production
+          let userFriendlyError = `Failed to create sale: ${errorMessage}`;
+          if (isProduction) {
+            if (errorCode === '42501' || errorMessage.includes('permission denied') || errorMessage.includes('row-level security')) {
+              userFriendlyError = 'Sale creation failed due to database permissions. Please contact your administrator to check Row Level Security policies.';
+            } else if (errorCode === '23503' || errorMessage.includes('foreign key')) {
+              userFriendlyError = 'Sale creation failed: Invalid customer or branch reference. Please refresh the page and try again.';
+            } else if (errorMessage.includes('connection') || errorMessage.includes('timeout')) {
+              userFriendlyError = 'Sale creation failed: Database connection error. Please check your internet connection and try again.';
+            } else {
+              userFriendlyError = `Sale creation failed: ${errorMessage}. Error code: ${errorCode || 'unknown'}`;
+            }
+          }
+          
+          return { 
+            success: false, 
+            error: userFriendlyError,
+            // Include technical details for debugging (only in development)
+            ...(isProduction ? {} : { 
+              technicalError: `Full error: ${saleError1.message}. Fallback also failed: ${fallbackError.message}`,
+              errorCode,
+              errorDetails,
+              errorHint
+            })
+          };
         }
 
         console.log('✅ Fallback insert succeeded');
@@ -791,16 +1016,43 @@ class SaleProcessingService {
         .insert(saleItems);
 
       if (itemsError) {
+        const isProduction = import.meta.env.MODE === 'production' || import.meta.env.PROD;
+        const errorCode = itemsError.code || '';
+        const errorMessage = itemsError.message || '';
+        
         console.error('❌ Error creating sale items:', itemsError);
         console.error('❌ Full error details:', {
-          message: itemsError.message,
+          message: errorMessage,
           details: itemsError.details,
           hint: itemsError.hint,
-          code: itemsError.code
+          code: errorCode
         });
         console.error('❌ Sale items data:', saleItems);
         console.error('❌ Sale ID:', sale.id);
-        return { success: false, error: `Sale created but items failed: ${itemsError.message}` };
+        
+        // Production-specific diagnostics for sale items
+        if (isProduction) {
+          console.error('🚨 PRODUCTION SALE ITEMS ERROR:');
+          if (errorCode === '42501' || errorMessage.includes('permission denied') || errorMessage.includes('row-level security')) {
+            console.error('   RLS policy blocking sale items insert.');
+            console.error('   Check RLS policies on lats_sale_items table.');
+          }
+          if (errorCode === '23503' || errorMessage.includes('foreign key')) {
+            console.error('   Foreign key constraint violation.');
+            console.error('   Verify sale_id, product_id, and variant_id exist.');
+          }
+        }
+        
+        let userFriendlyError = `Sale created but items failed: ${errorMessage}`;
+        if (isProduction && errorCode === '42501') {
+          userFriendlyError = 'Sale was created but items could not be saved due to database permissions. Please contact your administrator.';
+        }
+        
+        return { 
+          success: false, 
+          error: userFriendlyError,
+          saleId: sale.id // Return sale ID even though items failed
+        };
       }
 
       // Mirror POS payments into payment_transactions table (NEW - leverages triggers)

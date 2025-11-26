@@ -1166,36 +1166,71 @@ export async function addCustomerToDb(customer: Omit<Customer, 'promoHistory' | 
     if (currentBranchId) {
 
       
-      // Set branch_id for branch filtering (REQUIRED for branch isolation)
-      dbCustomer.branch_id = currentBranchId;
-
+      // 🔒 CRITICAL: Verify branch exists in lats_branches (required by FK constraint)
+      let validBranchId: string | null = null;
+      let branchName: string | null = null;
       
-      // Also set created_by_branch_id for metadata/audit trail
-      dbCustomer.created_by_branch_id = currentBranchId;
-
-      
-      // Fetch branch name for denormalized storage
       try {
-
-        const { data: branchData } = await checkSupabase()
+        // Get branch info from store_locations (where the ID comes from)
+        const { data: storeLocationData } = await checkSupabase()
           .from('store_locations')
-          .select('name')
+          .select('id, name')
           .eq('id', currentBranchId)
           .single();
         
-        if (branchData?.name) {
-          dbCustomer.created_by_branch_name = branchData.name;
-
-        } else {
-          console.warn('   ⚠️  Branch name not found in database');
+        if (!storeLocationData) {
+          throw new Error(`Branch ID ${currentBranchId} not found in store_locations`);
         }
-      } catch (branchError) {
-        console.warn('   ⚠️  Could not fetch branch name:', branchError);
-        console.warn('   ℹ️  Database trigger will handle branch name assignment');
+        
+        branchName = storeLocationData.name;
+        
+        // Check if branch exists in lats_branches (required by FK constraint)
+        const { data: latsBranchData, error: latsBranchError } = await checkSupabase()
+          .from('lats_branches')
+          .select('id, name')
+          .eq('id', currentBranchId)
+          .single();
+        
+        if (latsBranchData && !latsBranchError) {
+          validBranchId = latsBranchData.id;
+          branchName = latsBranchData.name || branchName;
+          console.log('✅ Branch verified in lats_branches:', branchName);
+        } else {
+          // Create branch in lats_branches with SAME ID as store_locations
+          console.warn('⚠️  Creating branch in lats_branches with same ID...');
+          const { data: newBranch, error: createError } = await checkSupabase()
+            .from('lats_branches')
+            .insert([{
+              id: currentBranchId,
+              name: storeLocationData.name,
+              is_active: true
+            }])
+            .select('id, name')
+            .single();
+          
+          if (newBranch && !createError) {
+            validBranchId = newBranch.id;
+            branchName = newBranch.name;
+            console.log('✅ Created branch in lats_branches:', branchName);
+          } else {
+            throw new Error(`Failed to create branch: ${createError?.message || 'Unknown error'}`);
+          }
+        }
+      } catch (branchError: any) {
+        console.error('❌ Error verifying branch:', branchError);
+        throw new Error(`Failed to verify branch: ${branchError.message || 'Unknown error'}`);
       }
-      
-      // Mark as branch-specific (not shared)
-      dbCustomer.is_shared = false;
+
+      if (validBranchId) {
+        // Set branch_id for branch filtering (REQUIRED for branch isolation)
+        dbCustomer.branch_id = validBranchId;
+        dbCustomer.created_by_branch_id = validBranchId;
+        if (branchName) {
+          dbCustomer.created_by_branch_name = branchName;
+        }
+        // Mark as branch-specific (not shared)
+        dbCustomer.is_shared = false;
+      }
       // console.log removed');
       
 

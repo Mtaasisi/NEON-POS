@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { useCustomers } from '../../../context/CustomersContext';
 import { useBranch } from '../../../context/BranchContext';
 import { installmentService } from '../../../lib/installmentService';
+import { installmentCacheService } from '../../../lib/installmentCacheService';
 import { supabase } from '../../../lib/supabaseClient';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import SuccessModal from '../../../components/ui/SuccessModal';
@@ -40,12 +42,14 @@ import {
   Package,
   Building,
   AlertCircle,
-  User
+  User,
+  Link
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { financeAccountService } from '../../../lib/financeAccountService';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { TableSkeleton } from '../../../components/ui/SkeletonLoaders';
+import InstallmentManagementModal from '../../lats/components/pos/InstallmentManagementModal';
 
 const InstallmentsPage: React.FC = () => {
   const { currentUser } = useAuth();
@@ -69,6 +73,7 @@ const InstallmentsPage: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [paymentAccounts, setPaymentAccounts] = useState<any[]>([]);
+  const [showInstallmentManagementModal, setShowInstallmentManagementModal] = useState(false);
 
   // Fetch plans and stats
   const fetchPlans = useCallback(async () => {
@@ -80,10 +85,33 @@ const InstallmentsPage: React.FC = () => {
     const jobId = startLoading('Loading installment plans...');
     setIsLoading(true);
     try {
-      console.log('Fetching installment plans for branch:', currentBranch.id);
-      const fetchedPlans = await installmentService.getAllInstallmentPlans(currentBranch.id);
-      console.log('Fetched plans:', fetchedPlans);
-      setPlans(fetchedPlans);
+      // Check if we have cached installment plans (from InstallmentPreloader)
+      const cachedPlans = installmentCacheService.getInstallments(currentBranch.id);
+      let fetchedPlans: any[] = [];
+      
+      if (cachedPlans && cachedPlans.length > 0) {
+        console.log(`⚡ [InstallmentsPage] Using ${cachedPlans.length} cached installment plans - instant load!`);
+        fetchedPlans = cachedPlans;
+        setPlans(fetchedPlans);
+        
+        // Still refresh in background (non-blocking)
+        installmentService.getAllInstallmentPlans(currentBranch.id)
+          .then(freshPlans => {
+            console.log(`✅ [InstallmentsPage] Background refresh completed (${freshPlans.length} plans)`);
+            installmentCacheService.saveInstallments(freshPlans, currentBranch.id);
+            setPlans(freshPlans);
+          })
+          .catch(err => {
+            console.warn('⚠️ [InstallmentsPage] Background refresh failed (non-critical):', err);
+          });
+      } else {
+        console.log('📡 [InstallmentsPage] No cache found, loading from database...');
+        fetchedPlans = await installmentService.getAllInstallmentPlans(currentBranch.id);
+        console.log('Fetched plans:', fetchedPlans);
+        setPlans(fetchedPlans);
+        // Save to cache for next time
+        installmentCacheService.saveInstallments(fetchedPlans, currentBranch.id);
+      }
       
       const fetchedStats = await installmentService.getStatistics(currentBranch.id);
       console.log('Fetched stats:', fetchedStats);
@@ -202,6 +230,15 @@ const InstallmentsPage: React.FC = () => {
           </div>
         </div>
 
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowInstallmentManagementModal(true)}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-700 transition-colors text-sm"
+          >
+            <CreditCard size={18} />
+            Manage Installments
+          </button>
         <button
           onClick={() => setShowCreateModal(true)}
           className="flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
@@ -209,6 +246,7 @@ const InstallmentsPage: React.FC = () => {
           <Plus size={18} />
           New Installment Plan
         </button>
+        </div>
       </div>
 
       {/* Statistics */}
@@ -578,10 +616,36 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Helper function to format numbers with comma separators
+  const formatPrice = (price: number | string): string => {
+    const num = typeof price === 'string' ? parseFloat(price) : price;
+    // Remove .00 for whole numbers
+    if (num % 1 === 0) {
+      return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    }
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // Block body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   // Fetch recent unpaid/partial sales
   useEffect(() => {
     const fetchSales = async () => {
-      if (!isOpen) return;
+      if (!isOpen || !currentBranch?.id) {
+        setSales([]);
+        return;
+      }
       
       setLoadingSales(true);
       try {
@@ -596,16 +660,22 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
             created_at,
             customers (name, phone)
           `)
-          .eq('branch_id', currentBranch?.id)
+          .eq('branch_id', currentBranch.id)
           .in('payment_status', ['unpaid', 'partial'])
           .order('created_at', { ascending: false })
           .limit(50);
         
-        if (!error && data) {
-          setSales(data);
+        if (error) {
+          console.error('Error fetching sales:', error);
+          toast.error('Failed to load sales');
+          setSales([]);
+        } else {
+          setSales(data || []);
         }
       } catch (error) {
         console.error('Error fetching sales:', error);
+        toast.error('Failed to load sales');
+        setSales([]);
       } finally {
         setLoadingSales(false);
       }
@@ -640,7 +710,7 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.customer_id || !formData.account_id) {
       toast.error('Please fill in all required fields');
       return;
@@ -678,62 +748,95 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <CreditCard className="w-5 h-5 text-blue-600" />
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[100000]" 
+      style={{ top: 0, left: 0, right: 0, bottom: 0 }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="installment-modal-title"
+    >
+      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+        >
+          <XIcon className="w-5 h-5" />
+        </button>
+
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+              <CreditCard className="w-8 h-8 text-white" />
             </div>
+            
+            {/* Text */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Create Installment Plan</h3>
+              <h3 id="installment-modal-title" className="text-2xl font-bold text-gray-900 mb-2">Create Installment Plan</h3>
               <p className="text-sm text-gray-600">Set up payment plan for customer</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <XIcon size={20} />
-          </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        {/* Form Wrapper */}
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+            {/* Scrollable Form Section */}
+            <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {/* Link to Existing Sale (Optional) */}
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-            <label className="block text-sm font-medium text-blue-900 mb-1">
+            <div className="bg-blue-50 p-5 rounded-xl border-2 border-blue-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Link className="w-5 h-5 text-blue-600" />
+                <label className="block text-sm font-bold text-blue-900">
               Link to Existing Sale (Optional)
             </label>
+              </div>
+              {loadingSales ? (
+                <div className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl bg-white flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-sm text-gray-600">Loading sales...</span>
+                </div>
+              ) : (
+                <>
             <select
               value={formData.sale_id}
               onChange={(e) => handleSaleSelect(e.target.value)}
-              className="w-full px-4 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-              disabled={loadingSales}
+                    className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white font-medium"
             >
               <option value="">-- Create New Installment (No Sale Link) --</option>
-              {sales.map(sale => (
+                    {sales.length > 0 ? (
+                      sales.map(sale => (
                 <option key={sale.id} value={sale.id}>
-                  {sale.sale_number} - {sale.customers?.name} - {new Intl.NumberFormat('en-TZ', { style: 'currency', currency: 'TZS', minimumFractionDigits: 0 }).format(sale.total_amount)} ({sale.payment_status})
+                          {sale.sale_number} - {sale.customers?.name || 'Unknown Customer'} - {formatPrice(sale.total_amount)} TZS ({sale.payment_status})
                 </option>
-              ))}
+                      ))
+                    ) : (
+                      <option value="" disabled>No unpaid or partial sales found</option>
+                    )}
             </select>
-            <p className="text-xs text-blue-700 mt-2">
-              💡 Link to an unpaid sale to auto-populate customer and amount
-            </p>
+                  {sales.length === 0 && !loadingSales && (
+                    <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" />
+                      No unpaid or partial sales available to link
+                    </p>
+                  )}
+                </>
+              )}
           </div>
 
           {/* Customer */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-xs font-medium text-gray-700 mb-2">
               Customer <span className="text-red-500">*</span>
             </label>
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <select
               value={formData.customer_id}
               onChange={(e) => setFormData(prev => ({ ...prev, customer_id: e.target.value }))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
               required
               disabled={!!formData.sale_id}
             >
@@ -744,60 +847,87 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
                 </option>
               ))}
             </select>
+              </div>
             {formData.sale_id && (
-              <p className="text-xs text-gray-600 mt-1">✓ Auto-selected from linked sale</p>
+                <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                  <CheckCircle className="w-3 h-3" />
+                  Auto-selected from linked sale
+                </p>
             )}
           </div>
 
           {/* Total Amount and Down Payment */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
                 Total Amount <span className="text-red-500">*</span>
               </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
-                type="number"
-                value={formData.total_amount}
-                onChange={(e) => setFormData(prev => ({ ...prev, total_amount: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
-                min="0"
-                step="0.01"
+                    type="text"
+                    value={formatPrice(formData.total_amount || 0)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/,/g, '');
+                      const numValue = parseFloat(value) || 0;
+                      setFormData(prev => ({ ...prev, total_amount: numValue }));
+                    }}
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
                 required
                 disabled={!!formData.sale_id}
               />
+                </div>
               {formData.sale_id && (
-                <p className="text-xs text-gray-600 mt-1">✓ Auto-populated from linked sale</p>
+                  <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    Auto-populated from linked sale
+                  </p>
               )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
                 Down Payment <span className="text-red-500">*</span>
               </label>
+                <div className="relative">
+                  <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
-                type="number"
-                value={formData.down_payment}
-                onChange={(e) => setFormData(prev => ({ ...prev, down_payment: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                min="0"
-                step="0.01"
+                    type="text"
+                    value={formatPrice(formData.down_payment || 0)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/,/g, '');
+                      const numValue = parseFloat(value) || 0;
+                      setFormData(prev => ({ ...prev, down_payment: numValue }));
+                    }}
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white"
                 required
               />
+                </div>
             </div>
           </div>
 
-          {/* Summary Box */}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="grid grid-cols-2 gap-3 text-sm">
+            {/* Summary Box - Polished Design */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border-2 border-blue-200 shadow-sm">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
               <div>
-                <span className="text-gray-600">Amount to Finance:</span>
-                <div className="font-bold text-blue-900">
-                  {amountFinanced.toLocaleString('en-TZ', { style: 'currency', currency: 'TZS', minimumFractionDigits: 0 })}
+                    <p className="text-xs font-medium text-gray-600 mb-0.5">Amount to Finance</p>
+                    <p className="text-lg font-bold text-blue-900">
+                      {formatPrice(amountFinanced)} TZS
+                    </p>
                 </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                    <Calendar className="w-5 h-5 text-white" />
               </div>
               <div>
-                <span className="text-gray-600">Per Installment:</span>
-                <div className="font-bold text-blue-900">
-                  {installmentAmount.toLocaleString('en-TZ', { style: 'currency', currency: 'TZS', minimumFractionDigits: 0 })}
+                    <p className="text-xs font-medium text-gray-600 mb-0.5">Per Installment</p>
+                    <p className="text-lg font-bold text-emerald-900">
+                      {formatPrice(installmentAmount)} TZS
+                    </p>
                 </div>
               </div>
             </div>
@@ -806,26 +936,26 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
           {/* Number of Installments and Frequency */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
                 Number of Installments <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
                 value={formData.number_of_installments}
                 onChange={(e) => setFormData(prev => ({ ...prev, number_of_installments: parseInt(e.target.value) || 1 }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white"
                 min="1"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
                 Payment Frequency <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.payment_frequency}
                 onChange={(e) => setFormData(prev => ({ ...prev, payment_frequency: e.target.value as PaymentFrequency }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
                 required
               >
                 <option value="weekly">Weekly</option>
@@ -838,40 +968,48 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
           {/* Start Date and Late Fee */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
                 Start Date <span className="text-red-500">*</span>
               </label>
+                <div className="relative">
+                  <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="date"
                 value={formData.start_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
                 required
               />
+                </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Late Fee Amount</label>
+                <label className="block text-xs font-medium text-gray-700 mb-2">Late Fee Amount</label>
+                <div className="relative">
+                  <AlertTriangle className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-orange-400" />
               <input
-                type="number"
-                value={formData.late_fee_amount}
-                onChange={(e) => setFormData(prev => ({ ...prev, late_fee_amount: parseFloat(e.target.value) || 0 }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                min="0"
-                step="0.01"
+                    type="text"
+                    value={formatPrice(formData.late_fee_amount || 0)}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/,/g, '');
+                      const numValue = parseFloat(value) || 0;
+                      setFormData(prev => ({ ...prev, late_fee_amount: numValue }));
+                    }}
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900 font-medium bg-white"
               />
+                </div>
             </div>
           </div>
 
           {/* Payment Method and Account */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
                 Payment Method <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.payment_method}
                 onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
                 required
               >
                 <option value="cash">Cash</option>
@@ -881,13 +1019,15 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-2">
                 Payment Account <span className="text-red-500">*</span>
               </label>
+                <div className="relative">
+                  <Building className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <select
                 value={formData.account_id}
                 onChange={(e) => setFormData(prev => ({ ...prev, account_id: e.target.value }))}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
                 required
               >
                 <option value="">Select Account</option>
@@ -897,41 +1037,56 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
                   </option>
                 ))}
               </select>
+                </div>
             </div>
           </div>
 
           {/* Notes */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+              <label className="block text-xs font-medium text-gray-700 mb-2">Notes</label>
+              <div className="relative">
+                <FileText className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white resize-none"
               placeholder="Plan details..."
-              rows={2}
+                  rows={3}
             />
+              </div>
+            </div>
           </div>
 
-          {/* Submit Buttons */}
-          <div className="flex gap-3 pt-4">
+          {/* Fixed Action Buttons Footer */}
+          <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+            <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                className="flex-1 px-6 py-3.5 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all shadow-sm"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Creating...' : 'Create Installment Plan'}
-            </button>
-          </div>
+                disabled={isSubmitting || !formData.customer_id || !formData.account_id}
+                  className="flex-1 px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Creating...
+                    </span>
+                  ) : (
+                  'Create Installment Plan'
+                  )}
+                </button>
+              </div>
+            </div>
         </form>
-      </div>
-    </div>
+          </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1120,9 +1275,6 @@ const RecordInstallmentPaymentModal: React.FC<RecordInstallmentPaymentModalProps
                 required
               />
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              💡 Default amount is set to the calculated installment price ({Number(plan.installment_amount).toFixed(2)} TZS). You can adjust if needed.
-            </p>
           </div>
 
           <div>
@@ -1530,19 +1682,19 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Name:</span>
                   <span className="font-medium text-gray-900">{currentPlan.customer?.name}</span>
-                </div>
+            </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Phone:</span>
                   <span className="font-medium text-gray-900">{currentPlan.customer?.phone}</span>
                 </div>
-                {currentPlan.customer?.email && (
+                    {currentPlan.customer?.email && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Email:</span>
                     <span className="font-medium text-gray-900">{currentPlan.customer.email}</span>
-                  </div>
-                )}
-              </div>
+                      </div>
+                    )}
             </div>
+          </div>
 
             <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
               <h4 className="text-sm font-semibold text-purple-900 mb-3">Plan Status</h4>
@@ -1555,7 +1707,7 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                     currentPlan.status === 'defaulted' ? 'bg-red-100 text-red-700' :
                     'bg-orange-100 text-orange-700'
                   }`}>{currentPlan.status}</span>
-                </div>
+            </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Created:</span>
                   <span className="font-medium text-gray-900">{formatDate(currentPlan.created_at)}</span>
@@ -1563,10 +1715,10 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-600">Reminders Sent:</span>
                   <span className="font-medium text-gray-900">{currentPlan.reminder_count}</span>
+              </div>
                 </div>
               </div>
             </div>
-          </div>
 
           {/* Financial Summary */}
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-lg border border-green-200">
@@ -1607,17 +1759,17 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
           </div>
 
           {/* Payment Schedule Info */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
               <p className="text-xs text-gray-600 mb-1">Installment Amount</p>
               <p className="text-xl font-bold text-gray-900">{formatCurrency(currentPlan.installment_amount)}</p>
               <p className="text-xs text-gray-500 mt-1">per {currentPlan.payment_frequency}</p>
-            </div>
+                </div>
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
               <p className="text-xs text-gray-600 mb-1">Installments</p>
               <p className="text-xl font-bold text-gray-900">{currentPlan.installments_paid} / {currentPlan.number_of_installments}</p>
               <p className="text-xs text-gray-500 mt-1">paid</p>
-            </div>
+                </div>
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
               <p className="text-xs text-gray-600 mb-1">Next Payment</p>
               <p className="text-xl font-bold text-gray-900">{currentPlan.next_payment_date ? formatDate(currentPlan.next_payment_date) : 'Completed'}</p>
@@ -1655,10 +1807,10 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                       `}
                     >
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                        {installment.installmentNumber}
+                            {installment.installmentNumber}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-900">
-                        {formatDate(installment.dueDate)}
+                          {formatDate(installment.dueDate)}
                         {installment.status === 'overdue' && (
                           <span className="ml-2 text-xs text-red-600">
                             ({installment.daysOverdue} days late)
@@ -1725,10 +1877,10 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                           </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
-                          {item.lats_product_variants?.sku || item.lats_products?.sku || '-'}
+                            {item.lats_product_variants?.sku || item.lats_products?.sku || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
-                          {item.quantity}
+                            {item.quantity}
                         </td>
                         <td className="px-4 py-3 text-sm text-right text-gray-900">
                           {formatCurrency(item.unit_price || item.price || 0)}
@@ -1756,9 +1908,9 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                   <div className="bg-purple-50 p-3 rounded-lg">
                     <p className="text-xs text-gray-600 mb-1">Branch</p>
                     <p className="text-sm font-medium text-gray-900">{branchInfo.name}</p>
-                    {branchInfo.address && (
-                      <p className="text-xs text-gray-500 mt-1">{branchInfo.address}</p>
-                    )}
+                      {branchInfo.address && (
+                        <p className="text-xs text-gray-500 mt-1">{branchInfo.address}</p>
+                      )}
                   </div>
                 )}
                 {creatorInfo && (
@@ -1767,9 +1919,9 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                     <p className="text-sm font-medium text-gray-900">
                       {creatorInfo.full_name}
                     </p>
-                    {creatorInfo.email && (
-                      <p className="text-xs text-gray-500 mt-1">{creatorInfo.email}</p>
-                    )}
+                      {creatorInfo.email && (
+                        <p className="text-xs text-gray-500 mt-1">{creatorInfo.email}</p>
+                      )}
                   </div>
                 )}
               </div>
@@ -1814,19 +1966,19 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                 <p className="text-xs text-gray-600 mb-1">Late Fee Rate</p>
                 <p className="text-lg font-bold text-orange-600">{formatCurrency(currentPlan.late_fee_amount || 0)}</p>
                 <p className="text-xs text-gray-500 mt-1">per missed payment</p>
-              </div>
+                </div>
               <div className={`p-3 rounded-lg ${currentPlan.late_fee_applied > 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
                 <p className="text-xs text-gray-600 mb-1">Late Fees Applied</p>
                 <p className={`text-lg font-bold ${currentPlan.late_fee_applied > 0 ? 'text-red-600' : 'text-gray-500'}`}>
                   {formatCurrency(currentPlan.late_fee_applied || 0)}
-                </p>
+                  </p>
                 <p className="text-xs text-gray-500 mt-1">accumulated</p>
-              </div>
+                </div>
               <div className={`p-3 rounded-lg ${currentPlan.days_overdue > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
                 <p className="text-xs text-gray-600 mb-1">Days Overdue</p>
                 <p className={`text-lg font-bold ${currentPlan.days_overdue > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {currentPlan.days_overdue || 0}
-                </p>
+                    {currentPlan.days_overdue || 0}
+                  </p>
                 <p className="text-xs text-gray-500 mt-1">{currentPlan.days_overdue > 0 ? 'action required' : 'on track'}</p>
               </div>
             </div>
@@ -2358,6 +2510,12 @@ const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
 
       {/* Success Modal */}
       <SuccessModal {...successModal.props} />
+
+      {/* Installment Management Modal */}
+      <InstallmentManagementModal
+        isOpen={showInstallmentManagementModal}
+        onClose={() => setShowInstallmentManagementModal(false)}
+      />
     </div>
   );
 };

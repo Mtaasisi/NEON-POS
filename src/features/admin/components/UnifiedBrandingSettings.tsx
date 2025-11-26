@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Building2, Upload, X, Save } from 'lucide-react';
-import GlassCard from '../../shared/components/ui/GlassCard';
-import GlassButton from '../../shared/components/ui/GlassButton';
+// Removed GlassCard, GlassButton - using native elements matching SetPricingModal style
 import { supabase } from '../../../lib/supabaseClient';
 import { businessInfoService } from '../../../lib/businessInfoService';
 import toast from 'react-hot-toast';
+import { useSettingsSave } from '../../../context/SettingsSaveContext';
 
 /**
  * Business Information Settings
@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
  * Fetches from lats_pos_general_settings table
  */
 const UnifiedBrandingSettings: React.FC = () => {
+  const { registerSaveHandler, unregisterSaveHandler, setHasChanges } = useSettingsSave();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [settingsId, setSettingsId] = useState<string | null>(null);
@@ -111,12 +112,10 @@ const UnifiedBrandingSettings: React.FC = () => {
     toast.success('Logo removed. Remember to save.');
   };
 
-  const handleSave = async () => {
-    if (!settingsId) {
-      toast.error('Settings ID not found');
-      return;
-    }
+  useEffect(() => {
+    if (!settingsId) return;
 
+  const handleSave = async () => {
     try {
       setSaving(true);
       // @ts-ignore - Neon query builder implements thenable interface
@@ -148,177 +147,191 @@ const UnifiedBrandingSettings: React.FC = () => {
       setSaving(false);
     }
   };
+    
+    registerSaveHandler('unified-branding-settings', handleSave);
+    return () => unregisterSaveHandler('unified-branding-settings');
+  }, [formData, settingsId, registerSaveHandler, unregisterSaveHandler]);
+
+  useEffect(() => {
+    if (settingsId) {
+      setHasChanges(true);
+    }
+  }, [formData, settingsId, setHasChanges]);
 
   if (loading) {
     return (
-      <GlassCard className="p-6">
+      <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm">
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-          <span className="ml-3 text-gray-600">Loading business information...</span>
+          <div className="text-center">
+            <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading business information...</p>
+          </div>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
-    <GlassCard className="p-6">
-      <div className="mb-6">
-        <div className="flex items-center gap-3">
-          <Building2 className="w-6 h-6 text-indigo-600" />
+    <>
+      {/* Icon Header - Fixed - Matching SetPricingModal style */}
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+            <Building2 className="w-8 h-8 text-white" />
+          </div>
+          
+          {/* Text */}
           <div>
-            <h3 className="text-xl font-semibold text-gray-800">Business Information</h3>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Business Information</h2>
             <p className="text-sm text-gray-600">Configure your business details and branding</p>
           </div>
         </div>
       </div>
 
-      <div className="space-y-6">
-        {/* Business Details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Name
-            </label>
-            <input
-              type="text"
-              value={formData.businessName}
-              onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-              placeholder="My Store"
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Phone
-            </label>
-            <input
-              type="tel"
-              value={formData.businessPhone}
-              onChange={(e) => setFormData({ ...formData, businessPhone: e.target.value })}
-              placeholder="+255 123 456 789"
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Email
-            </label>
-            <input
-              type="email"
-              value={formData.businessEmail}
-              onChange={(e) => setFormData({ ...formData, businessEmail: e.target.value })}
-              placeholder="info@mystore.com"
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Business Website
-            </label>
-            <input
-              type="url"
-              value={formData.businessWebsite}
-              onChange={(e) => setFormData({ ...formData, businessWebsite: e.target.value })}
-              placeholder="www.mystore.com"
-              className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Business Address
-          </label>
-          <input
-            type="text"
-            value={formData.businessAddress}
-            onChange={(e) => setFormData({ ...formData, businessAddress: e.target.value })}
-            placeholder="123 Main Street, City, Country"
-            className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
-          />
-        </div>
-
-        {/* Business Logo Upload */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Business Logo
-          </label>
-          <div className="flex items-start gap-4">
-            {/* Logo Preview */}
-            {logoPreview ? (
-              <div className="relative">
-                <div className="w-32 h-32 border-2 border-gray-200 rounded-lg overflow-hidden bg-white flex items-center justify-center">
-                  <img 
-                    src={logoPreview} 
-                    alt="Business Logo" 
-                    className="max-w-full max-h-full object-contain"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRemoveLogo}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
-                  title="Remove logo"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="py-6 space-y-6">
+          {/* Business Details Section */}
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+            <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <div className="w-8 h-8 bg-blue-500 rounded-xl flex items-center justify-center shadow-sm">
+                <Building2 className="w-4 h-4 text-white" />
               </div>
-            ) : (
-              <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
-                <Upload className="w-8 h-8 text-gray-400" />
+              Business Details
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Business Name
+                </label>
+                <input
+                  type="text"
+                  value={formData.businessName}
+                  onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
+                  placeholder="My Store"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
               </div>
-            )}
 
-            {/* Upload Button */}
-            <div className="flex-1">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="hidden"
-                id="logo-upload"
-              />
-              <label
-                htmlFor="logo-upload"
-                className={`inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-colors ${uploadingLogo ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <Upload className="w-4 h-4" />
-                {uploadingLogo ? 'Uploading...' : logoPreview ? 'Change Logo' : 'Upload Logo'}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Business Phone
+                </label>
+                <input
+                  type="tel"
+                  value={formData.businessPhone}
+                  onChange={(e) => setFormData({ ...formData, businessPhone: e.target.value })}
+                  placeholder="+255 123 456 789"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Business Email
+                </label>
+                <input
+                  type="email"
+                  value={formData.businessEmail}
+                  onChange={(e) => setFormData({ ...formData, businessEmail: e.target.value })}
+                  placeholder="info@mystore.com"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Business Website
+                </label>
+                <input
+                  type="url"
+                  value={formData.businessWebsite}
+                  onChange={(e) => setFormData({ ...formData, businessWebsite: e.target.value })}
+                  placeholder="www.mystore.com"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Business Address
               </label>
-              <p className="mt-2 text-sm text-gray-500">
-                Upload your business logo. Recommended size: 200x200px. Max size: 2MB. 
-                Supported formats: JPG, PNG, GIF, WebP.
-              </p>
+              <input
+                type="text"
+                value={formData.businessAddress}
+                onChange={(e) => setFormData({ ...formData, businessAddress: e.target.value })}
+                placeholder="123 Main Street, City, Country"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
+              />
             </div>
           </div>
-        </div>
 
-        {/* Save Button */}
-        <div className="flex justify-end pt-4 border-t border-gray-200">
-          <GlassButton
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Save Changes
-              </>
-            )}
-          </GlassButton>
+          {/* Business Logo Upload Section */}
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+            <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <div className="w-8 h-8 bg-purple-500 rounded-xl flex items-center justify-center shadow-sm">
+                <Upload className="w-4 h-4 text-white" />
+              </div>
+              Business Logo
+            </h4>
+            
+            <div className="flex items-start gap-6">
+              {/* Logo Preview */}
+              {logoPreview ? (
+                <div className="relative">
+                  <div className="w-40 h-40 border-2 border-gray-200 rounded-xl overflow-hidden bg-white flex items-center justify-center shadow-sm">
+                    <img 
+                      src={logoPreview} 
+                      alt="Business Logo" 
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleRemoveLogo}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 hover:bg-red-600 transition-colors shadow-lg"
+                    title="Remove logo"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-40 h-40 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center bg-gray-50">
+                  <Upload className="w-10 h-10 text-gray-400" />
+                </div>
+              )}
+
+              {/* Upload Button */}
+              <div className="flex-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                  id="logo-upload"
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className={`inline-flex items-center gap-2 px-6 py-3 border-2 border-gray-300 rounded-xl shadow-sm text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 cursor-pointer transition-all ${uploadingLogo ? 'opacity-50 cursor-not-allowed' : 'hover:border-purple-500 hover:shadow-md'}`}
+                >
+                  <Upload className="w-5 h-5" />
+                  {uploadingLogo ? 'Uploading...' : logoPreview ? 'Change Logo' : 'Upload Logo'}
+                </label>
+                <p className="mt-3 text-sm text-gray-600">
+                  Upload your business logo. Recommended size: 200x200px. Max size: 2MB. 
+                  Supported formats: JPG, PNG, GIF, WebP.
+                </p>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
-    </GlassCard>
+    </>
   );
 };
 

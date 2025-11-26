@@ -145,6 +145,13 @@ export const addBranchFilter = async (
     return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
   }
 
+  // 🔒 CRITICAL FIX: Always include shared customers, even in isolated mode
+  // This ensures customers marked as is_shared=true are visible to all branches
+  if (entityType === 'customers') {
+    console.log(`🔄 CUSTOMERS: Including shared customers even in isolated mode`);
+    return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
+  }
+
   console.log(`🔒 ISOLATED DATA: Filtering ${entityType} by branch ${branchId}`);
   logQueryDebug(entityType, query, branch?.data_isolation_mode || 'isolated', true);
   return query.eq('branch_id', branchId);

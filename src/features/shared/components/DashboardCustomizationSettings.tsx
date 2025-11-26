@@ -160,53 +160,53 @@ const DashboardCustomizationSettings: React.FC = () => {
 
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({
     quickActions: {
-      // Core Business Features
+      // Core Business Features - Only 6 enabled by default
       devices: true,
       addDevice: true,
       customers: true,
       inventory: true,
       appointments: true,
       purchaseOrders: true,
-      payments: true,
-      adGenerator: true,
-      pos: true,
-      reports: true,
-      employees: true,
-      whatsapp: true,
-      settings: true,
-      search: true,
-      loyalty: true,
-      backup: true,
+      payments: false,
+      adGenerator: false,
+      pos: false,
+      reports: false,
+      employees: false,
+      whatsapp: false,
+      settings: false,
+      search: false,
+      loyalty: false,
+      backup: false,
       
       // SMS & Communication Features
-      sms: true,
-      bulkSms: true,
-      smsLogs: true,
-      smsSettings: true,
+      sms: false,
+      bulkSms: false,
+      smsLogs: false,
+      smsSettings: false,
       
       // Import/Export & Data Management
-      excelImport: true,
-      excelTemplates: true,
-      productExport: true,
-      customerImport: true,
+      excelImport: false,
+      excelTemplates: false,
+      productExport: false,
+      customerImport: false,
       
       // Advanced System Features
-      userManagement: true,
-      databaseSetup: true,
-      integrationSettings: true,
-      integrationsTest: true,
-      aiTraining: true,
-      bluetoothPrinter: true,
+      userManagement: false,
+      databaseSetup: false,
+      integrationSettings: false,
+      integrationsTest: false,
+      aiTraining: false,
+      bluetoothPrinter: false,
       
       // Business Management
-      categoryManagement: true,
-      supplierManagement: true,
-      storeLocations: true,
+      categoryManagement: false,
+      supplierManagement: false,
+      storeLocations: false,
       
       // Advanced Analytics & Reports
-      reminders: true,
-      mobile: true,
-      myAttendance: true
+      reminders: false,
+      mobile: false,
+      myAttendance: false
     },
     widgets: {
       revenueTrendChart: true,
@@ -402,7 +402,7 @@ const DashboardCustomizationSettings: React.FC = () => {
   };
 
   const getWidgetSize = (widgetKey: string): WidgetSize => {
-    return dashboardSettings.widgetSizes?.[widgetKey] || 'medium';
+    return dashboardSettings.widgetSizes?.[widgetKey] || 'small';
   };
 
   const quickActionItems = [
@@ -579,7 +579,7 @@ const DashboardCustomizationSettings: React.FC = () => {
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">Dashboard Settings</h2>
-              <p className="text-sm text-gray-600">Customize your dashboard - Click items to add or remove</p>
+              <p className="text-sm text-gray-600">Customize your dashboard</p>
             </div>
           </div>
           
@@ -697,15 +697,6 @@ const DashboardCustomizationSettings: React.FC = () => {
                   </h4>
                   <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
 
-                  {/* Click Instruction */}
-                  <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                    isEnabled 
-                      ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                      : 'text-indigo-600 opacity-0 group-hover:opacity-100'
-                  }`}>
-                    <MousePointerClick size={12} />
-                    {isEnabled ? 'Click to disable' : 'Click to enable'}
-                  </div>
                 </button>
               );
             })}
@@ -910,15 +901,6 @@ const DashboardCustomizationSettings: React.FC = () => {
                         {item.label}
                       </h4>
 
-                      {/* Click Instruction */}
-                      <div className={`mt-3 flex items-center gap-1 text-xs font-medium transition-opacity ${
-                        isEnabled 
-                          ? 'text-red-600 opacity-0 group-hover:opacity-100' 
-                          : `${colorScheme.hoverText} opacity-0 group-hover:opacity-100`
-                      }`}>
-                        <MousePointerClick size={12} />
-                        {isEnabled ? 'Click to remove' : 'Click to enable'}
-                      </div>
                     </button>
 
                     {/* Size Selector - Only show if enabled */}
@@ -997,9 +979,6 @@ const DashboardCustomizationSettings: React.FC = () => {
                     {orderedWidgets.filter(w => !dashboardSettings.widgets[w.key]).length} Available
                   </span>
                 </h3>
-                <p className="text-sm text-gray-700 font-medium mt-1">
-                  Click any widget below to add it to your dashboard
-                </p>
               </div>
             </div>
             <button
@@ -1065,11 +1044,6 @@ const DashboardCustomizationSettings: React.FC = () => {
                     {item.label}
                   </h4>
 
-                  {/* Click Instruction */}
-                  <div className="mt-3 flex items-center gap-1 text-xs font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Plus size={12} />
-                    Click to add
-                  </div>
                 </button>
               );
             })}
@@ -1080,43 +1054,6 @@ const DashboardCustomizationSettings: React.FC = () => {
       {/* Widget Order Section */}
       <WidgetOrderSettings className="mt-8" />
 
-      {/* Info Box */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-5 mt-8">
-        <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-            <Info className="w-5 h-5 text-blue-600" />
-          </div>
-          <div>
-            <h4 className="font-semibold text-blue-900 mb-2 text-base">💡 How to Use</h4>
-            <ul className="text-sm text-blue-800 space-y-2">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">✅</span>
-                <span><strong>Dashboard Preview</strong> shows REAL gaps and empty spaces - exactly like your actual dashboard!</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">📏</span>
-                <span><strong>See the gaps?</strong> Change widget sizes to Large to fill empty spaces, or keep Small/Medium if you like the gaps</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">➕</span>
-                <span><strong>Available Widgets</strong> (gray section) - click any widget to add it and see how it affects the layout</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">🎨</span>
-                <span><strong>Resize instantly:</strong> Click Small (1 col) / Medium (2 cols) / Large (3 cols - full width) buttons</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">📊</span>
-                <span>Purple = <strong>Charts</strong>, Blue = <strong>Widgets</strong></span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-600 font-bold">💾</span>
-                <span>Click <strong>"Save Changes"</strong> when you're happy with the layout!</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

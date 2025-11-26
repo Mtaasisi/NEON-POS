@@ -66,6 +66,10 @@
     "check:connection": "node check-database-connection.mjs",
     "verify:env": "node verify-database-config.mjs",
     "verify:db-config": "node verify-database-config.mjs",
+
+    "db:sync": "node db-sync.mjs sync",
+    "db:sync:auto": "node db-sync.mjs auto",
+    "db:check": "node db-sync.mjs check",
     "import:customers": "node import-customers.mjs"
   },
   "dependencies": {

@@ -847,9 +847,12 @@ Date: ${new Date(payment.created_at || payment.date).toLocaleDateString()}`;
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed': return 'text-green-600 bg-green-100';
+      case 'paid': return 'text-green-600 bg-green-100';
       case 'approved': return 'text-blue-600 bg-blue-100';
       case 'pending': return 'text-orange-600 bg-orange-100';
+      case 'partial': return 'text-yellow-600 bg-yellow-100';
       case 'failed': return 'text-red-600 bg-red-100';
+      case 'unpaid': return 'text-red-600 bg-red-100';
       default: return 'text-gray-600 bg-gray-100';
     }
   };

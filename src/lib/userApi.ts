@@ -355,6 +355,8 @@ function getDefaultPermissions(role: string): string[] {
       return ['devices', 'spare-parts'];
     case 'customer-care':
       return ['customers', 'appointments'];
+    case 'store-keeper':
+      return ['inventory', 'stock', 'purchase-orders', 'reports'];
     case 'user':
       return ['basic'];
     default:

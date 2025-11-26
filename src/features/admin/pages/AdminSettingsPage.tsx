@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../lib/supabaseClient';
+import { SettingsSaveProvider, useSettingsSave } from '../../../context/SettingsSaveContext';
 import { 
   getAdminSettings,
   getAdminSettingsByCategory,
@@ -241,12 +242,13 @@ interface SystemSettings {
   };
 }
 
-const AdminSettingsPage: React.FC = () => {
+const AdminSettingsPageContent: React.FC = () => {
   const { currentUser } = useAuth();
   const [searchParams] = useSearchParams();
   const [activeSection, setActiveSection] = useState('branding');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const { saveAll, isSaving: contextSaving, hasChanges, setHasChanges } = useSettingsSave();
   const [settings, setSettings] = useState<SystemSettings>({
     branding: {
       appLogo: '',
@@ -523,106 +525,144 @@ const AdminSettingsPage: React.FC = () => {
 
   if (!currentUser || currentUser.role !== 'admin') {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'transparent' }}>
-        <GlassCard className="p-8 text-center">
-          <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h2>
-          <p className="text-gray-600">You need admin privileges to access this page.</p>
-        </GlassCard>
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'transparent' }}>
+        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border-2 border-red-200">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <AlertTriangle className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
+            <p className="text-gray-600">You need admin privileges to access this page.</p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen p-4" style={{ backgroundColor: 'transparent' }}>
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
+    <div className="min-h-screen p-4 sm:p-6" style={{ backgroundColor: 'transparent' }}>
+      <div className="max-w-7xl mx-auto h-[calc(100vh-2rem)] flex flex-col">
+        {/* Fixed Icon Header - Matching SetPricingModal style */}
+        <div className="sticky top-0 z-50 bg-white rounded-2xl shadow-2xl p-8 mb-6 border-b border-gray-200">
+          <div className="grid grid-cols-[auto,1fr,auto] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+              <Settings className="w-8 h-8 text-white" />
+            </div>
+            
+            {/* Text */}
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-                <Settings className="w-8 h-8 text-indigo-600" />
-                Admin Settings
-              </h1>
-              <p className="text-gray-600 mt-2">Manage system configuration, backend settings, and database connections</p>
+              <h1 className="text-2xl font-bold text-gray-900 mb-3">Admin Settings</h1>
+              <p className="text-sm text-gray-600">Manage system configuration, backend settings, and database connections</p>
+            </div>
+
+            {/* Universal Save Button */}
+            <div>
+              <button
+                onClick={async () => {
+                  try {
+                    await saveAll();
+                    toast.success('All settings saved successfully');
+                  } catch (error) {
+                    toast.error('Failed to save some settings');
+                  }
+                }}
+                disabled={contextSaving || !hasChanges}
+                className="flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {contextSaving ? (
+                  <>
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-5 h-5" />
+                    Save All Settings
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
 
         {/* Settings Sections */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Navigation Sidebar */}
-          <div className="lg:col-span-1">
-            <GlassCard className="p-4 sticky top-4 max-h-[calc(100vh-120px)]">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Settings Categories</h3>
-              <nav className="space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] pr-2 sidebar-scrollbar">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
+          {/* Navigation Sidebar - Fixed, doesn't scroll */}
+          <div className="lg:col-span-1 flex-shrink-0">
+            <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6 h-full flex flex-col">
+              {/* Icon Header for Sidebar */}
+              <div className="mb-6 pb-4 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+                    <Settings className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-lg font-bold text-gray-900">Settings Categories</h3>
+                </div>
+              </div>
+              <nav className="space-y-2 overflow-y-auto flex-1 pr-2 sidebar-scrollbar">
                 {[
-                  { id: 'branding', label: 'Business Information', icon: Building2 },
-                  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-                  { id: 'stores', label: 'Store Management', icon: MapPin },
-                  { id: 'branch-debug', label: 'Branch Isolation Debug', icon: Bug },
-                  { id: 'inventory', label: 'Inventory', icon: Package },
-                  { id: 'shipping', label: 'Shipping Management', icon: Truck },
-                  { id: 'payments', label: 'Payments', icon: CreditCard },
-                  { id: 'attendance', label: 'Attendance', icon: Users },
-                  { id: 'loyalty', label: 'Loyalty Program', icon: Star },
-                  { id: 'integrations', label: 'Integrations', icon: Globe },
-                  { id: 'api-webhooks', label: 'API & Webhooks', icon: Code },
-                  { id: 'documents', label: 'Document Templates', icon: FileText },
-                  { id: 'appearance', label: 'Appearance', icon: Palette },
-                  { id: 'notifications', label: 'Notifications', icon: Bell },
-                  { id: 'database', label: 'Database', icon: Database },
-                  { id: 'branch-migration', label: 'Branch Migration', icon: GitBranch },
-                  { id: 'automation', label: 'Automation', icon: RotateCcw }
-                ].map((section) => (
-                  <button
-                    key={section.id}
-                    onClick={() => setActiveSection(section.id)}
-                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-colors ${
-                      activeSection === section.id
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : 'text-gray-800 hover:bg-gray-100'
-                    }`}
-                  >
-                    <section.icon className="w-5 h-5" />
-                    {section.label}
-                  </button>
-                ))}
+                  { id: 'branding', label: 'Business Information', icon: Building2, color: 'indigo' },
+                  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, color: 'blue' },
+                  { id: 'stores', label: 'Store Management', icon: MapPin, color: 'orange' },
+                  { id: 'branch-debug', label: 'Branch Isolation Debug', icon: Bug, color: 'red' },
+                  { id: 'inventory', label: 'Inventory', icon: Package, color: 'purple' },
+                  { id: 'shipping', label: 'Shipping Management', icon: Truck, color: 'cyan' },
+                  { id: 'payments', label: 'Payments', icon: CreditCard, color: 'green' },
+                  { id: 'attendance', label: 'Attendance', icon: Users, color: 'teal' },
+                  { id: 'loyalty', label: 'Loyalty Program', icon: Star, color: 'yellow' },
+                  { id: 'integrations', label: 'Integrations', icon: Globe, color: 'emerald' },
+                  { id: 'api-webhooks', label: 'API & Webhooks', icon: Code, color: 'pink' },
+                  { id: 'documents', label: 'Document Templates', icon: FileText, color: 'violet' },
+                  { id: 'appearance', label: 'Appearance', icon: Palette, color: 'rose' },
+                  { id: 'notifications', label: 'Notifications', icon: Bell, color: 'amber' },
+                  { id: 'database', label: 'Database', icon: Database, color: 'slate' },
+                  { id: 'branch-migration', label: 'Branch Migration', icon: GitBranch, color: 'sky' },
+                  { id: 'automation', label: 'Automation', icon: RotateCcw, color: 'lime' }
+                ].map((section) => {
+                  const isActive = activeSection === section.id;
+                  const colorClasses = {
+                    indigo: isActive ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'hover:bg-indigo-50 hover:border-indigo-200',
+                    blue: isActive ? 'bg-blue-50 border-blue-300 text-blue-700' : 'hover:bg-blue-50 hover:border-blue-200',
+                    orange: isActive ? 'bg-orange-50 border-orange-300 text-orange-700' : 'hover:bg-orange-50 hover:border-orange-200',
+                    red: isActive ? 'bg-red-50 border-red-300 text-red-700' : 'hover:bg-red-50 hover:border-red-200',
+                    purple: isActive ? 'bg-purple-50 border-purple-300 text-purple-700' : 'hover:bg-purple-50 hover:border-purple-200',
+                    cyan: isActive ? 'bg-cyan-50 border-cyan-300 text-cyan-700' : 'hover:bg-cyan-50 hover:border-cyan-200',
+                    green: isActive ? 'bg-green-50 border-green-300 text-green-700' : 'hover:bg-green-50 hover:border-green-200',
+                    teal: isActive ? 'bg-teal-50 border-teal-300 text-teal-700' : 'hover:bg-teal-50 hover:border-teal-200',
+                    yellow: isActive ? 'bg-yellow-50 border-yellow-300 text-yellow-700' : 'hover:bg-yellow-50 hover:border-yellow-200',
+                    emerald: isActive ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'hover:bg-emerald-50 hover:border-emerald-200',
+                    pink: isActive ? 'bg-pink-50 border-pink-300 text-pink-700' : 'hover:bg-pink-50 hover:border-pink-200',
+                    violet: isActive ? 'bg-violet-50 border-violet-300 text-violet-700' : 'hover:bg-violet-50 hover:border-violet-200',
+                    rose: isActive ? 'bg-rose-50 border-rose-300 text-rose-700' : 'hover:bg-rose-50 hover:border-rose-200',
+                    amber: isActive ? 'bg-amber-50 border-amber-300 text-amber-700' : 'hover:bg-amber-50 hover:border-amber-200',
+                    slate: isActive ? 'bg-slate-50 border-slate-300 text-slate-700' : 'hover:bg-slate-50 hover:border-slate-200',
+                    sky: isActive ? 'bg-sky-50 border-sky-300 text-sky-700' : 'hover:bg-sky-50 hover:border-sky-200',
+                    lime: isActive ? 'bg-lime-50 border-lime-300 text-lime-700' : 'hover:bg-lime-50 hover:border-lime-200',
+                  };
+                  
+                  return (
+                    <button
+                      key={section.id}
+                      onClick={() => setActiveSection(section.id)}
+                      className={`w-full flex items-center gap-3 p-3.5 rounded-xl border-2 transition-all font-semibold text-sm shadow-sm hover:shadow-md ${
+                        isActive 
+                          ? colorClasses[section.color as keyof typeof colorClasses]
+                          : `border-gray-200 text-gray-700 bg-white ${colorClasses[section.color as keyof typeof colorClasses]}`
+                      }`}
+                    >
+                      <section.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? '' : 'text-gray-500'}`} />
+                      <span className="text-sm">{section.label}</span>
+                    </button>
+                  );
+                })}
               </nav>
-            </GlassCard>
+            </div>
           </div>
 
-          {/* Main Content */}
-          <div className="lg:col-span-3">
-            {activeSection === 'branding' && (
-              <UnifiedBrandingSettings />
-            )}
-
-            {activeSection === 'dashboard' && (
-              <DashboardCustomizationSettings />
-            )}
-
-            {activeSection === 'stores' && (
-              <StoreManagementSettings />
-            )}
-
-            {activeSection === 'branch-debug' && (
-              <>
-                <BranchIsolationDebugPanel />
-                <BranchDataCleanupPanel />
-                <div className="mt-6">
-                  <BranchProductManagement />
-                </div>
-                <div className="mt-6">
-                  <BranchProductSharing />
-                </div>
-              </>
-            )}
-
-            {activeSection === 'inventory' && (
-              <InventorySettings />
-            )}
-
+          {/* Main Content - Scrollable */}
+          <div className="lg:col-span-3 min-h-0 overflow-y-auto">
+            {/* Components that already have unified structure render as-is */}
             {activeSection === 'shipping' && (
               <ShippingSettings isActive={true} />
             )}
@@ -639,48 +679,140 @@ const AdminSettingsPage: React.FC = () => {
               <PaymentSettings isActive={true} />
             )}
 
+            {activeSection === 'stores' && (
+              <StoreManagementSettings />
+            )}
+
+            {/* Components that need unified wrapper */}
+            {activeSection === 'branding' && (
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <UnifiedBrandingSettings />
+              </div>
+            )}
+
+            {activeSection === 'dashboard' && (
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <DashboardCustomizationSettings />
+              </div>
+            )}
+
+            {activeSection === 'branch-debug' && (
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                  <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                    <div className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
+                      <Bug className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3">Branch Isolation Debug</h2>
+                      <p className="text-sm text-gray-600">Debug and test branch data isolation settings</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                  <div className="py-6 space-y-6">
+                    <BranchIsolationDebugPanel />
+                    <BranchDataCleanupPanel />
+                    <BranchProductManagement />
+                    <BranchProductSharing />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'inventory' && (
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <InventorySettings />
+              </div>
+            )}
+
             {activeSection === 'loyalty' && (
-              <LoyaltyProgramSettings />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <LoyaltyProgramSettings />
+              </div>
             )}
 
             {activeSection === 'api-webhooks' && (
-              <APIWebhooksSettings />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <APIWebhooksSettings />
+              </div>
             )}
 
             {activeSection === 'documents' && (
-              <DocumentTemplatesSettings />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <DocumentTemplatesSettings />
+              </div>
             )}
             
             {activeSection === 'database' && (
-              <DatabaseSettings />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <DatabaseSettings />
+              </div>
             )}
 
             {activeSection === 'integrations' && (
-              <IntegrationsManagement />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <IntegrationsManagement />
+              </div>
             )}
 
             {activeSection === 'attendance' && (
-              <AttendanceSettings 
-                settings={settings.attendance}
-                onSave={(data) => saveSettings('attendance', data)}
-                getStatusIcon={getStatusIcon}
-                getStatusColor={getStatusColor}
-              />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                  <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                    <div className="w-16 h-16 bg-teal-600 rounded-full flex items-center justify-center shadow-lg">
+                      <Users className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3">Attendance Settings</h2>
+                      <p className="text-sm text-gray-600">Configure employee attendance tracking and policies</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                  <div className="py-6">
+                    <AttendanceSettings 
+                      settings={settings.attendance}
+                      onSave={(data) => saveSettings('attendance', data)}
+                      getStatusIcon={getStatusIcon}
+                      getStatusColor={getStatusColor}
+                    />
+                  </div>
+                </div>
+              </div>
             )}
 
             {activeSection === 'branch-migration' && (
-              <DatabaseBranchMigration />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <DatabaseBranchMigration />
+              </div>
             )}
 
             {activeSection === 'automation' && (
-              <AutomationSettings 
-                settings={settings.automation}
-                onSave={(data) => saveSettings('automation', data)}
-                getStatusIcon={getStatusIcon}
-                getStatusColor={getStatusColor}
-              />
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                  <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                    <div className="w-16 h-16 bg-lime-600 rounded-full flex items-center justify-center shadow-lg">
+                      <RotateCcw className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3">Automation Settings</h2>
+                      <p className="text-sm text-gray-600">Configure automated workflows and processes</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                  <div className="py-6">
+                    <AutomationSettings 
+                      settings={settings.automation}
+                      onSave={(data) => saveSettings('automation', data)}
+                      getStatusIcon={getStatusIcon}
+                      getStatusColor={getStatusColor}
+                    />
+                  </div>
+                </div>
+              </div>
             )}
-
           </div>
         </div>
       </div>
@@ -710,7 +842,7 @@ const BrandingSettings: React.FC<{
   };
 
   return (
-    <GlassCard className="p-6">
+    <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Image className="w-6 h-6 text-indigo-600" />
@@ -720,7 +852,7 @@ const BrandingSettings: React.FC<{
 
         <div className="space-y-6">
           {/* Logo Upload */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200 shadow-sm">
             <h4 className="font-medium text-gray-900 mb-4 flex items-center">
               <Image className="h-5 w-5 text-blue-600 mr-2" />
               App Logo
@@ -735,65 +867,65 @@ const BrandingSettings: React.FC<{
           </div>
 
           {/* Company Information */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200 shadow-sm">
             <h4 className="font-medium text-gray-900 mb-4 flex items-center">
               <Building2 className="h-5 w-5 text-green-600 mr-2" />
               Company Information
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Company Name</label>
-                <GlassInput
+                <label className="block text-xs font-medium text-gray-700 mb-2">Company Name</label>
+                <input
                   type="text"
                   value={localSettings.companyName || ''}
                   onChange={(e) => setLocalSettings(prev => ({ ...prev, companyName: e.target.value }))}
                   placeholder="Enter company name"
-                  className="w-full"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                 />
               </div>
             </div>
           </div>
 
           {/* Color Scheme */}
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-6 border-2 border-purple-200 shadow-sm">
             <h4 className="font-medium text-gray-900 mb-4 flex items-center">
               <Palette className="h-5 w-5 text-purple-600 mr-2" />
               Color Scheme
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Primary Color</label>
+                <label className="block text-xs font-medium text-gray-700 mb-2">Primary Color</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
                     value={localSettings.primaryColor || '#3B82F6'}
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, primaryColor: e.target.value }))}
-                    className="w-12 h-10 rounded border border-gray-300"
+                    className="w-12 h-12 rounded-xl border-2 border-gray-300 shadow-sm"
                   />
-                  <GlassInput
+                  <input
                     type="text"
                     value={localSettings.primaryColor || ''}
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, primaryColor: e.target.value }))}
                     placeholder="#3B82F6"
-                    className="flex-1"
+                    className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Color</label>
+                <label className="block text-xs font-medium text-gray-700 mb-2">Secondary Color</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
                     value={localSettings.secondaryColor || '#1E40AF'}
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, secondaryColor: e.target.value }))}
-                    className="w-12 h-10 rounded border border-gray-300"
+                    className="w-12 h-12 rounded-xl border-2 border-gray-300 shadow-sm"
                   />
-                  <GlassInput
+                  <input
                     type="text"
                     value={localSettings.secondaryColor || ''}
                     onChange={(e) => setLocalSettings(prev => ({ ...prev, secondaryColor: e.target.value }))}
                     placeholder="#1E40AF"
-                    className="flex-1"
+                    className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                   />
                 </div>
               </div>
@@ -801,18 +933,18 @@ const BrandingSettings: React.FC<{
           </div>
 
           {/* Logo Display Settings */}
-          <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border-2 border-orange-200 shadow-sm">
             <h4 className="font-medium text-gray-900 mb-4 flex items-center">
               <Eye className="h-5 w-5 text-orange-600 mr-2" />
               Logo Display
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Logo Size</label>
+                <label className="block text-xs font-medium text-gray-700 mb-2">Logo Size</label>
                 <select
                   value={localSettings.logoSize || 'medium'}
                   onChange={(e) => setLocalSettings(prev => ({ ...prev, logoSize: e.target.value as 'small' | 'medium' | 'large' }))}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                 >
                   <option value="small">Small</option>
                   <option value="medium">Medium</option>
@@ -820,11 +952,11 @@ const BrandingSettings: React.FC<{
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Logo Position</label>
+                <label className="block text-xs font-medium text-gray-700 mb-2">Logo Position</label>
                 <select
                   value={localSettings.logoPosition || 'left'}
                   onChange={(e) => setLocalSettings(prev => ({ ...prev, logoPosition: e.target.value as 'left' | 'center' | 'right' }))}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                 >
                   <option value="left">Left</option>
                   <option value="center">Center</option>
@@ -835,12 +967,12 @@ const BrandingSettings: React.FC<{
           </div>
 
           {/* Preview Section */}
-          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-lg p-4">
+          <div className="bg-gradient-to-r from-cyan-50 to-blue-50 rounded-xl p-6 border-2 border-cyan-200 shadow-sm">
             <h4 className="font-medium text-gray-900 mb-4 flex items-center">
               <Eye className="h-5 w-5 text-cyan-600 mr-2" />
               Preview
             </h4>
-            <div className="p-4 bg-gray-50 rounded-lg border">
+            <div className="p-6 bg-gray-50 rounded-xl border-2 border-gray-200 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {localSettings.appLogo && (
@@ -867,26 +999,25 @@ const BrandingSettings: React.FC<{
 
           {/* Actions */}
           <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <GlassButton
+            <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-4 h-4" />
+              <Save className="w-5 h-5" />
               {saving ? 'Saving...' : 'Save Branding Settings'}
-            </GlassButton>
+            </button>
 
-            <GlassButton
+            <button
               onClick={() => setLocalSettings(settings)}
-              variant="outline"
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-xl transition-all shadow-sm"
             >
-              <RotateCcw className="w-4 h-4" />
+              <RotateCcw className="w-5 h-5" />
               Reset
-            </GlassButton>
+            </button>
           </div>
         </div>
-    </GlassCard>
+    </div>
   );
 };
 
@@ -1118,7 +1249,7 @@ const AttendanceSettings: React.FC<{
     <div className="space-y-6">
         {/* Validation Errors */}
         {validationErrors.length > 0 && (
-          <div className="mb-6 bg-red-50 border-2 border-red-200 rounded-lg p-4">
+          <div className="mb-6 bg-red-50 border-2 border-red-200 rounded-xl p-6 shadow-sm">
             <div className="flex items-start gap-3">
               <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
@@ -1143,13 +1274,13 @@ const AttendanceSettings: React.FC<{
       
         <div className="space-y-6">
           {/* General Settings */}
-          <GlassCard className="p-6">
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
             <div 
               className="flex items-center justify-between cursor-pointer"
               onClick={() => toggleSection('general')}
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
+                <div className="p-2 bg-blue-100 rounded-xl border-2 border-blue-200 shadow-sm">
                   <Settings className="w-6 h-6 text-blue-600" />
                 </div>
                 <div>
@@ -1166,8 +1297,8 @@ const AttendanceSettings: React.FC<{
             {expandedSection === 'general' && (
             <div className="mt-6">
             <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-                <span className="text-sm font-medium text-gray-700">Enable Attendance</span>
+              <div className="flex items-center justify-between p-4 bg-white rounded-xl border-2 border-gray-200 shadow-sm">
+                <span className="text-xs font-medium text-gray-700">Enable Attendance</span>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
@@ -1179,10 +1310,10 @@ const AttendanceSettings: React.FC<{
                 </label>
               </div>
 
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-white rounded-xl border-2 border-gray-200 shadow-sm">
                 <div className="flex items-center gap-2">
                   <Camera className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm font-medium text-gray-700">Require Photo Verification</span>
+                  <span className="text-xs font-medium text-gray-700">Require Photo Verification</span>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -1200,7 +1331,7 @@ const AttendanceSettings: React.FC<{
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg">
+                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-sm">
                       <Shield className="w-6 h-6 text-white" />
                     </div>
                     <div>
@@ -1222,7 +1353,7 @@ const AttendanceSettings: React.FC<{
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${localSettings.allowEmployeeChoice ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      <div className={`p-2 rounded-xl shadow-sm ${localSettings.allowEmployeeChoice ? 'bg-green-500' : 'bg-gray-300'}`}>
                         <Users className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1">
@@ -1249,7 +1380,7 @@ const AttendanceSettings: React.FC<{
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${!localSettings.allowEmployeeChoice ? 'bg-orange-500' : 'bg-gray-300'}`}>
+                      <div className={`p-2 rounded-xl shadow-sm ${!localSettings.allowEmployeeChoice ? 'bg-orange-500' : 'bg-gray-300'}`}>
                         <Lock className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1">
@@ -1390,7 +1521,7 @@ const AttendanceSettings: React.FC<{
                             
                             {/* Content */}
                             <div className="flex items-start gap-3">
-                              <div className={`p-2 rounded-lg ${isSelected ? 'bg-white' : 'bg-gray-100'}`}>
+                              <div className={`p-2 rounded-xl border-2 ${isSelected ? 'bg-white border-blue-500 shadow-sm' : 'bg-gray-100 border-gray-200'}`}>
                                 <mode.icon className={`w-6 h-6 ${isSelected ? mode.iconColor : 'text-gray-400'}`} />
                               </div>
                               <div className="flex-1 min-w-0">
@@ -1408,7 +1539,7 @@ const AttendanceSettings: React.FC<{
                       })}
                     </div>
                     {(!localSettings.availableSecurityModes || localSettings.availableSecurityModes.length === 0) && (
-                      <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-2">
+                      <div className="mt-3 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl shadow-sm flex items-center gap-2">
                         <AlertTriangle className="w-4 h-4 text-yellow-600" />
                         <p className="text-xs text-yellow-800">Please select at least one security mode for employees</p>
                       </div>
@@ -1430,7 +1561,7 @@ const AttendanceSettings: React.FC<{
                   <select
                     value={localSettings.defaultSecurityMode || 'auto-location'}
                     onChange={(e) => setLocalSettings({ ...localSettings, defaultSecurityMode: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-gradient-to-r from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium hover:border-blue-400 transition-colors"
+                    className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
                   >
                     <option value="auto-location">Auto-Location (GPS Auto-Detect)</option>
                     <option value="manual-location">Manual Location Selection</option>
@@ -1440,7 +1571,7 @@ const AttendanceSettings: React.FC<{
                     <option value="all-security">Maximum Security (All Methods)</option>
                   </select>
                   
-                  <div className="mt-3 p-3 bg-blue-50 rounded-lg flex items-start gap-2">
+                  <div className="mt-3 p-4 bg-blue-50 rounded-xl border-2 border-blue-200 shadow-sm flex items-start gap-2">
                     <Lightbulb className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-blue-800 leading-relaxed">
                       {localSettings.allowEmployeeChoice 
@@ -1453,16 +1584,16 @@ const AttendanceSettings: React.FC<{
             </div>
             </div>
             )}
-          </GlassCard>
+          </div>
 
           {/* Location Settings */}
-          <GlassCard className="p-6">
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
             <div 
               className="flex items-center justify-between cursor-pointer"
               onClick={() => toggleSection('location')}
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
+                <div className="p-2 bg-green-100 rounded-xl border-2 border-green-200 shadow-sm">
                   <MapPin className="w-6 h-6 text-green-600" />
                 </div>
                 <div>
@@ -1479,57 +1610,82 @@ const AttendanceSettings: React.FC<{
             {expandedSection === 'location' && (
             <div className="mt-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <GlassInput
-                label="GPS Accuracy (meters)"
-                type="number"
-                value={localSettings.gpsAccuracy || 0}
-                onChange={(e) => setLocalSettings({ ...localSettings, gpsAccuracy: parseInt(e.target.value) || 0 })}
-                min="10"
-                max="1000"
-              />
-              <GlassInput
-                label="Check-in Radius (meters)"
-                type="number"
-                value={localSettings.checkInRadius || 0}
-                onChange={(e) => setLocalSettings({ ...localSettings, checkInRadius: parseInt(e.target.value) || 0 })}
-                min="10"
-                max="1000"
-              />
-              <GlassInput
-                label="Grace Period (minutes)"
-                type="number"
-                value={localSettings.gracePeriod || 0}
-                onChange={(e) => setLocalSettings({ ...localSettings, gracePeriod: parseInt(e.target.value) || 0 })}
-                min="0"
-                max="60"
-              />
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  GPS Accuracy (meters)
+                </label>
+                <input
+                  type="number"
+                  value={localSettings.gpsAccuracy || 0}
+                  onChange={(e) => setLocalSettings({ ...localSettings, gpsAccuracy: parseInt(e.target.value) || 0 })}
+                  min="10"
+                  max="1000"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Check-in Radius (meters)
+                </label>
+                <input
+                  type="number"
+                  value={localSettings.checkInRadius || 0}
+                  onChange={(e) => setLocalSettings({ ...localSettings, checkInRadius: parseInt(e.target.value) || 0 })}
+                  min="10"
+                  max="1000"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Grace Period (minutes)
+                </label>
+                <input
+                  type="number"
+                  value={localSettings.gracePeriod || 0}
+                  onChange={(e) => setLocalSettings({ ...localSettings, gracePeriod: parseInt(e.target.value) || 0 })}
+                  min="0"
+                  max="60"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <GlassInput
-                label="Check-in Time"
-                type="time"
-                value={localSettings.checkInTime || ''}
-                onChange={(e) => setLocalSettings({ ...localSettings, checkInTime: e.target.value })}
-              />
-              <GlassInput
-                label="Check-out Time"
-                type="time"
-                value={localSettings.checkOutTime || ''}
-                onChange={(e) => setLocalSettings({ ...localSettings, checkOutTime: e.target.value })}
-              />
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Check-in Time
+                </label>
+                <input
+                  type="time"
+                  value={localSettings.checkInTime || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, checkInTime: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Check-out Time
+                </label>
+                <input
+                  type="time"
+                  value={localSettings.checkOutTime || ''}
+                  onChange={(e) => setLocalSettings({ ...localSettings, checkOutTime: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
             </div>
             </div>
             )}
-          </GlassCard>
+          </div>
 
           {/* Office Locations */}
-          <GlassCard className="p-6">
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
             <div 
               className="flex items-center justify-between cursor-pointer"
               onClick={() => toggleSection('offices')}
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
+                <div className="p-2 bg-purple-100 rounded-xl border-2 border-purple-200 shadow-sm">
                   <Building2 className="w-6 h-6 text-purple-600" />
                 </div>
                 <div>
@@ -1564,7 +1720,7 @@ const AttendanceSettings: React.FC<{
                 showRadius={true}
               />
               {selectedOffice && (
-                <div className="mt-3 p-3 bg-blue-50 rounded-lg">
+                <div className="mt-3 p-4 bg-blue-50 rounded-xl border-2 border-blue-200 shadow-sm">
                   <p className="text-sm text-blue-800">
                     <strong>Selected:</strong> {selectedOffice.name} - {selectedOffice.address}
                   </p>
@@ -1574,19 +1730,19 @@ const AttendanceSettings: React.FC<{
             
             {/* Existing Offices */}
             {localSettings.offices.map((office: any, officeIndex: number) => (
-              <div key={officeIndex} className="bg-white rounded-lg p-4 mb-4 border border-gray-200">
+              <div key={officeIndex} className="bg-white rounded-xl p-6 mb-4 border-2 border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h5 className="font-medium text-gray-900">{office.name}</h5>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setEditingOffice(editingOffice === officeIndex ? null : officeIndex)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                      className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border-2 border-blue-200 hover:border-blue-300 shadow-sm"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => removeOffice(officeIndex)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                      className="p-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-colors border-2 border-red-200 hover:border-red-300 shadow-sm"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -1596,36 +1752,63 @@ const AttendanceSettings: React.FC<{
                 {editingOffice === officeIndex ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <GlassInput
-                        label="Office Name"
-                        value={office.name}
-                        onChange={(e) => updateOffice(officeIndex, 'name', e.target.value)}
-                      />
-                      <GlassInput
-                        label="Address"
-                        value={office.address}
-                        onChange={(e) => updateOffice(officeIndex, 'address', e.target.value)}
-                      />
-                      <GlassInput
-                        label="Latitude"
-                        type="number"
-                        step="any"
-                        value={office.lat || 0}
-                        onChange={(e) => updateOffice(officeIndex, 'lat', parseFloat(e.target.value) || 0)}
-                      />
-                      <GlassInput
-                        label="Longitude"
-                        type="number"
-                        step="any"
-                        value={office.lng || 0}
-                        onChange={(e) => updateOffice(officeIndex, 'lng', parseFloat(e.target.value) || 0)}
-                      />
-                      <GlassInput
-                        label="Radius (meters)"
-                        type="number"
-                        value={office.radius || 0}
-                        onChange={(e) => updateOffice(officeIndex, 'radius', parseInt(e.target.value) || 0)}
-                      />
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Office Name
+                        </label>
+                        <input
+                          type="text"
+                          value={office.name}
+                          onChange={(e) => updateOffice(officeIndex, 'name', e.target.value)}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Address
+                        </label>
+                        <input
+                          type="text"
+                          value={office.address}
+                          onChange={(e) => updateOffice(officeIndex, 'address', e.target.value)}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Latitude
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={office.lat || 0}
+                          onChange={(e) => updateOffice(officeIndex, 'lat', parseFloat(e.target.value) || 0)}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Longitude
+                        </label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={office.lng || 0}
+                          onChange={(e) => updateOffice(officeIndex, 'lng', parseFloat(e.target.value) || 0)}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
+                          Radius (meters)
+                        </label>
+                        <input
+                          type="number"
+                          value={office.radius || 0}
+                          onChange={(e) => updateOffice(officeIndex, 'radius', parseInt(e.target.value) || 0)}
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                        />
+                      </div>
                     </div>
                     
                     {/* Networks */}
@@ -1646,14 +1829,14 @@ const AttendanceSettings: React.FC<{
                             placeholder="SSID"
                             value={network.ssid}
                             onChange={(e) => updateNetwork(officeIndex, networkIndex, 'ssid', e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                           />
                           <input
                             type="text"
                             placeholder="Description"
                             value={network.description}
                             onChange={(e) => updateNetwork(officeIndex, networkIndex, 'description', e.target.value)}
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                           />
                           <button
                             onClick={() => removeNetwork(officeIndex, networkIndex)}
@@ -1677,7 +1860,7 @@ const AttendanceSettings: React.FC<{
             ))}
 
             {/* Add New Office */}
-            <div className="bg-white rounded-lg p-4 border-2 border-dashed border-gray-300">
+            <div className="bg-white rounded-xl p-6 border-2 border-dashed border-gray-300 shadow-sm">
               <h5 className="font-medium text-gray-900 mb-4">Add New Office</h5>
               
               {/* Get Current Location Button */}
@@ -1689,42 +1872,66 @@ const AttendanceSettings: React.FC<{
                   <Compass className="w-4 h-4 mr-2" />
                   Get Current Location
                 </GlassButton>
-                <p className="text-sm text-gray-600 mt-2">
-                  💡 Click this button to automatically detect your current location for the new office
-                </p>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <GlassInput
-                  label="Office Name"
-                  value={newOffice.name || ''}
-                  onChange={(e) => setNewOffice({ ...newOffice, name: e.target.value })}
-                />
-                <GlassInput
-                  label="Address"
-                  value={newOffice.address || ''}
-                  onChange={(e) => setNewOffice({ ...newOffice, address: e.target.value })}
-                />
-                <GlassInput
-                  label="Latitude"
-                  type="number"
-                  step="any"
-                  value={newOffice.lat || ''}
-                  onChange={(e) => setNewOffice({ ...newOffice, lat: e.target.value })}
-                />
-                <GlassInput
-                  label="Longitude"
-                  type="number"
-                  step="any"
-                  value={newOffice.lng || ''}
-                  onChange={(e) => setNewOffice({ ...newOffice, lng: e.target.value })}
-                />
-                <GlassInput
-                  label="Radius (meters)"
-                  type="number"
-                  value={newOffice.radius || ''}
-                  onChange={(e) => setNewOffice({ ...newOffice, radius: e.target.value })}
-                />
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Office Name
+                  </label>
+                  <input
+                    type="text"
+                    value={newOffice.name || ''}
+                    onChange={(e) => setNewOffice({ ...newOffice, name: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Address
+                  </label>
+                  <input
+                    type="text"
+                    value={newOffice.address || ''}
+                    onChange={(e) => setNewOffice({ ...newOffice, address: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Latitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newOffice.lat || ''}
+                    onChange={(e) => setNewOffice({ ...newOffice, lat: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Longitude
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newOffice.lng || ''}
+                    onChange={(e) => setNewOffice({ ...newOffice, lng: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Radius (meters)
+                  </label>
+                  <input
+                    type="number"
+                    value={newOffice.radius || ''}
+                    onChange={(e) => setNewOffice({ ...newOffice, radius: e.target.value })}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                  />
+                </div>
               </div>
               
               {/* Networks for new office */}
@@ -1778,17 +1985,17 @@ const AttendanceSettings: React.FC<{
               
               <button
                 onClick={addOffice}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+                className="w-full bg-blue-600 text-white py-3 px-6 rounded-xl hover:bg-blue-700 transition-all font-semibold shadow-lg hover:shadow-xl"
               >
                 Add Office
               </button>
             </div>
             </div>
             )}
-          </GlassCard>
+          </div>
 
           {/* Save Button */}
-          <GlassCard className="p-6">
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
             <div className="flex justify-end">
               <GlassButton
                 onClick={handleSave}
@@ -1808,7 +2015,7 @@ const AttendanceSettings: React.FC<{
                 )}
               </GlassButton>
             </div>
-          </GlassCard>
+          </div>
         </div>
     </div>
   );
@@ -1897,7 +2104,6 @@ const DatabaseSettings: React.FC = () => {
       // Show reminder about organizing backups on Desktop
       if (autoBackupEnabled) {
         setTimeout(() => {
-          toast.info('💡 Tip: Move backups from Downloads to Desktop/Dukani Pro [Backup]/', { duration: 6000 });
         }, 2000);
       }
     } catch (error: any) {
@@ -2507,18 +2713,18 @@ Generated: ${new Date().toLocaleString()}
 
   if (loading) {
     return (
-      <GlassCard className="p-6">
+      <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           <span className="ml-3 text-gray-600">Loading backup settings...</span>
         </div>
-      </GlassCard>
+      </div>
     );
   }
 
   return (
     <>
-    <GlassCard className="p-6">
+    <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Database className="w-6 h-6 text-blue-600" />
@@ -2528,21 +2734,20 @@ Generated: ${new Date().toLocaleString()}
 
       <div className="space-y-6">
         {/* Automatic Backup */}
-        <div className="border border-gray-200 rounded-lg p-4">
+        <div className="border-2 border-gray-200 rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <RotateCcw className="h-5 w-5 text-blue-600" />
               <h4 className="font-medium text-gray-900">Auto Backup</h4>
               <div className="group relative">
                 <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
-                <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-80 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl">
+                <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-80 p-4 bg-gray-900 text-white text-xs rounded-xl shadow-xl border-2 border-gray-700">
                   <div className="space-y-2">
                     <p><strong>Downloads to:</strong> Downloads folder (browser limitation)</p>
                     <p><strong>Move to:</strong> Desktop/Dukani Pro [Backup]/</p>
                     <p><strong>File Name:</strong> [Dukani Pro Backup] backup_YYYY-MM-DD_HH-MM-SS.json</p>
                     <p><strong>Rotation:</strong> Tracks 30 backups, auto-removes oldest</p>
                     <p><strong>Schedule:</strong> Runs at configured time</p>
-                    <p className="text-yellow-300 mt-2">💡 Move files from Downloads to Desktop folder</p>
                   </div>
                   <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
                 </div>
@@ -2606,7 +2811,7 @@ Generated: ${new Date().toLocaleString()}
                     <span className="text-blue-600 font-medium cursor-help">
                       {JSON.parse(localStorage.getItem('autoBackupHistory') || '[]').length}/30
                     </span>
-                    <div className="invisible group-hover:visible absolute right-0 top-6 z-50 w-64 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
+                    <div className="invisible group-hover:visible absolute right-0 top-6 z-50 w-64 p-4 bg-gray-900 text-white text-xs rounded-xl shadow-lg border-2 border-gray-700">
                       <p className="font-semibold mb-2">Backup Rotation</p>
                       <p>• Tracks last 30 automatic backups</p>
                       <p>• Old entries auto-removed from history</p>
@@ -2621,7 +2826,7 @@ Generated: ${new Date().toLocaleString()}
                 className="w-full text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 py-1.5 rounded transition-colors flex items-center justify-center gap-1"
               >
                 <FileText className="w-3 h-3" />
-                Setup Guide (Desktop Folder)
+                Setup Guide
               </button>
               <div className="grid grid-cols-2 gap-2">
               <GlassButton
@@ -2708,7 +2913,7 @@ Generated: ${new Date().toLocaleString()}
             </div>
 
             {/* Table Selection - Collapsible */}
-            <div className="border border-gray-200 rounded bg-white">
+            <div className="border-2 border-gray-200 rounded-xl bg-white shadow-sm">
               <button
                 onClick={() => {
                   if (!showTableSelector && availableTables.length === 0) {
@@ -2717,7 +2922,7 @@ Generated: ${new Date().toLocaleString()}
                   setShowTableSelector(!showTableSelector);
                 }}
                 disabled={isBackingUp}
-                className="w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 rounded transition-colors disabled:opacity-50"
+                className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50 border-2 border-transparent hover:border-gray-300"
               >
                   <div className="flex items-center gap-2 flex-wrap">
                     <Database className="h-3.5 w-3.5 text-gray-600 flex-shrink-0" />
@@ -2774,26 +2979,26 @@ Generated: ${new Date().toLocaleString()}
                               <div className="flex gap-2">
                                 <button
                                   onClick={expandAllGroups}
-                                  className="text-xs text-orange-600 hover:text-orange-700 font-medium px-2 py-1 hover:bg-orange-50 rounded transition-colors"
+                                  className="text-xs text-orange-600 hover:text-orange-700 font-semibold px-3 py-1.5 hover:bg-orange-50 rounded-xl transition-all border-2 border-orange-200 hover:border-orange-300 shadow-sm"
                                 >
                                   Expand All
                                 </button>
                                 <button
                                   onClick={collapseAllGroups}
-                                  className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 hover:bg-gray-100 rounded transition-colors"
+                                  className="text-xs text-gray-600 hover:text-gray-700 font-semibold px-3 py-1.5 hover:bg-gray-100 rounded-xl transition-all border-2 border-gray-200 hover:border-gray-300 shadow-sm"
                                 >
                                   Collapse All
                                 </button>
                                 <span className="border-l border-gray-300 mx-1"></span>
                                 <button
                                   onClick={selectAllTables}
-                                  className="text-xs text-orange-600 hover:text-orange-700 font-medium px-2 py-1 hover:bg-orange-50 rounded transition-colors"
+                                  className="text-xs text-orange-600 hover:text-orange-700 font-semibold px-3 py-1.5 hover:bg-orange-50 rounded-xl transition-all border-2 border-orange-200 hover:border-orange-300 shadow-sm"
                                 >
                                   Select All
                                 </button>
                                 <button
                                   onClick={deselectAllTables}
-                                  className="text-xs text-gray-600 hover:text-gray-700 font-medium px-2 py-1 hover:bg-gray-100 rounded transition-colors"
+                                  className="text-xs text-gray-600 hover:text-gray-700 font-semibold px-3 py-1.5 hover:bg-gray-100 rounded-xl transition-all border-2 border-gray-200 hover:border-gray-300 shadow-sm"
                                 >
                                   Deselect All
                                 </button>
@@ -2808,7 +3013,7 @@ Generated: ${new Date().toLocaleString()}
                                 placeholder="Search tables..."
                                 value={tableSearchQuery}
                                 onChange={(e) => setTableSearchQuery(e.target.value)}
-                                className="w-full pl-8 pr-8 py-1.5 text-xs border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-gray-50 focus:bg-white transition-colors"
+                                className="w-full pl-8 pr-8 py-2.5 text-xs border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 bg-white transition-colors font-medium"
                               />
                               {tableSearchQuery && (
                                 <button
@@ -2981,7 +3186,7 @@ Generated: ${new Date().toLocaleString()}
                 </div>
         </div>
       
-    </GlassCard>
+    </div>
 
     {/* Database Data Cleanup Panel */}
     <div className="mt-6">
@@ -3051,7 +3256,7 @@ const IntegrationsSettings: React.FC<{
   ];
 
   return (
-    <GlassCard className="p-6">
+    <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Globe className="w-6 h-6 text-indigo-600" />
@@ -3065,7 +3270,7 @@ const IntegrationsSettings: React.FC<{
           const integrationSettings = localSettings[integration.id];
 
           return (
-            <div key={integration.id} className="border border-gray-200 rounded-lg">
+            <div key={integration.id} className="border-2 border-gray-200 rounded-xl shadow-sm">
               <div className="flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
                   <Icon className={`w-5 h-5 ${integration.color}`} />
@@ -3080,15 +3285,13 @@ const IntegrationsSettings: React.FC<{
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <GlassButton
+                  <button
                     onClick={() => testIntegration(integration.id)}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-1"
+                    className="flex items-center gap-1 px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold rounded-xl transition-all shadow-sm text-sm"
                   >
                     <TestTube className="w-3 h-3" />
                     Test
-                  </GlassButton>
+                  </button>
                 </div>
               </div>
 
@@ -3096,35 +3299,35 @@ const IntegrationsSettings: React.FC<{
                   {integration.id === 'sms' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Provider
                         </label>
-                        <GlassInput
+                        <input
                           type="text"
                           value={integrationSettings.provider}
                           onChange={(e) => setLocalSettings(prev => ({
                             ...prev,
                             sms: { ...prev.sms, provider: e.target.value }
                           }))}
-                          className="w-full"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Balance
                         </label>
-                        <GlassInput
+                        <input
                           type="number"
                           value={integrationSettings.balance}
                           onChange={(e) => setLocalSettings(prev => ({
                             ...prev,
                             sms: { ...prev.sms, balance: parseInt(e.target.value) || 0 }
                           }))}
-                          className="w-full"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Last Used
                         </label>
                         <div className="text-sm text-gray-600">
@@ -3137,35 +3340,35 @@ const IntegrationsSettings: React.FC<{
                   {integration.id === 'email' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Provider
                         </label>
-                        <GlassInput
+                        <input
                           type="text"
                           value={integrationSettings.provider}
                           onChange={(e) => setLocalSettings(prev => ({
                             ...prev,
                             email: { ...prev.email, provider: e.target.value }
                           }))}
-                          className="w-full"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Daily Limit
                         </label>
-                        <GlassInput
+                        <input
                           type="number"
                           value={integrationSettings.dailyLimit}
                           onChange={(e) => setLocalSettings(prev => ({
                             ...prev,
                             email: { ...prev.email, dailyLimit: parseInt(e.target.value) || 0 }
                           }))}
-                          className="w-full"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Used Today
                         </label>
                         <div className="text-sm text-gray-600">
@@ -3180,35 +3383,35 @@ const IntegrationsSettings: React.FC<{
                   {integration.id === 'ai' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Provider
                         </label>
-                        <GlassInput
+                        <input
                           type="text"
                           value={integrationSettings.provider}
                           onChange={(e) => setLocalSettings(prev => ({
                             ...prev,
                             ai: { ...prev.ai, provider: e.target.value }
                           }))}
-                          className="w-full"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           Model
                         </label>
-                        <GlassInput
+                        <input
                           type="text"
                           value={integrationSettings.model}
                           onChange={(e) => setLocalSettings(prev => ({
                             ...prev,
                             ai: { ...prev.ai, model: e.target.value }
                           }))}
-                          className="w-full"
+                          className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-2">
                           API Key Status
                         </label>
                         <div className="flex items-center gap-2">
@@ -3250,7 +3453,7 @@ const IntegrationsSettings: React.FC<{
           </GlassButton>
         </div>
       </div>
-    </GlassCard>
+    </div>
   );
 }; 
 
@@ -3318,7 +3521,7 @@ const AutomationSettings: React.FC<{
   ];
 
   return (
-    <GlassCard className="p-6">
+    <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">Automation Settings</h3>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -3361,7 +3564,15 @@ const AutomationSettings: React.FC<{
           );
         })}
       </div>
-    </GlassCard>
+    </div>
+  );
+};
+
+const AdminSettingsPage: React.FC = () => {
+  return (
+    <SettingsSaveProvider>
+      <AdminSettingsPageContent />
+    </SettingsSaveProvider>
   );
 };
 

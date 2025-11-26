@@ -179,16 +179,6 @@ const SupplierImportExportToolbar: React.FC<SupplierImportExportToolbarProps> = 
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Instructions */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h4 className="font-medium text-blue-900 mb-2">Import Instructions</h4>
-                <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
-                  <li>Download the template CSV file to see the required format</li>
-                  <li>Fill in your supplier data following the template structure</li>
-                  <li>Upload the completed CSV file to import suppliers</li>
-                  <li>Duplicate supplier names will be skipped</li>
-                </ul>
-              </div>
 
               {/* Template Download */}
               <div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat, FileText } from 'lucide-react';
+import { ShoppingCart, User, XCircle, Phone, Crown, Search, Plus, Percent, DollarSign, Edit3, CreditCard, Repeat, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import GlassCard from '../../../../features/shared/components/ui/GlassCard';
 import VariantCartItem from './VariantCartItem';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
@@ -45,6 +45,7 @@ interface POSCartSectionProps {
   totalAmount: number;
   discountAmount: number;
   discountPercentage?: number;
+  currentDiscountType?: 'percentage' | 'fixed';
   taxAmount: number;
   taxRate: number;
   finalAmount: number;
@@ -73,6 +74,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   totalAmount,
   discountAmount,
   discountPercentage = 0,
+  currentDiscountType,
   taxAmount,
   taxRate,
   finalAmount,
@@ -85,6 +87,30 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
   
   // Track which item is expanded (only one at a time)
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+
+  // Track discount section expansion state
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+
+  // Track if a discount was recently applied (for auto-collapse logic)
+  const [wasDiscountRecentlyApplied, setWasDiscountRecentlyApplied] = useState(false);
+
+  // Format number with commas
+  const formatNumberWithCommas = (value: string) => {
+    if (!value) return '';
+    // Remove any existing commas
+    const number = value.replace(/,/g, '');
+    // Add commas as thousand separators
+    return number.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  // Parse number by removing commas
+  const parseNumberValue = (value: string) => {
+    return value.replace(/,/g, '');
+  };
+
+  // Inline discount input state
+  const [inlineDiscountType, setInlineDiscountType] = useState<'percentage' | 'fixed'>('fixed');
+  const [inlineDiscountValue, setInlineDiscountValue] = useState('');
   
   // Reverse cart items so latest added appears at top
   const reversedCartItems = [...cartItems].reverse();
@@ -96,6 +122,25 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
       setExpandedItemId(latestItem.id);
     }
   }, [cartItems.length]);
+
+  // Track when discount is applied
+  useEffect(() => {
+    if (discountAmount > 0) {
+      setWasDiscountRecentlyApplied(true);
+    }
+  }, [discountAmount]);
+
+  // Auto-collapse discount section only after a discount was applied and then cleared
+  useEffect(() => {
+    if (discountAmount === 0 && isDiscountExpanded && wasDiscountRecentlyApplied) {
+      // Small delay to allow for visual feedback
+      const timer = setTimeout(() => {
+        setIsDiscountExpanded(false);
+        setWasDiscountRecentlyApplied(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [discountAmount, isDiscountExpanded, wasDiscountRecentlyApplied]);
   
   // Handle toggle expand - close previous item when opening a new one
   const handleToggleExpand = (itemId: string) => {
@@ -289,43 +334,212 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                   <span className="text-gray-600 font-medium">Subtotal:</span>
                   <span className="font-bold text-gray-900">TZS {totalAmount.toLocaleString()}</span>
                 </div>
-                {/* Discount Button - Larger */}
-                {discountAmount > 0 ? (
-                  <button
-                    onClick={() => {
-                      playClickSound();
-                      onShowDiscountModal();
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-green-700 hover:bg-green-100 transition-colors"
-                    title="Edit Discount"
-                  >
-                    <Percent className="w-4 h-4" />
-                    <span className="text-sm font-semibold">-{discountAmount.toLocaleString()}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        playDeleteSound();
-                        onClearDiscount();
-                      }}
-                      className="ml-1 p-1 text-red-600 hover:bg-red-50 rounded"
-                      title="Remove Discount"
-                    >
-                      <XCircle className="w-4 h-4" />
-                    </button>
-                  </button>
+              </div>
+
+              {/* Collapsible Discount Section */}
+              <div className="mb-4">
+                  {/* Collapsed State - Compact Button */}
+                  {!isDiscountExpanded ? (
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          playClickSound();
+                          setIsDiscountExpanded(true);
+                        }}
+                        className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all duration-300 hover:shadow-md ${
+                          discountAmount > 0
+                            ? 'bg-green-50 border-green-200 hover:bg-green-100'
+                            : 'bg-orange-50 border-orange-200 hover:bg-orange-100'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Percent className={`w-5 h-5 ${discountAmount > 0 ? 'text-green-600' : 'text-orange-600'}`} />
+                          <div className="text-left">
+                            <span className="font-semibold text-gray-900">
+                              {discountAmount > 0 ? 'Discount Applied' : 'Add Discount'}
+                            </span>
+                            {discountAmount > 0 && (
+                              <div className="text-sm text-green-600 font-medium">
+                                -TZS {discountAmount.toLocaleString()} ({currentDiscountType === 'percentage' ? `${discountPercentage}%` : 'fixed'})
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <ChevronDown className="w-5 h-5 text-gray-500" />
+                        </div>
+                      </button>
+                      {discountAmount > 0 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playDeleteSound();
+                            onClearDiscount();
+                          }}
+                          className="absolute top-2 right-12 inline-flex items-center justify-center w-9 h-9 text-sm font-medium text-white bg-red-500 hover:bg-red-600 border border-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors duration-200 shadow-lg"
+                          title="Remove Discount"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                            <path d="M3 6h18"></path>
+                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                            <line x1="10" x2="10" y1="11" y2="17"></line>
+                            <line x1="14" x2="14" y1="11" y2="17"></line>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
                 ) : (
+                    /* Expanded State - Full Discount Section */
+                    <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-200 overflow-hidden">
+                      {/* Header with collapse button */}
+                      <div className="flex items-center justify-between p-4 border-b border-orange-200">
+                        <div className="flex items-center gap-2">
+                          <Percent className="w-5 h-5 text-orange-600" />
+                          <span className="font-semibold text-gray-900">Discount Options</span>
+                        </div>
                   <button
                     onClick={() => {
                       playClickSound();
-                      onShowDiscountModal();
+                            setIsDiscountExpanded(false);
+                          }}
+                          className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
+                          title="Collapse"
+                        >
+                          <ChevronUp className="w-5 h-5 text-gray-600" />
+                        </button>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-4">
+                        {discountAmount === 0 ? (
+                          <>
+                            {/* Type Toggle Buttons */}
+                            <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1">
+                              <button
+                                onClick={() => {
+                                  setInlineDiscountType('fixed');
+                                  setInlineDiscountValue('');
                     }}
-                    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                                className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all duration-200 ${
+                                  inlineDiscountType === 'fixed'
+                                    ? 'bg-white text-orange-600 shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                TZS
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setInlineDiscountType('percentage');
+                                  setInlineDiscountValue('');
+                                }}
+                                className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all duration-200 ${
+                                  inlineDiscountType === 'percentage'
+                                    ? 'bg-white text-orange-600 shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-50'
+                                }`}
+                              >
+                                %
+                              </button>
+                            </div>
+
+                            {/* Combined Input and Quick Actions */}
+                            <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 focus-within:border-orange-500 transition-colors">
+                              {/* Input Field */}
+                              <input
+                                type="text"
+                                value={formatNumberWithCommas(inlineDiscountValue)}
+                                onChange={(e) => {
+                                  // Only allow numbers and remove any non-numeric characters except commas
+                                  const cleanedValue = e.target.value.replace(/[^0-9,]/g, '');
+                                  setInlineDiscountValue(parseNumberValue(cleanedValue));
+                                }}
+                                placeholder="0"
+                                className="w-full text-center text-3xl font-bold text-gray-900 bg-transparent border-none outline-none mb-3"
+                                autoFocus
+                                onKeyPress={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const applyBtn = e.currentTarget.parentElement?.parentElement?.parentElement?.querySelector('button[type="submit"]') as HTMLButtonElement;
+                                    applyBtn?.click();
+                                  }
+                                }}
+                              />
+
+                              {/* Quick Actions Inside Field */}
+                              {inlineDiscountType === 'percentage' && (
+                                <div className="flex gap-2 justify-center">
+                                  {[5, 10, 15, 20].map((percent) => (
+                                    <button
+                                      key={percent}
+                                      onClick={() => {
+                                        playClickSound();
+                                        onApplyDiscount('percentage', percent.toString());
+                                        setIsDiscountExpanded(false); // Collapse after applying
+                                      }}
+                                      className="px-3 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-700 rounded-md text-sm font-medium transition-colors border border-gray-200"
+                                    >
+                                      {percent}%
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Apply Button - Primary Action */}
+                            <div className="mt-4">
+                              <button
+                              type="submit"
+                              onClick={() => {
+                                playClickSound();
+                                if (!inlineDiscountValue || parseFloat(inlineDiscountValue) <= 0) {
+                                  return;
+                                }
+                                onApplyDiscount(inlineDiscountType, inlineDiscountValue);
+                                setInlineDiscountValue('');
+                                setIsDiscountExpanded(false); // Collapse after applying
+                              }}
+                              disabled={!inlineDiscountValue || parseFloat(inlineDiscountValue) <= 0}
+                              className="w-full flex items-center justify-center gap-2 p-4 bg-orange-500 hover:bg-orange-600 text-white rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-medium text-lg"
                   >
                     <Percent className="w-5 h-5" />
-                    <span className="text-sm font-medium">Discount</span>
+                              Apply Discount
+                            </button>
+                            </div>
+                          </>
+                        ) : (
+                          /* Show applied discount with option to edit */
+                          <div className="bg-white p-3 rounded-lg border border-green-200">
+                            <div className="text-center mb-2">
+                              <span className="text-sm text-gray-600">
+                                Currently Applied: {currentDiscountType === 'percentage' ? `${discountPercentage}% off` : 'Fixed discount'}
+                              </span>
+                            </div>
+                            <div className="text-center mb-3">
+                              <span className="text-2xl font-bold text-green-600">
+                                -TZS {discountAmount.toLocaleString()}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => {
+                                playClickSound();
+                                // Pre-fill with current discount values for editing
+                                setInlineDiscountType(currentDiscountType || 'fixed');
+                                setInlineDiscountValue(currentDiscountType === 'percentage' ? discountPercentage.toString() : discountAmount.toString());
+                                // Section stays expanded for editing
+                              }}
+                              className="w-full flex items-center justify-center gap-2 p-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors text-sm font-medium"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                              Edit Discount
                   </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                 )}
-              </div>
+                </div>
 
               {/* Tax - Larger Text */}
               {isTaxEnabled && (
@@ -340,17 +554,18 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                 <span className="text-lg font-bold text-gray-900">Total:</span>
                 <span className="text-2xl font-bold text-green-600">TZS {finalAmount.toLocaleString()}</span>
               </div>
+              </div>
 
-              {/* Customer Warning - Larger */}
-              {!selectedCustomer && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg mb-4">
-                  <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                  <span className="text-sm font-medium text-amber-900">Please select a customer to proceed</span>
-                </div>
-              )}
+            {/* Customer Warning - Larger */}
+            {!selectedCustomer && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg mb-4 mt-4">
+                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                <span className="text-sm font-medium text-amber-900">Please select a customer to proceed</span>
+              </div>
+            )}
 
-              {/* Action Buttons - Grid Layout with Larger Touch Targets */}
-              <div className="grid grid-cols-2 gap-3">
+            {/* Action Buttons - Grid Layout with Larger Touch Targets */}
+            <div className="grid grid-cols-2 gap-3">
                 {/* Installment Plan Button */}
                 {onShowInstallmentModal && (
                   <button
@@ -384,35 +599,34 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
                 )}
               </div>
 
-              {/* Preview Invoice Button - Show before payment */}
-              {onPreviewInvoice && cartItems.length > 0 && (
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    onPreviewInvoice();
-                  }}
-                  disabled={!selectedCustomer}
-                  className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg mt-3 flex items-center justify-center gap-2"
-                  title={!selectedCustomer ? "Please select a customer first to preview invoice" : "Preview invoice with current prices"}
-                >
-                  <FileText className="w-5 h-5" />
-                  Preview Invoice
-                </button>
-              )}
-
-              {/* Process Payment Button - Full Width, Prominent & Larger */}
+            {/* Preview Invoice Button - Show before payment */}
+            {onPreviewInvoice && cartItems.length > 0 && (
               <button
                 onClick={() => {
-                  playPaymentSound();
-                  onProcessPayment();
+                  playClickSound();
+                  onPreviewInvoice();
                 }}
-                disabled={cartItems.length === 0 || !selectedCustomer}
-                className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl mt-3 text-lg"
-                title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Process payment"}
+                disabled={!selectedCustomer}
+                className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 shadow-md hover:shadow-lg mt-3 flex items-center justify-center gap-2"
+                title={!selectedCustomer ? "Please select a customer first to preview invoice" : "Preview invoice with current prices"}
               >
-                Process Payment
+                <FileText className="w-5 h-5" />
+                Preview Invoice
               </button>
-            </div>
+            )}
+
+            {/* Process Payment Button - Full Width, Prominent & Larger */}
+            <button
+              onClick={() => {
+                playPaymentSound();
+                onProcessPayment();
+              }}
+              disabled={cartItems.length === 0 || !selectedCustomer}
+              className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-lg transition-colors duration-200 shadow-lg hover:shadow-xl mt-3 text-lg"
+              title={!selectedCustomer ? "Please select a customer first" : cartItems.length === 0 ? "Add items to cart first" : "Process payment"}
+            >
+              Process Payment
+            </button>
           </div>
         )}
       </GlassCard>

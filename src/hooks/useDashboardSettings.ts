@@ -99,53 +99,53 @@ export interface DashboardSettings {
 
 const defaultDashboardSettings: DashboardSettings = {
   quickActions: {
-    // Core Business Features
+    // Core Business Features - Only 6 enabled by default
     devices: true,
     addDevice: true,
     customers: true,
     inventory: true,
     appointments: true,
     purchaseOrders: true,
-    payments: true,
-    adGenerator: true,
-    pos: true,
-    reports: true,
-    employees: true,
-    whatsapp: true,
-    settings: true,
-    search: true,
-    loyalty: true,
-    backup: true,
+    payments: false,
+    adGenerator: false,
+    pos: false,
+    reports: false,
+    employees: false,
+    whatsapp: false,
+    settings: false,
+    search: false,
+    loyalty: false,
+    backup: false,
     
     // SMS & Communication Features
-    sms: true,
-    bulkSms: true,
-    smsLogs: true,
-    smsSettings: true,
+    sms: false,
+    bulkSms: false,
+    smsLogs: false,
+    smsSettings: false,
     
     // Import/Export & Data Management
-    excelImport: true,
-    excelTemplates: true,
-    productExport: true,
-    customerImport: true,
+    excelImport: false,
+    excelTemplates: false,
+    productExport: false,
+    customerImport: false,
     
     // Advanced System Features
-    userManagement: true,
-    databaseSetup: true,
-    integrationSettings: true,
-    integrationsTest: true,
-    aiTraining: true,
-    bluetoothPrinter: true,
+    userManagement: false,
+    databaseSetup: false,
+    integrationSettings: false,
+    integrationsTest: false,
+    aiTraining: false,
+    bluetoothPrinter: false,
     
     // Business Management
-    categoryManagement: true,
-    supplierManagement: true,
-    storeLocations: true,
+    categoryManagement: false,
+    supplierManagement: false,
+    storeLocations: false,
     
     // Advanced Analytics & Reports
-    reminders: true,
-    mobile: true,
-    myAttendance: true
+    reminders: false,
+    mobile: false,
+    myAttendance: false
   },
   widgets: {
     revenueTrendChart: true,
@@ -176,7 +176,22 @@ const defaultDashboardSettings: DashboardSettings = {
     salesChart: true,
     paymentMethodsChart: true,
     salesByCategoryChart: true,
-    profitMarginChart: true
+    profitMarginChart: true,
+    // New feature widgets
+    tradeInWidget: true,
+    installmentsWidget: true,
+    loyaltyWidget: true,
+    smsWidget: true,
+    sparePartsWidget: true,
+    storageRoomsWidget: true,
+    stockTransfersWidget: true,
+    specialOrdersWidget: true,
+    backupWidget: true,
+    repairWidget: true,
+    // AI-powered widgets
+    aiInsightsWidget: true,
+    predictiveAnalyticsWidget: true,
+    alertSystemWidget: true
   },
   autoArrange: false
 };
@@ -322,7 +337,7 @@ export function useDashboardSettings() {
   };
 
   const getWidgetSize = (widget: string): WidgetSize => {
-    return dashboardSettings.widgetSizes?.[widget] || 'medium';
+    return dashboardSettings.widgetSizes?.[widget] || 'small';
   };
 
   const getWidgetColumnSpan = (widget: string): number => {

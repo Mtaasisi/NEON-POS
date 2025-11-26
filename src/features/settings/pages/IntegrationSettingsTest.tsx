@@ -105,17 +105,6 @@ const IntegrationSettingsTest: React.FC = () => {
           </pre>
         </div>
 
-        {/* Instructions */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="font-semibold text-blue-900 mb-2">Test Instructions:</h3>
-          <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-            <li>Try typing in the input fields above</li>
-            <li>Check if text appears as you type</li>
-            <li>Look at "Current value" below each input</li>
-            <li>Click "Test Save" and check browser console (F12)</li>
-            <li>If this works, the inputs are fine!</li>
-          </ol>
-        </div>
       </div>
     </div>
   );
