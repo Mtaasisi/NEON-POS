@@ -1549,7 +1549,8 @@ const PaymentAccountManagement: React.FC = () => {
                       </div>
                     ) : (
                       <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                        {accountTransactions
+                        {(
+                          accountTransactions
                           .filter(t => {
                             // Filter by transaction type
                             if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) {
@@ -2429,7 +2430,8 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                 )}
                               </div>
                             );
-                          })}
+                          })
+                        )}
                       </div>
                     )}
                     </div>
