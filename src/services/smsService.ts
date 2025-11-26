@@ -401,8 +401,8 @@ Respond in JSON format:
     }
     
     if (!this.apiKey || !this.apiUrl) {
-      // Only warn once to avoid console spam
-      if (!SMSService.hasWarnedAboutConfig) {
+      // Only warn in development mode - suppress in production to avoid console noise
+      if (!SMSService.hasWarnedAboutConfig && (import.meta.env.DEV || import.meta.env.MODE === 'development')) {
         console.warn('⚠️ SMS provider not configured. Configure SMS Gateway in Admin Settings → Integrations. Until configured, SMS sending will be simulated (logged only, not actually sent).');
         SMSService.hasWarnedAboutConfig = true;
       }

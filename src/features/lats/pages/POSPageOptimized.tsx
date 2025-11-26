@@ -323,7 +323,19 @@ const POSPageOptimized: React.FC = () => {
   const { settings: dynamicPricingSettings } = useDynamicPricingSettings();
   const { settings: barcodeScannerSettings } = useBarcodeScannerSettings();
   const { settings: deliverySettings } = useDeliverySettings();
-  const dynamicDelivery = useDynamicDelivery(deliverySettings);
+  // ✅ FIX: Ensure deliverySettings has all required fields with proper defaults
+  const safeDeliverySettings = deliverySettings ? {
+    ...deliverySettings,
+    delivery_areas: deliverySettings.delivery_areas || [],
+    area_delivery_fees: deliverySettings.area_delivery_fees || {}
+  } : {
+    delivery_areas: [],
+    area_delivery_fees: {},
+    enable_delivery: false,
+    default_delivery_fee: 0,
+    free_delivery_threshold: 0
+  } as any; // Type assertion to handle partial settings
+  const dynamicDelivery = useDynamicDelivery(safeDeliverySettings);
   const [selectedDeliveryArea, setSelectedDeliveryArea] = useState<string>('');
   const { settings: searchFilterSettings } = useSearchFilterSettings();
   const { settings: advancedSettings } = useAdvancedSettings();
@@ -1277,8 +1289,7 @@ const POSPageOptimized: React.FC = () => {
                   opened_by_user_id: currentUser?.id,
                   is_active: true
                 }], {
-                  onConflict: 'date,is_active',
-                  ignoreDuplicates: false
+                  onConflict: 'date,is_active'
                 })
                 .select()
                 .single();
@@ -1442,8 +1453,8 @@ const POSPageOptimized: React.FC = () => {
 
       // Get all parent IDs
       const parentIds = parentVariants
-        .filter(p => p.is_parent || p.variant_type === 'parent')
-        .map(p => p.id);
+        .filter((p: any) => p.is_parent || p.variant_type === 'parent')
+        .map((p: any) => p.id);
 
       if (parentIds.length === 0) {
         return false; // No parent variants
@@ -1506,25 +1517,76 @@ const POSPageOptimized: React.FC = () => {
           variant = product.variants[0];
           console.log('⚠️ No variant specified, using first variant:', variant);
         } else {
-          // Check if this product has IMEI variants that need selection
-          const hasIMEIVariants = await checkForIMEIVariants(product);
-          if (hasIMEIVariants) {
-            toast.error('Please select a specific device variant first');
-            console.log('⚠️ Product has IMEI variants, variant selection required');
+          // ✅ FIX: Fetch variants from database if not in product object
+          console.log('🔍 Product has no variants in object, fetching from database...');
+          const { data: dbVariants, error: variantError } = await supabase
+            .from('lats_product_variants')
+            .select('id, name, variant_name, selling_price, price, unit_price, quantity, sku, is_parent, variant_type, is_active')
+            .eq('product_id', product.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+          if (variantError) {
+            console.error('❌ Error fetching variants:', variantError);
+            toast.error('Failed to load product variants. Please try again.');
             return;
+          }
+
+          if (dbVariants && dbVariants.length > 0) {
+            // Use the first variant from database
+            variant = {
+              id: dbVariants[0].id,
+              name: dbVariants[0].name || dbVariants[0].variant_name || 'Default',
+              sellingPrice: dbVariants[0].selling_price || dbVariants[0].price || dbVariants[0].unit_price,
+              price: dbVariants[0].price || dbVariants[0].unit_price || dbVariants[0].selling_price,
+              sku: dbVariants[0].sku,
+              quantity: dbVariants[0].quantity,
+              is_parent: dbVariants[0].is_parent,
+              variant_type: dbVariants[0].variant_type
+            };
+            console.log('✅ Found variant in database:', variant);
           } else {
-            toast.error('Product has no variants available. Cannot add to cart.');
-            console.error('❌ Product has no variants:', product);
-            return;
+            // No variants in database either - check if product has IMEI variants that need selection
+            const hasIMEIVariants = await checkForIMEIVariants(product);
+            if (hasIMEIVariants) {
+              toast.error('Please select a specific device variant first');
+              console.log('⚠️ Product has IMEI variants, variant selection required');
+              return;
+            } else {
+              // ✅ ALLOW: Product has no variants and no children - allow direct product sale
+              // Create a virtual variant using product data
+              console.log('ℹ️ Product has no variants - creating virtual variant from product data');
+              variant = {
+                id: product.id, // Use product ID as variant ID for products without variants
+                name: 'Default',
+                sellingPrice: product.selling_price || product.price || product.unit_price,
+                price: product.price || product.unit_price || product.selling_price,
+                sku: product.sku || 'N/A',
+                quantity: product.stock_quantity || 0,
+                is_parent: false,
+                variant_type: 'standard'
+              };
+              console.log('✅ Created virtual variant for product without variants:', variant);
+            }
           }
         }
       }
 
-      // Validate variant ID is a valid UUID
+      // Validate variant ID is a valid UUID (or product ID for products without variants)
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-      if (!variant.id || !UUID_REGEX.test(variant.id)) {
+      if (!variant.id) {
         toast.error('Invalid variant ID. Please select a valid variant.');
         console.error('❌ Invalid variant ID:', variant.id, 'for product:', product.name);
+        return;
+      }
+      
+      // ✅ ALLOW: If variant ID equals product ID, it's a product without variants (virtual variant)
+      // This is allowed for products that have no variants in the database
+      const isVirtualVariant = variant.id === product.id;
+      if (!isVirtualVariant && !UUID_REGEX.test(variant.id)) {
+        toast.error('Invalid variant ID format. Please select a valid variant.');
+        console.error('❌ Invalid variant ID format:', variant.id, 'for product:', product.name);
         return;
       }
 
@@ -1548,23 +1610,39 @@ const POSPageOptimized: React.FC = () => {
 
       // ✅ IMPROVED: Check stock availability using the service method
       // This properly handles parent variants by calculating stock from children
-      const stockCheck = await saleProcessingService.checkStockAvailability(variant.id, quantity);
+      // For products without variants (virtual variants), check product stock directly
+      let stockCheck;
+      let availableStock;
       
-      if (!stockCheck.available) {
-        const errorMessage = stockCheck.error || 'Insufficient stock';
-        toast.error(`${product.name}: ${errorMessage}`);
-        console.error('❌ Stock check failed:', {
-        productName: product.name,
-        variantName: variant?.name,
-          variantId: variant.id,
-          requestedQuantity: quantity,
-          availableStock: stockCheck.availableStock,
-          error: stockCheck.error
-        });
-        return;
+      if (isVirtualVariant) {
+        // For products without variants, use product stock
+        availableStock = product.stock_quantity || 0;
+        if (availableStock < quantity) {
+          toast.error(`${product.name}: Insufficient stock. Available: ${availableStock}, Requested: ${quantity}`);
+          return;
+        }
+        stockCheck = { available: true, availableStock };
+      } else {
+        stockCheck = await saleProcessingService.checkStockAvailability(variant.id, quantity);
+        
+        if (!stockCheck.available) {
+          const errorMessage = stockCheck.error || 'Insufficient stock';
+          toast.error(`${product.name}: ${errorMessage}`);
+          // Only log in development - user already sees toast error
+          if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+            console.warn('⚠️ Stock check failed:', {
+              productName: product.name,
+              variantName: variant?.name,
+              variantId: variant.id,
+              requestedQuantity: quantity,
+              availableStock: stockCheck.availableStock,
+              error: stockCheck.error
+            });
+          }
+          return;
+        }
+        availableStock = stockCheck.availableStock;
       }
-
-      const availableStock = stockCheck.availableStock;
       
       console.log('✅ Stock check passed:', {
         productName: product.name,
@@ -1708,13 +1786,16 @@ const POSPageOptimized: React.FC = () => {
       if (!stockCheck.available) {
         const errorMessage = stockCheck.error || 'Insufficient stock';
         toast.error(`${existingItem.productName}: ${errorMessage}`);
-        console.error('❌ Stock check failed for quantity update:', {
-          productName: existingItem.productName,
-          variantId: existingItem.variantId,
-          requestedQuantity: quantity,
-          availableStock: stockCheck.availableStock,
-          error: stockCheck.error
-        });
+        // Only log in development - user already sees toast error
+        if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+          console.warn('⚠️ Stock check failed for quantity update:', {
+            productName: existingItem.productName,
+            variantId: existingItem.variantId,
+            requestedQuantity: quantity,
+            availableStock: stockCheck.availableStock,
+            error: stockCheck.error
+          });
+        }
         return;
       }
 
@@ -2192,7 +2273,7 @@ const POSPageOptimized: React.FC = () => {
       const inventoryResult = await addTradeInDeviceToInventory({
         transaction: tradeInTransaction,
         categoryId: categoryId,
-        locationId: null,
+        locationId: undefined, // Use undefined instead of null for optional parameter
         needsRepair: tradeInTransaction.needs_repair || false,
         resalePrice: pricingData.selling_price, // Use the confirmed selling price
       });
@@ -2412,29 +2493,26 @@ const POSPageOptimized: React.FC = () => {
         <DraftManagementModal
           isOpen={showDraftModal}
           onClose={() => setShowDraftModal(false)}
-          drafts={getAllDrafts()}
           onLoadDraft={loadDraft}
-          onDeleteDraft={deleteDraft}
         />
 
         <DraftNotification
-          drafts={getAllDrafts()}
-          onLoadDraft={(draftId) => {
-            loadDraft(draftId);
-            toast.success('Draft loaded successfully!');
-          }}
+          draftCount={getAllDrafts().length}
+          onViewDrafts={() => setShowDraftModal(true)}
+          onDismiss={() => {}}
+          isVisible={getAllDrafts().length > 0}
         />
 
         <DailyClosingModal
           isOpen={showDailyClosingModal}
           onClose={() => setShowDailyClosingModal(false)}
-          onDayClosed={() => {
+          onComplete={() => {
             console.log('Day closed successfully');
             setIsDailyClosed(true);
             setShowDailyClosingModal(false);
             toast.success('Day closed successfully!');
           }}
-          sessionStartTime={sessionStartTime}
+          currentUser={currentUser}
         />
 
         {/* Comprehensive Payment Modal - Supports multiple payment methods */}
@@ -2475,6 +2553,9 @@ const POSPageOptimized: React.FC = () => {
 
               // Calculate expected payment amount
               const expectedAmount = finalAmount;
+              
+              // ✅ FIX: Calculate validatedTotalPaid before using it
+              const validatedTotalPaid = totalPaid || expectedAmount;
 
               // Prepare sale data for database with multiple payments
               const saleData = {
@@ -2663,7 +2744,7 @@ const POSPageOptimized: React.FC = () => {
                   setManualDiscount(0);
                   setDiscountValue('');
                   setDiscountType('percentage');
-                  setDiscountPercentage(0);
+                  // Discount is already cleared via setManualDiscount(0) and setDiscountValue('')
                   setSelectedCustomer(null);
                   
                   // ✅ FIX: Clear child variants cache after sale to ensure sold items are hidden
@@ -2679,8 +2760,8 @@ const POSPageOptimized: React.FC = () => {
                     console.warn('⚠️ Unhandled error in cache clearing:', err);
                   });
                   
-                  // Reload today's sales
-                  loadTodaysSales();
+                  // Reload sales data to refresh today's sales display
+                  loadSales();
                   
                   // Play success sound
                   playPaymentSound();
@@ -2739,15 +2820,16 @@ const POSPageOptimized: React.FC = () => {
         <DayOpeningModal
           isOpen={showDayOpeningModal}
           onClose={() => setShowDayOpeningModal(false)}
-          onDayOpened={(sessionId) => {
+          onOpenDay={async () => {
             setSessionStartTime(new Date().toISOString());
             setIsDailyClosed(false);
             setShowDayOpeningModal(false);
             toast.success('Day opened successfully!');
           }}
+          currentUser={currentUser}
         />
 
-        <SuccessModal {...successModal} />
+        <SuccessModal {...successModal.props} />
       </>
     );
   }
@@ -3319,8 +3401,8 @@ const POSPageOptimized: React.FC = () => {
                   console.warn('⚠️ Unhandled error in cache clearing:', err);
                 });
                 
-                // ✅ FIX: Reload today's sales for consistency with regular payment handler
-                loadTodaysSales();
+                // ✅ FIX: Reload sales data to refresh today's sales display
+                loadSales();
                 
                 // Play success sound
                 playPaymentSound();
@@ -3714,77 +3796,36 @@ const POSPageOptimized: React.FC = () => {
               return;
             }
 
-            // Pre-validate that all variants exist in database before processing payment
-            // This catches deleted/moved variants early and provides better UX
-            // Note: Query without branch/is_active filters to match sale processing service behavior
-            // ✅ FIX: Check both lats_product_variants AND inventory_items (for serial number devices)
-            const variantIds = validCartItems.map(item => item.variantId);
-            
-            // Check lats_product_variants table
-            const { data: existingVariants, error: variantCheckError } = await supabase
-              .from('lats_product_variants')
-              .select('id, is_active, branch_id, is_shared, variant_type')
-              .in('id', variantIds);
+            // ✅ OPTIMIZED: Variant existence check is now handled by batch stock validation
+            // The stock validation will catch missing variants, so we can skip this redundant check
+            // This reduces database queries and improves performance
 
-            // ✅ FIX: Also check inventory_items table for serial number devices (legacy items)
-            const { data: existingInventoryItems, error: inventoryCheckError } = await supabase
-              .from('inventory_items')
-              .select('id, status, variant_id, product_id')
-              .in('id', variantIds);
-
-            if (variantCheckError || inventoryCheckError) {
-              console.warn('⚠️ Error checking variant existence (will be validated by sale service):', variantCheckError || inventoryCheckError);
-              // Don't block payment - let the sale processing service handle validation
-              // It has more sophisticated error handling
-            } else {
-              // Combine IDs from both tables
-              const variantIdsSet = new Set(existingVariants?.map((v: any) => v.id) || []);
-              const inventoryIdsSet = new Set(existingInventoryItems?.map((i: any) => i.id) || []);
-              const existingVariantIds = new Set([...Array.from(variantIdsSet), ...Array.from(inventoryIdsSet)]);
-              
-              const missingVariants = validCartItems.filter(item => !existingVariantIds.has(item.variantId));
-
-              if (missingVariants.length > 0) {
-                // Log warning instead of error since this is expected behavior
-                console.warn('⚠️ Cart contains variants that may no longer be accessible:', missingVariants.map(v => ({
-                  productName: v.productName,
-                  variantId: v.variantId
-                })));
-                
-                const missingItems = missingVariants.map(item => item.productName).join(', ');
-                
-                // Remove missing variants from cart
-                const remainingItems = validCartItems.filter(item => existingVariantIds.has(item.variantId));
-                setCartItems(remainingItems);
-                
-                if (remainingItems.length === 0) {
-                  toast.error('All items were removed. Please add items to cart before processing payment.');
-                  return;
-                }
-                
-                toast(`Some items in your cart are no longer available: ${missingItems}. They have been removed. Please review and try again.`, { icon: '⚠️' });
-                return;
-              }
-            }
-
-            // ✅ PRE-PAYMENT STOCK VALIDATION: Validate all items have sufficient stock before processing payment
+            // ✅ OPTIMIZED PRE-PAYMENT STOCK VALIDATION: Batch check all items at once
             // This prevents payment processing when stock is insufficient
             console.log('🔍 Pre-payment stock validation for', validCartItems.length, 'items...');
+            
+            // ✅ OPTIMIZED: Use batch stock check instead of sequential checks
+            const stockCheckItems = validCartItems.map(item => ({
+              variantId: item.variantId,
+              quantity: item.quantity
+            }));
+            
+            const stockCheckResults = await saleProcessingService.checkStockAvailabilityBatch(stockCheckItems);
             const stockValidationErrors: string[] = [];
             
             for (const item of validCartItems) {
-              const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
+              const stockCheck = stockCheckResults.get(item.variantId);
               
-              if (!stockCheck.available) {
-                const errorMsg = `${item.productName} (${item.variantName}): ${stockCheck.error || 'Insufficient stock'}`;
+              if (!stockCheck || !stockCheck.available) {
+                const errorMsg = `${item.productName} (${item.variantName}): ${stockCheck?.error || 'Insufficient stock'}`;
                 stockValidationErrors.push(errorMsg);
                 console.error('❌ Pre-payment stock validation failed:', {
                   productName: item.productName,
                   variantName: item.variantName,
                   variantId: item.variantId,
                   requestedQuantity: item.quantity,
-                  availableStock: stockCheck.availableStock,
-                  error: stockCheck.error
+                  availableStock: stockCheck?.availableStock || 0,
+                  error: stockCheck?.error
                 });
               }
             }
@@ -3794,14 +3835,11 @@ const POSPageOptimized: React.FC = () => {
               console.error('❌ Pre-payment stock validation failed:', stockValidationErrors);
               toast.error(errorMessage, { duration: 6000 });
               
-              // Remove items with insufficient stock from cart
-              const itemsToKeep: typeof validCartItems = [];
-              for (const item of validCartItems) {
-                const stockCheck = await saleProcessingService.checkStockAvailability(item.variantId, item.quantity);
-                if (stockCheck.available) {
-                  itemsToKeep.push(item);
-                }
-              }
+              // Remove items with insufficient stock from cart (using already fetched results)
+              const itemsToKeep = validCartItems.filter(item => {
+                const stockCheck = stockCheckResults.get(item.variantId);
+                return stockCheck?.available === true;
+              });
               
               if (itemsToKeep.length < validCartItems.length) {
                 setCartItems(itemsToKeep);
@@ -4100,7 +4138,6 @@ const POSPageOptimized: React.FC = () => {
                           setShowInvoicePreview(true);
                         },
                         variant: 'primary',
-                        icon: FileText,
                       },
                       {
                         label: 'New Sale',
@@ -4416,7 +4453,6 @@ const POSPageOptimized: React.FC = () => {
           }
         }}
         currentUser={currentUser}
-        lastClosureInfo={dailyClosureInfo}
       />
 
       {/* Daily Closing Modal */}

@@ -1274,36 +1274,57 @@ const PaymentAccountManagement: React.FC = () => {
 
       {/* Transaction History Modal */}
       {showHistoryModal && selectedAccount && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+        <div 
+          className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[999999]" 
+          style={{ 
+            overflow: 'hidden',
+            overscrollBehavior: 'none',
+            position: 'fixed',
+            zIndex: 999999
+          }}
+          role="dialog" 
+          aria-modal="true" 
+          aria-labelledby="transaction-history-modal-title"
+          onClick={(e) => {
+            // Only close if clicking the backdrop itself, not the modal content
+            if (e.target === e.currentTarget) {
+              setShowHistoryModal(false);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full max-h-[90vh] flex flex-col overflow-hidden relative z-[999999]"
+            style={{ zIndex: 999999 }}
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Close Button */}
             <button
               onClick={() => setShowHistoryModal(false)}
-              className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+              className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
               aria-label="Close modal"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
 
             {/* Modal Header */}
-            <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="p-8 pr-20 bg-white border-b border-gray-200 flex-shrink-0">
               <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
                 <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
                   <History className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">Transaction History</h3>
+                  <h3 id="transaction-history-modal-title" className="text-2xl font-bold text-gray-900 mb-2">Transaction History</h3>
                   <p className="text-sm text-gray-600 font-medium">{selectedAccount.name}</p>
                 </div>
               </div>
             </div>
 
-            {/* Account Summary */}
             <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
               <div className="py-4 space-y-4">
+                {/* Account Summary Cards */}
                 <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
                   <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-indigo-600" />
+                    <DollarSign className="w-5 h-5 text-indigo-600" />
                     Account Summary
                   </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1334,17 +1355,17 @@ const PaymentAccountManagement: React.FC = () => {
 
                 {/* Search and Filter Bar */}
                 <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                  <div className="flex items-center gap-4 mb-4">
-                    {/* Search Bar - Left Side */}
-                    <div className="flex-1 min-w-[300px]">
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    {/* Search Bar */}
+                    <div className="flex-1 min-w-0 max-w-lg">
                       <div className="relative">
-                        <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <input
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           placeholder="Search transactions by description, reference, amount..."
-                          className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
+                          className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition-all duration-200"
                         />
                         {searchQuery && (
                           <button
@@ -1360,21 +1381,21 @@ const PaymentAccountManagement: React.FC = () => {
                     {/* Filter Toggle Button */}
                     <button
                       onClick={() => setFiltersExpanded(!filtersExpanded)}
-                      className={`px-4 py-3 border-2 rounded-xl transition-all flex items-center gap-2 ${
+                      className={`px-4 py-2.5 border-2 rounded-xl transition-all flex items-center gap-2 text-sm font-medium shadow-sm hover:shadow-md ${
                         filtersExpanded
-                          ? 'bg-indigo-50 border-indigo-500 text-indigo-700'
-                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                          ? 'bg-indigo-50 border-indigo-500 text-indigo-700 hover:border-indigo-400'
+                          : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-indigo-400'
                       }`}
                     >
-                      <Filter className="w-5 h-5" />
+                      <Filter className="w-4 h-4" />
                       {filtersExpanded ? (
                         <>
-                          <span className="text-sm font-semibold">Hide Filters</span>
+                          <span>Hide Filters</span>
                           <ChevronUp className="w-4 h-4" />
                         </>
                       ) : (
                         <>
-                          <span className="text-sm font-semibold">Filters</span>
+                          <span>Filters</span>
                           <ChevronDown className="w-4 h-4" />
                         </>
                       )}
@@ -1383,36 +1404,40 @@ const PaymentAccountManagement: React.FC = () => {
                   
                   {/* Expandable Filters Section */}
                   {filtersExpanded && (
-                    <div className="pt-4 border-t border-gray-200 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                    <div className="pt-4 border-t border-gray-200 space-y-4">
+                      <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                        <Filter className="w-4 h-4 text-indigo-600" />
+                        Advanced Filters
+                      </h3>
                       {/* Filter Row */}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {/* Transaction Type Filter */}
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-2">Transaction Type</label>
-                        <select
-                          value={transactionTypeFilter}
-                          onChange={(e) => setTransactionTypeFilter(e.target.value)}
-                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
-                        >
-                          <option value="all">All Transactions</option>
-                          <option value="payment_received">Money In</option>
-                          <option value="expense">Expenses</option>
-                          <option value="payment_made">Payments Made</option>
-                          <option value="transfer_in">Transfers In</option>
-                          <option value="transfer_out">Transfers Out</option>
-                        </select>
-                      </div>
-                      
+                          <select
+                            value={transactionTypeFilter}
+                            onChange={(e) => setTransactionTypeFilter(e.target.value)}
+                            className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm transition-all duration-200"
+                          >
+                            <option value="all">All Transactions</option>
+                            <option value="payment_received">Money In</option>
+                            <option value="expense">Expenses</option>
+                            <option value="payment_made">Payments Made</option>
+                            <option value="transfer_in">Transfers In</option>
+                            <option value="transfer_out">Transfers Out</option>
+                          </select>
+                        </div>
+                        
                         {/* Date Range - Start */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-2">Start Date</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Date From</label>
                           <div className="relative">
                             <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                               type="date"
                               value={dateFilter.start}
                               onChange={(e) => setDateFilter({ ...dateFilter, start: e.target.value })}
-                              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
+                              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm transition-all duration-200"
                               placeholder="Start date"
                             />
                           </div>
@@ -1420,14 +1445,14 @@ const PaymentAccountManagement: React.FC = () => {
                         
                         {/* Date Range - End */}
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-2">End Date</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-2">Date To</label>
                           <div className="relative">
                             <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                               type="date"
                               value={dateFilter.end}
                               onChange={(e) => setDateFilter({ ...dateFilter, end: e.target.value })}
-                              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm font-medium bg-white"
+                              className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-sm transition-all duration-200"
                               placeholder="End date"
                             />
                           </div>
@@ -1444,77 +1469,82 @@ const PaymentAccountManagement: React.FC = () => {
                                 setDateFilter({ start: '', end: '' });
                                 setSearchQuery('');
                                 setTransactionTypeFilter('all');
+                                setFiltersExpanded(false);
                               }}
-                              className="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border-2 border-gray-300 rounded-xl hover:bg-gray-50 transition-all"
+                              className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-all text-sm font-semibold shadow-sm flex items-center gap-2"
                             >
+                              <RefreshCw className="w-4 h-4" />
                               Clear All
                             </button>
                           )}
-                        <button
-                          onClick={() => {
-                            if (!selectedAccount) return;
-                            const filtered = accountTransactions.filter(t => {
-                              if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
-                              if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
-                              if (dateFilter.end) {
-                                const endDate = new Date(dateFilter.end);
-                                endDate.setHours(23, 59, 59, 999);
-                                if (new Date(t.created_at) > endDate) return false;
-                              }
+                        </div>
+                        {/* Export Buttons */}
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => {
+                              if (!selectedAccount) return;
+                              const filtered = accountTransactions.filter(t => {
+                                if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                                if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                                if (dateFilter.end) {
+                                  const endDate = new Date(dateFilter.end);
+                                  endDate.setHours(23, 59, 59, 999);
+                                  if (new Date(t.created_at) > endDate) return false;
+                                }
                                 if (searchQuery) {
                                   const query = searchQuery.toLowerCase();
                                   const matchesDescription = t.description?.toLowerCase().includes(query);
                                   const matchesReference = t.reference_number?.toLowerCase().includes(query);
                                   const matchesAmount = formatMoney(t.amount, selectedAccount.currency).toLowerCase().includes(query);
                                   if (!matchesDescription && !matchesReference && !matchesAmount) return false;
-                              }
-                              return true;
-                            });
-                            exportToCSV(filtered, {
-                              accountName: selectedAccount.name,
-                              currency: selectedAccount.currency || 'TZS',
-                              dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
-                            });
-                            toast.success('CSV exported successfully');
-                          }}
+                                }
+                                return true;
+                              });
+                              exportToCSV(filtered, {
+                                accountName: selectedAccount.name,
+                                currency: selectedAccount.currency || 'TZS',
+                                dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
+                              });
+                              toast.success('CSV exported successfully');
+                            }}
                             className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center gap-2"
-                        >
+                          >
                             <Download className="w-4 h-4" />
                             CSV
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (!selectedAccount) return;
-                            const filtered = accountTransactions.filter(t => {
-                              if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
-                              if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
-                              if (dateFilter.end) {
-                                const endDate = new Date(dateFilter.end);
-                                endDate.setHours(23, 59, 59, 999);
-                                if (new Date(t.created_at) > endDate) return false;
-                              }
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (!selectedAccount) return;
+                              const filtered = accountTransactions.filter(t => {
+                                if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                                if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                                if (dateFilter.end) {
+                                  const endDate = new Date(dateFilter.end);
+                                  endDate.setHours(23, 59, 59, 999);
+                                  if (new Date(t.created_at) > endDate) return false;
+                                }
                                 if (searchQuery) {
                                   const query = searchQuery.toLowerCase();
                                   const matchesDescription = t.description?.toLowerCase().includes(query);
                                   const matchesReference = t.reference_number?.toLowerCase().includes(query);
                                   const matchesAmount = formatMoney(t.amount, selectedAccount.currency).toLowerCase().includes(query);
                                   if (!matchesDescription && !matchesReference && !matchesAmount) return false;
-                              }
-                              return true;
-                            });
-                            exportToPDF(filtered, {
-                              accountName: selectedAccount.name,
-                              currency: selectedAccount.currency || 'TZS',
-                              dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
-                            });
-                            toast.success('PDF opened in new window');
-                          }}
+                                }
+                                return true;
+                              });
+                              exportToPDF(filtered, {
+                                accountName: selectedAccount.name,
+                                currency: selectedAccount.currency || 'TZS',
+                                dateRange: dateFilter.start && dateFilter.end ? dateFilter : undefined,
+                              });
+                              toast.success('PDF opened in new window');
+                            }}
                             className="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center gap-2"
-                        >
+                          >
                             <FileText className="w-4 h-4" />
                             PDF
-                        </button>
-                      </div>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1548,7 +1578,7 @@ const PaymentAccountManagement: React.FC = () => {
                         <p className="text-gray-500">This account has no transaction history.</p>
                       </div>
                     ) : (
-                      <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                      <div className="space-y-3 pr-1">
                         {accountTransactions
                           .filter(t => {
                             // Filter by transaction type
@@ -1563,9 +1593,9 @@ const PaymentAccountManagement: React.FC = () => {
                               const endDate = new Date(dateFilter.end);
                               endDate.setHours(23, 59, 59, 999); // Include the entire end date
                               if (new Date(t.created_at) > endDate) {
-                          return false;
-                        }
-                      }
+                                return false;
+                              }
+                            }
                             // Filter by search query
                             if (searchQuery) {
                               const query = searchQuery.toLowerCase();
@@ -1589,45 +1619,54 @@ const PaymentAccountManagement: React.FC = () => {
                             
                             const isExpanded = expandedTransaction === transaction.id;
                             
+                            // Format date
+                            const transactionDate = new Date(transaction.created_at);
+                            const formattedDate = transactionDate.toLocaleDateString('en-US', { 
+                              month: 'short', 
+                              day: 'numeric', 
+                              year: 'numeric' 
+                            });
+                            
+                            // Check if it's an installment payment
+                            const isInstallment = transaction.description?.toLowerCase().includes('installment') || 
+                                                 transaction.metadata?.is_installment ||
+                                                 transaction.reference_number?.includes('INS-');
+                            
+                            // Get transaction number (1-based index)
+                            const transactionNumber = index + 1;
+                            
+                            // Determine status
+                            const isPaid = isIncoming && !isReversed;
+                            const isOverdue = isOutgoing && !isReversed && !isPaid;
+                            
                             return (
                               <div 
                                 key={transaction.id} 
-                                className={`group relative rounded-2xl border-2 transition-all duration-300 ${
+                                className={`group relative p-5 rounded-2xl border-2 transition-all duration-200 ${
                                   isExpanded
                                     ? 'border-indigo-500 shadow-xl'
                                     : isReversed
-                                    ? 'bg-white border-gray-300 opacity-60 hover:shadow-md'
+                                    ? 'bg-white border-gray-300 opacity-60 shadow-md hover:shadow-lg'
                                     : isPartial
-                                    ? 'bg-white border-yellow-400 shadow-md hover:shadow-lg'
+                                    ? 'bg-white border-yellow-300 shadow-md hover:shadow-lg'
                                     : isIncoming
                                     ? 'bg-white border-green-300 shadow-md hover:shadow-lg'
                                     : isOutgoing
                                     ? 'bg-white border-red-300 shadow-md hover:shadow-lg'
-                                    : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
+                                    : 'bg-white border-gray-200 shadow-md hover:shadow-lg'
                                 }`}
                               >
                                 {/* Header - Clickable */}
                                 <div 
-                                  className="flex items-center justify-between p-5 cursor-pointer"
+                                  className="flex items-center justify-between cursor-pointer"
                                   onClick={() => setExpandedTransaction(isExpanded ? null : transaction.id)}
                                 >
                                   {/* Left Section */}
                                   <div className="flex items-center gap-4 flex-1">
-                                    {/* Expand/Collapse Icon */}
-                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 ${
-                                      isExpanded ? 'bg-indigo-500 text-white' : 'bg-gray-200 hover:bg-gray-300 text-gray-600'
-                                    }`}>
-                                      <ChevronDown 
-                                        className={`w-5 h-5 transition-transform duration-200 ${
-                                          isExpanded ? 'rotate-180' : ''
-                                        }`}
-                                      />
-                                        </div>
-                                    
-                                    {/* Transaction Type Icon - Circular Badge */}
-                                    <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center shadow-lg ${
+                                    {/* Transaction Number Badge - Circular */}
+                                    <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg shadow-lg ${
                                       isReversed
-                                        ? 'bg-gray-400'
+                                        ? 'bg-gradient-to-br from-gray-400 to-gray-500'
                                         : isPartial
                                         ? 'bg-gradient-to-br from-yellow-500 to-yellow-600'
                                         : isIncome
@@ -1638,14 +1677,11 @@ const PaymentAccountManagement: React.FC = () => {
                                         ? 'bg-gradient-to-br from-red-500 to-red-600'
                                         : 'bg-gradient-to-br from-gray-400 to-gray-500'
                                     } text-white`}>
-                                      {isPartial && !isReversed ? (
-                                        <DollarSign className="w-6 h-6" />
-                                      ) : isIncoming && !isReversed ? (
-                                        <ArrowDownRight className="w-6 h-6" />
-                                      ) : isOutgoing && !isReversed ? (
-                                        <ArrowUpRight className="w-6 h-6" />
-                                      ) : (
-                                        <History className="w-6 h-6" />
+                                      {transactionNumber}
+                                      {isPaid && !isReversed && (
+                                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                                          <CheckCircle className="w-3 h-3 text-white" />
+                                        </div>
                                       )}
                                       {isReversed && (
                                         <div className="absolute -top-1 -right-1 w-5 h-5 bg-gray-500 rounded-full flex items-center justify-center border-2 border-white">
@@ -1657,44 +1693,107 @@ const PaymentAccountManagement: React.FC = () => {
                                     {/* Description and Details */}
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2 mb-2">
-                                        <h4 className="text-base font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">
-                                          {transaction.description || 'No description'}
-                                        </h4>
+                                        <Calendar className="w-4 h-4 flex-shrink-0 text-gray-600" />
+                                        <div className="text-base font-bold text-gray-900">
+                                          {isInstallment 
+                                            ? transaction.description || `Installment Payment ${index}`
+                                            : formattedDate
+                                          }
+                                        </div>
                                       </div>
                                       
-                                      <div className="flex items-center gap-3 flex-wrap">
-                                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                                          <Calendar className="w-3.5 h-3.5" />
-                                        {new Date(transaction.created_at).toLocaleString()}
-                                      </div>
-                                        
-                                      {transaction.reference_number && (
-                                          <span className="text-xs font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded border border-gray-200">
-                                          Ref: {transaction.reference_number}
-                                          </span>
+                                      {isInstallment && (
+                                        <div className="text-xs text-gray-600 mb-2">
+                                          {transactionDate.toLocaleString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric', 
+                                            year: 'numeric',
+                                            hour: 'numeric',
+                                            minute: '2-digit',
+                                            hour12: true
+                                          })}
+                                        </div>
                                       )}
+                                      
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {/* Status Badge */}
+                                        {isOverdue && !isReversed && (
+                                          <>
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-red-100 text-red-800 border border-red-200">
+                                              <AlertTriangle className="w-3.5 h-3.5" />
+                                              overdue
+                                            </span>
+                                            <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                                              1 days late
+                                            </span>
+                                          </>
+                                        )}
                                         
-                                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold uppercase ${
-                                          isPartial && !isReversed
-                                            ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
-                                            : isIncoming && !isReversed
-                                            ? 'bg-green-100 text-green-800 border border-green-200'
-                                            : isOutgoing && !isReversed
-                                            ? 'bg-red-100 text-red-800 border border-red-200'
-                                            : 'bg-gray-100 text-gray-700 border border-gray-200'
-                                      }`}>
-                                          {formatTransactionType(transaction.transaction_type)}
-                                        </span>
+                                        {isPaid && !isReversed && (
+                                          <>
+                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-green-100 text-green-800 border border-green-200">
+                                              <CheckCircle className="w-3.5 h-3.5" />
+                                              paid
+                                            </span>
+                                            <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200">
+                                              Paid on {formattedDate}
+                                            </span>
+                                          </>
+                                        )}
+                                        
+                                        {isPartial && !isReversed && (
+                                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-yellow-100 text-yellow-800 border border-yellow-200">
+                                            <DollarSign className="w-3.5 h-3.5" />
+                                            partial
+                                          </span>
+                                        )}
                                         
                                         {isReversed && (
-                                          <span className="text-xs font-semibold text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200">
-                                            Reversed
-                                        </span>
+                                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-gray-100 text-gray-800 border border-gray-200">
+                                            <X className="w-3.5 h-3.5" />
+                                            reversed
+                                          </span>
+                                        )}
+                                        
+                                        {!isOverdue && !isPaid && !isPartial && !isReversed && (
+                                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase ${
+                                            isIncoming
+                                              ? 'bg-green-100 text-green-800 border border-green-200'
+                                              : isOutgoing
+                                              ? 'bg-red-100 text-red-800 border border-red-200'
+                                              : 'bg-gray-100 text-gray-700 border border-gray-200'
+                                          }`}>
+                                            {formatTransactionType(transaction.transaction_type)}
+                                          </span>
                                         )}
                                       </div>
-                                      </div>
+                                      
+                                      {/* Installment Payment Details */}
+                                      {isInstallment && (
+                                        <div className="space-y-1 mt-2">
+                                          {transaction.metadata?.payment_method && (
+                                            <div className="flex items-center gap-2 text-xs">
+                                              <span className="text-gray-600">Method:</span>
+                                              <span className="font-semibold text-gray-900">{transaction.metadata.payment_method}</span>
+                                            </div>
+                                          )}
+                                          {transaction.reference_number && (
+                                            <div className="flex items-center gap-2 text-xs">
+                                              <span className="text-gray-600">Reference:</span>
+                                              <span className="font-semibold text-gray-900">{transaction.reference_number}</span>
+                                            </div>
+                                          )}
+                                          {transaction.metadata?.notes && (
+                                            <div className="text-xs mt-2 p-2 bg-white rounded-lg border border-gray-200">
+                                              <span className="text-gray-600">Notes: </span>
+                                              <span className="text-gray-700">{transaction.metadata.notes}</span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
-                                    
+                                  </div>
+                                  
                                   {/* Right Section - Amount */}
                                   <div className="flex-shrink-0 text-right ml-4">
                                     <div className={`text-2xl font-bold mb-1 ${
@@ -1707,19 +1806,57 @@ const PaymentAccountManagement: React.FC = () => {
                                         : isOutgoing
                                         ? 'text-red-700'
                                         : 'text-gray-900'
-                                      }`}>
+                                    }`}>
                                       {isPartial && !isReversed && '~'}
                                       {isIncoming && !isReversed && !isPartial && '+'}
                                       {isOutgoing && !isReversed && !isPartial && '-'}
-                                        {formatMoney(transaction.amount, selectedAccount.currency)}
-                                      </div>
+                                      {formatMoney(transaction.amount, selectedAccount.currency)}
+                                    </div>
                                     
-                                    <div className="text-xs text-gray-500 font-medium">
-                                      Balance: {formatMoney(transaction.balance_after, selectedAccount.currency)}
-                                    </div>
-                                    </div>
+                                    {isPaid && !isReversed && (
+                                      <div className="flex items-center justify-end gap-1 text-xs text-green-600 font-medium mt-1">
+                                        <CheckCircle className="w-3 h-3" />
+                                        <span>Completed</span>
+                                      </div>
+                                    )}
+                                    
+                                    {!isInstallment && (
+                                      <div className="text-xs text-gray-500 font-medium mt-1">
+                                        Balance: {formatMoney(transaction.balance_after, selectedAccount.currency)}
+                                      </div>
+                                    )}
+                                    
+                                    {isInstallment && transaction.reference_number && (
+                                      <div className="text-xs text-gray-600 font-medium mt-1">
+                                        Reference: {transaction.reference_number}
+                                      </div>
+                                    )}
                                   </div>
-                                  
+                                </div>
+                                
+                                {/* Connecting Line */}
+                                {index < accountTransactions.filter(t => {
+                                  if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
+                                  if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
+                                  if (dateFilter.end) {
+                                    const endDate = new Date(dateFilter.end);
+                                    endDate.setHours(23, 59, 59, 999);
+                                    if (new Date(t.created_at) > endDate) return false;
+                                  }
+                                  if (searchQuery) {
+                                    const query = searchQuery.toLowerCase();
+                                    const matchesDescription = t.description?.toLowerCase().includes(query);
+                                    const matchesReference = t.reference_number?.toLowerCase().includes(query);
+                                    const matchesAmount = formatMoney(t.amount, selectedAccount?.currency || 'TZS').toLowerCase().includes(query);
+                                    if (!matchesDescription && !matchesReference && !matchesAmount) return false;
+                                  }
+                                  return true;
+                                }).length - 1 && (
+                                  <div className={`absolute left-7 top-full w-0.5 h-3 ${
+                                    isReversed ? 'bg-gray-300' : isPartial ? 'bg-yellow-300' : isIncome ? 'bg-yellow-300' : isIncoming ? 'bg-green-300' : isOutgoing ? 'bg-red-300' : 'bg-gray-300'
+                                  }`} />
+                                )}
+                                
                                 {/* Separator Line - Only show when expanded */}
                                 {isExpanded && (
                                   <div className="mt-0 pt-5 border-t-2 border-gray-200 relative">
@@ -1737,6 +1874,14 @@ const PaymentAccountManagement: React.FC = () => {
                                     formatMoney={formatMoney}
                                     saleDetails={saleDetails[transaction.id]}
                                     loadingSaleDetails={loadingSaleDetails[transaction.id]}
+                                    onViewDetails={(transaction) => {
+                                      setSelectedTransaction(transaction);
+                                      setShowTransactionDetailsModal(true);
+                                    }}
+                                    onReverse={(transaction) => {
+                                      setReversalTransaction(transaction);
+                                      setShowReversalModal(true);
+                                    }}
                                     onFetchSaleDetails={async (saleId: string) => {
                                       if (saleDetails[transaction.id]) return; // Already loaded
                                       setLoadingSaleDetails(prev => ({ ...prev, [transaction.id]: true }));
@@ -1831,7 +1976,7 @@ const PaymentAccountManagement: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowHistoryModal(false)}
-                className="w-full px-6 py-3.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl text-lg"
+                className="w-full px-6 py-3.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl"
               >
                 Close
               </button>
@@ -1904,6 +2049,8 @@ interface TransactionExpandedContentProps {
   saleDetails: any;
   loadingSaleDetails: boolean;
   onFetchSaleDetails: (saleId: string) => Promise<void>;
+  onViewDetails: (transaction: Transaction) => void;
+  onReverse: (transaction: Transaction) => void;
 }
 
 const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
@@ -1912,7 +2059,9 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
   formatMoney,
   saleDetails,
   loadingSaleDetails,
-  onFetchSaleDetails
+  onFetchSaleDetails,
+  onViewDetails,
+  onReverse
 }) => {
   const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
   const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
@@ -1966,148 +2115,6 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                         </div>
                                       </div>
                                     </div>
-
-                                    {/* Transaction Details Section - Additional Info */}
-                                    <div className="bg-white p-4 rounded-xl border-2 border-gray-200">
-                                      <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-3">
-                                        <Info className="w-5 h-5 text-indigo-600" />
-                                        Additional Details
-                                      </h4>
-                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                          <div className="text-xs text-gray-500 font-medium mb-1">Account</div>
-                                          <div className="text-sm font-semibold text-gray-900">
-                                            {selectedAccount?.name || 'Unknown Account'}
-                                          </div>
-                                          <div className="text-xs text-gray-600 mt-1">
-                                            {selectedAccount?.type || 'N/A'} • {selectedAccount?.currency || 'TZS'}
-                                          </div>
-                                        </div>
-                                        {transaction.reference_number && (
-                                          <div>
-                                            <div className="text-xs text-gray-500 font-medium mb-1">Reference Number</div>
-                                            <div className="text-sm font-semibold text-gray-900 font-mono bg-gray-50 px-2 py-1 rounded border border-gray-200">
-                                              {transaction.reference_number}
-                                            </div>
-                                          </div>
-                                        )}
-                                        
-                                        {/* Customer Information */}
-                                        {(transaction.metadata?.customer_name || transaction.metadata?.customer_id || transaction.metadata?.customer) && (
-                                          <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                            <div className="text-xs text-blue-600 font-medium mb-2 flex items-center gap-1">
-                                              <User className="w-3.5 h-3.5" />
-                                              Customer
-                                            </div>
-                                            <div className="text-sm font-semibold text-gray-900 mb-2">
-                                              {transaction.metadata?.customer_name || transaction.metadata?.customer?.name || 'Unknown Customer'}
-                                            </div>
-                                            <div className="space-y-1">
-                                              {transaction.metadata?.customer_phone && (
-                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
-                                                  <Phone className="w-3 h-3" />
-                                                  {transaction.metadata.customer_phone}
-                                                </div>
-                                              )}
-                                              {transaction.metadata?.customer_email && (
-                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
-                                                  <Mail className="w-3 h-3" />
-                                                  {transaction.metadata.customer_email}
-                                                </div>
-                                              )}
-                                              {transaction.metadata?.customer_address && (
-                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
-                                                  <MapPin className="w-3 h-3" />
-                                                  {transaction.metadata.customer_address}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
-                                        
-                                        {/* Supplier Information */}
-                                        {transaction.metadata?.supplier && (
-                                          <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
-                                            <div className="text-xs text-purple-600 font-medium mb-2 flex items-center gap-1">
-                                              <Building className="w-3.5 h-3.5" />
-                                              Supplier
-                                            </div>
-                                            <div className="text-sm font-semibold text-gray-900 mb-2">
-                                              {typeof transaction.metadata.supplier === 'string' 
-                                                ? transaction.metadata.supplier 
-                                                : transaction.metadata.supplier.name || 'Unknown Supplier'}
-                                            </div>
-                                            <div className="space-y-1">
-                                              {transaction.metadata?.supplier_phone && (
-                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
-                                                  <Phone className="w-3 h-3" />
-                                                  {transaction.metadata.supplier_phone}
-                                                </div>
-                                              )}
-                                              {transaction.metadata?.supplier_email && (
-                                                <div className="text-xs text-gray-600 flex items-center gap-1.5">
-                                                  <Mail className="w-3 h-3" />
-                                                  {transaction.metadata.supplier_email}
-                                                </div>
-                                              )}
-                                            </div>
-                                          </div>
-                                        )}
-                                        
-                                        {/* Payment Method */}
-                                        {transaction.metadata?.payment_method && (
-                                          <div>
-                                            <div className="text-xs text-gray-500 font-medium mb-1">Payment Method</div>
-                                            <div className="text-sm font-semibold text-gray-900">
-                                              {transaction.metadata.payment_method}
-                                            </div>
-                                          </div>
-                                        )}
-                                        
-                                        {/* Source Type */}
-                                        {transaction.metadata?.type && (
-                                          <div>
-                                            <div className="text-xs text-gray-500 font-medium mb-1">Source Type</div>
-                                            <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                              {transaction.metadata.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                                        </span>
-                                          </div>
-                                        )}
-                                        
-                                        {/* PO Reference */}
-                                        {transaction.metadata?.po_reference && (
-                                          <div>
-                                            <div className="text-xs text-gray-500 font-medium mb-1">Purchase Order</div>
-                                            <div className="text-sm font-semibold text-purple-700 bg-purple-50 px-2 py-1 rounded border border-purple-200 font-mono">
-                                              {transaction.metadata.po_reference}
-                                            </div>
-                                      </div>
-                                    )}
-                                        
-                                        {/* Sale Reference */}
-                                        {transaction.metadata?.sale_reference && (
-                                          <div>
-                                            <div className="text-xs text-gray-500 font-medium mb-1">Sale Reference</div>
-                                            <div className="text-sm font-semibold text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200 font-mono">
-                                              {transaction.metadata.sale_reference}
-                                  </div>
-                                          </div>
-                                        )}
-                                        
-                                        {/* Notes */}
-                                        {transaction.metadata?.notes && (
-                                          <div className="md:col-span-2">
-                                            <div className="text-xs text-gray-500 font-medium mb-1 flex items-center gap-1">
-                                              <FileTextIcon className="w-3.5 h-3.5" />
-                                              Notes
-                                </div>
-                                            <div className="text-sm text-gray-900 bg-gray-50 p-2 rounded border border-gray-200">
-                                              {transaction.metadata.notes}
-                              </div>
-                                          </div>
-                                        )}
-                              </div>
-                            </div>
                             
 
 
@@ -2141,11 +2148,11 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                                   }`}>
                                                     {saleDetails.status}
                                                   </span>
-                                      </div>
+                                                </div>
                                                 <div>
                                                   <div className="text-xs text-gray-500 font-medium mb-1">Cashier</div>
                                                   <div className="text-sm font-semibold text-gray-900">{saleDetails.cashierName || 'Unknown'}</div>
-                                    </div>
+                                                </div>
                                                 <div>
                                                   <div className="text-xs text-gray-500 font-medium mb-1">Date & Time</div>
                                                   <div className="text-sm font-semibold text-gray-900">
@@ -2158,8 +2165,8 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                                     })}
                                                   </div>
                                                 </div>
-                                    </div>
-                                  </div>
+                                              </div>
+                                            </div>
                                   
                                             {/* Customer Information */}
                                             {saleDetails.customer && (
@@ -2168,67 +2175,45 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                                   <User className="w-5 h-5 text-blue-600" />
                                                   Customer Information
                                                 </h4>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                  <div>
-                                                    <div className="text-xs text-gray-500 font-medium mb-1">Name</div>
-                                                    <div className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                                                      {saleDetails.customer.name}
-                                                      {saleDetails.customer.customer_tag && (
-                                                        <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                                          {saleDetails.customer.customer_tag.toUpperCase()}
-                                                        </span>
-                                                      )}
-                                                    </div>
+                                                <div className="space-y-4">
+                                                  <div className="flex justify-between items-center">
+                                                    <span className="text-sm font-medium text-gray-600">Name:</span>
+                                                    <span className="text-base font-bold text-gray-900">{saleDetails.customer.name}</span>
                                                   </div>
                                                   {saleDetails.customer.phone && (
-                                                    <div>
-                                                      <div className="text-xs text-gray-500 font-medium mb-1">Phone</div>
-                                                      <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
-                                                        <Phone className="w-3.5 h-3.5" />
-                                                        {saleDetails.customer.phone}
-                                                      </div>
-                                                    </div>
-                                                  )}
-                                                  {saleDetails.customer.email && (
-                                                    <div>
-                                                      <div className="text-xs text-gray-500 font-medium mb-1">Email</div>
-                                                      <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
-                                                        <Mail className="w-3.5 h-3.5" />
-                                                        {saleDetails.customer.email}
-                                                      </div>
+                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                                      <span className="text-sm font-medium text-gray-600">Phone:</span>
+                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.phone}</span>
                                                     </div>
                                                   )}
                                                   {saleDetails.customer.city && (
-                                                    <div>
-                                                      <div className="text-xs text-gray-500 font-medium mb-1">Location</div>
-                                                      <div className="text-sm font-semibold text-gray-900 flex items-center gap-1">
-                                                        <MapPin className="w-3.5 h-3.5" />
-                                                        {saleDetails.customer.city}
-                                                      </div>
+                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                                      <span className="text-sm font-medium text-gray-600">Location:</span>
+                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.city}</span>
                                                     </div>
                                                   )}
                                                   {saleDetails.customer.loyalty_level && (
-                                                    <div>
-                                                      <div className="text-xs text-gray-500 font-medium mb-1">Loyalty Level</div>
-                                                      <div className="text-sm font-semibold text-gray-900">{saleDetails.customer.loyalty_level}</div>
+                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                                      <span className="text-sm font-medium text-gray-600">Loyalty Level:</span>
+                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.loyalty_level}</span>
                                                     </div>
                                                   )}
                                                   {saleDetails.customer.total_spent !== undefined && (
-                                                    <div>
-                                                      <div className="text-xs text-gray-500 font-medium mb-1">Total Spent</div>
-                                                      <div className="text-sm font-semibold text-gray-900">{formatMoney(saleDetails.customer.total_spent || 0, selectedAccount?.currency)}</div>
+                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                                      <span className="text-sm font-medium text-gray-600">Total Spent:</span>
+                                                      <span className="text-base font-bold text-gray-900">{formatMoney(saleDetails.customer.total_spent || 0, selectedAccount?.currency)}</span>
                                                     </div>
                                                   )}
                                                   {saleDetails.customer.points !== undefined && (
-                                                    <div>
-                                                      <div className="text-xs text-gray-500 font-medium mb-1">Points</div>
-                                                      <div className="text-sm font-semibold text-gray-900">{saleDetails.customer.points || 0}</div>
+                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                                      <span className="text-sm font-medium text-gray-600">Points:</span>
+                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.points || 0}</span>
                                                     </div>
                                                   )}
                                                   {saleDetails.customer.last_visit && (
-                                                    <div>
-                                                      <div className="text-xs text-gray-500 font-medium mb-1">Last Visit</div>
-                                                      <div className="text-sm font-semibold text-gray-900">
+                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                                      <span className="text-sm font-medium text-gray-600">Last Visit:</span>
+                                                      <span className="text-base font-bold text-gray-900">
                                                         {new Date(saleDetails.customer.last_visit).toLocaleString('en-TZ', {
                                                           year: 'numeric',
                                                           month: 'short',
@@ -2236,7 +2221,7 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                                           hour: '2-digit',
                                                           minute: '2-digit'
                                                         })}
-                                                      </div>
+                                                      </span>
                                                     </div>
                                                   )}
                                                 </div>
@@ -2272,7 +2257,7 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                             {/* Financial Summary */}
                                             <div className="bg-white rounded-lg p-4 border border-gray-200">
                                               <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                                                <DollarSign className="w-5 h-5 text-blue-600" />
+                                                <DollarSign className="w-5 h-5 text-green-600" />
                                                 Financial Summary
                                               </h4>
                                               <div className="space-y-2">
@@ -2353,8 +2338,7 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setSelectedTransaction(transaction);
-                                            setShowTransactionDetailsModal(true);
+                                            onViewDetails(transaction);
                                           }}
                                           className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                                         >
@@ -2363,18 +2347,17 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                         </button>
                                         
                                         {!isReversed && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setReversalTransaction(transaction);
-                                        setShowReversalModal(true);
-                                      }}
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onReverse(transaction);
+                                            }}
                                             className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
-                                    >
+                                          >
                                             <RepeatIcon className="w-4 h-4" />
-                                      Reverse
-                                    </button>
-                                  )}
+                                            Reverse
+                                          </button>
+                                        )}
                                         
                                         <button
                                           onClick={(e) => {
@@ -2403,111 +2386,8 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                   )}
                                 </div>
                                     </div>
-                                )}
-                                
-                                {/* Connecting Line */}
-                                {index < accountTransactions.filter(t => {
-                                  if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
-                                  if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
-                                  if (dateFilter.end) {
-                                    const endDate = new Date(dateFilter.end);
-                                    endDate.setHours(23, 59, 59, 999);
-                                    if (new Date(t.created_at) > endDate) return false;
-                                  }
-                                  if (searchQuery) {
-                                    const query = searchQuery.toLowerCase();
-                                    const matchesDescription = t.description?.toLowerCase().includes(query);
-                                    const matchesReference = t.reference_number?.toLowerCase().includes(query);
-                                    const matchesAmount = formatMoney(t.amount, selectedAccount?.currency || 'TZS').toLowerCase().includes(query);
-                                    if (!matchesDescription && !matchesReference && !matchesAmount) return false;
-                                  }
-                                  return true;
-                                }).length - 1 && (
-                                  <div className={`absolute left-7 top-full w-0.5 h-3 ${
-                                    isReversed ? 'bg-gray-300' : isPartial ? 'bg-yellow-300' : isIncome ? 'bg-yellow-300' : isIncoming ? 'bg-green-300' : isOutgoing ? 'bg-red-300' : 'bg-gray-300'
-                                  }`} />
-                                )}
                               </div>
-                            );
-                          })}
-                      </div>
-                    )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowHistoryModal(false)}
-                className="w-full px-6 py-3.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl text-lg"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manual Transaction Modal */}
-      {showManualTransactionModal && manualTransactionAccount && (
-        <ManualTransactionModal
-          account={manualTransactionAccount}
-          onClose={() => {
-            setShowManualTransactionModal(false);
-            setManualTransactionAccount(null);
-          }}
-          onSuccess={() => {
-            fetchAccounts();
-          }}
-        />
-      )}
-
-      {/* Transfer Modal */}
-      {showTransferModal && (
-        <TransferModal
-          accounts={accounts}
-          onClose={() => setShowTransferModal(false)}
-          onSuccess={() => {
-            fetchAccounts();
-          }}
-        />
-      )}
-
-      {/* Transaction Reversal Modal */}
-      {showReversalModal && reversalTransaction && selectedAccount && (
-        <TransactionReversalModal
-          transaction={reversalTransaction}
-          accountName={selectedAccount.name}
-          accountCurrency={selectedAccount.currency || 'TZS'}
-          onClose={() => {
-            setShowReversalModal(false);
-            setReversalTransaction(null);
-          }}
-          onSuccess={() => {
-            fetchAccounts();
-            // Reload the transactions for the selected account
-            if (selectedAccount) {
-              handleViewHistory(selectedAccount);
-            }
-          }}
-        />
-      )}
-
-      {/* Transaction Details Modal */}
-      <TransactionDetailsModal
-        isOpen={showTransactionDetailsModal}
-        onClose={() => {
-          setShowTransactionDetailsModal(false);
-          setSelectedTransaction(null);
-        }}
-        transaction={selectedTransaction}
-      />
-    </div>
-  );
-};
+                          );
+                        };
 
 export default PaymentAccountManagement;

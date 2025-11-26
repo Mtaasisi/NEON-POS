@@ -40,6 +40,21 @@ export interface RoleWidgetPermissions {
   topProductsWidget: boolean;
   expensesWidget: boolean;
   staffPerformanceWidget: boolean;
+  // New feature widgets
+  tradeInWidget: boolean;
+  installmentsWidget: boolean;
+  loyaltyWidget: boolean;
+  smsWidget: boolean;
+  sparePartsWidget: boolean;
+  storageRoomsWidget: boolean;
+  stockTransfersWidget: boolean;
+  specialOrdersWidget: boolean;
+  backupWidget: boolean;
+  repairWidget: boolean;
+  // AI-powered widgets
+  aiInsightsWidget: boolean;
+  predictiveAnalyticsWidget: boolean;
+  alertSystemWidget: boolean;
 }
 
 export interface RoleQuickActionPermissions {
@@ -129,6 +144,21 @@ const adminWidgetPermissions: RoleWidgetPermissions = {
   topProductsWidget: true,
   expensesWidget: true,
   staffPerformanceWidget: true,
+  // New feature widgets
+  tradeInWidget: true,
+  installmentsWidget: true,
+  loyaltyWidget: true,
+  smsWidget: true,
+  sparePartsWidget: true,
+  storageRoomsWidget: true,
+  stockTransfersWidget: true,
+  specialOrdersWidget: true,
+  backupWidget: true,
+  repairWidget: true,
+  // AI-powered widgets
+  aiInsightsWidget: true,
+  predictiveAnalyticsWidget: true,
+  alertSystemWidget: true,
 };
 
 /**
@@ -168,6 +198,21 @@ const technicianWidgetPermissions: RoleWidgetPermissions = {
   topProductsWidget: false,
   expensesWidget: false,
   staffPerformanceWidget: false,
+  // New feature widgets
+  tradeInWidget: true,
+  installmentsWidget: false,
+  loyaltyWidget: false,
+  smsWidget: false,
+  sparePartsWidget: true,
+  storageRoomsWidget: true,
+  stockTransfersWidget: true,
+  specialOrdersWidget: false,
+  backupWidget: false,
+  repairWidget: true,
+  // AI-powered widgets
+  aiInsightsWidget: false,
+  predictiveAnalyticsWidget: false,
+  alertSystemWidget: true,
 };
 
 /**
@@ -342,6 +387,21 @@ const storeKeeperWidgetPermissions: RoleWidgetPermissions = {
   topProductsWidget: true, // Useful for inventory management
   expensesWidget: false,
   staffPerformanceWidget: false,
+  // New feature widgets
+  tradeInWidget: false,
+  installmentsWidget: false,
+  loyaltyWidget: false,
+  smsWidget: false,
+  sparePartsWidget: true, // Core feature for store keeper
+  storageRoomsWidget: true, // Core feature for store keeper
+  stockTransfersWidget: true, // Core feature for store keeper
+  specialOrdersWidget: false,
+  backupWidget: false,
+  repairWidget: false,
+  // AI-powered widgets
+  aiInsightsWidget: false,
+  predictiveAnalyticsWidget: false,
+  alertSystemWidget: true,
 };
 
 /**

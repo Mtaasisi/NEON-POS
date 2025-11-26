@@ -155,14 +155,17 @@ export const AlertSystemWidget: React.FC<AlertSystemWidgetProps> = ({ className 
     }
 
     // System alerts (simulated)
-    const systemAlerts = [
+    const systemAlerts: Alert[] = [
       {
         id: 'backup-due',
         type: 'info' as const,
         title: 'Backup Due',
         message: 'Daily backup is due. Consider running a backup now.',
+        timestamp: new Date(),
+        acknowledged: false,
         category: 'system' as const,
         priority: 'low' as const,
+        actionable: false,
         autoExpire: true,
         expireTime: 120 // 2 hours
       },
@@ -171,6 +174,8 @@ export const AlertSystemWidget: React.FC<AlertSystemWidgetProps> = ({ className 
         type: 'info' as const,
         title: 'Software Update Available',
         message: 'A new version of the POS system is available.',
+        timestamp: new Date(),
+        acknowledged: false,
         category: 'system' as const,
         priority: 'low' as const,
         actionable: true,

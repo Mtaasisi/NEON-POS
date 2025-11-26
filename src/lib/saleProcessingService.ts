@@ -196,6 +196,7 @@ class SaleProcessingService {
       }
 
       // For parent variants, calculate stock from children
+      // ✅ ALLOW: If parent has no children, use parent's own stock
       let availableStock = variant.quantity || 0;
       if (variant.is_parent || variant.variant_type === 'parent') {
         const { data: children } = await supabase
@@ -204,7 +205,15 @@ class SaleProcessingService {
           .eq('parent_variant_id', variantId)
           .eq('is_active', true);
         
-        availableStock = children?.reduce((sum, child) => sum + (child.quantity || 0), 0) || 0;
+        const childrenStock = children?.reduce((sum, child) => sum + (child.quantity || 0), 0) || 0;
+        
+        // ✅ ALLOW: If parent has no children, allow selling parent directly using its own stock
+        if (childrenStock > 0) {
+          availableStock = childrenStock; // Use children stock if available
+        } else {
+          // No children - use parent's own stock
+          availableStock = variant.quantity || 0;
+        }
       }
 
       // Check if requested quantity is available
@@ -227,6 +236,180 @@ class SaleProcessingService {
         availableStock: 0,
         error: error instanceof Error ? error.message : 'Failed to check stock availability'
       };
+    }
+  }
+
+  // ✅ OPTIMIZED: Batch check stock availability for multiple variants at once
+  async checkStockAvailabilityBatch(items: Array<{ variantId: string; quantity: number }>): Promise<Map<string, {
+    available: boolean;
+    availableStock: number;
+    error?: string;
+  }>> {
+    const results = new Map<string, { available: boolean; availableStock: number; error?: string }>();
+    
+    try {
+      if (items.length === 0) {
+        return results;
+      }
+
+      // Filter valid UUIDs
+      const validItems = items.filter(item => isValidUuid(item.variantId));
+      const variantIds = validItems.map(item => item.variantId);
+
+      if (variantIds.length === 0) {
+        // Return errors for invalid UUIDs
+        items.forEach(item => {
+          if (!isValidUuid(item.variantId)) {
+            results.set(item.variantId, {
+              available: false,
+              availableStock: 0,
+              error: 'Invalid variant ID format'
+            });
+          }
+        });
+        return results;
+      }
+
+      // ✅ OPTIMIZED: Single batch query for all variants
+      const [variantsResult, inventoryResult] = await Promise.all([
+        supabase
+          .from('lats_product_variants')
+          .select('id, quantity, is_parent, variant_type, parent_variant_id, is_active')
+          .in('id', variantIds),
+        supabase
+          .from('inventory_items')
+          .select('id, status, product_id, variant_id')
+          .in('id', variantIds)
+      ]);
+
+      const variants = variantsResult.data || [];
+      const inventoryItems = inventoryResult.data || [];
+
+      // Create maps for quick lookup
+      const variantMap = new Map(variants.map(v => [v.id, v]));
+      const inventoryMap = new Map(inventoryItems.map(i => [i.id, i]));
+
+      // Identify parent variants that need child stock calculation
+      const parentVariants = variants.filter(v => v.is_parent || v.variant_type === 'parent');
+      const parentVariantIds = parentVariants.map(v => v.id);
+
+      // ✅ OPTIMIZED: Batch query for all parent variant children at once
+      let childrenMap = new Map<string, number>();
+      if (parentVariantIds.length > 0) {
+        const { data: allChildren } = await supabase
+          .from('lats_product_variants')
+          .select('parent_variant_id, quantity')
+          .in('parent_variant_id', parentVariantIds)
+          .eq('is_active', true);
+
+        // Aggregate children quantities by parent
+        allChildren?.forEach(child => {
+          const parentId = child.parent_variant_id;
+          const currentSum = childrenMap.get(parentId) || 0;
+          childrenMap.set(parentId, currentSum + (child.quantity || 0));
+        });
+      }
+
+      // Process each item
+      for (const item of validItems) {
+        const variant = variantMap.get(item.variantId);
+        const inventoryItem = inventoryMap.get(item.variantId);
+
+        // Handle inventory items
+        if (inventoryItem && !variant) {
+          if (inventoryItem.status !== 'available') {
+            results.set(item.variantId, {
+              available: false,
+              availableStock: 0,
+              error: `Item is not available for sale (status: ${inventoryItem.status})`
+            });
+            continue;
+          }
+          if (item.quantity > 1) {
+            results.set(item.variantId, {
+              available: false,
+              availableStock: 1,
+              error: 'Serial number devices can only be sold one at a time'
+            });
+            continue;
+          }
+          results.set(item.variantId, {
+            available: true,
+            availableStock: 1
+          });
+          continue;
+        }
+
+        // Handle variants
+        if (!variant) {
+          results.set(item.variantId, {
+            available: false,
+            availableStock: 0,
+            error: 'Variant not found'
+          });
+          continue;
+        }
+
+        if (variant.is_active === false) {
+          results.set(item.variantId, {
+            available: false,
+            availableStock: 0,
+            error: 'Variant is not active'
+          });
+          continue;
+        }
+
+        // Calculate available stock (use children stock for parents if available)
+        // ✅ ALLOW: If parent has no children, use parent's own stock
+        let availableStock = variant.quantity || 0;
+        if (variant.is_parent || variant.variant_type === 'parent') {
+          const childrenStock = childrenMap.get(item.variantId) || 0;
+          if (childrenStock > 0) {
+            availableStock = childrenStock; // Use children stock if available
+          } else {
+            // No children - use parent's own stock
+            availableStock = variant.quantity || 0;
+          }
+        }
+
+        if (availableStock < item.quantity) {
+          results.set(item.variantId, {
+            available: false,
+            availableStock,
+            error: `Insufficient stock. Available: ${availableStock}, Requested: ${item.quantity}`
+          });
+          continue;
+        }
+
+        results.set(item.variantId, {
+          available: true,
+          availableStock
+        });
+      }
+
+      // Handle invalid UUIDs
+      items.forEach(item => {
+        if (!isValidUuid(item.variantId) && !results.has(item.variantId)) {
+          results.set(item.variantId, {
+            available: false,
+            availableStock: 0,
+            error: 'Invalid variant ID format'
+          });
+        }
+      });
+
+      return results;
+    } catch (error) {
+      console.error('❌ Error in batch stock check:', error);
+      // Return errors for all items on failure
+      items.forEach(item => {
+        results.set(item.variantId, {
+          available: false,
+          availableStock: 0,
+          error: error instanceof Error ? error.message : 'Failed to check stock availability'
+        });
+      });
+      return results;
     }
   }
 
@@ -400,6 +583,26 @@ class SaleProcessingService {
       const variantDataMap = new Map(variants?.map(v => [v.id, v]) || []);
       const inventoryItemMap = new Map(inventoryItems?.map(i => [i.id, i]) || []);
 
+      // ✅ OPTIMIZED: Batch query all parent variant children at once
+      const parentVariants = variants?.filter(v => v.is_parent || v.variant_type === 'parent') || [];
+      const parentVariantIds = parentVariants.map(v => v.id);
+      const childrenStockMap = new Map<string, number>();
+      
+      if (parentVariantIds.length > 0) {
+        const { data: allChildren } = await supabase
+          .from('lats_product_variants')
+          .select('parent_variant_id, quantity')
+          .in('parent_variant_id', parentVariantIds)
+          .eq('is_active', true);
+        
+        // Aggregate children quantities by parent
+        allChildren?.forEach(child => {
+          const parentId = child.parent_variant_id;
+          const currentSum = childrenStockMap.get(parentId) || 0;
+          childrenStockMap.set(parentId, currentSum + (child.quantity || 0));
+        });
+      }
+
       // Validate stock and calculate costs in single pass
       const itemsWithCosts: SaleItem[] = [];
       
@@ -526,18 +729,21 @@ class SaleProcessingService {
           continue; // Skip to next item
         }
         
-        // For parent variants, calculate stock from children
-        let availableStock = variantData.quantity;
-        if (variantData.is_parent || variantData.variant_type === 'parent') {
-          console.warn('⚠️ Attempting to sell parent variant - stock calculated from children');
-          const { data: children } = await supabase
-            .from('lats_product_variants')
-            .select('quantity')
-            .eq('parent_variant_id', item.variantId)
-            .eq('is_active', true);
-          
-          availableStock = children?.reduce((sum, child) => sum + (child.quantity || 0), 0) || 0;
-        }
+          // For parent variants, calculate stock from children
+          // ✅ OPTIMIZED: Use pre-fetched children stock from batch query
+          // ✅ ALLOW: If parent has no children, use parent's own stock
+          let availableStock = variantData.quantity;
+          if (variantData.is_parent || variantData.variant_type === 'parent') {
+            const childrenStock = childrenStockMap.get(item.variantId) || 0;
+            if (childrenStock > 0) {
+              console.warn('⚠️ Attempting to sell parent variant - stock calculated from children');
+              availableStock = childrenStock; // Use children stock if available
+            } else {
+              // No children - use parent's own stock
+              console.log('ℹ️ Parent variant has no children - using parent stock directly');
+              availableStock = variantData.quantity || 0;
+            }
+          }
         
         if (availableStock < item.quantity) {
           return {
@@ -1080,90 +1286,113 @@ class SaleProcessingService {
 
         console.log('💳 Processing payment mirroring for', payments.length, 'payment(s)');
 
-        for (const p of payments) {
-          if (!p?.amount || p.amount <= 0) {
-            console.log('⏭️ Skipping payment with invalid amount:', p?.amount);
-            continue;
+        // ✅ OPTIMIZED: Filter valid payments first
+        const validPayments = payments.filter(p => p?.amount && p.amount > 0);
+        
+        if (validPayments.length === 0) {
+          console.log('ℹ️  No valid payments to process');
+        } else {
+          // ✅ OPTIMIZED: Batch fetch all account balances at once
+          const accountIds = [...new Set(validPayments.map(p => p.accountId).filter(Boolean) as string[])];
+          const accountDataMap = new Map<string, any>();
+          
+          if (accountIds.length > 0) {
+            const { data: accounts } = await supabase
+              .from('finance_accounts')
+              .select('id, balance, branch_id')
+              .in('id', accountIds);
+            
+            accounts?.forEach(acct => {
+              accountDataMap.set(acct.id, acct);
+            });
           }
 
-          // Skip customer_payments mirroring - rely on triggers instead
-          console.log(`ℹ️  Payment ${p.method} - ${p.amount} will be auto-synced by database triggers`);
+          // ✅ OPTIMIZED: Prepare all updates and inserts for batch processing
+          const accountUpdates: Array<{ id: string; balance: number; updated_at: string }> = [];
+          const transactionInserts: Array<any> = [];
 
-          // Update finance accounts and account transactions if accountId is provided
-          if (p.accountId) {
-            try {
-              console.log('💰 Updating finance account:', p.accountId);
+          for (const p of validPayments) {
+            // Skip customer_payments mirroring - rely on triggers instead
+            console.log(`ℹ️  Payment ${p.method} - ${p.amount} will be auto-synced by database triggers`);
 
-              // Use balance before storage/update with utility function
-              const { balance: originalBalance, accountData: acct, isValid } = await getAccountBalanceBeforeStorage(p.accountId);
-
-              if (!isValid || !acct) {
-                console.warn('⚠️ Failed to fetch finance account balance before storage');
-                continue; // Skip this payment's account updates
-              }
-
-              if (typeof originalBalance === 'number') {
-                // Example: Log or use the original balance before modification
-                console.log(`Account ${p.accountId} original balance before transaction: ${originalBalance}`);
+            // Update finance accounts and account transactions if accountId is provided
+            if (p.accountId && accountDataMap.has(p.accountId)) {
+              try {
+                const acct = accountDataMap.get(p.accountId);
+                const originalBalance = acct.balance || 0;
 
                 // Validate balance before transaction
                 const validation = validateBalanceBeforeTransaction(originalBalance, p.amount, p.amount > 0 ? 'payment' : 'expense');
 
-                // You can use originalBalance here for any calculations or logic before the update
-                // For example: validation, logging, notifications, etc.
                 if (!validation.isValid && validation.warning) {
                   console.warn(`⚠️ ${validation.warning}`);
                 }
 
-                // Note: For sales/payments received, we add to balance (income)
-                // For expenses/payments made, we subtract from balance (outcome)
-                // But we ensure balance never goes negative
                 const newBalance = validation.newBalance;
-                const { error: updErr } = await supabase
-                  .from('finance_accounts')
-                  .update({ balance: newBalance, updated_at: new Date().toISOString() })
-                  .eq('id', p.accountId);
                 
-                if (updErr) {
-                  console.warn('⚠️ Failed updating finance account balance:', updErr.message);
-                } else {
-                  console.log(`✅ Finance account ${p.accountId} balance updated: ${acct.balance} + ${p.amount} = ${newBalance}`);
-                }
-              }
-            } catch (faError) {
-              console.warn('⚠️ finance_accounts error:', faError instanceof Error ? faError.message : 'Unknown error');
-            }
+                // Collect account update
+                accountUpdates.push({
+                  id: p.accountId,
+                  balance: newBalance,
+                  updated_at: new Date().toISOString()
+                });
 
-            try {
-              console.log('📝 Recording account transaction for account:', p.accountId);
-
-              // Get account branch_id for transaction isolation
-              const { data: accountData } = await supabase
-                .from('finance_accounts')
-                .select('branch_id')
-                .eq('id', p.accountId)
-                .single();
-
-              const { error: atErr } = await supabase
-                .from('account_transactions')
-                .insert({
+                // Collect transaction insert
+                transactionInserts.push({
                   account_id: p.accountId,
                   transaction_type: 'payment_received',
                   amount: p.amount,
                   reference_number: saleNumber,
                   description: `POS sale payment (${p.method || 'payment'})`,
-                  branch_id: accountData?.branch_id, // Assign branch_id from account for isolation
+                  branch_id: acct.branch_id,
                   metadata: { sale_id: sale.id, customer_id: saleData.customerId },
                   created_at: new Date().toISOString()
                 });
-
-              if (atErr) {
-                console.warn('⚠️ account_transactions insert failed:', atErr.message);
-              } else {
-                console.log(`✅ Transaction recorded for account ${p.accountId}: +${p.amount}`);
+              } catch (faError) {
+                console.warn('⚠️ finance_accounts error:', faError instanceof Error ? faError.message : 'Unknown error');
               }
-            } catch (atError) {
-              console.warn('⚠️ account_transactions error:', atError instanceof Error ? atError.message : 'Unknown error');
+            }
+          }
+
+          // ✅ OPTIMIZED: Batch update all accounts in parallel
+          if (accountUpdates.length > 0) {
+            const updatePromises = accountUpdates.map(update => 
+              supabase
+                .from('finance_accounts')
+                .update({ balance: update.balance, updated_at: update.updated_at })
+                .eq('id', update.id)
+            );
+            
+            const updateResults = await Promise.allSettled(updatePromises);
+            updateResults.forEach((result, index) => {
+              if (result.status === 'fulfilled' && result.value.error) {
+                console.warn(`⚠️ Failed updating finance account ${accountUpdates[index].id}:`, result.value.error.message);
+              } else if (result.status === 'fulfilled') {
+                console.log(`✅ Finance account ${accountUpdates[index].id} balance updated`);
+              }
+            });
+          }
+
+          // ✅ OPTIMIZED: Batch insert all transactions at once
+          if (transactionInserts.length > 0) {
+            const { error: batchInsertError } = await supabase
+              .from('account_transactions')
+              .insert(transactionInserts);
+
+            if (batchInsertError) {
+              console.warn('⚠️ Batch account_transactions insert failed:', batchInsertError.message);
+              // Fallback to individual inserts
+              for (const transaction of transactionInserts) {
+                const { error: atErr } = await supabase
+                  .from('account_transactions')
+                  .insert(transaction);
+                
+                if (atErr) {
+                  console.warn('⚠️ account_transactions insert failed:', atErr.message);
+                }
+              }
+            } else {
+              console.log(`✅ Batch recorded ${transactionInserts.length} transactions`);
             }
           }
         }
@@ -1708,11 +1937,11 @@ class SaleProcessingService {
             result.error.includes('Failed to fetch')
           );
           
-          // Only log actual SMS provider errors, not connection errors
-          if (!isConnectionError && result.error) {
+          // Only log actual SMS provider errors in development, not connection errors
+          if (!isConnectionError && result.error && (import.meta.env.DEV || import.meta.env.MODE === 'development')) {
             console.warn('⚠️ SMS notification failed:', result.error);
           }
-          // Connection errors are silently ignored - SMS is optional
+          // Connection errors and production warnings are silently ignored - SMS is optional
         }
       } catch (importError) {
         // Silently skip SMS if service is unavailable (expected in dev environment)

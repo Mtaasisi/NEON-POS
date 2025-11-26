@@ -281,88 +281,79 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
 
   return (
     <>
-      {/* Backdrop - respects sidebar and topbar */}
+      {/* Backdrop */}
       <div 
-        className="fixed bg-black/60"
-        onClick={handleClose}
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 35
-        }}
-      />
-      
-      {/* Modal Container */}
-      <div 
-        className="fixed flex items-center justify-center p-4"
-        style={{
-          left: 'var(--sidebar-width, 0px)',
-          top: 'var(--topbar-height, 64px)',
-          right: 0,
-          bottom: 0,
-          zIndex: 50,
-          pointerEvents: 'none'
+        className="fixed bg-black/60 flex items-center justify-center p-4 z-[1000000]" 
+        style={{ top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000000 }}
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="edit-customer-modal-title"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleClose();
+          }
         }}
       >
-        <div 
-          className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-          style={{ pointerEvents: 'auto' }}
-        >
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-500 rounded-lg">
-              <User className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Edit Customer</h2>
-              <p className="text-sm text-gray-600">Update customer information</p>
-            </div>
-          </div>
+        <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden relative">
+          {/* Close Button */}
           <button
             onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+            aria-label="Close modal"
           >
-            <X className="w-5 h-5 text-gray-500" />
+            <X className="w-6 h-6" />
           </button>
-        </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-          <div className="space-y-6">
-            {/* Missing Information Alert */}
-            {missingFields.length > 0 && (
-              <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle className="w-5 h-5 text-orange-600" />
-                  <h3 className="font-semibold text-orange-800">Missing Information</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {missingFields.map((field, index) => (
-                    <span
-                      key={index}
-                      className="px-3 py-1.5 bg-white text-orange-700 text-sm font-medium rounded-lg border border-orange-300 shadow-sm"
-                    >
-                      {field}
-                    </span>
-                  ))}
-                </div>
+          {/* Icon Header - Fixed */}
+          <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+            <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+              {/* Icon */}
+              <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                <User className="w-8 h-8 text-white" />
               </div>
-            )}
+              
+              {/* Text */}
+              <div>
+                <h3 id="edit-customer-modal-title" className="text-2xl font-bold text-gray-900 mb-2">Edit Customer</h3>
+                <p className="text-sm text-gray-600 font-medium">{customer.name || 'Customer Information'}</p>
+              </div>
+            </div>
+          </div>
 
-            {/* Basic Information */}
-            <div className="bg-white border-2 border-gray-200 rounded-lg p-5">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <User className="w-5 h-5 text-blue-600" />
-                Basic Information
-              </h3>
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+            <div className="py-4">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Missing Information Alert */}
+                {missingFields.length > 0 && (
+                  <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-xl p-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertCircle className="w-5 h-5 text-orange-600" />
+                      <h3 className="font-semibold text-orange-800">Missing Information</h3>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {missingFields.map((field, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-1.5 bg-white text-orange-700 text-sm font-medium rounded-lg border border-orange-300 shadow-sm"
+                        >
+                          {field}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Basic Information */}
+                <div className="bg-white rounded-xl p-6 mb-4 border border-gray-200 shadow-sm">
+                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <User className="w-5 h-5 text-blue-600" />
+                    Basic Information
+                  </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
                     Full Name <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -370,7 +361,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                       type="text"
                       value={formData.name}
                       onChange={(e) => handleInputChange('name', e.target.value)}
-                      className="w-full px-4 py-3 pl-11 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full px-4 py-3 pl-11 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
                       placeholder="Enter full name"
                       required
                     />
@@ -379,7 +370,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
                     Phone Number <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -387,7 +378,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => handleInputChange('phone', e.target.value)}
-                      className="w-full px-4 py-3 pl-11 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full px-4 py-3 pl-11 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
                       placeholder="+255 123 456 789"
                       required
                     />
@@ -397,7 +388,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
 
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-2 flex items-center gap-2">
                     WhatsApp Number
                     {isFieldMissing(customer?.whatsapp) && <AlertCircle className="w-4 h-4 text-orange-500" />}
                   </label>
@@ -406,7 +397,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                       type="tel"
                       value={formData.whatsapp}
                       onChange={(e) => handleInputChange('whatsapp', e.target.value)}
-                      className="w-full px-4 py-3 pl-11 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full px-4 py-3 pl-11 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
                       placeholder="+255 123 456 789"
                     />
                     <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
@@ -414,7 +405,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
                     Gender <span className="text-red-500">*</span>
                   </label>
                   <div className="flex gap-3">
@@ -447,7 +438,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-2 flex items-center gap-2">
                     Region
                     {isFieldMissing(customer?.city) && <AlertCircle className="w-4 h-4 text-orange-500" />}
                   </label>
@@ -458,7 +449,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                       onChange={(e) => handleInputChange('city', e.target.value)}
                       onFocus={() => setShowRegionDropdown(true)}
                       onBlur={() => setTimeout(() => setShowRegionDropdown(false), 200)}
-                      className="w-full min-h-[48px] py-3 pl-11 pr-10 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full min-h-[48px] py-3 pl-11 pr-10 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
                       placeholder="Type or select region"
                       autoComplete="off"
                       autoCorrect="off"
@@ -497,17 +488,17 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
             </div>
 
 
-            {/* Customer Status */}
-            <div className="bg-white border-2 border-gray-200 rounded-lg p-5">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Crown className="w-5 h-5 text-purple-600" />
-                Customer Status
-              </h3>
+                {/* Customer Status */}
+                <div className="bg-white rounded-xl p-6 mb-4 border border-gray-200 shadow-sm">
+                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Crown className="w-5 h-5 text-purple-600" />
+                    Customer Status
+                  </h3>
               
               <div className="space-y-5">
                 {/* Loyalty Level */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-3">
                     Loyalty Level
                   </label>
                   <div className="flex flex-wrap gap-3">
@@ -538,7 +529,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
 
                 {/* Customer Tag */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-3">
                     Customer Tag
                   </label>
                   <div className="flex flex-wrap gap-3">
@@ -567,38 +558,38 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
               </div>
             </div>
 
-            {/* Referral Information */}
-            <div className="bg-purple-50 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Gift className="w-5 h-5 text-purple-600" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">Referred By Customer</p>
-                    <p className="text-xs text-gray-500">Link referrer to earn points</p>
+                {/* Referral Information */}
+                <div className="bg-purple-50 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Gift className="w-5 h-5 text-purple-600" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Referred By Customer</p>
+                        <p className="text-xs text-gray-500">Link referrer to earn points</p>
+                      </div>
+                    </div>
+                    <span className="px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded-full">
+                      Bonus Points
+                    </span>
                   </div>
+                  <CustomerSearchDropdown
+                    value={formData.referredBy}
+                    onChange={(value) => handleInputChange('referredBy', value)}
+                    placeholder="Search for the referring customer..."
+                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-purple-500 transition-colors text-gray-900"
+                  />
                 </div>
-                <span className="px-2 py-1 bg-purple-600 text-white text-xs font-medium rounded-full">
-                  Bonus Points
-                </span>
-              </div>
-              <CustomerSearchDropdown
-                value={formData.referredBy}
-                onChange={(value) => handleInputChange('referredBy', value)}
-                placeholder="Search for the referring customer..."
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 transition-colors text-gray-900"
-              />
-            </div>
 
-            {/* Birth Information */}
-            <div className="bg-white border-2 border-gray-200 rounded-lg p-5">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-pink-600" />
-                Birth Information
-              </h3>
+                {/* Birth Information */}
+                <div className="bg-white rounded-xl p-6 mb-4 border border-gray-200 shadow-sm">
+                  <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-pink-600" />
+                    Birth Information
+                  </h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-2 flex items-center gap-2">
                     Birth Month
                     {isFieldMissing(customer?.birthMonth) && <AlertCircle className="w-4 h-4 text-orange-500" />}
                   </label>
@@ -609,7 +600,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                       onChange={(e) => handleInputChange('birthMonth', e.target.value)}
                       onFocus={() => setShowMonthDropdown(true)}
                       onBlur={() => setTimeout(() => setShowMonthDropdown(false), 200)}
-                      className="w-full py-3 pl-11 pr-10 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full py-3 pl-11 pr-10 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
                       placeholder="Type or select month"
                       autoComplete="off"
                       autoCorrect="off"
@@ -646,7 +637,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-2 flex items-center gap-2">
                     Birth Day
                     {isFieldMissing(customer?.birthDay) && <AlertCircle className="w-4 h-4 text-orange-500" />}
                   </label>
@@ -657,7 +648,7 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
                       onChange={(e) => handleInputChange('birthDay', e.target.value)}
                       onFocus={() => setShowDayDropdown(true)}
                       onBlur={() => setTimeout(() => setShowDayDropdown(false), 200)}
-                      className="w-full py-3 pl-11 pr-10 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full py-3 pl-11 pr-10 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
                       placeholder="Type or select day"
                       autoComplete="off"
                       autoCorrect="off"
@@ -697,58 +688,59 @@ const CustomerEditModal: React.FC<CustomerEditModalProps> = ({
               </div>
             </div>
 
-            {/* Notes */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Additional Notes
-                </label>
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => handleInputChange('notes', e.target.value)}
-                  rows={4}
-                  placeholder="Add notes about this customer..."
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 transition-colors text-gray-900 resize-none"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  Optional: Add any important information or preferences about this customer
-                </p>
-              </div>
+                {/* Notes */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Additional Notes
+                  </label>
+                  <textarea
+                    value={formData.notes}
+                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                    rows={4}
+                    placeholder="Add notes about this customer..."
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium resize-none transition-colors"
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    Optional: Add any important information or preferences about this customer
+                  </p>
+                </div>
+              </form>
             </div>
+          </div>
 
+          {/* Fixed Action Buttons Footer */}
+          <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+            <form onSubmit={handleSubmit}>
+              <div className="flex items-center justify-between">
+                <div className="text-sm">
+                  {hasChanges && (
+                    <span className="flex items-center gap-2 text-orange-600 font-medium">
+                      <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
+                      Unsaved changes
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    disabled={isLoading}
+                    className="flex-1 px-6 py-3.5 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all shadow-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!hasChanges || isLoading}
+                    className="flex-1 px-6 py-3.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg flex items-center justify-center gap-2"
+                  >
+                    <Save className="w-5 h-5" />
+                    {isLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
-        </form>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-white">
-          <div className="text-sm">
-            {hasChanges && (
-              <span className="flex items-center gap-2 text-orange-600 font-medium">
-                <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse"></div>
-                Unsaved changes
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={handleClose}
-              disabled={isLoading}
-              className="px-6 py-3 text-sm font-medium bg-white text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              onClick={handleSubmit}
-              disabled={!hasChanges || isLoading}
-              className="px-6 py-3 text-sm font-medium bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md hover:shadow-lg"
-            >
-              <Save className="w-4 h-4" />
-              {isLoading ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
-        </div>
         </div>
       </div>
     </>

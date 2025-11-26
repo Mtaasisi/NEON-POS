@@ -57,7 +57,11 @@ import {
   Shield,
   Maximize2,
   Minimize2,
-  Square
+  Square,
+  RefreshCw,
+  CreditCard,
+  ShoppingBag,
+  Truck
 } from 'lucide-react';
 
 type WidgetSize = 'small' | 'medium' | 'large';
@@ -487,7 +491,22 @@ const DashboardCustomizationSettings: React.FC = () => {
     { key: 'salesWidget' as const, label: 'Sales Widget', icon: DollarSign, category: 'Widgets' },
     { key: 'topProductsWidget' as const, label: 'Top Products Widget', icon: TrendingUp, category: 'Widgets' },
     { key: 'expensesWidget' as const, label: 'Expenses Widget', icon: Briefcase, category: 'Widgets' },
-    { key: 'staffPerformanceWidget' as const, label: 'Staff Performance Widget', icon: Users, category: 'Widgets' }
+    { key: 'staffPerformanceWidget' as const, label: 'Staff Performance Widget', icon: Users, category: 'Widgets' },
+    // New feature widgets
+    { key: 'tradeInWidget' as const, label: 'Trade-in Widget', icon: RefreshCw, category: 'Widgets' },
+    { key: 'installmentsWidget' as const, label: 'Installments Widget', icon: CreditCard, category: 'Widgets' },
+    { key: 'loyaltyWidget' as const, label: 'Loyalty Widget', icon: Star, category: 'Widgets' },
+    { key: 'smsWidget' as const, label: 'SMS Widget', icon: MessageSquare, category: 'Widgets' },
+    { key: 'sparePartsWidget' as const, label: 'Spare Parts Widget', icon: Wrench, category: 'Widgets' },
+    { key: 'storageRoomsWidget' as const, label: 'Storage Rooms Widget', icon: Building, category: 'Widgets' },
+    { key: 'stockTransfersWidget' as const, label: 'Stock Transfers Widget', icon: Truck, category: 'Widgets' },
+    { key: 'specialOrdersWidget' as const, label: 'Special Orders Widget', icon: ShoppingBag, category: 'Widgets' },
+    { key: 'backupWidget' as const, label: 'Backup Widget', icon: HardDrive, category: 'Widgets' },
+    { key: 'repairWidget' as const, label: 'Repair Widget', icon: Wrench, category: 'Widgets' },
+    // AI-powered widgets
+    { key: 'aiInsightsWidget' as const, label: 'AI Insights Widget', icon: Bot, category: 'Widgets' },
+    { key: 'predictiveAnalyticsWidget' as const, label: 'Predictive Analytics Widget', icon: TrendingUp, category: 'Widgets' },
+    { key: 'alertSystemWidget' as const, label: 'Alert System Widget', icon: Bell, category: 'Widgets' }
   ];
 
   if (loading || !rolePermissions) {
