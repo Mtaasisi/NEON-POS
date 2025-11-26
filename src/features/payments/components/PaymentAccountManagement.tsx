@@ -1549,7 +1549,8 @@ const PaymentAccountManagement: React.FC = () => {
                       </div>
                     ) : (
                       <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                        {accountTransactions
+                        {(
+                          accountTransactions
                           .filter(t => {
                             // Filter by transaction type
                             if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) {
@@ -1818,7 +1819,8 @@ const PaymentAccountManagement: React.FC = () => {
                                 )}
                               </div>
                             );
-                          })}
+                          })
+                        )}
                       </div>
                     )}
                   </div>
@@ -2400,112 +2402,9 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                             <Copy className="w-4 h-4" />
                                             Copy Ref
                                           </button>
-                                  )}
-                                </div>
+                                        )}
+                                      </div>
                                     </div>
-                                )}
-                                
-                                {/* Connecting Line */}
-                                {index < accountTransactions.filter(t => {
-                                  if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) return false;
-                                  if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) return false;
-                                  if (dateFilter.end) {
-                                    const endDate = new Date(dateFilter.end);
-                                    endDate.setHours(23, 59, 59, 999);
-                                    if (new Date(t.created_at) > endDate) return false;
-                                  }
-                                  if (searchQuery) {
-                                    const query = searchQuery.toLowerCase();
-                                    const matchesDescription = t.description?.toLowerCase().includes(query);
-                                    const matchesReference = t.reference_number?.toLowerCase().includes(query);
-                                    const matchesAmount = formatMoney(t.amount, selectedAccount?.currency || 'TZS').toLowerCase().includes(query);
-                                    if (!matchesDescription && !matchesReference && !matchesAmount) return false;
-                                  }
-                                  return true;
-                                }).length - 1 && (
-                                  <div className={`absolute left-7 top-full w-0.5 h-3 ${
-                                    isReversed ? 'bg-gray-300' : isPartial ? 'bg-yellow-300' : isIncome ? 'bg-yellow-300' : isIncoming ? 'bg-green-300' : isOutgoing ? 'bg-red-300' : 'bg-gray-300'
-                                  }`} />
-                                )}
-                              </div>
-                            );
-                          })}
-                      </div>
-                    )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
-              <button
-                type="button"
-                onClick={() => setShowHistoryModal(false)}
-                className="w-full px-6 py-3.5 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl text-lg"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Manual Transaction Modal */}
-      {showManualTransactionModal && manualTransactionAccount && (
-        <ManualTransactionModal
-          account={manualTransactionAccount}
-          onClose={() => {
-            setShowManualTransactionModal(false);
-            setManualTransactionAccount(null);
-          }}
-          onSuccess={() => {
-            fetchAccounts();
-          }}
-        />
-      )}
-
-      {/* Transfer Modal */}
-      {showTransferModal && (
-        <TransferModal
-          accounts={accounts}
-          onClose={() => setShowTransferModal(false)}
-          onSuccess={() => {
-            fetchAccounts();
-          }}
-        />
-      )}
-
-      {/* Transaction Reversal Modal */}
-      {showReversalModal && reversalTransaction && selectedAccount && (
-        <TransactionReversalModal
-          transaction={reversalTransaction}
-          accountName={selectedAccount.name}
-          accountCurrency={selectedAccount.currency || 'TZS'}
-          onClose={() => {
-            setShowReversalModal(false);
-            setReversalTransaction(null);
-          }}
-          onSuccess={() => {
-            fetchAccounts();
-            // Reload the transactions for the selected account
-            if (selectedAccount) {
-              handleViewHistory(selectedAccount);
-            }
-          }}
-        />
-      )}
-
-      {/* Transaction Details Modal */}
-      <TransactionDetailsModal
-        isOpen={showTransactionDetailsModal}
-        onClose={() => {
-          setShowTransactionDetailsModal(false);
-          setSelectedTransaction(null);
-        }}
-        transaction={selectedTransaction}
-      />
     </div>
   );
 };
