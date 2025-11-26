@@ -479,7 +479,117 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
     initializeDatabaseCheck().catch(console.error);
   }, []);
 
-  // Handle offline sync
+  // Handle offline sync - start auto-sync for pending sales
+  // ⚠️ CRITICAL FIX: Prevent multiple initializations that cause boot loops
+  useEffect(() => {
+    console.log('🔵 [DEBUG] App: useEffect for initialization triggered');
+    
+    let isInitialized = false;
+    let initTimeout: NodeJS.Timeout | null = null;
+    
+    async function initializeOfflineSync() {
+      console.log('🔵 [DEBUG] App: initializeOfflineSync called, isInitialized:', isInitialized);
+      // Prevent multiple initializations
+      if (isInitialized) {
+        console.log('⏭️ [DEBUG] App: Already initialized, skipping offline sync');
+        return;
+      }
+      
+      try {
+        console.log('🔵 [DEBUG] App: Importing offlineSaleSyncService');
+        const { offlineSaleSyncService } = await import('./services/offlineSaleSyncService');
+        // Start automatic background sync
+        offlineSaleSyncService.startAutoSync();
+        console.log('✅ [App] Offline sale sync service started');
+        
+        // Also sync immediately if online (with delay to prevent blocking)
+        if (navigator.onLine) {
+          console.log('🔵 [DEBUG] App: Online, scheduling sync in 2 seconds');
+          setTimeout(() => {
+            console.log('🔵 [DEBUG] App: Executing pending sales sync');
+            offlineSaleSyncService.syncAllPendingSales().catch((err) => {
+              console.warn('⚠️ [DEBUG] App: Initial sync failed:', err);
+            });
+          }, 2000); // Delay to prevent blocking initial load
+        } else {
+          console.log('🔵 [DEBUG] App: Offline, skipping sync');
+        }
+      } catch (error) {
+        console.error('❌ [DEBUG] App: Failed to initialize offline sync:', error);
+      }
+    }
+    
+    // Initialize database auto-sync
+    async function initializeDatabaseAutoSync() {
+      console.log('🔵 [DEBUG] App: initializeDatabaseAutoSync called, isInitialized:', isInitialized);
+      // Prevent multiple initializations
+      if (isInitialized) {
+        console.log('⏭️ [DEBUG] App: Already initialized, skipping database auto-sync');
+        return;
+      }
+      
+      try {
+        console.log('🔵 [DEBUG] App: Importing autoSyncService and fullDatabaseDownloadService');
+        const { autoSyncService } = await import('./services/autoSyncService');
+        const { fullDatabaseDownloadService } = await import('./services/fullDatabaseDownloadService');
+        
+        // Check if database is downloaded
+        const isDownloaded = fullDatabaseDownloadService.isDownloaded();
+        console.log('🔵 [DEBUG] App: Database download status:', {
+          isDownloaded,
+          isOnline: navigator.onLine
+        });
+        
+        if (isDownloaded && navigator.onLine) {
+          // Start auto sync if database is downloaded and online
+          autoSyncService.startAutoSync();
+          console.log('✅ [App] Database auto-sync service started');
+        } else if (isDownloaded) {
+          console.log('ℹ️ [App] Database downloaded but offline - auto-sync will start when online');
+        } else {
+          console.log('ℹ️ [App] No database downloaded - auto-sync disabled');
+        }
+      } catch (error) {
+        console.error('❌ [DEBUG] App: Failed to initialize database auto-sync:', error);
+      }
+    }
+    
+    // ⚠️ CRITICAL: Defer initialization to prevent blocking and boot loops
+    console.log('🔵 [DEBUG] App: Scheduling initialization in 1 second');
+    initTimeout = setTimeout(() => {
+      console.log('🔵 [DEBUG] App: Executing initialization now');
+      initializeOfflineSync();
+      initializeDatabaseAutoSync();
+      isInitialized = true;
+      console.log('🔵 [DEBUG] App: Initialization complete');
+    }, 1000); // Delay to ensure app is fully loaded
+    
+    return () => {
+      console.log('🔵 [DEBUG] App: Cleanup function called');
+      // Clear timeout if component unmounts before initialization
+      if (initTimeout) {
+        console.log('🔵 [DEBUG] App: Clearing initialization timeout');
+        clearTimeout(initTimeout);
+      }
+      // Cleanup: stop auto-sync on unmount
+      console.log('🔵 [DEBUG] App: Stopping auto-sync services');
+      import('./services/offlineSaleSyncService').then(({ offlineSaleSyncService }) => {
+        offlineSaleSyncService.stopAutoSync();
+        console.log('🔵 [DEBUG] App: Offline sync stopped');
+      }).catch((err) => {
+        console.warn('⚠️ [DEBUG] App: Failed to stop offline sync:', err);
+      });
+      
+      import('./services/autoSyncService').then(({ autoSyncService }) => {
+        autoSyncService.stopAutoSync();
+        console.log('🔵 [DEBUG] App: Database auto-sync stopped');
+      }).catch((err) => {
+        console.warn('⚠️ [DEBUG] App: Failed to stop database auto-sync:', err);
+      });
+    };
+  }, []); // Empty deps - only run once on mount
+
+  // Handle offline sync (legacy - keeping for backward compatibility)
   useEffect(() => {
     async function syncPending() {
       try {

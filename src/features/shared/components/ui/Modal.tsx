@@ -10,11 +10,16 @@ interface ModalProps {
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
   maxHeight?: string;
   actions?: React.ReactNode;
+  zIndex?: number;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'lg', maxHeight, actions }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidth = 'lg', maxHeight, actions, zIndex }) => {
   // Prevent body scroll when modal is open
   useBodyScrollLock(isOpen);
+  
+  // Default z-index values
+  const backdropZIndex = zIndex ? zIndex - 15 : 35;
+  const modalZIndex = zIndex || 50;
   
   if (!isOpen) return null;
   return createPortal(
@@ -29,7 +34,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidt
           top: 'var(--topbar-height, 64px)',
           right: 0,
           bottom: 0,
-          zIndex: 35,
+          zIndex: backdropZIndex,
           background: 'rgba(0,0,0,0.4)',
           backdropFilter: 'blur(2px)'
         }}
@@ -43,7 +48,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, maxWidt
           top: 'var(--topbar-height, 64px)',
           right: 0,
           bottom: 0,
-          zIndex: 50,
+          zIndex: modalZIndex,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

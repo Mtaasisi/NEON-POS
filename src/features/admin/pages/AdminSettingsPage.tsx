@@ -37,6 +37,7 @@ import { BranchProductSharing } from '../components/BranchProductSharing';
 import DashboardCustomizationSettings from '../components/DashboardCustomizationSettings';
 import { DatabaseDataCleanupPanel } from '../components/DatabaseDataCleanupPanel';
 import DatabaseBranchMigration from '../components/DatabaseBranchMigration';
+import DatabaseManagementSettings from '../components/DatabaseManagementSettings';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { 
   Settings,
@@ -617,6 +618,7 @@ const AdminSettingsPageContent: React.FC = () => {
                   { id: 'appearance', label: 'Appearance', icon: Palette, color: 'rose' },
                   { id: 'notifications', label: 'Notifications', icon: Bell, color: 'amber' },
                   { id: 'database', label: 'Database', icon: Database, color: 'slate' },
+                  { id: 'database-management', label: 'Offline Database', icon: HardDrive, color: 'indigo' },
                   { id: 'branch-migration', label: 'Branch Migration', icon: GitBranch, color: 'sky' },
                   { id: 'automation', label: 'Automation', icon: RotateCcw, color: 'lime' }
                 ].map((section) => {
@@ -639,6 +641,7 @@ const AdminSettingsPageContent: React.FC = () => {
                     slate: isActive ? 'bg-slate-50 border-slate-300 text-slate-700' : 'hover:bg-slate-50 hover:border-slate-200',
                     sky: isActive ? 'bg-sky-50 border-sky-300 text-sky-700' : 'hover:bg-sky-50 hover:border-sky-200',
                     lime: isActive ? 'bg-lime-50 border-lime-300 text-lime-700' : 'hover:bg-lime-50 hover:border-lime-200',
+                    indigo: isActive ? 'bg-indigo-50 border-indigo-300 text-indigo-700' : 'hover:bg-indigo-50 hover:border-indigo-200',
                   };
                   
                   return (
@@ -777,6 +780,27 @@ const AdminSettingsPageContent: React.FC = () => {
                       getStatusIcon={getStatusIcon}
                       getStatusColor={getStatusColor}
                     />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeSection === 'database-management' && (
+              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+                <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+                  <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+                    <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
+                      <HardDrive className="w-8 h-8 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3">Offline Database Management</h2>
+                      <p className="text-sm text-gray-600">Download full database for offline-first operation and faster performance</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+                  <div className="py-6">
+                    <DatabaseManagementSettings />
                   </div>
                 </div>
               </div>

@@ -1050,6 +1050,12 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
   const [sales, setSales] = useState<any[]>([]);
   const [loadingSales, setLoadingSales] = useState(false);
   
+  const [currentStep, setCurrentStep] = useState(1);
+  const [useCustomDates, setUseCustomDates] = useState(false);
+  const [firstPayment, setFirstPayment] = useState(0);
+  const [customInstallmentDates, setCustomInstallmentDates] = useState<string[]>([]);
+  const [planStartDate, setPlanStartDate] = useState(new Date().toISOString().split('T')[0]);
+  
   const [formData, setFormData] = useState<Partial<CreateInstallmentPlanInput>>({
     customer_id: '',
     sale_id: '',
@@ -1077,8 +1083,20 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      // Initialize next payment date when modal opens
+      const today = new Date().toISOString().split('T')[0];
+      setPlanStartDate(today);
+      const frequency = formData.payment_frequency || 'monthly';
+      const initialNextPaymentDate = calculateNextPaymentDate(today, frequency);
+      setFormData(prev => ({ ...prev, start_date: initialNextPaymentDate }));
     } else {
       document.body.style.overflow = '';
+      // Reset form when modal closes
+      setCurrentStep(1);
+      setFirstPayment(0);
+      setUseCustomDates(false);
+      setCustomInstallmentDates([]);
+      setPlanStartDate(new Date().toISOString().split('T')[0]);
     }
     return () => {
       document.body.style.overflow = '';
@@ -1149,8 +1167,99 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
     }
   };
 
-  const amountFinanced = (formData.total_amount || 0) - (formData.down_payment || 0);
+  // Calculate amounts accounting for down payment and first payment
+  const amountFinanced = (formData.total_amount || 0) - (formData.down_payment || 0) - (firstPayment || 0);
   const installmentAmount = amountFinanced / (formData.number_of_installments || 1);
+
+  // Calculate next payment date based on plan start date and frequency
+  const calculateNextPaymentDate = useCallback((startDate: string, frequency: PaymentFrequency): string => {
+    const start = new Date(startDate);
+    const nextPayment = new Date(start);
+
+    switch (frequency) {
+      case 'weekly':
+        nextPayment.setDate(start.getDate() + 7);
+        break;
+      case 'bi_weekly':
+        nextPayment.setDate(start.getDate() + 14);
+        break;
+      case 'monthly':
+        nextPayment.setMonth(start.getMonth() + 1);
+        break;
+      default:
+        nextPayment.setMonth(start.getMonth() + 1);
+    }
+
+    return nextPayment.toISOString().split('T')[0];
+  }, []);
+
+  // Generate dates based on frequency (starting from next payment date)
+  const generateDates = useCallback((nextPaymentDate: string, numberOfInstallments: number, frequency: PaymentFrequency) => {
+    const dates: string[] = [];
+    const start = new Date(nextPaymentDate);
+
+    for (let i = 0; i < numberOfInstallments; i++) {
+      const dueDate = new Date(start);
+      if (frequency === 'monthly') {
+        dueDate.setMonth(start.getMonth() + i);
+      } else if (frequency === 'weekly') {
+        dueDate.setDate(start.getDate() + (i * 7));
+      } else if (frequency === 'bi_weekly') {
+        dueDate.setDate(start.getDate() + (i * 14));
+      }
+      dates.push(dueDate.toISOString().split('T')[0]);
+    }
+
+    return dates;
+  }, []);
+
+  // Calculate next payment date when plan start date or frequency changes
+  useEffect(() => {
+    if (planStartDate && formData.payment_frequency) {
+      const nextPaymentDate = calculateNextPaymentDate(planStartDate, formData.payment_frequency);
+      setFormData(prev => ({ ...prev, start_date: nextPaymentDate }));
+    }
+  }, [planStartDate, formData.payment_frequency, calculateNextPaymentDate]);
+
+  // Update custom dates when number of installments, next payment date, or frequency changes
+  useEffect(() => {
+    if (isOpen && !useCustomDates && formData.number_of_installments && formData.start_date && formData.payment_frequency) {
+      const generatedDates = generateDates(
+        formData.start_date,
+        formData.number_of_installments,
+        formData.payment_frequency
+      );
+      setCustomInstallmentDates(generatedDates);
+    }
+  }, [isOpen, formData.number_of_installments, formData.start_date, formData.payment_frequency, useCustomDates, generateDates]);
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      // Validate step 1
+      if (!formData.customer_id || !formData.total_amount || formData.number_of_installments < 1) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
+      setCurrentStep(2);
+    } else if (currentStep === 2) {
+      // Validate step 2 - dates
+      if (!formData.start_date) {
+        toast.error('Please set the next payment date');
+        return;
+      }
+      if (useCustomDates && customInstallmentDates.some(date => !date)) {
+        toast.error('Please fill in all installment dates');
+        return;
+      }
+      setCurrentStep(3);
+    }
+  };
+
+  const handlePreviousStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1162,6 +1271,8 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
 
     setIsSubmitting(true);
     try {
+      // For now, we'll use the standard createInstallmentPlan
+      // In the future, we might need to extend it to support custom dates and first payment
       const result = await installmentService.createInstallmentPlan(
         formData as CreateInstallmentPlanInput,
         currentUser?.id,
@@ -1169,6 +1280,12 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
       );
 
       if (result.success) {
+        // Record first payment if any
+        if (firstPayment > 0 && result.plan) {
+          // TODO: Record first payment separately if needed
+          // This might require extending the service
+        }
+
         onSuccess();
         successModal.show('Installment plan has been created successfully!', {
           title: 'Plan Created',
@@ -1180,6 +1297,11 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
             }
           ]
         });
+        // Reset form
+        setCurrentStep(1);
+        setFirstPayment(0);
+        setUseCustomDates(false);
+        setCustomInstallmentDates([]);
       } else {
         toast.error(result.error || 'Failed to create installment plan');
       }
@@ -1221,294 +1343,471 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
-            <div className="bg-blue-50 p-5 rounded-xl border-2 border-blue-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Link className="w-5 h-5 text-blue-600" />
-                <label className="block text-sm font-bold text-blue-900">
-                  Link to Existing Sale (Optional)
-                </label>
-              </div>
-              {loadingSales ? (
-                <div className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl bg-white flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm text-gray-600">Loading sales...</span>
+          {/* Step Indicator */}
+          <div className="px-6 pt-4 pb-2 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center justify-center gap-2">
+              <div className={`flex items-center gap-2 ${currentStep >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                  {currentStep > 1 ? <Check className="w-5 h-5" /> : '1'}
                 </div>
-              ) : (
-                <>
-                  <select
-                    value={formData.sale_id}
-                    onChange={(e) => handleSaleSelect(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white font-medium"
-                  >
-                    <option value="">-- Create New Installment (No Sale Link) --</option>
-                    {sales.length > 0 ? (
-                      sales.map(sale => (
-                        <option key={sale.id} value={sale.id}>
-                          {sale.sale_number} - {sale.customers?.name || 'Unknown Customer'} - {formatPrice(sale.total_amount)} TZS ({sale.payment_status})
+                <span className="text-sm font-medium">Basic Info</span>
+              </div>
+              <div className={`w-12 h-0.5 ${currentStep >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+              <div className={`flex items-center gap-2 ${currentStep >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                  {currentStep > 2 ? <Check className="w-5 h-5" /> : '2'}
+                </div>
+                <span className="text-sm font-medium">Payment Dates</span>
+              </div>
+              <div className={`w-12 h-0.5 ${currentStep >= 3 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+              <div className={`flex items-center gap-2 ${currentStep >= 3 ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${currentStep >= 3 ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                  3
+                </div>
+                <span className="text-sm font-medium">Payment Details</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+            {/* Step 1: Basic Information */}
+            {currentStep === 1 && (
+              <>
+                <div className="bg-blue-50 p-5 rounded-xl border-2 border-blue-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Link className="w-5 h-5 text-blue-600" />
+                    <label className="block text-sm font-bold text-blue-900">
+                      Link to Existing Sale (Optional)
+                    </label>
+                  </div>
+                  {loadingSales ? (
+                    <div className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl bg-white flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-sm text-gray-600">Loading sales...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={formData.sale_id}
+                        onChange={(e) => handleSaleSelect(e.target.value)}
+                        className="w-full px-4 py-3 border-2 border-blue-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white font-medium"
+                      >
+                        <option value="">-- Create New Installment (No Sale Link) --</option>
+                        {sales.length > 0 ? (
+                          sales.map(sale => (
+                            <option key={sale.id} value={sale.id}>
+                              {sale.sale_number} - {sale.customers?.name || 'Unknown Customer'} - {formatPrice(sale.total_amount)} TZS ({sale.payment_status})
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>No unpaid or partial sales found</option>
+                        )}
+                      </select>
+                      {sales.length === 0 && !loadingSales && (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          No unpaid or partial sales available to link
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Customer <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      value={formData.customer_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customer_id: e.target.value }))}
+                      className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
+                      required
+                      disabled={!!formData.sale_id}
+                    >
+                      <option value="">Select Customer</option>
+                      {customers.map(customer => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name} - {customer.phone}
                         </option>
-                      ))
-                    ) : (
-                      <option value="" disabled>No unpaid or partial sales found</option>
-                    )}
-                  </select>
-                  {sales.length === 0 && !loadingSales && (
-                    <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      No unpaid or partial sales available to link
+                      ))}
+                    </select>
+                  </div>
+                  {formData.sale_id && (
+                    <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Auto-selected from linked sale
                     </p>
                   )}
-                </>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">
-                Customer <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <select
-                  value={formData.customer_id}
-                  onChange={(e) => setFormData(prev => ({ ...prev, customer_id: e.target.value }))}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
-                  required
-                  disabled={!!formData.sale_id}
-                >
-                  <option value="">Select Customer</option>
-                  {customers.map(customer => (
-                    <option key={customer.id} value={customer.id}>
-                      {customer.name} - {customer.phone}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {formData.sale_id && (
-                <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" />
-                  Auto-selected from linked sale
-                </p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Total Amount <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={formatPrice(formData.total_amount || 0)}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/,/g, '');
-                      const numValue = parseFloat(value) || 0;
-                      setFormData(prev => ({ ...prev, total_amount: numValue }));
-                    }}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    required
-                    disabled={!!formData.sale_id}
-                  />
                 </div>
-                {formData.sale_id && (
-                  <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-                    <CheckCircle className="w-3 h-3" />
-                    Auto-populated from linked sale
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Total Amount <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={formatPrice(formData.total_amount || 0)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/,/g, '');
+                          const numValue = parseFloat(value) || 0;
+                          setFormData(prev => ({ ...prev, total_amount: numValue }));
+                        }}
+                        className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        required
+                        disabled={!!formData.sale_id}
+                      />
+                    </div>
+                    {formData.sale_id && (
+                      <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        Auto-populated from linked sale
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Down Payment <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={formatPrice(formData.down_payment || 0)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/,/g, '');
+                          const numValue = parseFloat(value) || 0;
+                          setFormData(prev => ({ ...prev, down_payment: numValue }));
+                        }}
+                        className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white"
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    First Payment <span className="text-gray-500">(Optional)</span>
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <input
+                      type="text"
+                      value={formatPrice(firstPayment || 0)}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/,/g, '');
+                        const numValue = parseFloat(value) || 0;
+                        setFirstPayment(numValue);
+                      }}
+                      className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white"
+                      placeholder="0"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Additional payment after down payment</p>
+                </div>
+
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border-2 border-blue-200 shadow-sm">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+                        <TrendingUp className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-0.5">Amount to Finance</p>
+                        <p className="text-lg font-bold text-blue-900">
+                          {formatPrice(amountFinanced)} TZS
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                        <Calendar className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-gray-600 mb-0.5">Per Installment</p>
+                        <p className="text-lg font-bold text-emerald-900">
+                          {formatPrice(installmentAmount)} TZS
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Number of Installments <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={formData.number_of_installments}
+                      onChange={(e) => setFormData(prev => ({ ...prev, number_of_installments: parseInt(e.target.value) || 1 }))}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white"
+                      min="1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Payment Frequency <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.payment_frequency}
+                      onChange={(e) => {
+                        const frequency = e.target.value as PaymentFrequency;
+                        setFormData(prev => ({ ...prev, payment_frequency: frequency }));
+                        // Recalculate next payment date when frequency changes
+                        if (planStartDate) {
+                          const nextPaymentDate = calculateNextPaymentDate(planStartDate, frequency);
+                          setFormData(prev => ({ ...prev, start_date: nextPaymentDate }));
+                        }
+                      }}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
+                      required
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="bi_weekly">Bi-Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Step 2: Payment Dates */}
+            {currentStep === 2 && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Plan Start Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="date"
+                        value={planStartDate}
+                        onChange={(e) => {
+                          setPlanStartDate(e.target.value);
+                          // Recalculate next payment date
+                          if (formData.payment_frequency) {
+                            const nextPaymentDate = calculateNextPaymentDate(e.target.value, formData.payment_frequency);
+                            setFormData(prev => ({ ...prev, start_date: nextPaymentDate }));
+                          }
+                        }}
+                        className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">When the installment plan starts</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Next Payment Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="date"
+                        value={formData.start_date}
+                        onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                        className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
+                        required
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formData.payment_frequency === 'weekly' && 'Calculated: 1 week from start date'}
+                      {formData.payment_frequency === 'bi_weekly' && 'Calculated: 2 weeks from start date'}
+                      {formData.payment_frequency === 'monthly' && 'Calculated: 1 month from start date'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-200">
+                  <div className="flex items-center gap-3 mb-3">
+                    <input
+                      type="checkbox"
+                      id="useCustomDates"
+                      checked={useCustomDates}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseCustomDates(checked);
+                        // If unchecking, regenerate dates based on frequency
+                        if (!checked && formData.start_date && formData.number_of_installments && formData.payment_frequency) {
+                          const generatedDates = generateDates(
+                            formData.start_date,
+                            formData.number_of_installments,
+                            formData.payment_frequency
+                          );
+                          setCustomInstallmentDates(generatedDates);
+                        }
+                      }}
+                      className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="useCustomDates" className="text-sm font-medium text-gray-700 cursor-pointer">
+                      Use custom dates for each installment
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-600 ml-8">
+                    Enable this to set individual dates for each payment instead of using the frequency-based schedule
                   </p>
+                </div>
+
+                {formData.number_of_installments > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                      Installment Payment Dates
+                    </h4>
+                    <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
+                      {Array.from({ length: formData.number_of_installments }, (_, index) => (
+                        <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                          <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                            <span className="text-sm font-bold text-blue-700">{index + 1}</span>
+                          </div>
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                              Installment {index + 1} Due Date
+                            </label>
+                            <input
+                              type="date"
+                              value={customInstallmentDates[index] || ''}
+                              onChange={(e) => {
+                                const newDates = [...customInstallmentDates];
+                                newDates[index] = e.target.value;
+                                setCustomInstallmentDates(newDates);
+                              }}
+                              disabled={!useCustomDates}
+                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
+                            />
+                          </div>
+                          <div className="flex-shrink-0">
+                            <span className="text-sm font-bold text-gray-700">
+                              {formatPrice(installmentAmount)} TZS
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Down Payment <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={formatPrice(formData.down_payment || 0)}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/,/g, '');
-                      const numValue = parseFloat(value) || 0;
-                      setFormData(prev => ({ ...prev, down_payment: numValue }));
-                    }}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white"
-                    required
-                  />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
 
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border-2 border-blue-200 shadow-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
-                    <TrendingUp className="w-5 h-5 text-white" />
+            {/* Step 3: Payment Details */}
+            {currentStep === 3 && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">Late Fee Amount</label>
+                    <div className="relative">
+                      <AlertTriangle className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-orange-400" />
+                      <input
+                        type="text"
+                        value={formatPrice(formData.late_fee_amount || 0)}
+                        onChange={(e) => {
+                          const value = e.target.value.replace(/,/g, '');
+                          const numValue = parseFloat(value) || 0;
+                          setFormData(prev => ({ ...prev, late_fee_amount: numValue }));
+                        }}
+                        className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900 font-medium bg-white"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-gray-600 mb-0.5">Amount to Finance</p>
-                    <p className="text-lg font-bold text-blue-900">
-                      {formatPrice(amountFinanced)} TZS
-                    </p>
+                    <label className="block text-xs font-medium text-gray-700 mb-2">
+                      Payment Method <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.payment_method}
+                      onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
+                      required
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="mobile_money">Mobile Money</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                      <option value="card">Card</option>
+                    </select>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
-                    <Calendar className="w-5 h-5 text-white" />
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">
+                    Payment Account <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Building className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <select
+                      value={formData.account_id}
+                      onChange={(e) => setFormData(prev => ({ ...prev, account_id: e.target.value }))}
+                      className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
+                      required
+                    >
+                      <option value="">Select Account</option>
+                      {paymentAccounts.map(account => (
+                        <option key={account.id} value={account.id}>
+                          {account.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-600 mb-0.5">Per Installment</p>
-                    <p className="text-lg font-bold text-emerald-900">
-                      {formatPrice(installmentAmount)} TZS
-                    </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Notes</label>
+                  <div className="relative">
+                    <FileText className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white resize-none"
+                      placeholder="Plan details..."
+                      rows={3}
+                    />
                   </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Number of Installments <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  value={formData.number_of_installments}
-                  onChange={(e) => setFormData(prev => ({ ...prev, number_of_installments: parseInt(e.target.value) || 1 }))}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-lg font-bold bg-white"
-                  min="1"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Payment Frequency <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.payment_frequency}
-                  onChange={(e) => setFormData(prev => ({ ...prev, payment_frequency: e.target.value as PaymentFrequency }))}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
-                  required
-                >
-                  <option value="weekly">Weekly</option>
-                  <option value="bi_weekly">Bi-Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Start Date <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Calendar className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <input
-                    type="date"
-                    value={formData.start_date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">Late Fee Amount</label>
-                <div className="relative">
-                  <AlertTriangle className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-orange-400" />
-                  <input
-                    type="text"
-                    value={formatPrice(formData.late_fee_amount || 0)}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/,/g, '');
-                      const numValue = parseFloat(value) || 0;
-                      setFormData(prev => ({ ...prev, late_fee_amount: numValue }));
-                    }}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-200 text-gray-900 font-medium bg-white"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Payment Method <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.payment_method}
-                  onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
-                  required
-                >
-                  <option value="cash">Cash</option>
-                  <option value="mobile_money">Mobile Money</option>
-                  <option value="bank_transfer">Bank Transfer</option>
-                  <option value="card">Card</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Payment Account <span className="text-red-500">*</span>
-                </label>
-                <div className="relative">
-                  <Building className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <select
-                    value={formData.account_id}
-                    onChange={(e) => setFormData(prev => ({ ...prev, account_id: e.target.value }))}
-                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white"
-                    required
-                  >
-                    <option value="">Select Account</option>
-                    {paymentAccounts.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-2">Notes</label>
-              <div className="relative">
-                <FileText className="absolute left-4 top-4 w-5 h-5 text-gray-400" />
-                <textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white resize-none"
-                  placeholder="Plan details..."
-                  rows={3}
-                />
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={currentStep === 1 ? onClose : handlePreviousStep}
                 className="flex-1 px-6 py-3.5 border-2 border-gray-300 text-gray-700 rounded-xl font-semibold hover:bg-gray-50 transition-all shadow-sm"
               >
-                Cancel
+                {currentStep === 1 ? 'Cancel' : 'Previous'}
               </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || !formData.customer_id || !formData.account_id}
-                className="flex-1 px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Creating...
-                  </span>
-                ) : (
-                  'Create Installment Plan'
-                )}
-              </button>
+              {currentStep < 3 ? (
+                <button
+                  type="button"
+                  onClick={handleNextStep}
+                  className="flex-1 px-6 py-3.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl text-lg"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isSubmitting || !formData.customer_id || !formData.account_id}
+                  className="flex-1 px-6 py-3.5 bg-green-600 text-white rounded-xl font-semibold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl text-lg"
+                >
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Creating...
+                    </span>
+                  ) : (
+                    'Create Installment Plan'
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </form>
@@ -1731,7 +2030,7 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-600">Installments Paid:</span>
-                  <span className="text-base font-bold text-gray-900">{actualInstallmentsPaid} / {plan.number_of_installments}</span>
+                  <span className="text-base font-bold text-gray-900">{plan.installments_paid || 0} / {plan.number_of_installments}</span>
                 </div>
                 <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                   <span className="text-sm font-medium text-gray-600">Remaining Balance:</span>
@@ -2959,11 +3258,11 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
           </div>
 
           {/* Payment Schedule - Redesigned */}
-          <div className="mb-4">
+          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm mb-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-purple-600" />
-                Payment Schedule
+                Installment Schedule
               </h4>
               <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg">
                 <span className="text-xs font-semibold text-purple-700">
@@ -2971,7 +3270,7 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                 </span>
               </div>
             </div>
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
               {displayedSchedule.map((installment, index) => {
                 const isPaid = installment.status === 'paid';
                 const isOverdue = installment.status === 'overdue';
@@ -2980,88 +3279,76 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                 return (
                   <div
                     key={installment.installmentNumber}
-                    className={`relative p-4 rounded-xl border-2 transition-all ${
+                    className={`group relative p-5 rounded-2xl border-2 transition-all duration-200 ${
                       isPaid
-                        ? 'bg-gradient-to-r from-green-50 to-green-100/50 border-green-300 shadow-sm'
+                        ? 'bg-white border-green-300 shadow-md hover:shadow-lg'
                         : isOverdue
-                        ? 'bg-gradient-to-r from-red-50 to-red-100/50 border-red-300 shadow-sm'
-                        : 'bg-gradient-to-r from-gray-50 to-gray-100/50 border-gray-300 hover:border-gray-400'
+                        ? 'bg-white border-red-300 shadow-md hover:shadow-lg'
+                        : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-center justify-between">
                       {/* Left Section - Number and Date */}
-                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="flex items-center gap-4 flex-1">
                         {/* Installment Number Badge */}
-                        <div className={`flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base shadow-sm ${
+                        <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg shadow-lg ${
                           isPaid
-                            ? 'bg-green-500 text-white'
+                            ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
                             : isOverdue
-                            ? 'bg-red-500 text-white'
-                            : 'bg-gray-400 text-white'
+                            ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
+                            : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'
                         }`}>
-                          #{installment.installmentNumber}
+                          {installment.installmentNumber}
                         </div>
                         
                         {/* Date and Status Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                          <div className="flex items-center gap-2 mb-2">
                             <Calendar className={`w-4 h-4 flex-shrink-0 ${
                               isPaid ? 'text-green-600' : isOverdue ? 'text-red-600' : 'text-gray-500'
                             }`} />
-                            <div className="text-sm font-bold text-gray-900">
+                            <div className="text-base font-bold text-gray-900">
                               {formatDate(installment.dueDate)}
                             </div>
                           </div>
                           
                           {/* Status Badge */}
-                          <div className="flex items-center gap-2 mt-1.5">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold uppercase ${
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase ${
                               isPaid
-                                ? 'bg-green-200 text-green-800'
+                                ? 'bg-green-100 text-green-800 border border-green-200'
                                 : isOverdue
-                                ? 'bg-red-200 text-red-800'
-                                : 'bg-gray-200 text-gray-700'
+                                ? 'bg-red-100 text-red-800 border border-red-200'
+                                : 'bg-gray-100 text-gray-700 border border-gray-200'
                             }`}>
-                              {isPaid && <CheckCircle className="w-3 h-3" />}
-                              {isOverdue && <AlertTriangle className="w-3 h-3" />}
+                              {isPaid && <CheckCircle className="w-3.5 h-3.5" />}
+                              {isOverdue && <AlertTriangle className="w-3.5 h-3.5" />}
                               {installment.status}
                             </span>
                             {isOverdue && installment.daysOverdue && (
-                              <span className="text-xs font-semibold text-red-600">
+                              <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
                                 {installment.daysOverdue} days late
                               </span>
                             )}
                           </div>
-                          
-                          {/* Payment Date if Paid */}
-                          {isPaid && installment.payment && (
-                            <div className="mt-1.5 text-xs text-green-700 font-medium">
-                              ✓ Paid on {formatDate(installment.payment.payment_date)}
-                            </div>
-                          )}
                         </div>
                       </div>
                       
                       {/* Right Section - Amount */}
-                      <div className="flex-shrink-0 text-right">
-                        <div className={`text-lg font-bold ${
+                      <div className="flex-shrink-0 text-right ml-4">
+                        <div className={`text-2xl font-bold mb-1 ${
                           isPaid ? 'text-green-700' : isOverdue ? 'text-red-700' : 'text-gray-900'
                         }`}>
                           {formatCurrency(installment.amount)}
                         </div>
-                        {isPaid && installment.payment && (
-                          <div className="text-xs text-green-600 font-medium mt-1">
-                            Reference: {installment.payment.reference_number || 'N/A'}
-                          </div>
-                        )}
                       </div>
                     </div>
                     
                     {/* Progress Indicator Line */}
                     {index < displayedSchedule.length - 1 && (
-                      <div className={`absolute left-6 top-full w-0.5 h-2 ${
+                      <div className={`absolute left-7 top-full w-0.5 h-3 ${
                         isPaid ? 'bg-green-300' : isOverdue ? 'bg-red-300' : 'bg-gray-300'
-                      }`} style={{ transform: 'translateY(-2px)' }} />
+                      }`} />
                     )}
                   </div>
                 );

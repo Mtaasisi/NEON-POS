@@ -695,7 +695,34 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
               </thead>
               <tbody>
                 {products.map((product) => {
-                  const category = categories.find(c => c.id === product.categoryId);
+                  // Debug: Log first product's data structure
+                  if (products.indexOf(product) === 0 && import.meta.env.MODE === 'development') {
+                    console.log('🔍 [EnhancedInventoryTab] First product data:', {
+                      id: product.id,
+                      name: product.name,
+                      sku: product.sku,
+                      categoryId: product.categoryId,
+                      supplierId: product.supplierId,
+                      shelfId: product.shelfId,
+                      shelfName: product.shelfName,
+                      shelfCode: product.shelfCode,
+                      productPrice: product.price,
+                      productSellingPrice: product.sellingPrice,
+                      variants: product.variants?.length || 0,
+                      variantPrices: product.variants?.map((v: any) => ({
+                        sku: v.sku,
+                        sellingPrice: v.sellingPrice,
+                        price: v.price,
+                        costPrice: v.costPrice
+                      })) || [],
+                      category: product.category,
+                      supplier: product.supplier,
+                      categoriesAvailable: categories.length,
+                      suppliersAvailable: suppliers.length
+                    });
+                  }
+                  
+                  const category = product.category || categories.find(c => c.id === product.categoryId);
                   
                   // Smart variant selection: prefer variant with stock, then highest price
                   const mainVariant = (() => {
@@ -707,12 +734,43 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                     
                     // If no stock, use variant with highest price
                     const variantWithPrice = [...product.variants]
-                      .sort((a: any, b: any) => (b.sellingPrice || 0) - (a.sellingPrice || 0))[0];
-                    if (variantWithPrice && variantWithPrice.sellingPrice > 0) return variantWithPrice;
+                      .sort((a: any, b: any) => (b.sellingPrice || b.price || 0) - (a.sellingPrice || a.price || 0))[0];
+                    if (variantWithPrice && (variantWithPrice.sellingPrice > 0 || variantWithPrice.price > 0)) return variantWithPrice;
                     
                     // Fallback to first variant
                     return product.variants[0];
                   })();
+                  
+                  // Get best available price from all variants or product level
+                  const getBestPrice = () => {
+                    // First, try mainVariant price (check all price fields)
+                    if (mainVariant) {
+                      if (mainVariant.sellingPrice > 0) return mainVariant.sellingPrice;
+                      if (mainVariant.price > 0) return mainVariant.price;
+                      if (mainVariant.unit_price > 0) return mainVariant.unit_price;
+                      if ((mainVariant as any).selling_price > 0) return (mainVariant as any).selling_price;
+                    }
+                    
+                    // Try all variants to find any with a price
+                    if (product.variants && product.variants.length > 0) {
+                      for (const variant of product.variants) {
+                        if (variant.sellingPrice > 0) return variant.sellingPrice;
+                        if (variant.price > 0) return variant.price;
+                        if (variant.unit_price > 0) return variant.unit_price;
+                        if ((variant as any).selling_price > 0) return (variant as any).selling_price;
+                      }
+                    }
+                    
+                    // Fallback to product-level price (check all price fields)
+                    if (product.price > 0) return product.price;
+                    if (product.sellingPrice > 0) return product.sellingPrice;
+                    if ((product as any).unit_price > 0) return (product as any).unit_price;
+                    if ((product as any).selling_price > 0) return (product as any).selling_price;
+                    
+                    return 0;
+                  };
+                  
+                  const displayPrice = getBestPrice();
                   
                   // Calculate stock: Use variant stock if product HAS variants, otherwise use product-level stock
                   // 🐛 FIX: Don't fallback to product stock when variants exist but have 0 stock
@@ -856,33 +914,37 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       )}
                       {visibleColumns.includes('sku') && (
                         <td className="py-3 px-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
-                              setShowQRModal(true);
-                            }}
-                            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
-                            title="View QR Code"
-                          >
-                            <QrCode size={18} />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-mono text-gray-700">
+                              {mainVariant?.sku || product.sku || 'N/A'}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedSKU(mainVariant?.sku || product.sku || 'N/A');
+                                setShowQRModal(true);
+                              }}
+                              className="text-blue-600 hover:text-blue-800 transition-colors"
+                              title="View QR Code"
+                            >
+                              <QrCode size={16} />
+                            </button>
+                          </div>
                         </td>
                       )}
                       {visibleColumns.includes('category') && (
                         <td className="py-3 px-4">
                           <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500 text-white shadow-sm inline-block max-w-[150px] truncate" title={category?.name || 'Uncategorized'}>
-                            {category?.name || 'Uncategorized'}
+                            {category?.name || (product.categoryId ? 'Loading...' : 'Uncategorized')}
                           </span>
                         </td>
                       )}
                       {visibleColumns.includes('supplier') && (
                         <td className="py-3 px-4">
                           {(() => {
-                            // Look up supplier from suppliers list using supplierId
-                            const supplier = product.supplierId 
-                              ? suppliers.find(s => s.id === product.supplierId)
-                              : product.supplier; // Fallback to embedded supplier object
+                            // Look up supplier: first try embedded supplier object, then lookup by ID
+                            const supplier = product.supplier 
+                              || (product.supplierId ? suppliers.find(s => s.id === product.supplierId) : null);
                             
                             if (supplier?.name?.startsWith('Trade-In:')) {
                               return (
@@ -896,7 +958,9 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                             }
                             
                             return (
-                              <span className="text-sm text-gray-600">{supplier?.name || 'N/A'}</span>
+                              <span className="text-sm text-gray-600">
+                                {supplier?.name || (product.supplierId ? 'Loading...' : 'N/A')}
+                              </span>
                             );
                           })()}
                         </td>
@@ -911,9 +975,15 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                       {visibleColumns.includes('price') && (
                         <td className="py-3 px-4">
                           <div>
-                            <p className="font-medium text-gray-900">{formatMoney(mainVariant?.sellingPrice || 0)}</p>
-                            {mainVariant?.costPrice && (
-                              <p className="text-xs text-gray-500">Cost: {formatMoney(mainVariant.costPrice)}</p>
+                            <p className="font-medium text-gray-900">
+                              {displayPrice > 0 ? formatMoney(displayPrice) : (
+                                <span className="text-gray-400 italic">No price set</span>
+                              )}
+                            </p>
+                            {(mainVariant?.costPrice || product.costPrice) > 0 && (
+                              <p className="text-xs text-gray-500">
+                                Cost: {formatMoney(mainVariant?.costPrice || product.costPrice || 0)}
+                              </p>
                             )}
                           </div>
                         </td>

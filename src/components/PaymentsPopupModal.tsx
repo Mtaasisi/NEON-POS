@@ -7,7 +7,7 @@ import { usePaymentAccounts } from '../hooks/usePaymentAccounts';
 import PaymentMethodIcon from './PaymentMethodIcon';
 import { devicePriceService } from '../lib/devicePriceService';
 import { toast } from 'react-hot-toast';
-import { Currency, DEFAULT_CURRENCY, formatCurrencyWithFlag, SUPPORTED_CURRENCIES } from '../lib/currencyUtils';
+import { Currency, DEFAULT_CURRENCY, formatCurrency, SUPPORTED_CURRENCIES } from '../lib/currencyUtils';
 import { useBodyScrollLock } from '../hooks/useBodyScrollLock';
 import { supabase } from '../lib/supabaseClient';
 
@@ -148,6 +148,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
   const [processingStep, setProcessingStep] = useState<string>(''); // Current processing step
   const [expandedMethodId, setExpandedMethodId] = useState<string | null>(null);
   const [methodAmounts, setMethodAmounts] = useState<Record<string, number>>({}); // Track amounts for each method in single mode
+  const [quickPaySelectedMethodId, setQuickPaySelectedMethodId] = useState<string | null>(null); // Track which Quick Pay method was selected
 
   // Reset form when modal opens (balances refresh only when stale)
     useEffect(() => {
@@ -164,6 +165,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
         setPriceEditReason('');
         setProcessingStep('');
         setMethodAmounts({});
+        setQuickPaySelectedMethodId(null);
 
       // Only refresh balances if we don't have them or they're stale (older than 5 minutes)
       const shouldRefreshBalances = () => {
@@ -739,14 +741,13 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           {/* Payment Summary for Entire Order */}
           <div className="mb-6">
             <div className="mb-4 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">
-                  Total Amount: <span className="font-bold text-lg text-gray-900">
-                    {(amountInTZS || amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
-                  </span>
+              <div className="flex-1 text-center">
+                <p className="text-xs text-gray-500 mb-2">Total Amount</p>
+                <p className="text-6xl font-bold text-gray-900">
+                  {(amountInTZS || amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}
                 </p>
                 {showConversion && amountInTZS && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 mt-2">
                     Original: {currency} {amount.toLocaleString()} • Exchange Rate: {exchangeRate?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 )}
@@ -766,26 +767,25 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Amount
                     </label>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                        <span className="text-lg">{selectedCurrency.flag}</span>
-                        <select
-                          value={selectedCurrency.code}
-                          onChange={(e) => {
-                            const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
-                            if (newCurrency) {
-                              setSelectedCurrency(newCurrency);
-                            }
-                          }}
-                          className="bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer"
-                        >
-                          {SUPPORTED_CURRENCIES.map(currencyOption => (
-                            <option key={currencyOption.code} value={currencyOption.code}>
-                              {currencyOption.code}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                    <div className="mb-3">
+                      <select
+                        value={selectedCurrency.code}
+                        onChange={(e) => {
+                          const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
+                          if (newCurrency) {
+                            setSelectedCurrency(newCurrency);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 cursor-pointer mb-2"
+                      >
+                        {SUPPORTED_CURRENCIES.map(currencyOption => (
+                          <option key={currencyOption.code} value={currencyOption.code}>
+                            {currencyOption.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 focus-within:border-orange-500 transition-colors">
                       <input
                         type="text"
                         value={customAmount ? Number(customAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
@@ -795,7 +795,13 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                             setCustomAmount(value);
                           }
                         }}
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-lg font-bold"
+                        onClick={(e) => {
+                          if (customAmount && Number(customAmount) > 0) {
+                            setCustomAmount('');
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                        className="w-full text-center text-3xl font-bold text-gray-900 bg-transparent border-none outline-none"
                         placeholder="0"
                         autoFocus
                       />
@@ -849,6 +855,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                       onClick={() => {
                         setSelectedMethod(method.id);
                         setExpandedMethodId(method.id);
+                        setQuickPaySelectedMethodId(method.id); // Track which Quick Pay method was clicked
                         // Set the method amount to the full amount when using quick pay
                         // Store in TZS (user enters TZS amounts)
                         // amountInTZS is the converted TZS amount, or amount if already in TZS
@@ -884,6 +891,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                   } else {
                     setSelectedMethod('');
                     setMethodAmounts({});
+                    setQuickPaySelectedMethodId(null); // Reset Quick Pay selection
                   }
                   setExpandedMethodId(null);
                 }}
@@ -899,7 +907,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
           )}
 
           {/* Payment Methods List */}
-          <div className="space-y-4 py-4">
+          <div className="py-4">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -953,7 +961,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                           </div>
                         </div>
                         <div className="px-4 py-2 rounded-xl text-base font-bold shadow-sm border bg-green-100 text-green-700 border-green-200">
-                          {formatCurrencyWithFlag(entry.amount, currency)}
+                          {formatCurrency(entry.amount, currency)}
                         </div>
                       </div>
                       
@@ -966,26 +974,25 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                               <label className="block text-sm font-medium text-gray-700 mb-2">
                                 Edit {entry.method} Amount
                               </label>
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                                  <span className="text-lg">{currency.flag}</span>
-                                  <select
-                                    value={entry.currency}
-                                    onChange={(e) => {
-                                      const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
-                                      if (newCurrency) {
-                                        updatePaymentEntry(index, 'currency', newCurrency.code);
-                                      }
-                                    }}
-                                    className="bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer"
-                                  >
-                                    {SUPPORTED_CURRENCIES.map(currencyOption => (
-                                      <option key={currencyOption.code} value={currencyOption.code}>
-                                        {currencyOption.code}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
+                              <div className="mb-3">
+                                <select
+                                  value={entry.currency}
+                                  onChange={(e) => {
+                                    const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
+                                    if (newCurrency) {
+                                      updatePaymentEntry(index, 'currency', newCurrency.code);
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 cursor-pointer mb-2"
+                                >
+                                  {SUPPORTED_CURRENCIES.map(currencyOption => (
+                                    <option key={currencyOption.code} value={currencyOption.code}>
+                                      {currencyOption.code}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 focus-within:border-orange-500 transition-colors">
                                 <input
                                   type="text"
                                   value={entry.amount > 0 ? entry.amount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
@@ -995,8 +1002,14 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                                       updatePaymentEntry(index, 'amount', value === '' ? 0 : parseFloat(value));
                                     }
                                   }}
-                                  placeholder="Enter amount"
-                                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
+                                  onClick={(e) => {
+                                    if (entry.amount > 0) {
+                                      updatePaymentEntry(index, 'amount', 0);
+                                      e.currentTarget.value = '';
+                                    }
+                                  }}
+                                  placeholder="0"
+                                  className="w-full text-center text-3xl font-bold text-gray-900 bg-transparent border-none outline-none"
                                 />
                               </div>
                             </div>
@@ -1076,26 +1089,25 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Amount</label>
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                                  <span className="text-lg">{selectedCurrency.flag}</span>
-                                  <select
-                                    value={selectedCurrency.code}
-                                    onChange={(e) => {
-                                      const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
-                                      if (newCurrency) {
-                                        setSelectedCurrency(newCurrency);
-                                      }
-                                    }}
-                                    className="bg-transparent border-none text-gray-700 focus:outline-none cursor-pointer"
-                                  >
-                                    {SUPPORTED_CURRENCIES.map(currencyOption => (
-                                      <option key={currencyOption.code} value={currencyOption.code}>
-                                        {currencyOption.code}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
+                              <div className="mb-3">
+                                <select
+                                  value={selectedCurrency.code}
+                                  onChange={(e) => {
+                                    const newCurrency = SUPPORTED_CURRENCIES.find(c => c.code === e.target.value);
+                                    if (newCurrency) {
+                                      setSelectedCurrency(newCurrency);
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 cursor-pointer mb-2"
+                                >
+                                  {SUPPORTED_CURRENCIES.map(currencyOption => (
+                                    <option key={currencyOption.code} value={currencyOption.code}>
+                                      {currencyOption.code}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 focus-within:border-orange-500 transition-colors">
                                 <input
                                   type="text"
                                   value={customAmount ? Number(customAmount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
@@ -1105,8 +1117,14 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                                       setCustomAmount(value);
                                     }
                                   }}
-                                  placeholder="Enter amount"
-                                  className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
+                                  onClick={(e) => {
+                                    if (customAmount && Number(customAmount) > 0) {
+                                      setCustomAmount('');
+                                      e.currentTarget.value = '';
+                                    }
+                                  }}
+                                  placeholder="0"
+                                  className="w-full text-center text-3xl font-bold text-gray-900 bg-transparent border-none outline-none"
                                 />
                               </div>
                               {showConversion && customAmount && Number(customAmount) > 0 && (
@@ -1155,8 +1173,12 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                 )}
               </div>
             ) : (
-              /* Single Payment Mode - Card Style */
-              displayPaymentMethods.map((method) => {
+              /* Single Payment Mode - Card Style - Grid Layout */
+              <div className={quickPaySelectedMethodId ? "grid grid-cols-1 gap-4" : "grid grid-cols-1 md:grid-cols-2 gap-4"}>
+                {(quickPaySelectedMethodId 
+                  ? displayPaymentMethods.filter(method => method.id === quickPaySelectedMethodId)
+                  : displayPaymentMethods
+                ).map((method) => {
               const isExpanded = expandedMethodId === method.id;
               const account = paymentAccounts.find(acc => acc.payment_method_id === method.id);
               const methodSpecificAmount = methodAmounts[method.id];
@@ -1253,17 +1275,19 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                           <label className="block text-sm font-medium text-gray-700 mb-2">
                             Enter {method.name} Amount (in TZS)
                           </label>
-                          <div className="flex items-center gap-2">
-                            <div className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg bg-white">
-                              <span className="text-lg">{SUPPORTED_CURRENCIES.find(c => c.code === 'TZS')?.flag || '🇹🇿'}</span>
-                              <span className="text-sm font-medium text-gray-700">TZS</span>
-                            </div>
+                          <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 focus-within:border-orange-500 transition-colors">
                             <input
                               type="text"
                               value={methodAmounts[method.id] > 0 ? methodAmounts[method.id].toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : ''}
                               onChange={(e) => updateMethodAmount(method.id, e.target.value)}
-                              placeholder="Enter amount"
-                              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 text-xl font-bold bg-white"
+                              onClick={(e) => {
+                                if (methodAmounts[method.id] > 0) {
+                                  setMethodAmounts(prev => ({ ...prev, [method.id]: 0 }));
+                                  e.currentTarget.value = '';
+                                }
+                              }}
+                              placeholder="0"
+                              className="w-full text-center text-3xl font-bold text-gray-900 bg-transparent border-none outline-none"
                             />
                           </div>
                           {methodAmounts[method.id] > 0 && currency && currency !== 'TZS' && exchangeRate && (
@@ -1299,7 +1323,8 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                   )}
                 </div>
               );
-              })
+              })}
+              </div>
             )}
           </div>
         </div>
@@ -1317,11 +1342,11 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600">Original Price:</span>
-                    <p className="font-semibold text-gray-900">{formatCurrencyWithFlag(amount, selectedCurrency)}</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(amount, selectedCurrency)}</p>
                   </div>
                   <div>
                     <span className="text-gray-600">Amount Paid:</span>
-                    <p className="font-semibold text-gray-900">{formatCurrencyWithFlag(customerPaymentAmount, selectedCurrency)}</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(customerPaymentAmount, selectedCurrency)}</p>
                   </div>
                 </div>
               </div>
@@ -1329,7 +1354,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
               {!showPriceEdit ? (
                 <div className="space-y-3">
                   <p className="text-sm text-gray-700">
-                    Customer paid <span className="font-semibold">{formatCurrencyWithFlag(customerPaymentAmount - amount, selectedCurrency)}</span> more than the original price.
+                    Customer paid <span className="font-semibold">{formatCurrency(customerPaymentAmount - amount, selectedCurrency)}</span> more than the original price.
                   </p>
                   <button
                     onClick={() => {
@@ -1417,24 +1442,7 @@ const PaymentsPopupModal: React.FC<PaymentsPopupModalProps> = ({
               </span>
             </div>
           )}
-          {remainingAmount <= 0 && (isMultipleMode ? paymentEntries.length > 0 : selectedMethod) && (
-            <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-              <span className="text-sm font-semibold text-green-700">
-                Payment ready! Full amount ({(amountInTZS || amount).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {displayCurrency}) will be processed.
-              </span>
-            </div>
-          )}
 
-          {/* Processing step indicator */}
-          {isProcessing && processingStep && (
-            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
-              <Loader2 className="w-5 h-5 text-blue-600 flex-shrink-0 animate-spin" />
-              <span className="text-sm font-semibold text-blue-700">
-                {processingStep}
-              </span>
-            </div>
-          )}
 
           {/* Main Action Button */}
           <button

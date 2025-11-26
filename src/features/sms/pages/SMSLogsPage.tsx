@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, RefreshCw, Search, X, CheckCircle2, XCircle, Clock, Send, Lightbulb, Edit2, DollarSign, Phone, FileText, Calendar, User, AlertCircle } from 'lucide-react';
+import { MessageSquare, RefreshCw, Search, X, CheckCircle2, XCircle, Clock, Send, Lightbulb, Edit2, DollarSign, Phone, FileText, Calendar, User, AlertCircle, MoreVertical, Copy, Eye, RotateCw } from 'lucide-react';
 import { supabase } from '../../../lib/supabaseClient';
 import { toast } from 'react-hot-toast';
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
+import { smsService } from '../../../services/smsService';
 
 interface SMSLog {
   id: string;
@@ -63,7 +64,10 @@ const SMSLogsPage: React.FC = () => {
   const [showPriceInput, setShowPriceInput] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [animateStats, setAnimateStats] = useState(false);
+  const [retryingLogId, setRetryingLogId] = useState<string | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const isMountedRef = useRef(true);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -74,6 +78,60 @@ const SMSLogsPage: React.FC = () => {
       isMountedRef.current = false;
     };
   }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpenDropdownId(null);
+      }
+    };
+
+    if (openDropdownId) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [openDropdownId]);
+
+  // Handle retry SMS
+  const handleRetrySMS = async (log: SMSLog): Promise<{ success: boolean; error?: string } | undefined> => {
+    if (!log.id) return;
+    
+    setRetryingLogId(log.id);
+    try {
+      const result = await smsService.resendSMS(log.id);
+      
+      if (result.success) {
+        toast.success('SMS resent successfully!');
+        // Refresh logs to show updated status
+        await fetchSMSLogs();
+        return { success: true };
+      } else {
+        toast.error(`Failed to resend SMS: ${result.error || 'Unknown error'}`);
+        return { success: false, error: result.error };
+      }
+    } catch (error: any) {
+      console.error('Error retrying SMS:', error);
+      toast.error(`Error retrying SMS: ${error.message || 'Unknown error'}`);
+      return { success: false, error: error.message || 'Unknown error' };
+    } finally {
+      setRetryingLogId(null);
+    }
+  };
+
+  // Handle copy to clipboard
+  const handleCopy = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${type} copied to clipboard!`);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      toast.error('Failed to copy to clipboard');
+    }
+  };
 
   const fetchSMSLogs = async () => {
     const jobId = startLoading('Loading SMS logs...');
@@ -611,6 +669,92 @@ const SMSLogsPage: React.FC = () => {
                           <div className="text-lg font-bold text-purple-600">{formatPrice(calculatedCost)} TZS</div>
                           <div className="text-xs text-gray-500">{smsInfo.smsUnits} unit{smsInfo.smsUnits > 1 ? 's' : ''}</div>
                         </div>
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                          {/* Retry Button - Only show for failed/pending messages */}
+                          {(log.status === 'failed' || log.status === 'pending') && (
+                            <button
+                              onClick={() => handleRetrySMS(log)}
+                              disabled={retryingLogId === log.id}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-lg text-xs font-semibold transition-all shadow-sm hover:shadow-md disabled:cursor-not-allowed"
+                              title="Retry sending SMS"
+                            >
+                              {retryingLogId === log.id ? (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Retrying...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCw className="w-3.5 h-3.5" />
+                                  <span>Retry</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                          
+                          {/* More Actions Button */}
+                          <div className="relative" ref={dropdownRef}>
+                            <button
+                              onClick={() => setOpenDropdownId(openDropdownId === log.id ? null : log.id)}
+                              className="flex items-center justify-center w-8 h-8 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all shadow-sm hover:shadow-md"
+                              title="More actions"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+                            
+                            {/* Dropdown Menu */}
+                            {openDropdownId === log.id && (
+                              <div className="absolute right-0 top-10 z-50 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-2 overflow-hidden">
+                                <button
+                                  onClick={() => {
+                                    setSelectedLog(log);
+                                    setOpenDropdownId(null);
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 transition-colors"
+                                >
+                                  <Eye className="w-4 h-4 text-blue-600" />
+                                  <span className="font-medium">View Details</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleCopy(log.message, 'Message');
+                                    setOpenDropdownId(null);
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-green-50 transition-colors"
+                                >
+                                  <Copy className="w-4 h-4 text-green-600" />
+                                  <span className="font-medium">Copy Message</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleCopy(log.recipient_phone, 'Phone number');
+                                    setOpenDropdownId(null);
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 transition-colors"
+                                >
+                                  <Phone className="w-4 h-4 text-purple-600" />
+                                  <span className="font-medium">Copy Phone</span>
+                                </button>
+                                {(log.status === 'failed' || log.status === 'pending') && (
+                                  <button
+                                    onClick={() => {
+                                      handleRetrySMS(log);
+                                      setOpenDropdownId(null);
+                                    }}
+                                    disabled={retryingLogId === log.id}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-orange-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    <RotateCw className={`w-4 h-4 text-orange-600 ${retryingLogId === log.id ? 'animate-spin' : ''}`} />
+                                    <span className="font-medium">
+                                      {retryingLogId === log.id ? 'Retrying...' : 'Retry SMS'}
+                                    </span>
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -888,10 +1032,38 @@ const SMSLogsPage: React.FC = () => {
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0">
+                <div className="p-6 pt-4 border-t border-gray-200 bg-white flex-shrink-0 flex gap-3">
+                  {/* Retry Button in Modal - Only show for failed/pending */}
+                  {(selectedLog.status === 'failed' || selectedLog.status === 'pending') && (
+                    <button
+                      onClick={async () => {
+                        if (selectedLog.id) {
+                          const result = await handleRetrySMS(selectedLog);
+                          // Close modal if retry was successful
+                          if (result?.success) {
+                            setSelectedLog(null);
+                          }
+                        }
+                      }}
+                      disabled={retryingLogId === selectedLog.id}
+                      className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl disabled:cursor-not-allowed"
+                    >
+                      {retryingLogId === selectedLog.id ? (
+                        <>
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                          <span>Retrying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <RotateCw className="w-5 h-5" />
+                          <span>Retry SMS</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedLog(null)}
-                    className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl"
+                    className={`px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl ${(selectedLog.status === 'failed' || selectedLog.status === 'pending') ? 'flex-1' : 'w-full'}`}
                   >
                     Close
                   </button>

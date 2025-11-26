@@ -21,6 +21,17 @@ class ProductCacheService {
    */
   saveProducts(products: any[]): void {
     try {
+      // 🔍 DIAGNOSTIC: Check variant data before saving
+      if (import.meta.env.DEV && products && products.length > 0) {
+        const productsWithVariants = products.filter(p => p.variants && p.variants.length > 0).length;
+        const totalVariants = products.reduce((sum, p) => sum + (p.variants?.length || 0), 0);
+        console.log(`💾 [Cache] Saving ${products.length} products to cache:`, {
+          withVariants: productsWithVariants,
+          withoutVariants: products.length - productsWithVariants,
+          totalVariants: totalVariants
+        });
+      }
+      
       const cached: CachedData<any[]> = {
         data: products,
         timestamp: Date.now(),
@@ -39,6 +50,9 @@ class ProductCacheService {
     try {
       const cached = localStorage.getItem(ProductCacheService.PRODUCTS_KEY);
       if (!cached) {
+        if (import.meta.env.DEV) {
+          console.log('ℹ️ [Cache] No products cache found in localStorage');
+        }
         return null;
       }
       
@@ -46,6 +60,7 @@ class ProductCacheService {
       
       // Check version
       if (data.version !== CACHE_VERSION) {
+        console.log('ℹ️ [Cache] Cache version mismatch, clearing old cache');
         this.clearProducts();
         return null;
       }
@@ -53,8 +68,22 @@ class ProductCacheService {
       // Check expiry
       const age = Date.now() - data.timestamp;
       if (age > CACHE_DURATION) {
+        if (import.meta.env.DEV) {
+          console.log(`ℹ️ [Cache] Cache expired (${Math.round(age / 1000 / 60)} minutes old, max ${CACHE_DURATION / 1000 / 60} minutes)`);
+        }
         this.clearProducts();
         return null;
+      }
+      
+      if (import.meta.env.DEV) {
+        const products = data.data || [];
+        const productsWithVariants = products.filter((p: any) => p.variants && p.variants.length > 0).length;
+        const totalVariants = products.reduce((sum: number, p: any) => sum + (p.variants?.length || 0), 0);
+        console.log(`✅ [Cache] Found ${products.length} cached products (${Math.round(age / 1000)} seconds old):`, {
+          withVariants: productsWithVariants,
+          withoutVariants: products.length - productsWithVariants,
+          totalVariants: totalVariants
+        });
       }
       return data.data;
     } catch (error) {
@@ -126,6 +155,13 @@ class ProductCacheService {
   clearAll(): void {
     this.clearProducts();
     this.clearCategories();
+  }
+
+  /**
+   * Clear cache (alias for clearAll for consistency with other services)
+   */
+  clearCache(): void {
+    this.clearAll();
   }
 }
 

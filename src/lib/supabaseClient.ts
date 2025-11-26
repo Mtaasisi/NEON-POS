@@ -45,30 +45,72 @@ if (typeof window !== 'undefined') {
   // Suppress transient WebSocket errors that are automatically retried
   const originalConsoleError = console.error;
   const originalConsoleWarn = console.warn;
+  const originalConsoleLog = console.log;
+  
+  // Track WebSocket errors to avoid spam
+  const wsErrorCounts = new Map<string, number>();
+  const WS_ERROR_SUPPRESS_THRESHOLD = 3; // Suppress after 3 occurrences
+  
+  // Helper function to check if a message is a WebSocket error
+  const isWebSocketError = (errorMsg: string, fullMessage: string, allArgsString: string): boolean => {
+    // Check all arguments for WebSocket-related content
+    // The library may log errors with file paths first, so check the full message
+    return (
+      // Direct WebSocket error patterns
+      errorMsg.includes('WebSocket connection to') ||
+      errorMsg.includes('WebSocket is closed before the connection is established') ||
+      errorMsg.includes('Failed to construct \'WebSocket\'') ||
+      (errorMsg.includes('WebSocket connection') && errorMsg.includes('failed')) ||
+      // Check full message for WebSocket errors (library may log file path first)
+      fullMessage.includes('WebSocket connection to') ||
+      fullMessage.includes('WebSocket connection') && fullMessage.includes('failed') ||
+      // Neon-specific patterns
+      (fullMessage.includes('wss://') && (fullMessage.includes('neon.tech') || fullMessage.includes('neon') || fullMessage.includes('pooler')) && (fullMessage.includes('failed') || fullMessage.includes('error'))) ||
+      (errorMsg.includes('@neondatabase/serverless') && errorMsg.includes('Unhandled error')) ||
+      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket')) ||
+      // Library file path patterns
+      (fullMessage.includes('@neondatabase_serverless.js') || fullMessage.includes('neondatabase_serverless.js')) ||
+      (fullMessage.includes('@neondatabase') && (fullMessage.includes('WebSocket') || fullMessage.includes('wss://'))) ||
+      // Lowercase checks for case-insensitive matching
+      (allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
+      (allArgsString.includes('websocket') && allArgsString.includes('neon')) ||
+      (allArgsString.includes('wss://') && allArgsString.includes('pooler') && (allArgsString.includes('failed') || allArgsString.includes('error'))) ||
+      (allArgsString.includes('websocket') && allArgsString.includes('pooler')) ||
+      // Additional patterns from the actual error messages
+      (allArgsString.includes('ep-icy-mouse') || (allArgsString.includes('ep-') && allArgsString.includes('pooler'))) ||
+      (errorMsg.includes('connect @') && allArgsString.includes('neondatabase')) ||
+      (fullMessage.includes('supabaseClient.ts') && allArgsString.includes('websocket')) ||
+      // Stack trace patterns
+      (allArgsString.includes('neondatabase') && allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
+      (allArgsString.includes('neondatabase') && allArgsString.includes('wss://') && allArgsString.includes('pooler'))
+    );
+  };
   
   // Enhanced error suppression for WebSocket connection errors
   console.error = (...args: any[]) => {
+    // Convert all arguments to strings and check the full message
     const errorMsg = String(args[0] || '');
-    const fullMessage = args.map(a => String(a)).join(' ');
+    const fullMessage = args.map(a => {
+      // Handle different argument types
+      if (typeof a === 'string') return a;
+      if (a instanceof Error) return a.message + ' ' + a.stack;
+      if (typeof a === 'object' && a !== null) return JSON.stringify(a);
+      return String(a);
+    }).join(' ');
     const allArgsString = fullMessage.toLowerCase();
     
     // Suppress common WebSocket connection errors that are automatically retried
     // These errors occur during initial connection attempts and are handled by the pool's retry mechanism
-    if (
-      errorMsg.includes('WebSocket connection to') ||
-      errorMsg.includes('WebSocket is closed before the connection is established') ||
-      errorMsg.includes('Failed to construct \'WebSocket\'') ||
-      fullMessage.includes('wss://') && (fullMessage.includes('neon.tech') || fullMessage.includes('neon')) && (fullMessage.includes('failed') || fullMessage.includes('error')) ||
-      (errorMsg.includes('@neondatabase/serverless') && errorMsg.includes('Unhandled error')) ||
-      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket')) ||
-      (allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
-      (allArgsString.includes('websocket') && allArgsString.includes('neon')) ||
-      (allArgsString.includes('wss://') && allArgsString.includes('pooler') && allArgsString.includes('failed'))
-    ) {
+    if (isWebSocketError(errorMsg, fullMessage, allArgsString)) {
+      // Track error frequency to avoid spam
+      const errorKey = 'websocket_connection_error';
+      const count = (wsErrorCounts.get(errorKey) || 0) + 1;
+      wsErrorCounts.set(errorKey, count);
+      
       // These errors are transient and will be retried automatically by the pool
-      // Only log in development mode as debug info (not as error)
-      if (import.meta.env.DEV) {
-        console.debug('🔄 WebSocket connection attempt (automatic retry enabled)');
+      // Only log in development mode as debug info (not as error), and only occasionally
+      if (import.meta.env.DEV && count <= WS_ERROR_SUPPRESS_THRESHOLD) {
+        console.debug(`🔄 WebSocket connection attempt ${count}/${WS_ERROR_SUPPRESS_THRESHOLD} (automatic retry enabled)`);
       }
       return;
     }
@@ -84,11 +126,7 @@ if (typeof window !== 'undefined') {
     
     // Suppress WebSocket warning noise and slow database response warnings
     if (
-      warnMsg.includes('WebSocket connection to') || 
-      warnMsg.includes('WebSocket is closed') ||
-      (fullMessage.includes('neon.tech') && fullMessage.includes('WebSocket')) ||
-      (allArgsString.includes('websocket') && allArgsString.includes('failed')) ||
-      (allArgsString.includes('websocket') && allArgsString.includes('neon')) ||
+      isWebSocketError(warnMsg, fullMessage, allArgsString) ||
       warnMsg.includes('Slow database response') ||
       warnMsg.includes('possible cold start') ||
       warnMsg.includes('Cold start detected') ||
@@ -101,16 +139,42 @@ if (typeof window !== 'undefined') {
     originalConsoleWarn.apply(console, args);
   };
   
+  // Also suppress console.log messages that contain WebSocket errors
+  console.log = (...args: any[]) => {
+    // Convert all arguments to strings and check the full message
+    const logMsg = String(args[0] || '');
+    const fullMessage = args.map(a => {
+      // Handle different argument types
+      if (typeof a === 'string') return a;
+      if (a instanceof Error) return a.message + ' ' + a.stack;
+      if (typeof a === 'object' && a !== null) return JSON.stringify(a);
+      return String(a);
+    }).join(' ');
+    const allArgsString = fullMessage.toLowerCase();
+    
+    // Suppress WebSocket error logs from the library
+    if (isWebSocketError(logMsg, fullMessage, allArgsString)) {
+      return; // Silently ignore
+    }
+    
+    // Pass through all other logs
+    originalConsoleLog.apply(console, args);
+  };
+  
   // Also suppress unhandled promise rejections from WebSocket connections
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason;
     const errorMsg = reason?.message || String(reason || '');
+    const errorString = String(reason || '').toLowerCase();
     
     // Suppress WebSocket-related unhandled rejections
     if (
       errorMsg.includes('WebSocket') ||
       errorMsg.includes('neon.tech') ||
-      errorMsg.includes('pooler')
+      errorMsg.includes('pooler') ||
+      errorString.includes('websocket') ||
+      errorString.includes('wss://') ||
+      (errorString.includes('neon') && errorString.includes('pooler'))
     ) {
       // These are handled by the pool's retry mechanism
       event.preventDefault();
@@ -119,6 +183,26 @@ if (typeof window !== 'undefined') {
       }
     }
   });
+  
+  // Global error event listener to catch WebSocket errors at the window level
+  window.addEventListener('error', (event) => {
+    const errorMsg = event.message || String(event.error || '');
+    const errorString = errorMsg.toLowerCase();
+    
+    // Suppress WebSocket connection errors
+    if (
+      errorString.includes('websocket') ||
+      errorString.includes('wss://') ||
+      (errorString.includes('neon') && errorString.includes('pooler')) ||
+      errorMsg.includes('WebSocket connection to')
+    ) {
+      // These are transient and will be retried automatically
+      event.preventDefault();
+      if (import.meta.env.DEV) {
+        console.debug('🔄 Suppressed WebSocket error event (will retry)');
+      }
+    }
+  }, true); // Use capture phase to catch errors early
 }
 
 // ✅ FIXED: Use WebSocket Pool for browser compatibility
@@ -150,18 +234,31 @@ try {
   // Add pool error handler to catch connection errors gracefully
   pool.on('error', (err: any) => {
     const errorMsg = err?.message || String(err || '');
+    const errorString = String(err || '').toLowerCase();
     
     // Suppress expected WebSocket connection errors that are automatically retried
-    if (
+    const isWebSocketError = (
       errorMsg.includes('WebSocket') ||
       errorMsg.includes('connection terminated') ||
       errorMsg.includes('ECONNRESET') ||
-      errorMsg.includes('socket hang up')
-    ) {
+      errorMsg.includes('socket hang up') ||
+      errorString.includes('websocket') ||
+      errorString.includes('wss://') ||
+      (errorString.includes('neon') && errorString.includes('pooler')) ||
+      (errorString.includes('failed') && (errorString.includes('websocket') || errorString.includes('wss://')))
+    );
+    
+    if (isWebSocketError) {
       // These are transient errors - the pool will automatically retry
-      // Only log in development mode
+      // Only log in development mode, and only occasionally to avoid spam
       if (import.meta.env.DEV) {
-        console.debug('🔄 Pool connection error (will retry automatically):', errorMsg.substring(0, 100));
+        const errorKey = 'pool_websocket_error';
+        const count = (wsErrorCounts.get(errorKey) || 0) + 1;
+        wsErrorCounts.set(errorKey, count);
+        
+        if (count <= WS_ERROR_SUPPRESS_THRESHOLD) {
+          console.debug(`🔄 Pool WebSocket connection error ${count}/${WS_ERROR_SUPPRESS_THRESHOLD} (will retry automatically)`);
+        }
       }
       return;
     }

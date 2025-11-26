@@ -389,6 +389,72 @@ Respond in JSON format:
     // Ensure service is initialized
     await this.ensureInitialized();
     
+    // ✅ ENHANCED: Quick health check before using cache
+    const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+    if (isDevelopment && typeof window !== 'undefined') {
+      const serverUnavailableKey = 'sms_proxy_server_unavailable';
+      const serverUnavailable = localStorage.getItem(serverUnavailableKey);
+      const lastCheck = serverUnavailable ? parseInt(serverUnavailable, 10) : 0;
+      const timeSinceLastCheck = Date.now() - lastCheck;
+      
+      // If cache exists and is recent, do a quick health check first
+      if (serverUnavailable && timeSinceLastCheck < 300000) {
+        try {
+          // Quick health check with short timeout (2 seconds for more reliability)
+          const healthCheckUrl = 'http://localhost:8000/health';
+          const healthController = new AbortController();
+          const healthTimeout = setTimeout(() => healthController.abort(), 2000);
+          
+          try {
+            const healthResponse = await fetch(healthCheckUrl, {
+              method: 'GET',
+              signal: healthController.signal,
+              // Add mode to handle CORS if needed
+              mode: 'cors',
+              cache: 'no-cache'
+            });
+            clearTimeout(healthTimeout);
+            
+            if (healthResponse.ok) {
+              // Server is back online! Clear the cache
+              localStorage.removeItem(serverUnavailableKey);
+              console.log('✅ SMS proxy server is back online - cache cleared');
+              // Continue with SMS send attempt
+            } else {
+              // Server responded but with error, still use cache
+              console.warn('⚠️ Health check returned non-OK status:', healthResponse.status);
+              return { success: false, error: 'SMS proxy server not running' };
+            }
+          } catch (healthError: any) {
+            clearTimeout(healthTimeout);
+            
+            // Check if it's a network error or timeout
+            const isNetworkError = 
+              healthError.name === 'AbortError' ||
+              healthError.message?.includes('Failed to fetch') ||
+              healthError.message?.includes('ERR_CONNECTION_REFUSED') ||
+              healthError.message?.includes('ECONNREFUSED') ||
+              healthError.message?.includes('NetworkError');
+            
+            if (isNetworkError) {
+              // Network error means server is likely down - use cache
+              console.warn('⚠️ Health check failed - server appears to be down');
+              return { success: false, error: 'SMS proxy server not running' };
+            } else {
+              // Other error - might be CORS or other issue, but server might be up
+              // Clear cache and try anyway
+              console.warn('⚠️ Health check had non-network error, clearing cache and trying anyway');
+              localStorage.removeItem(serverUnavailableKey);
+            }
+          }
+        } catch (checkError) {
+          // Health check itself failed - be lenient and try anyway
+          console.warn('⚠️ Health check setup failed, trying SMS send anyway');
+          // Don't return early - let it try to send
+        }
+      }
+    }
+    
     // Only log debug info in development mode
     if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
       console.debug('🔍 SMS send attempt:', {
@@ -417,17 +483,35 @@ Respond in JSON format:
       }
 
       // Use backend proxy to avoid CORS issues
-      // In production, use environment variable; in development, use localhost
-      const proxyUrl = import.meta.env.VITE_API_URL 
-        ? `${import.meta.env.VITE_API_URL}/api/sms-proxy`
-        : 'http://localhost:8000/api/sms-proxy';
+      // In production, use environment variable or current origin; in development, use localhost
+      const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
+      const isProduction = import.meta.env.MODE === 'production' || import.meta.env.PROD;
+      
+      // Determine proxy URL based on environment
+      let proxyUrl: string;
+      if (import.meta.env.VITE_API_URL) {
+        // Use explicit API URL if set
+        proxyUrl = `${import.meta.env.VITE_API_URL}/api/sms-proxy`;
+      } else if (isProduction && typeof window !== 'undefined') {
+        // In production, use current origin if no explicit API URL is set
+        proxyUrl = `${window.location.origin}/api/sms-proxy`;
+      } else {
+        // Development fallback to localhost
+        proxyUrl = 'http://localhost:8000/api/sms-proxy';
+      }
+      
+      const isLocalhostProxy = proxyUrl.includes('localhost') || proxyUrl.includes('127.0.0.1');
+      
+      // Note: Cache check is now done earlier with health check, so we proceed directly to the request
       
       // Only log in development mode
-      if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
-        console.log('📱 Sending SMS via MShastra backend proxy...');
-        console.log('   Phone:', phone);
-        console.log('   Message:', message.substring(0, 50) + '...');
-        console.log('   Provider: MShastra');
+      if (isDevelopment) {
+        console.debug('📱 SMS proxy URL:', proxyUrl);
+        if (isLocalhostProxy) {
+          console.debug('ℹ️ Using localhost proxy - if server is not running, SMS will be skipped gracefully');
+          // Add helpful message about the expected error
+          console.debug('💡 Note: If you see "ERR_CONNECTION_REFUSED" in console, the SMS proxy server is not running. This is expected in development and SMS will be skipped.');
+        }
       }
 
       // Get fresh credentials from integrations for all fields
@@ -437,40 +521,123 @@ Respond in JSON format:
       const apiUrl = integration?.config?.api_url || this.apiUrl || 'https://mshastra.com/sendurl.aspx';
       const apiKey = integration?.credentials?.api_key || this.apiKey;
       const apiPassword = integration?.credentials?.api_password || this.apiPassword;
+      // Get config values (priority, country_code, timeout, max_retries)
+      const priority = integration?.config?.priority || 'High';
+      const countryCode = integration?.config?.country_code || 'ALL';
+      const timeout = integration?.config?.timeout || 30000;
+      const maxRetries = integration?.config?.max_retries || 3;
 
       let response: Response;
       try {
-        response = await fetch(proxyUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            phone,
-            message,
-            apiUrl: apiUrl,
-            apiKey: apiKey,
-            apiPassword: apiPassword,
-            senderId: senderId
-          })
-        });
+        // ✅ FIX: Add shorter timeout for localhost in development to fail fast
+        const timeoutMs = isLocalhostProxy && isDevelopment ? 2000 : 5000; // 2s for localhost, 5s for production
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+        
+        try {
+          // ✅ FIX: Wrap fetch in Promise to better handle connection errors
+          // Use a wrapper that catches network errors before they propagate
+          const fetchPromise = fetch(proxyUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              phone,
+              message,
+              apiUrl: apiUrl,
+              apiKey: apiKey,
+              apiPassword: apiPassword,
+              senderId: senderId,
+              priority: priority,
+              countryCode: countryCode,
+              timeout: timeout,
+              maxRetries: maxRetries
+            }),
+            signal: controller.signal
+          }).catch((fetchError: any) => {
+            // Catch network errors immediately
+            // Note: Browser will still log the error, but we handle it gracefully
+            const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+            const errorName = fetchError instanceof Error ? fetchError.name : '';
+            const isConnectionError = 
+              errorName === 'TypeError' ||
+              errorMessage.includes('Failed to fetch') || 
+              errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+              errorMessage.includes('ECONNREFUSED') ||
+              errorMessage.includes('NetworkError') ||
+              errorMessage.includes('network') ||
+              errorMessage.includes('fetch');
+            
+            if (isConnectionError) {
+              // Immediately cache the failure to prevent future attempts
+              if (isDevelopment && isLocalhostProxy && typeof window !== 'undefined') {
+                localStorage.setItem('sms_proxy_server_unavailable', Date.now().toString());
+              }
+              // Return a rejected promise with a specific error we can catch
+              return Promise.reject(new Error('SMS_PROXY_CONNECTION_ERROR'));
+            }
+            // Re-throw other errors
+            throw fetchError;
+          });
+          
+          response = await Promise.race([
+            fetchPromise,
+            // Add a timeout promise that rejects with a specific error
+            new Promise<never>((_, reject) => {
+              setTimeout(() => reject(new Error('SMS proxy timeout')), timeoutMs);
+            })
+          ]);
+          
+          clearTimeout(timeoutId);
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          
+          // Check if it was aborted due to timeout
+          if (fetchError.name === 'AbortError' || controller.signal.aborted || fetchError.message === 'SMS proxy timeout') {
+            // Timeout likely means connection refused or server not responding
+            // Don't log - this is expected when proxy server is not running
+            return { success: false, error: 'SMS proxy server not running' };
+          }
+          
+          // ✅ FIX: Handle connection errors silently
+          const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+          if (errorMessage === 'SMS_PROXY_CONNECTION_ERROR' || 
+              errorMessage.includes('Failed to fetch') || 
+              errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+              errorMessage.includes('ECONNREFUSED') ||
+              errorMessage.includes('NetworkError')) {
+            // Mark server as unavailable in development to avoid repeated attempts
+            // Use localStorage for persistence across page refreshes
+            if (isDevelopment && isLocalhostProxy && typeof window !== 'undefined') {
+              localStorage.setItem('sms_proxy_server_unavailable', Date.now().toString());
+            }
+            // Silently handle - SMS proxy server not running is expected in some environments
+            // Don't log - browser already logged the network error
+            return { success: false, error: 'SMS proxy server not running' };
+          }
+          // Re-throw if it's not a connection error
+          throw fetchError;
+        }
       } catch (fetchError) {
-        // ✅ FIX: Catch connection errors at fetch level to prevent browser error logs
+        // Fallback catch for any other errors
         const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
         const isConnectionError = 
+          errorMessage === 'SMS_PROXY_CONNECTION_ERROR' ||
           errorMessage.includes('Failed to fetch') || 
           errorMessage.includes('ERR_CONNECTION_REFUSED') ||
           errorMessage.includes('ECONNREFUSED') ||
-          (fetchError instanceof TypeError);
+          errorMessage.includes('NetworkError') ||
+          errorMessage.includes('network');
         
         if (isConnectionError) {
-          // Silently handle - SMS proxy server not running is expected in some environments
-          if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
-            console.debug('ℹ️ SMS proxy server not available (connection refused). SMS features disabled.');
+          // Mark server as unavailable in development to avoid repeated attempts
+          if (isDevelopment && isLocalhostProxy && typeof window !== 'undefined') {
+            sessionStorage.setItem('sms_proxy_server_unavailable', Date.now().toString());
           }
+          // Don't log - browser already logged the network error
           return { success: false, error: 'SMS proxy server not running' };
         }
-        // Re-throw if it's not a connection error
         throw fetchError;
       }
       
@@ -489,6 +656,10 @@ Respond in JSON format:
       const result = await response.json();
       
       if (result.success) {
+        // Clear the "server unavailable" cache since we successfully connected
+        if (isDevelopment && isLocalhostProxy && typeof window !== 'undefined') {
+          localStorage.removeItem('sms_proxy_server_unavailable');
+        }
         console.log('✅ SMS sent successfully via proxy');
         return { success: true };
       } else {
@@ -500,26 +671,41 @@ Respond in JSON format:
       // Fetch errors can be TypeError (connection refused) or other network errors
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorString = String(error);
+      const errorName = error instanceof Error ? error.name : '';
+      const isDevelopment = import.meta.env.DEV || import.meta.env.MODE === 'development';
       
       const isConnectionError = 
+        errorMessage === 'SMS_PROXY_CONNECTION_ERROR' ||
+        errorName === 'AbortError' ||
+        errorName === 'TypeError' ||
         errorMessage.includes('Failed to fetch') || 
         errorMessage.includes('ERR_CONNECTION_REFUSED') ||
         errorMessage.includes('ECONNREFUSED') ||
+        errorMessage.includes('NetworkError') ||
+        errorMessage.includes('network') ||
+        errorMessage.includes('fetch') ||
         errorString.includes('ERR_CONNECTION_REFUSED') ||
         errorString.includes('ECONNREFUSED') ||
-        (error instanceof TypeError && errorMessage.includes('fetch')) ||
-        (error instanceof TypeError && errorMessage.includes('network'));
+        (error instanceof TypeError);
       
       if (isConnectionError) {
+        // Mark server as unavailable in development to avoid repeated attempts
+        if (isDevelopment && isLocalhostProxy && typeof window !== 'undefined') {
+          sessionStorage.setItem('sms_proxy_server_unavailable', Date.now().toString());
+        }
         // ✅ FIX: Silently handle connection errors - SMS proxy server may not be running
         // Don't log as error - this is expected when proxy server isn't running
-        // Browser will still show network error in console (can't prevent that)
+        // Note: Browser will still show network error in console (this is expected browser behavior)
+        // The error is caught and handled gracefully, so it won't affect the sale process
+        // We suppress our own logging to avoid duplicate error messages
         return { success: false, error: 'SMS proxy server not running' };
       }
       
       // Only log actual SMS provider errors, not connection errors
-      console.error('📱 SMS Network Error:', error);
-      return { success: false, error: `Network error: ${errorMessage}` };
+      if (isDevelopment) {
+        console.warn('⚠️ SMS error (non-connection):', errorMessage);
+      }
+      return { success: false, error: `SMS error: ${errorMessage}` };
     }
   }
 
@@ -612,6 +798,10 @@ Respond in JSON format:
       if (!log) {
         return { success: false, error: 'SMS log not found' };
       }
+
+      // ✅ FIX: Force check server availability before resending
+      // This ensures we check if the server is available even if cache says it's not
+      await this.checkServerAvailability();
 
       // Resend the SMS
       const result = await this.sendSMS(log.recipient_phone, log.message);
@@ -863,6 +1053,51 @@ Asante kwa kumtumaini Inauzwa! 🚀`;
       console.error('Error sending template SMS:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Clear SMS proxy server cache
+   * Useful when you know the server is running but cache says it's not
+   */
+  clearServerCache(): void {
+    if (typeof window !== 'undefined') {
+      const serverUnavailableKey = 'sms_proxy_server_unavailable';
+      localStorage.removeItem(serverUnavailableKey);
+      console.log('✅ SMS proxy server cache cleared');
+    }
+  }
+
+  /**
+   * Check if SMS proxy server is available
+   */
+  async checkServerAvailability(): Promise<boolean> {
+    try {
+      const healthCheckUrl = 'http://localhost:8000/health';
+      const healthController = new AbortController();
+      const healthTimeout = setTimeout(() => healthController.abort(), 2000);
+      
+      try {
+        const healthResponse = await fetch(healthCheckUrl, {
+          method: 'GET',
+          signal: healthController.signal,
+          mode: 'cors',
+          cache: 'no-cache'
+        });
+        clearTimeout(healthTimeout);
+        
+        if (healthResponse.ok) {
+          // Server is available - clear any cache
+          this.clearServerCache();
+          return true;
+        }
+        return false;
+      } catch (healthError) {
+        clearTimeout(healthTimeout);
+        return false;
+      }
+    } catch (error) {
+      return false;
     }
   }
 }

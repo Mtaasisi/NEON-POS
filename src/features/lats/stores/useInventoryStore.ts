@@ -762,9 +762,43 @@ export const useInventoryStore = create<InventoryState>()(
         const state = get();
 
         // Prevent multiple simultaneous loads (unless forced)
+        // But if products are already loaded, we can return early
         if (state.isDataLoading && !force) {
-          console.log('🔍 [useInventoryStore] Products already loading, skipping...');
-          return;
+          console.log('🔍 [useInventoryStore] Products already loading, waiting for completion...');
+          // Wait for the current load to complete (max 30 seconds)
+          const maxWait = 30000;
+          const startWait = Date.now();
+          let waitCount = 0;
+          const maxWaitIterations = maxWait / 100; // 300 iterations max
+          
+          while (waitCount < maxWaitIterations) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            waitCount++;
+            const currentState = get();
+            if (!currentState.isDataLoading) {
+              // Load completed, check if products are now available
+              if (currentState.products.length > 0) {
+                console.log(`✅ [useInventoryStore] Products loaded by concurrent request: ${currentState.products.length}`);
+                return;
+              }
+              // Load completed but no products - break and continue loading
+              break;
+            }
+            // Safety check - if we've waited too long, break
+            if (Date.now() - startWait >= maxWait) {
+              console.warn('⚠️ [useInventoryStore] Timeout waiting for concurrent load, proceeding with new load');
+              break;
+            }
+          }
+          // If we waited and still no products, continue with loading
+          const finalState = get();
+          if (finalState.products.length === 0) {
+            console.log('⚠️ [useInventoryStore] Previous load completed but no products found, loading now...');
+            // Reset loading state and continue
+            set({ isDataLoading: false });
+          } else {
+            return;
+          }
         }
         
         console.log('🔍 [useInventoryStore] Starting products load...', { filters });
@@ -776,12 +810,57 @@ export const useInventoryStore = create<InventoryState>()(
           ...filters
         };
 
-        // 🚀 SUPER OPTIMIZED: Try localStorage cache first (instant load!)
-        if (!filters) {
+        // 🚀 SUPER OPTIMIZED: ALWAYS try localStorage cache first (instant load!)
+        // Even with filters, we can filter the cached data locally (much faster!)
+        if (!force) {
           const cachedProducts = productCacheService.getProducts();
           if (cachedProducts && cachedProducts.length > 0) {
-            console.log(`⚡ [useInventoryStore] Using localStorage cache (${cachedProducts.length} products)`);
-            set({ products: cachedProducts, isLoading: false });
+            console.log(`⚡ [useInventoryStore] Using localStorage cache (${cachedProducts.length} products) - INSTANT LOAD!`);
+            
+            // 🔍 DEBUG: Check cached products quality
+            if (import.meta.env.DEV) {
+              const cachedWithVariants = cachedProducts.filter((p: any) => p.variants && p.variants.length > 0).length;
+              const totalCachedVariants = cachedProducts.reduce((sum: number, p: any) => sum + (p.variants?.length || 0), 0);
+              const cachedWithStock = cachedProducts.filter((p: any) => {
+                const totalStock = p.variants?.reduce((sum: number, v: any) => sum + (v.quantity || v.stockQuantity || 0), 0) || 0;
+                return totalStock > 0;
+              }).length;
+              const cachedWithPrice = cachedProducts.filter((p: any) => {
+                const hasPrice = p.price > 0 || p.variants?.some((v: any) => (v.sellingPrice || v.price || 0) > 0);
+                return hasPrice;
+              }).length;
+              
+              console.log('🔍 [useInventoryStore Debug] Cached products quality:', {
+                total: cachedProducts.length,
+                withVariants: cachedWithVariants,
+                withoutVariants: cachedProducts.length - cachedWithVariants,
+                totalVariants: totalCachedVariants,
+                withStock: cachedWithStock,
+                withPrice: cachedWithPrice,
+                percentageWithVariants: Math.round((cachedWithVariants / cachedProducts.length) * 100),
+                percentageWithStock: Math.round((cachedWithStock / cachedProducts.length) * 100),
+                percentageWithPrice: Math.round((cachedWithPrice / cachedProducts.length) * 100),
+                dataSource: 'localStorage cache (downloaded database)'
+              });
+              
+              // Check if this is from full database download
+              const { fullDatabaseDownloadService } = await import('../../../services/fullDatabaseDownloadService');
+              const isDownloaded = fullDatabaseDownloadService.isDownloaded();
+              const downloadMeta = fullDatabaseDownloadService.getDownloadMetadata();
+              console.log('🔍 [useInventoryStore Debug] Full database status:', {
+                isDownloaded,
+                downloadTimestamp: downloadMeta?.timestamp,
+                downloadAge: downloadMeta ? Math.round((Date.now() - new Date(downloadMeta.timestamp).getTime()) / 1000 / 60) + ' minutes' : 'N/A'
+              });
+            }
+            
+            // Always use cache first, filter locally if needed (much faster than DB!)
+            set({ 
+              products: cachedProducts, 
+              isLoading: false, 
+              isDataLoading: false,
+              error: null 
+            });
             
             // ⚡ CRITICAL FIX: Also preload child variants when using cache!
             const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
@@ -789,28 +868,57 @@ export const useInventoryStore = create<InventoryState>()(
               console.warn('⚠️ Failed to preload child variants from cache (non-critical):', err);
             });
             
+            // Update memory cache too
+            get().updateCache('products', cachedProducts);
+            
+            // Load fresh data in background (non-blocking) if cache is older than 5 minutes
+            try {
+              const cacheData = JSON.parse(localStorage.getItem('pos_products_cache') || '{}');
+              const cacheAge = Date.now() - (cacheData.timestamp || 0);
+              if (cacheAge > 5 * 60 * 1000) {
+                console.log('🔄 [useInventoryStore] Cache is stale, refreshing in background...');
+                // Refresh in background without blocking UI
+                setTimeout(() => {
+                  get().loadProducts(filters, true).catch(err => {
+                    console.warn('⚠️ Background refresh failed (non-critical):', err);
+                  });
+                }, 100);
+              }
+            } catch (e) {
+              // Ignore cache age check errors
+            }
+            
             return;
           }
         }
 
-        // 🚀 OPTIMIZED: Re-enabled memory cache with 10-minute expiry
-        if (!filters && state.isCacheValid('products')) {
+        // 🚀 OPTIMIZED: Try memory cache if localStorage cache not available
+        if (state.isCacheValid('products') && !force) {
           console.log('⚡ [useInventoryStore] Using memory cache (valid for 10 min)');
-          const cachedProducts = state.dataCache.products || [];
-          set({ products: cachedProducts });
+          const memoryCachedProducts = state.dataCache.products || [];
           
-          // ⚡ CRITICAL FIX: Also preload child variants when using memory cache!
-          if (cachedProducts.length > 0) {
+          if (!filters) {
+            set({ products: memoryCachedProducts, isLoading: false, isDataLoading: false });
+          
+            // Preload child variants
+            if (memoryCachedProducts.length > 0) {
             const { childVariantsCacheService } = await import('../../../services/childVariantsCacheService');
-            childVariantsCacheService.preloadAllChildVariants(cachedProducts).catch(err => {
+              childVariantsCacheService.preloadAllChildVariants(memoryCachedProducts).catch(err => {
               console.warn('⚠️ Failed to preload child variants from memory cache (non-critical):', err);
             });
           }
           
           return;
+          } else {
+            // With filters, use memory cache and filter locally
+            set({ products: memoryCachedProducts, isLoading: false, isDataLoading: false });
+            return;
+          }
         }
         
-        console.log('🔍 [useInventoryStore] Cache expired or filtered request, loading from database...');
+        console.log('🔍 [useInventoryStore] No cache available, loading from database...');
+        console.log('⚠️ [useInventoryStore] PERFORMANCE WARNING: Loading from database instead of cache!');
+        console.log('💡 [useInventoryStore] Tip: Download full database in Settings > Offline Database for instant loads');
         
         const startTime = Date.now();
         set({ isLoading: true, error: null, isDataLoading: true });
@@ -870,12 +978,60 @@ export const useInventoryStore = create<InventoryState>()(
               stock: 0
             };
             
+            // 🔍 ENHANCED DIAGNOSTIC: Detailed variant, stock, and price analysis
+            const variantDetails = {
+              productsWithVariants: 0,
+              productsWithoutVariants: 0,
+              totalVariants: 0,
+              variantsWithStock: 0,
+              variantsWithoutStock: 0,
+              variantsWithPrice: 0,
+              variantsWithoutPrice: 0
+            };
+            
             processedProducts.forEach(product => {
               if (!product.supplier) missingInfoCount.supplier++;
               if (!product.category) missingInfoCount.category++;
-              if (!product.variants || product.variants.length === 0) missingInfoCount.variants++;
-              if (!product.price || product.price === 0) missingInfoCount.price++;
-              if (!product.totalQuantity || product.totalQuantity === 0) missingInfoCount.stock++;
+              
+              // Variant analysis
+              if (!product.variants || product.variants.length === 0) {
+                missingInfoCount.variants++;
+                variantDetails.productsWithoutVariants++;
+              } else {
+                variantDetails.productsWithVariants++;
+                variantDetails.totalVariants += product.variants.length;
+                
+                product.variants.forEach((variant: any) => {
+                  const stock = variant.quantity || variant.stockQuantity || 0;
+                  const price = variant.sellingPrice || variant.price || 0;
+                  
+                  if (stock > 0) {
+                    variantDetails.variantsWithStock++;
+                  } else {
+                    variantDetails.variantsWithoutStock++;
+                  }
+                  
+                  if (price > 0) {
+                    variantDetails.variantsWithPrice++;
+                  } else {
+                    variantDetails.variantsWithoutPrice++;
+                  }
+                });
+              }
+              
+              // Price check (product level or variant level)
+              const hasProductPrice = product.price && product.price > 0;
+              const hasVariantPrice = product.variants?.some((v: any) => (v.sellingPrice || v.price || 0) > 0);
+              if (!hasProductPrice && !hasVariantPrice) {
+                missingInfoCount.price++;
+              }
+              
+              // Stock check (product level or variant level)
+              const productStock = product.totalQuantity || product.stockQuantity || 0;
+              const variantStock = product.variants?.reduce((sum: number, v: any) => sum + (v.quantity || v.stockQuantity || 0), 0) || 0;
+              if (productStock === 0 && variantStock === 0) {
+                missingInfoCount.stock++;
+              }
             });
             
             console.log('🔍 [InventoryStore] DEBUG - Missing information in store:', {
@@ -889,6 +1045,34 @@ export const useInventoryStore = create<InventoryState>()(
                 stock: Math.round((missingInfoCount.stock / processedProducts.length) * 100)
               }
             });
+            
+            console.log('📊 [InventoryStore] Variant/Stock/Price Analysis:', {
+              ...variantDetails,
+              averageVariantsPerProduct: variantDetails.productsWithVariants > 0 
+                ? Math.round((variantDetails.totalVariants / variantDetails.productsWithVariants) * 10) / 10 
+                : 0
+            });
+            
+            // Sample first product with variants for detailed inspection
+            const sampleProductWithVariants = processedProducts.find(p => p.variants && p.variants.length > 0);
+            if (sampleProductWithVariants) {
+              console.log('🔍 [InventoryStore] Sample product with variants:', {
+                id: sampleProductWithVariants.id,
+                name: sampleProductWithVariants.name,
+                variantCount: sampleProductWithVariants.variants?.length || 0,
+                variants: sampleProductWithVariants.variants?.map((v: any) => ({
+                  id: v.id,
+                  name: v.name,
+                  quantity: v.quantity,
+                  stockQuantity: v.stockQuantity,
+                  price: v.price,
+                  sellingPrice: v.sellingPrice,
+                  costPrice: v.costPrice
+                })) || []
+              });
+            } else {
+              console.warn('⚠️ [InventoryStore] No products with variants found!');
+            }
 
             set({ 
               products: processedProducts,
@@ -1843,90 +2027,166 @@ export const useInventoryStore = create<InventoryState>()(
   )
 );
 
-// Subscribe to events for real-time updates
-latsEventBus.subscribeToAll((event) => {
-  const store = useInventoryStore.getState();
+// ⚠️ CRITICAL FIX: Subscribe to events with guards to prevent boot loops
+// Use a flag to prevent multiple subscriptions and event cascades
+let eventSubscriptionInitialized = false;
+let eventProcessingTimeout: NodeJS.Timeout | null = null;
+let isProcessingEvent = false;
+let eventCount = 0; // Debug counter
+
+if (!eventSubscriptionInitialized) {
+  eventSubscriptionInitialized = true;
+  console.log('🔵 [DEBUG] Event subscription initialized');
   
-  // Prevent infinite loops by checking if data is already loading
-  if (store.isDataLoading) {
-    return;
-  }
+  latsEventBus.subscribeToAll((event) => {
+    eventCount++;
+    console.log(`🔵 [DEBUG] Event received #${eventCount}:`, event.type, {
+      isProcessingEvent,
+      hasTimeout: !!eventProcessingTimeout,
+      timestamp: new Date().toISOString()
+    });
+    
+    // ⚠️ CRITICAL: Prevent concurrent event processing (prevents boot loops)
+    if (isProcessingEvent) {
+      console.log(`⏭️ [DEBUG] Skipping event ${event.type} - already processing`);
+      return; // Silently skip if already processing
+    }
+    
+    const store = useInventoryStore.getState();
+    console.log(`🔵 [DEBUG] Store state check for ${event.type}:`, {
+      isDataLoading: store.isDataLoading,
+      productsCount: store.products.length,
+      cacheTimestamp: store.cacheTimestamp
+    });
+    
+    // Prevent infinite loops by checking if data is already loading
+    if (store.isDataLoading) {
+      console.log(`⏭️ [DEBUG] Skipping event ${event.type} - data already loading`);
+      return;
+    }
+    
+    // Clear any pending event processing
+    if (eventProcessingTimeout) {
+      console.log(`🔵 [DEBUG] Clearing pending timeout for ${event.type}`);
+      clearTimeout(eventProcessingTimeout);
+    }
+    
+    // Defer event processing to prevent blocking and boot loops
+    console.log(`🔵 [DEBUG] Scheduling event processing for ${event.type} in 1 second`);
+    eventProcessingTimeout = setTimeout(() => {
+      console.log(`🔵 [DEBUG] Processing event ${event.type} now`);
+      isProcessingEvent = true;
+      
+      try {
+        switch (event.type) {
+          case 'lats:category.created':
+          case 'lats:category.updated':
+          case 'lats:category.deleted':
+            if (!store.isCacheValid('categories')) {
+              store.loadCategories().catch(() => {});
+            }
+            break;
+            
+          case 'lats:supplier.created':
+          case 'lats:supplier.updated':
+          case 'lats:supplier.deleted':
+            if (!store.isCacheValid('suppliers')) {
+              store.loadSuppliers().catch(() => {});
+            }
+            break;
+            
+          case 'lats:product.created':
+          case 'lats:product.updated':
+          case 'lats:product.deleted':
+            store.forceRefreshProducts().catch(() => {});
+            break;
+            
+          case 'lats:stock.updated':
+            console.log(`🔵 [DEBUG] Handling stock.updated event`);
+            // Only refresh if not already loading (prevents boot loops)
+            if (!store.isDataLoading) {
+              console.log(`🔵 [DEBUG] Scheduling stock refresh in 3 seconds`);
+              setTimeout(() => {
+                const currentStore = useInventoryStore.getState();
+                if (!currentStore.isDataLoading) {
+                  console.log(`🔵 [DEBUG] Executing stock refresh now`);
+                  currentStore.loadProducts().catch((err) => {
+                    console.warn('⚠️ [DEBUG] Stock refresh failed:', err);
+                  });
+                  if (!currentStore.isCacheValid('stockMovements')) {
+                    currentStore.loadStockMovements().catch((err) => {
+                      console.warn('⚠️ [DEBUG] Stock movements reload failed:', err);
+                    });
+                  }
+                } else {
+                  console.log(`⏭️ [DEBUG] Skipping stock refresh - data loading`);
+                }
+              }, 3000); // Increased to 3 seconds to prevent cascading
+            } else {
+              console.log(`⏭️ [DEBUG] Skipping stock.updated - data already loading`);
+            }
+            break;
+            
+          case 'lats:purchase-order.created':
+          case 'lats:purchase-order.updated':
+          case 'lats:purchase-order.received':
+          case 'lats:purchase-order.deleted':
+            // Disabled to prevent errors
+            break;
+            
+          case 'lats:spare-part.created':
+          case 'lats:spare-part.updated':
+          case 'lats:spare-part.deleted':
+            if (!store.isCacheValid('spareParts')) {
+              store.loadSpareParts().catch(() => {});
+            }
+            break;
+            
+          case 'lats:spare-part.used':
+            if (!store.isCacheValid('spareParts')) {
+              store.loadSpareParts().catch(() => {});
+            }
+            if (!store.isCacheValid('sparePartUsage')) {
+              store.loadSparePartUsage().catch(() => {});
+            }
+            break;
+            
+          case 'lats:sale.completed':
+            console.log(`🔵 [DEBUG] Handling sale.completed event`);
+            // Always refresh products after sale to update stock levels
+            setTimeout(() => {
+              const currentStore = useInventoryStore.getState();
+              console.log(`🔵 [DEBUG] Executing sale.completed reloads now`);
+              
+              // Always reload products to refresh stock after sale (force refresh)
+              if (!currentStore.isDataLoading) {
+                console.log(`🔄 [DEBUG] Refreshing products after sale to update stock`);
+                currentStore.loadProducts({ page: 1, limit: 200 }, true).catch((err) => {
+                  console.warn('⚠️ [DEBUG] Products reload failed:', err);
+                });
+              }
+              
+              // Also reload stock movements and sales
+              currentStore.loadStockMovements().catch((err) => {
+                console.warn('⚠️ [DEBUG] Stock movements reload failed:', err);
+              });
+              currentStore.loadSales().catch((err) => {
+                console.warn('⚠️ [DEBUG] Sales reload failed:', err);
+              });
+            }, 1000); // Reduced to 1 second for faster stock update
+            break;
+        }
+      } catch (error) {
+        console.error(`❌ [DEBUG] Error processing event ${event.type}:`, error);
+      } finally {
+        console.log(`🔵 [DEBUG] Event ${event.type} processing complete`);
+        isProcessingEvent = false;
+        eventProcessingTimeout = null;
+      }
+    }, 1000); // Defer all event processing by 1 second to prevent boot loops
+  });
   
-  switch (event.type) {
-    case 'lats:category.created':
-    case 'lats:category.updated':
-    case 'lats:category.deleted':
-      // Only reload if not already loading and cache is stale
-      if (!store.isCacheValid('categories')) {
-        store.loadCategories();
-      }
-      break;
-      
-    case 'lats:supplier.created':
-    case 'lats:supplier.updated':
-    case 'lats:supplier.deleted':
-      // Only reload if not already loading and cache is stale
-      if (!store.isCacheValid('suppliers')) {
-        store.loadSuppliers();
-      }
-      break;
-      
-    case 'lats:product.created':
-    case 'lats:product.updated':
-    case 'lats:product.deleted':
-      // Force refresh products when they are created/updated/deleted
-      store.forceRefreshProducts();
-      break;
-      
-    case 'lats:stock.updated':
-      // Force refresh products when stock is updated (critical for POS)
-      // This ensures stock levels are always up-to-date after sales
-      console.log('🔄 [useInventoryStore] Stock updated - forcing product refresh...');
-      store.forceRefreshProducts();
-      if (!store.isCacheValid('stockMovements')) {
-        store.loadStockMovements();
-      }
-      break;
-      
-    case 'lats:purchase-order.created':
-    case 'lats:purchase-order.updated':
-    case 'lats:purchase-order.received':
-    case 'lats:purchase-order.deleted':
-      // Temporarily disable purchase orders loading to prevent 400 errors
-      // TODO: Re-enable when purchase orders tables are properly set up
-      // store.loadPurchaseOrders();
-      break;
-      
-    case 'lats:spare-part.created':
-    case 'lats:spare-part.updated':
-    case 'lats:spare-part.deleted':
-      // Only reload if not already loading and cache is stale
-      if (!store.isCacheValid('spareParts')) {
-        store.loadSpareParts();
-      }
-      break;
-      
-    case 'lats:spare-part.used':
-      // Only reload if not already loading and cache is stale
-      if (!store.isCacheValid('spareParts')) {
-        store.loadSpareParts();
-      }
-      if (!store.isCacheValid('sparePartUsage')) {
-        store.loadSparePartUsage();
-      }
-      break;
-      
-    case 'lats:sale.completed':
-      // Reload products and stock movements when a sale is completed
-      if (!store.isCacheValid('products')) {
-        store.loadProducts();
-      }
-      if (!store.isCacheValid('stockMovements')) {
-        store.loadStockMovements();
-      }
-      if (!store.isCacheValid('sales')) {
-        store.loadSales();
-      }
-      break;
-  }
-});
+  console.log('🔵 [DEBUG] Event subscription setup complete');
+} else {
+  console.log('⏭️ [DEBUG] Event subscription already initialized, skipping');
+}

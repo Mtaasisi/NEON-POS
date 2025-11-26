@@ -1526,7 +1526,7 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
       )}
 
       {/* SMS Modal */}
-      <Modal isOpen={showSmsModal} onClose={() => { setShowSmsModal(false); setSmsMessage(''); setSmsResult(null); }} title="Send SMS" maxWidth="400px">
+      <Modal isOpen={showSmsModal} onClose={() => { setShowSmsModal(false); setSmsMessage(''); setSmsResult(null); }} title="Send SMS" maxWidth="400px" zIndex={100000}>
         <form
           onSubmit={async e => {
             e.preventDefault();

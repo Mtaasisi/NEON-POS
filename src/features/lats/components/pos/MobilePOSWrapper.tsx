@@ -587,14 +587,7 @@ const MobilePOSWrapper: React.FC<MobilePOSWrapperProps> = ({
                             <Crown className="w-3 h-3" />
                             VIP
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-500 text-white shadow-sm flex-shrink-0">
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Active
-                          </span>
-                        )}
+                        ) : null}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                         <Phone className="w-4 h-4 text-gray-500" />

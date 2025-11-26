@@ -31,17 +31,23 @@ class ChildVariantsCacheService {
    * ⚡ Preload ALL child variants for all products in one query
    * This is called when products are loaded
    */
-  async preloadAllChildVariants(products: any[]): Promise<void> {
-    // Prevent concurrent preloads
-    if (this.isPreloading) {
-      console.log('⏳ Child variants already preloading...');
+  async preloadAllChildVariants(products: any[], forceRefresh = false): Promise<void> {
+    // Prevent concurrent preloads (unless forcing refresh)
+    if (this.isPreloading && !forceRefresh) {
+      console.log('⏳ [ChildVariantsCache] Already preloading, skipping...');
       return;
     }
 
-    // Check if cache is still valid
+    // Check if cache is still valid (unless forcing refresh)
     const now = Date.now();
-    if (this.cache.size > 0 && (now - this.lastPreloadTime) < this.CACHE_DURATION) {
-      console.log('⚡ Using cached child variants (still fresh)');
+    if (!forceRefresh && this.cache.size > 0 && (now - this.lastPreloadTime) < this.CACHE_DURATION) {
+      console.log('⚡ [ChildVariantsCache] Using cached child variants (still fresh)');
+      return;
+    }
+
+    // ✅ FIX: Validate that we have products with variants before proceeding
+    if (!products || products.length === 0) {
+      console.log('ℹ️ [ChildVariantsCache] No products provided, skipping preload');
       return;
     }
 
@@ -63,11 +69,14 @@ class ChildVariantsCacheService {
       });
 
       if (allVariantIds.length === 0) {
-        console.log('ℹ️  No product variants found, skipping child preload');
+        console.log('ℹ️ [ChildVariantsCache] No product variants found, skipping child preload');
+        // ✅ FIX: Still update lastPreloadTime to prevent repeated attempts
+        this.lastPreloadTime = now;
+        this.isPreloading = false;
         return;
       }
 
-      console.log(`📊 Found ${allVariantIds.length} variant IDs to check for children`);
+      console.log(`📊 [ChildVariantsCache] Found ${allVariantIds.length} variant IDs to check for children`);
 
       // ⚡ SINGLE QUERY: Get ALL child variants for ALL parent variants at once!
       const { data: allChildren, error } = await supabase
@@ -80,7 +89,9 @@ class ChildVariantsCacheService {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('❌ Error preloading child variants:', error);
+        console.error('❌ [ChildVariantsCache] Error preloading child variants:', error);
+        // ✅ FIX: Still update lastPreloadTime to prevent repeated failed attempts
+        this.lastPreloadTime = now;
         return;
       }
 
@@ -114,8 +125,12 @@ class ChildVariantsCacheService {
       }
 
       if ((!allChildren || allChildren.length === 0) && legacyItems.length === 0) {
-        console.log('ℹ️  No child variants or legacy items found in database');
+        console.log('ℹ️ [ChildVariantsCache] No child variants or legacy items found in database');
+        // ✅ FIX: Still update cache and timestamp even if no children found
+        // This prevents repeated queries when there are no children
+        this.cache = new Map();
         this.lastPreloadTime = now;
+        this.isPreloading = false;
         return;
       }
 
@@ -287,9 +302,48 @@ class ChildVariantsCacheService {
   }
 
   /**
-   * Clear the cache (useful after stock updates)
+   * Clear cache (non-blocking, optimized for performance)
+   * Useful after stock updates to ensure fresh data
    */
   clearCache(): void {
+    // 🚀 OPTIMIZATION: Clear cache asynchronously to prevent blocking/freezing
+    // Use requestIdleCallback if available, otherwise setTimeout
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        try {
+          this.cache.clear();
+          this.lastPreloadTime = 0;
+          this.isPreloading = false;
+          if (import.meta.env.DEV) {
+            console.log('✅ [ChildVariantsCache] Cache cleared (background)');
+          }
+        } catch (error) {
+          console.warn('⚠️ [ChildVariantsCache] Error clearing cache:', error);
+        }
+      }, { timeout: 1000 });
+    } else {
+      setTimeout(() => {
+        try {
+          this.cache.clear();
+          this.lastPreloadTime = 0;
+          this.isPreloading = false;
+          if (import.meta.env.DEV) {
+            console.log('✅ [ChildVariantsCache] Cache cleared (background)');
+          }
+        } catch (error) {
+          console.warn('⚠️ [ChildVariantsCache] Error clearing cache:', error);
+        }
+      }, 0);
+    }
+  }
+  
+  /**
+   * Clear cache synchronously (use only when necessary)
+   */
+  clearCacheSync(): void {
+    this.cache.clear();
+    this.lastPreloadTime = 0;
+    this.isPreloading = false;
     console.log('🗑️  Clearing child variants cache');
     this.cache.clear();
     this.lastPreloadTime = 0;

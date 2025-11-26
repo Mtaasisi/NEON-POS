@@ -117,15 +117,6 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'customers'
   },
   {
-    id: 'payment-tracking',
-    name: 'Payment Tracking',
-    description: 'Track payment status',
-    icon: CreditCard,
-    path: '/lats/payments',
-    color: 'from-pink-500 to-pink-600',
-    category: 'analytics'
-  },
-  {
     id: 'search-products',
     name: 'Search Products',
     description: 'Find products quickly',

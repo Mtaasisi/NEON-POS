@@ -35,6 +35,10 @@ interface BranchContextType {
 
 const BranchContext = createContext<BranchContextType | undefined>(undefined);
 
+// Track HMR warnings to avoid console spam
+let hmrWarningLogged = false;
+let hmrWarningTimeout: NodeJS.Timeout | null = null;
+
 export const BranchProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
@@ -273,7 +277,17 @@ export const useBranch = (): BranchContextType => {
     // During HMR (Hot Module Reload), context can be temporarily undefined
     // Return a safe default to prevent crashes during development
     if (import.meta.env.DEV) {
-      console.warn('useBranch: Context temporarily unavailable during HMR, returning default values');
+      // Only log warning once per HMR cycle to avoid console spam
+      if (!hmrWarningLogged) {
+        hmrWarningLogged = true;
+        // Reset flag after 2 seconds (HMR typically completes quickly)
+        if (hmrWarningTimeout) clearTimeout(hmrWarningTimeout);
+        hmrWarningTimeout = setTimeout(() => {
+          hmrWarningLogged = false;
+        }, 2000);
+        // Use console.debug instead of console.warn to reduce noise
+        console.debug('useBranch: Context temporarily unavailable during HMR, returning default values');
+      }
       return {
         currentBranch: null,
         availableBranches: [],

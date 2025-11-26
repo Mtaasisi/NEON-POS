@@ -14,7 +14,7 @@ import {
   AlertTriangle, CheckCircle, Clock, XCircle, TrendingUp, TrendingDown, Eye,
   History, Copy, Printer, Share, Edit, Trash2, ArrowDownRight, X, User, Mail,
   Phone, Hash, DollarSign, Building2, FileText, CalendarDays, Banknote,
-  Wallet, Repeat
+  Wallet, Repeat, ArrowUpRight, ArrowRightLeft, List, LayoutGrid
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../lib/supabaseClient';
@@ -70,6 +70,8 @@ const EnhancedPaymentManagementPage: React.FC = () => {
     notes: ''
   });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [historyViewMode, setHistoryViewMode] = useState<'timeline' | 'table'>('table');
+  const [expandedHistoryTransaction, setExpandedHistoryTransaction] = useState<string | null>(null);
 
   // Load payment history
   useEffect(() => {
@@ -742,9 +744,38 @@ Reference: ${transaction.reference || 'N/A'}`;
                 <GlassCard className="p-6">
                   <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-semibold">Transactions ({filteredHistoryTransactions.length})</h3>
-                    <GlassButton onClick={loadPaymentHistory} disabled={historyLoading}>
-                      {historyLoading ? 'Loading...' : 'Refresh'}
-                    </GlassButton>
+                    <div className="flex items-center gap-3">
+                      {/* View Toggle */}
+                      <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                        <button
+                          onClick={() => setHistoryViewMode('timeline')}
+                          className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-2 ${
+                            historyViewMode === 'timeline'
+                              ? 'bg-white text-indigo-600 shadow-sm'
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                          title="Timeline View"
+                        >
+                          <LayoutGrid className="w-4 h-4" />
+                          <span className="text-sm font-medium">Timeline</span>
+                        </button>
+                        <button
+                          onClick={() => setHistoryViewMode('table')}
+                          className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-2 ${
+                            historyViewMode === 'table'
+                              ? 'bg-white text-indigo-600 shadow-sm'
+                              : 'text-gray-600 hover:text-gray-900'
+                          }`}
+                          title="Table View"
+                        >
+                          <List className="w-4 h-4" />
+                          <span className="text-sm font-medium">Table</span>
+                        </button>
+                      </div>
+                      <GlassButton onClick={loadPaymentHistory} disabled={historyLoading}>
+                        {historyLoading ? 'Loading...' : 'Refresh'}
+                      </GlassButton>
+                    </div>
                   </div>
 
                   {historyLoading ? (
@@ -770,11 +801,12 @@ Reference: ${transaction.reference || 'N/A'}`;
                         </GlassButton>
                       )}
                     </div>
-                  ) : (
+                  ) : historyViewMode === 'table' ? (
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-gray-200">
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Type</th>
                             <th className="text-left py-3 px-4 font-medium text-gray-700">Customer</th>
                             <th className="text-left py-3 px-4 font-medium text-gray-700">Source</th>
                             <th className="text-left py-3 px-4 font-medium text-gray-700">Amount</th>
@@ -790,12 +822,43 @@ Reference: ${transaction.reference || 'N/A'}`;
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredHistoryTransactions.map((transaction) => (
+                          {filteredHistoryTransactions.map((transaction, index) => {
+                            // Determine if it's income (incoming) or expense (outgoing)
+                            const isIncome = transaction.source === 'pos_sale' || transaction.source === 'device_payment';
+                            const isExpense = transaction.source === 'purchase_order';
+                            const isInstallment = transaction.method?.toLowerCase().includes('installment') || 
+                                                 transaction.reference?.includes('INS-');
+                            
+                            return (
                             <tr 
                               key={transaction.id} 
                               className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors"
                               onClick={() => setSelectedTransaction(transaction)}
                             >
+                              <td className="py-3 px-4">
+                                <div className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-md ${
+                                  isIncome
+                                    ? 'bg-gradient-to-br from-green-500 to-green-600'
+                                    : isExpense
+                                    ? 'bg-gradient-to-br from-red-500 to-red-600'
+                                    : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                } text-white`}>
+                                  {isInstallment ? (
+                                    index + 1
+                                  ) : isIncome ? (
+                                    <ArrowDownRight className="w-5 h-5" />
+                                  ) : isExpense ? (
+                                    <ArrowUpRight className="w-5 h-5" />
+                                  ) : (
+                                    <ArrowRightLeft className="w-5 h-5" />
+                                  )}
+                                  {transaction.status === 'completed' && (
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                                      <CheckCircle className="w-2.5 h-2.5 text-white" />
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
                               <td className="py-3 px-4">
                                 <div>
                                   <div className="font-semibold text-gray-900 text-lg">{transaction.customerName || 'N/A'}</div>
@@ -848,9 +911,131 @@ Reference: ${transaction.reference || 'N/A'}`;
                                 </div>
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
+                    </div>
+                  ) : (
+                    // Timeline View
+                    <div className="space-y-3 pr-1">
+                      {filteredHistoryTransactions.map((transaction, index) => {
+                        const isIncome = transaction.source === 'pos_sale' || transaction.source === 'device_payment';
+                        const isExpense = transaction.source === 'purchase_order';
+                        const isInstallment = transaction.method?.toLowerCase().includes('installment') || 
+                                             transaction.reference?.includes('INS-');
+                        const isExpanded = expandedHistoryTransaction === transaction.id;
+                        const isCompleted = transaction.status === 'completed';
+                        
+                        const transactionDate = new Date(transaction.date || transaction.timestamp);
+                        const formattedDate = transactionDate.toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          year: 'numeric' 
+                        });
+                        
+                        return (
+                          <div 
+                            key={transaction.id} 
+                            className={`group relative p-5 rounded-2xl border-2 transition-all duration-200 ${
+                              isExpanded
+                                ? 'border-indigo-500 shadow-xl'
+                                : isIncome
+                                ? 'bg-white border-green-300 shadow-md hover:shadow-lg'
+                                : isExpense
+                                ? 'bg-white border-red-300 shadow-md hover:shadow-lg'
+                                : 'bg-white border-gray-200 shadow-md hover:shadow-lg'
+                            }`}
+                          >
+                            <div 
+                              className="flex items-center justify-between cursor-pointer"
+                              onClick={() => setExpandedHistoryTransaction(isExpanded ? null : transaction.id)}
+                            >
+                              <div className="flex items-center gap-4 flex-1">
+                                {/* Transaction Icon Badge */}
+                                <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg shadow-lg ${
+                                  isIncome
+                                    ? 'bg-gradient-to-br from-green-500 to-green-600'
+                                    : isExpense
+                                    ? 'bg-gradient-to-br from-red-500 to-red-600'
+                                    : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                } text-white`}>
+                                  {isInstallment ? (
+                                    index + 1
+                                  ) : isIncome ? (
+                                    <ArrowDownRight className="w-6 h-6" />
+                                  ) : isExpense ? (
+                                    <ArrowUpRight className="w-6 h-6" />
+                                  ) : (
+                                    <ArrowRightLeft className="w-6 h-6" />
+                                  )}
+                                  {isCompleted && (
+                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                                      <CheckCircle className="w-3 h-3 text-white" />
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                {/* Description and Details */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Calendar className="w-4 h-4 flex-shrink-0 text-gray-600" />
+                                    <div className="text-base font-bold text-gray-900">
+                                      {formattedDate}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="text-sm font-semibold text-gray-900 mb-1">
+                                    {transaction.customerName || 'N/A'}
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase ${
+                                      transaction.source === 'pos_sale' ? 'bg-purple-100 text-purple-800 border border-purple-200' :
+                                      transaction.source === 'device_payment' ? 'bg-green-100 text-green-800 border border-green-200' :
+                                      'bg-orange-100 text-orange-800 border border-orange-200'
+                                    }`}>
+                                      {transaction.source === 'pos_sale' ? '🛒 POS' :
+                                       transaction.source === 'device_payment' ? '🔧 Repair' :
+                                       '📦 PO'}
+                                    </span>
+                                    {isCompleted && (
+                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-green-100 text-green-800 border border-green-200">
+                                        <CheckCircle className="w-3.5 h-3.5" />
+                                        Completed
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {/* Right Section - Amount */}
+                              <div className="flex-shrink-0 text-right ml-4">
+                                <div className={`text-2xl font-bold mb-1 ${
+                                  isIncome ? 'text-green-700' : 'text-red-700'
+                                }`}>
+                                  {isIncome ? '+' : '-'}{format.money(Math.abs(transaction.amount))}
+                                </div>
+                                <div className="text-xs text-gray-500 font-medium mt-1">
+                                  {transaction.method || 'N/A'}
+                                </div>
+                                {transaction.reference && (
+                                  <div className="text-xs text-gray-500 font-mono mt-1">
+                                    {transaction.reference}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Connecting Line */}
+                            {index < filteredHistoryTransactions.length - 1 && (
+                              <div className={`absolute left-7 top-full w-0.5 h-3 ${
+                                isIncome ? 'bg-green-300' : isExpense ? 'bg-red-300' : 'bg-gray-300'
+                              }`}></div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </GlassCard>

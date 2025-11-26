@@ -7,8 +7,6 @@ import {
   ShoppingCart,
   CreditCard,
   Trash2,
-  Users,
-  Scan,
   DollarSign,
   BarChart3,
   LogOut,
@@ -47,7 +45,6 @@ interface POSTopBarProps {
   canCloseDay?: boolean;
   // Bottom bar actions
   onViewAnalytics?: () => void;
-  onPaymentTracking?: () => void;
   onCustomers?: () => void;
   onReports?: () => void;
   onRefreshData?: () => void;
@@ -76,7 +73,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   canCloseDay = false,
   // Bottom bar actions
   onViewAnalytics,
-  onPaymentTracking,
   onCustomers,
   onReports,
   onRefreshData,
@@ -233,31 +229,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
               )}
           </div>
 
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                onClick={() => {
-                  playClickSound();
-                  onScanQrCode();
-                }}
-                className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-              >
-                <Scan size={18} />
-                <span className="text-sm font-medium">Scan</span>
-              </button>
-
-              {(currentUser.permissions?.includes('all') || currentUser.permissions?.includes('access_pos') || currentUser.role === 'admin' || currentUser.role === 'customer-care') && (
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    onAddCustomer();
-                  }}
-                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-                >
-                  <Users size={18} />
-                  <span className="text-sm font-medium">Customer</span>
-                </button>
-              )}
-            </div>
           </div>
 
           {/* Center: Time + Sales */}
@@ -347,21 +318,6 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                   <span className="hidden lg:inline">Installments</span>
                 </button>
               )}
-
-              {onPaymentTracking && (
-                <button
-                  onClick={() => {
-                    playClickSound();
-                    onPaymentTracking?.();
-                  }}
-                  className="flex items-center justify-center gap-2 px-5 py-3 min-w-[110px] rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white transition-all duration-300 shadow-sm hover:shadow-md"
-                  title="Payment Tracking"
-                >
-                  <FileText size={18} />
-                  <span className="text-sm font-medium">Payments</span>
-                </button>
-              )}
-
 
               {onCloseDay && canCloseDay && !isDailyClosed && (
                 <button

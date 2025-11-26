@@ -299,7 +299,9 @@ export const AlertSystemWidget: React.FC<AlertSystemWidgetProps> = ({ className 
     );
   };
 
-  const formatTimeAgo = (timestamp: Date) => {
+  const formatTimeAgo = (timestamp: Date | undefined | null) => {
+    if (!timestamp) return 'Unknown';
+    
     const now = new Date();
     const diffMs = now.getTime() - timestamp.getTime();
     const diffMins = Math.floor(diffMs / 60000);

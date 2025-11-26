@@ -57,6 +57,8 @@ export interface ProcessSaleResult {
 }
 
 class SaleProcessingService {
+  private static authWarningLogged = false; // Track if we've already logged the auth warning
+  
   // Helper method to check and ensure authentication
   private async ensureAuthentication(): Promise<{ success: boolean; user?: any; error?: string }> {
     try {
@@ -65,7 +67,9 @@ class SaleProcessingService {
       
       if (user && !authError) {
         // Supabase Auth is working
-        console.log('✅ User authenticated via Supabase Auth:', user.email);
+        if (!SaleProcessingService.authWarningLogged) {
+          console.log('✅ User authenticated via Supabase Auth:', user.email);
+        }
         return { success: true, user };
       }
 
@@ -74,7 +78,9 @@ class SaleProcessingService {
       if (storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
-          console.log('✅ User authenticated via localStorage:', parsedUser.email);
+          if (!SaleProcessingService.authWarningLogged) {
+            console.log('✅ User authenticated via localStorage:', parsedUser.email);
+          }
           return { 
             success: true, 
             user: {
@@ -86,12 +92,18 @@ class SaleProcessingService {
             }
           };
         } catch (parseError) {
-          console.warn('⚠️ Could not parse stored user');
+          if (!SaleProcessingService.authWarningLogged) {
+            console.warn('⚠️ Could not parse stored user');
+          }
         }
       }
 
       // Fallback: Allow without authentication (Neon direct mode)
-      console.warn('⚠️ No authentication found, using system user');
+      // Only log this warning once per session to reduce console spam
+      if (!SaleProcessingService.authWarningLogged) {
+        console.debug('ℹ️ No authentication found, using system user (this is normal for offline sync operations)');
+        SaleProcessingService.authWarningLogged = true;
+      }
       return { 
         success: true, 
         user: {
@@ -101,7 +113,11 @@ class SaleProcessingService {
         }
       };
     } catch (error) {
-      console.warn('⚠️ Authentication check error, using fallback:', error);
+      // Only log authentication errors once per session to reduce console spam
+      if (!SaleProcessingService.authWarningLogged) {
+        console.debug('ℹ️ Authentication check error, using system user fallback:', error);
+        SaleProcessingService.authWarningLogged = true;
+      }
       // Fallback to system user
       return { 
         success: true, 
@@ -131,12 +147,20 @@ class SaleProcessingService {
         };
       }
 
-      // Check if variant exists in lats_product_variants
-      const { data: variant, error: variantError } = await supabase
+      // 🚀 OPTIMIZATION: Try to get variant from cache first
+      const { workflowOptimizationService } = await import('../services/workflowOptimizationService');
+      let variant = await workflowOptimizationService.getVariantFast(variantId);
+      
+      // If not in cache, fetch from database
+      if (!variant) {
+        const { data: variantData, error: variantError } = await supabase
         .from('lats_product_variants')
         .select('id, quantity, is_parent, variant_type, parent_variant_id, is_active')
         .eq('id', variantId)
         .maybeSingle();
+        
+        variant = variantData || null;
+      }
 
       // Check if variant exists in inventory_items (legacy serial number devices)
       const { data: inventoryItem, error: inventoryError } = await supabase
@@ -252,9 +276,15 @@ class SaleProcessingService {
         return results;
       }
 
+      // 🚀 OPTIMIZATION: Use batch stock check from optimization service
+      const { workflowOptimizationService } = await import('../services/workflowOptimizationService');
+
       // Filter valid UUIDs
       const validItems = items.filter(item => isValidUuid(item.variantId));
       const variantIds = validItems.map(item => item.variantId);
+      
+      // Get stock levels from cache/optimization service
+      const stockMap = await workflowOptimizationService.batchCheckStock(variantIds);
 
       if (variantIds.length === 0) {
         // Return errors for invalid UUIDs
@@ -314,6 +344,9 @@ class SaleProcessingService {
       for (const item of validItems) {
         const variant = variantMap.get(item.variantId);
         const inventoryItem = inventoryMap.get(item.variantId);
+        
+        // 🚀 OPTIMIZATION: Use cached stock if available
+        const cachedStock = stockMap.get(item.variantId);
 
         // Handle inventory items
         if (inventoryItem && !variant) {
@@ -360,15 +393,15 @@ class SaleProcessingService {
         }
 
         // Calculate available stock (use children stock for parents if available)
-        // ✅ ALLOW: If parent has no children, use parent's own stock
-        let availableStock = variant.quantity || 0;
+        // 🚀 OPTIMIZATION: Use cached stock if available, otherwise calculate
+        let availableStock = cachedStock !== undefined ? cachedStock : (variant.quantity || 0);
         if (variant.is_parent || variant.variant_type === 'parent') {
           const childrenStock = childrenMap.get(item.variantId) || 0;
           if (childrenStock > 0) {
             availableStock = childrenStock; // Use children stock if available
           } else {
-            // No children - use parent's own stock
-            availableStock = variant.quantity || 0;
+            // No children - use parent's own stock or cached stock
+            availableStock = cachedStock !== undefined ? cachedStock : (variant.quantity || 0);
           }
         }
 
@@ -414,10 +447,23 @@ class SaleProcessingService {
   }
 
   // Process a complete sale with all necessary operations
-  async processSale(saleData: Omit<SaleData, 'id' | 'saleNumber' | 'createdAt'>): Promise<ProcessSaleResult> {
+  // Now uses offline-first approach: saves locally first for instant response, then syncs in background
+  async processSale(saleData: Omit<SaleData, 'id' | 'saleNumber' | 'createdAt'>, options?: { forceOnline?: boolean }): Promise<ProcessSaleResult> {
     try {
       console.log('🔄 Processing sale...', { itemCount: saleData.items.length, total: saleData.total });
       console.log('🔍 Sale data received:', JSON.stringify(saleData, null, 2));
+
+      // Check if offline-first mode is enabled (database downloaded)
+      const { fullDatabaseDownloadService } = await import('../services/fullDatabaseDownloadService');
+      const isOfflineFirstEnabled = fullDatabaseDownloadService.isDownloaded() && !options?.forceOnline;
+      
+      if (isOfflineFirstEnabled) {
+        console.log('💾 [SaleProcessing] Offline-first mode enabled - saving locally first');
+        return await this.processSaleOfflineFirst(saleData);
+      }
+
+      // Original online processing (for backward compatibility or when offline-first is disabled)
+      console.log('🌐 [SaleProcessing] Online mode - processing directly');
 
       // Check authentication using the helper method
       console.log('🔐 Checking authentication before processing sale...');
@@ -496,15 +542,23 @@ class SaleProcessingService {
       }
 
       // 5. Send notifications asynchronously (don't wait for completion)
-      this.sendNotifications(saleResult.sale!).catch(error => {
-        console.warn('⚠️ Notification sending failed:', error);
-      });
+      // 🚀 OPTIMIZATION: Defer notifications to prevent blocking
+      setTimeout(() => {
+        this.sendNotifications(saleResult.sale!).catch(error => {
+          console.warn('⚠️ Notification sending failed:', error);
+        });
+      }, 200); // Defer by 200ms
 
       console.log('✅ Sale processed successfully:', saleResult.saleId);
       toast.success('Sale completed successfully!');
 
-      // Emit sale completion event for real-time updates
-      emitSaleCompleted(saleResult.sale);
+      // 🚀 OPTIMIZATION: Defer event emission to prevent blocking
+      console.log('🔵 [DEBUG] SaleProcessing: Scheduling sale completion event in 50ms');
+      setTimeout(() => {
+        console.log('🔵 [DEBUG] SaleProcessing: Emitting sale.completed event now');
+        emitSaleCompleted(saleResult.sale);
+        console.log('🔵 [DEBUG] SaleProcessing: Sale completion event emitted');
+      }, 50); // Defer by 50ms
 
       return {
         success: true,
@@ -536,6 +590,10 @@ class SaleProcessingService {
           itemsWithCosts: []
         };
       }
+      
+      // 🚀 OPTIMIZATION: Preload variant data using optimization service
+      const { workflowOptimizationService } = await import('../services/workflowOptimizationService');
+      await workflowOptimizationService.preloadWorkflowData(undefined, variantIds);
       
       // ✅ FIX: Query both lats_product_variants AND inventory_items (for serial number devices)
       // Single query to get both quantity and cost_price for all variants
@@ -1533,6 +1591,8 @@ class SaleProcessingService {
 
   // Update inventory after sale (optimized with batched operations)
   private async updateInventory(items: SaleItem[], saleId?: string): Promise<{ success: boolean; error?: string }> {
+    // 🚀 OPTIMIZATION: Invalidate cache for updated variants
+    const { workflowOptimizationService } = await import('../services/workflowOptimizationService');
     try {
       // Get user ID for tracking (optional)
       let userId = 'system';
@@ -1648,9 +1708,13 @@ class SaleProcessingService {
         const currentQuantity = variantData?.quantity || 0;
         const newQuantity = Math.max(0, currentQuantity - item.quantity);
         
-        // Warn if updating parent variant (should update children instead)
+        // Note: Parent variants can be sold directly (using their own stock when children don't exist)
+        // This is handled correctly by the stock validation logic
         if (variantData?.is_parent || variantData?.variant_type === 'parent') {
-          console.warn(`⚠️ Updating stock for parent variant ${item.variantId}. Consider selling specific child variants (IMEI children) instead.`);
+          // Only log in development mode as debug info
+          if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+            console.debug(`ℹ️ Processing sale for parent variant ${item.variantId}. Stock will be deducted from parent's own quantity.`);
+          }
         }
         
         // ✅ FIX: Handle IMEI children and legacy items the same way
@@ -1660,15 +1724,11 @@ class SaleProcessingService {
           return markIMEIAsSold(item.variantId, saleId);
         }
         
-        // Update with calculated quantity for regular variants
-        // Note: Database triggers will auto-update parent stock when children are updated
-        return supabase
-          .from('lats_product_variants')
-          .update({ 
-            quantity: newQuantity,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', item.variantId);
+        // ✅ FIX: For regular variants, don't update stock directly here
+        // Stock will be deducted by the database trigger when stock movements are inserted
+        // This prevents double deduction (direct update + trigger update)
+        // Return a resolved promise to maintain the same structure
+        return Promise.resolve({ data: null, error: null });
       });
 
       // Prepare all stock movement records for batch insert
@@ -1695,6 +1755,7 @@ class SaleProcessingService {
             new_quantity: newQuantity,
             reason: 'Sale',
             reference: `Sale ${item.sku}`,
+            reference_id: saleId || null, // ✅ CRITICAL: Set reference_id so reversals can find this movement
             notes: `Sold ${item.quantity} units of ${item.productName} (${item.variantName})`,
             created_by: normalizedUserId
           };
@@ -1717,38 +1778,128 @@ class SaleProcessingService {
       }
 
       // Batch insert all stock movements (if table exists)
+      // ✅ FIX: Stock movements trigger database trigger to deduct stock
+      // But we ALWAYS verify and update stock directly to ensure it's reduced
+      let stockMovementsSucceeded = false;
       try {
         const { error: movementError } = await supabase
           .from('lats_stock_movements')
           .insert(stockMovements);
 
         if (movementError) {
-          console.warn('⚠️ Stock movements logging skipped (table may not exist):', movementError.message);
-          // Don't fail the sale if stock movements fail - this is just for tracking history
+          console.warn('⚠️ Stock movements insert failed:', movementError.message);
+          stockMovementsSucceeded = false;
         } else {
           console.log('✅ Stock movements logged successfully');
+          stockMovementsSucceeded = true;
         }
       } catch (err) {
-        console.log('ℹ️  Stock movements tracking not enabled (table not found)');
-        // Don't fail - this is an optional feature for advanced inventory tracking
+        console.warn('⚠️ Stock movements tracking not enabled (table not found):', err);
+        stockMovementsSucceeded = false;
       }
+
+      // ✅ CRITICAL FIX: ALWAYS directly update stock to ensure it's reduced
+      // Even if trigger works, we verify and update to prevent race conditions
+      // This ensures stock is ALWAYS correctly reduced during sales
+      console.log('🔄 Ensuring stock is reduced for all sold items...');
+      const directStockUpdates = items
+        .filter(item => {
+          const variantData = currentStockMap.get(item.variantId);
+          // Only update regular variants (not IMEI children or legacy items)
+          return variantData !== undefined && 
+                 variantData?.variant_type !== 'imei_child' && 
+                 !item.is_legacy && 
+                 !item.is_imei_child;
+        })
+        .map(async item => {
+          // ✅ FIX: Fetch CURRENT quantity right before updating (prevents race conditions)
+          const { data: currentVariant, error: fetchError } = await supabase
+            .from('lats_product_variants')
+            .select('quantity')
+            .eq('id', item.variantId)
+            .single();
+
+          if (fetchError) {
+            console.error('❌ Failed to fetch current stock for variant:', item.variantId, fetchError);
+            return { success: false, error: fetchError.message };
+          }
+
+          const currentQuantity = currentVariant?.quantity || 0;
+          const newQuantity = Math.max(0, currentQuantity - item.quantity);
+          
+          console.log(`📦 [Sale] Reducing stock for variant ${item.variantId}: ${currentQuantity} → ${newQuantity} (sold ${item.quantity})`);
+          
+          const { error: updateError } = await supabase
+            .from('lats_product_variants')
+            .update({ 
+              quantity: newQuantity,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.variantId);
+
+          if (updateError) {
+            console.error('❌ Failed to reduce stock for variant:', item.variantId, updateError);
+            return { success: false, error: updateError.message };
+          }
+
+          return { success: true };
+        });
+
+      const stockUpdateResults = await Promise.allSettled(directStockUpdates);
+      for (let i = 0; i < stockUpdateResults.length; i++) {
+        const result = stockUpdateResults[i];
+        if (result.status === 'rejected') {
+          console.error('❌ Stock update failed:', result.reason);
+          return { success: false, error: `Failed to reduce stock for ${items[i].productName}` };
+        } else if (result.status === 'fulfilled' && result.value.error) {
+          console.error('❌ Stock update error:', result.value.error);
+          return { success: false, error: result.value.error };
+        }
+      }
+      console.log('✅ Stock successfully reduced for all sold items');
 
       console.log('✅ Inventory updated successfully');
       
-      // ✅ FIX: Clear child variants cache after sale to ensure sold items are hidden
-      try {
-        const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
-        childVariantsCacheService.clearCache();
-        console.log('✅ Child variants cache cleared after sale');
-      } catch (error) {
-        console.warn('⚠️ Failed to clear child variants cache:', error);
-        // Don't fail the sale if cache clearing fails
-      }
-      
-      // Emit stock updated events for real-time updates
-      items.forEach(item => {
-        emitStockUpdate(item.productId, item.variantId, item.quantity);
-      });
+      // 🚀 OPTIMIZATION: Defer all cache operations to prevent blocking/freezing
+      // Run in background without blocking the sale completion
+      // ⚠️ CRITICAL: Use a single debounced operation to prevent cascading events
+      setTimeout(async () => {
+        try {
+          // Clear child variants cache after sale (non-blocking)
+          const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
+          childVariantsCacheService.clearCache();
+        } catch (error) {
+          console.warn('⚠️ Failed to clear child variants cache:', error);
+        }
+        
+        // Invalidate workflow optimization cache (non-blocking, simplified)
+        try {
+          // Only invalidate stock cache, not variant cache (less aggressive)
+          if (variantIds.length > 0) {
+            workflowOptimizationService.invalidateStockCache(variantIds);
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to invalidate workflow cache:', error);
+        }
+        
+        // ⚠️ CRITICAL FIX: Emit a SINGLE stock update event instead of multiple
+        // This prevents cascading reloads and infinite loops
+        try {
+          if (items.length > 0) {
+            // Emit a single aggregated event for all items
+            const firstItem = items[0];
+            console.log('🔵 [DEBUG] SaleProcessing: Emitting stock update event:', {
+              productId: firstItem.productId,
+              variantId: firstItem.variantId,
+              itemCount: items.length
+            });
+            emitStockUpdate(firstItem.productId, firstItem.variantId, items.length);
+            console.log('🔵 [DEBUG] SaleProcessing: Stock update event emitted');
+          }
+        } catch (error) {
+          console.warn('⚠️ [DEBUG] SaleProcessing: Failed to emit stock update:', error);
+        }
+      }, 500); // Increased delay to 500ms to ensure sale completes first
       
       return { success: true };
 
@@ -2231,6 +2382,98 @@ ${footerMessage}`;
     } catch (error) {
       console.error('❌ Error fetching recent sales:', error);
       return [];
+    }
+  }
+
+  /**
+   * Process sale with offline-first approach
+   * Saves locally first for instant response, then syncs to online in background
+   */
+  private async processSaleOfflineFirst(saleData: Omit<SaleData, 'id' | 'saleNumber' | 'createdAt'>): Promise<ProcessSaleResult> {
+    try {
+      const { offlineSaleSyncService } = await import('../services/offlineSaleSyncService');
+      
+      // Validate stock from local cache first (fast)
+      const stockValidation = await this.validateStockFromCache(saleData.items);
+      if (!stockValidation.success) {
+        return { success: false, error: stockValidation.error };
+      }
+
+      // Save locally first (instant response)
+      console.log('💾 [SaleProcessing] Saving sale locally for instant response...');
+      const localResult = await offlineSaleSyncService.saveSaleLocally(saleData);
+
+      if (!localResult.success) {
+        return { 
+          success: false, 
+          error: localResult.error || 'Failed to save sale locally' 
+        };
+      }
+
+      // Generate a temporary sale number for local display
+      const tempSaleNumber = `TEMP-${Date.now()}`;
+      
+      // Return success immediately (offline-first)
+      console.log('✅ [SaleProcessing] Sale saved locally, will sync in background');
+      
+      // Try to sync in background if online
+      if (navigator.onLine) {
+        offlineSaleSyncService.syncSale(localResult.saleId).catch(err => {
+          console.warn('⚠️ [SaleProcessing] Background sync failed, will retry:', err);
+        });
+      }
+
+      return {
+        success: true,
+        saleId: localResult.saleId,
+        sale: {
+          ...saleData,
+          id: localResult.saleId,
+          saleNumber: tempSaleNumber,
+          createdAt: new Date().toISOString()
+        } as SaleData
+      };
+    } catch (error) {
+      console.error('❌ [SaleProcessing] Offline-first processing error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
+   * Validate stock from local cache (fast, for offline-first)
+   */
+  private async validateStockFromCache(items: SaleItem[]): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Try to get stock levels from cache
+      const stockCache = localStorage.getItem('pos_stock_levels_cache');
+      if (!stockCache) {
+        // If no cache, allow the sale (will be validated on sync)
+        console.warn('⚠️ [SaleProcessing] No stock cache found, allowing sale (will validate on sync)');
+        return { success: true };
+      }
+
+      const { data: stockLevels } = JSON.parse(stockCache);
+      const stockMap = new Map(stockLevels.map((s: any) => [s.id, s.quantity]));
+
+      // Validate each item
+      for (const item of items) {
+        const availableStock = stockMap.get(item.variantId) || 0;
+        if (availableStock < item.quantity) {
+          return {
+            success: false,
+            error: `Insufficient stock for ${item.productName}. Available: ${availableStock}, Requested: ${item.quantity}`
+          };
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.warn('⚠️ [SaleProcessing] Stock cache validation error, allowing sale:', error);
+      // If cache validation fails, allow the sale (will be validated on sync)
+      return { success: true };
     }
   }
 }

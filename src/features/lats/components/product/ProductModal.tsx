@@ -107,6 +107,11 @@ const ProductModal: React.FC<ProductModalProps> = ({
   
   // Purchase order history lazy loading state - MUST be declared before useEffect that uses it
   const [shouldLoadHistory, setShouldLoadHistory] = useState(false);
+  
+  // Stock movements tracking - LAZY LOADED - MUST be declared before useEffect that uses it
+  const [stockMovements, setStockMovements] = useState<any[]>([]);
+  const [isLoadingMovements, setIsLoadingMovements] = useState(false);
+  const [shouldLoadMovements, setShouldLoadMovements] = useState(false);
 
   // Update current product when prop changes - runs immediately
   useEffect(() => {
@@ -158,6 +163,42 @@ const ProductModal: React.FC<ProductModalProps> = ({
       setShouldLoadHistory(true);
     }
   }, [activeTab, shouldLoadHistory]);
+  
+  // Lazy load movements when movements tab is active
+  useEffect(() => {
+    if (activeTab === 'movements' && !shouldLoadMovements) {
+      setShouldLoadMovements(true);
+    }
+  }, [activeTab, shouldLoadMovements]);
+  
+  // Fetch stock movements when needed
+  useEffect(() => {
+    const fetchStockMovements = async () => {
+      if (!shouldLoadMovements || !product?.id || !isOpen) return;
+      
+      setIsLoadingMovements(true);
+      try {
+        const { data, error } = await supabase
+          .from('lats_stock_movements')
+          .select('*')
+          .eq('product_id', product.id)
+          .order('created_at', { ascending: false })
+          .limit(200);
+        
+        if (error) throw error;
+        
+        setStockMovements(data || []);
+      } catch (error) {
+        console.error('Error fetching stock movements:', error);
+        toast.error('Failed to load stock movements');
+        setStockMovements([]);
+      } finally {
+        setIsLoadingMovements(false);
+      }
+    };
+    
+    fetchStockMovements();
+  }, [shouldLoadMovements, product?.id, isOpen]);
   
   // Handle tab change with lazy loading
   const handleTabChange = (tab: string) => {
@@ -1062,6 +1103,20 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                 <Receipt className="w-4 h-4" />
                 <span className="hidden sm:inline">Orders</span>
                 <span className="sm:hidden">PO</span>
+              </div>
+            </button>
+            <button
+              onClick={() => handleTabChange('movements')}
+              className={`flex-1 min-w-fit py-2 sm:py-3 px-3 sm:px-4 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
+                activeTab === 'movements'
+                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <History className="w-4 h-4" />
+                <span className="hidden sm:inline">Movements</span>
+                <span className="sm:hidden">Move</span>
               </div>
             </button>
             {isTradeInProduct(currentProduct.variants) && (
@@ -2876,6 +2931,202 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
                     </>
                   );
                 })()}
+              </div>
+            )}
+
+            {/* Movements Tab */}
+            {activeTab === 'movements' && !loadedTabs.has('movements') && (
+              <div className="flex items-center justify-center py-16">
+                <div className="text-center">
+                  <CircularProgress size={64} strokeWidth={5} color="blue" className="mx-auto mb-4" />
+                  <p className="text-gray-600 font-medium">Loading movements...</p>
+                </div>
+              </div>
+            )}
+            {activeTab === 'movements' && loadedTabs.has('movements') && (
+              <div className="space-y-6">
+                {isLoadingMovements ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="text-center">
+                      <CircularProgress size={64} strokeWidth={5} color="blue" className="mx-auto mb-4" />
+                      <p className="text-gray-600">Loading stock movements...</p>
+                    </div>
+                  </div>
+                ) : stockMovements.length === 0 ? (
+                  <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl border-2 border-dashed border-gray-300">
+                    <History className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No Stock Movements</h3>
+                    <p className="text-sm text-gray-500">This product has no stock movement history yet</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Movements Summary */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <History className="w-5 h-5 text-blue-600" />
+                          <span className="text-xs font-medium text-blue-700 uppercase">Total Movements</span>
+                        </div>
+                        <div className="text-3xl font-bold text-blue-900">{stockMovements.length}</div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <TrendingUp className="w-5 h-5 text-green-600" />
+                          <span className="text-xs font-medium text-green-700 uppercase">Stock In</span>
+                        </div>
+                        <div className="text-3xl font-bold text-green-900">
+                          {stockMovements.filter(m => m.movement_type === 'in' || m.movement_type === 'purchase' || (m.quantity && m.quantity > 0)).length}
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-red-50 to-red-100 rounded-xl p-4 border border-red-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <TrendingDown className="w-5 h-5 text-red-600" />
+                          <span className="text-xs font-medium text-red-700 uppercase">Stock Out</span>
+                        </div>
+                        <div className="text-3xl font-bold text-red-900">
+                          {stockMovements.filter(m => m.movement_type === 'out' || m.movement_type === 'sale' || (m.quantity && m.quantity < 0)).length}
+                        </div>
+                      </div>
+
+                      <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
+                        <div className="flex items-center gap-2 mb-2">
+                          <BarChart3 className="w-5 h-5 text-purple-600" />
+                          <span className="text-xs font-medium text-purple-700 uppercase">Adjustments</span>
+                        </div>
+                        <div className="text-3xl font-bold text-purple-900">
+                          {stockMovements.filter(m => m.movement_type === 'adjustment').length}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Movements Table */}
+                    <div className="bg-white rounded-xl p-6 border border-gray-200">
+                      <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-200">
+                        <History className="w-5 h-5 text-gray-600" />
+                        <h3 className="text-base font-semibold text-gray-800">Stock Movement History</h3>
+                        <span className="text-xs font-medium text-gray-500">({stockMovements.length} records)</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200">
+                              <th className="text-left p-3 font-medium text-gray-700">Date & Time</th>
+                              <th className="text-left p-3 font-medium text-gray-700">Type</th>
+                              <th className="text-left p-3 font-medium text-gray-700">Variant</th>
+                              <th className="text-right p-3 font-medium text-gray-700">Quantity</th>
+                              <th className="text-right p-3 font-medium text-gray-700 hidden lg:table-cell">Previous</th>
+                              <th className="text-right p-3 font-medium text-gray-700 hidden lg:table-cell">New</th>
+                              <th className="text-left p-3 font-medium text-gray-700">Reason</th>
+                              <th className="text-left p-3 font-medium text-gray-700 hidden md:table-cell">Reference</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {stockMovements.map((movement) => {
+                              const movementType = movement.movement_type || 'adjustment';
+                              let quantity = movement.quantity || 0;
+                              
+                              // Determine movement direction based on type
+                              // If quantity is stored as absolute value, negate it for outbound movements
+                              const isInType = movementType === 'in' || movementType === 'purchase' || movementType === 'return';
+                              const isOutType = movementType === 'out' || movementType === 'sale';
+                              const isAdjustment = movementType === 'adjustment';
+                              
+                              // If it's an outbound type and quantity is positive, make it negative for display
+                              if (isOutType && quantity > 0) {
+                                quantity = -quantity;
+                              }
+                              // If it's an inbound type and quantity is negative, make it positive for display
+                              if (isInType && quantity < 0) {
+                                quantity = Math.abs(quantity);
+                              }
+                              
+                              const isIn = quantity > 0 || isInType;
+                              const isOut = quantity < 0 || isOutType;
+                              
+                              // Find variant name
+                              const variant = currentProduct.variants?.find((v: any) => v.id === movement.variant_id);
+                              const variantName = variant ? getVariantDisplayName(variant) : 'N/A';
+                              
+                              // Format date
+                              const movementDate = movement.created_at 
+                                ? new Date(movement.created_at).toLocaleString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })
+                                : 'N/A';
+                              
+                              return (
+                                <tr key={movement.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                  <td className="p-3">
+                                    <div className="font-medium text-gray-900">{movementDate}</div>
+                                  </td>
+                                  <td className="p-3">
+                                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+                                      isIn 
+                                        ? 'bg-green-100 text-green-700 ring-1 ring-green-200' 
+                                        : isOut
+                                        ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                                        : 'bg-blue-100 text-blue-700 ring-1 ring-blue-200'
+                                    }`}>
+                                      {isIn && <TrendingUp className="w-3 h-3 mr-1" />}
+                                      {isOut && <TrendingDown className="w-3 h-3 mr-1" />}
+                                      {isAdjustment && <BarChart3 className="w-3 h-3 mr-1" />}
+                                      {movementType.charAt(0).toUpperCase() + movementType.slice(1)}
+                                    </span>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="font-medium text-gray-900 max-w-xs truncate" title={variantName}>
+                                      {variantName}
+                                    </div>
+                                    {variant?.sku && (
+                                      <div className="text-xs text-gray-500 font-mono">{variant.sku}</div>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-right">
+                                    <span className={`font-bold ${
+                                      isIn ? 'text-green-600' : isOut ? 'text-red-600' : 'text-blue-600'
+                                    }`}>
+                                      {quantity > 0 ? '+' : ''}{quantity}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-right font-medium text-gray-600 hidden lg:table-cell">
+                                    {movement.previous_quantity !== null && movement.previous_quantity !== undefined 
+                                      ? movement.previous_quantity 
+                                      : '-'}
+                                  </td>
+                                  <td className="p-3 text-right font-medium text-gray-600 hidden lg:table-cell">
+                                    {movement.new_quantity !== null && movement.new_quantity !== undefined 
+                                      ? movement.new_quantity 
+                                      : '-'}
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="text-sm text-gray-700 max-w-xs truncate" title={movement.reason || movement.notes || 'No reason provided'}>
+                                      {movement.reason || movement.notes || '-'}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-sm text-gray-600 hidden md:table-cell">
+                                    {movement.reference ? (
+                                      <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">
+                                        {movement.reference}
+                                      </span>
+                                    ) : (
+                                      '-'
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

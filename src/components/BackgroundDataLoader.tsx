@@ -30,27 +30,51 @@ const BackgroundDataLoader: React.FC = () => {
     }
   }, [storeLoading, startLoading, completeLoading]);
 
-  // Initialize global cache when products are loaded
+  // Initialize global cache when products are loaded or updated
   useEffect(() => {
-    if (products && products.length > 0 && !cacheInitializedRef.current) {
-      cacheInitializedRef.current = true;
-
+    if (products && products.length > 0) {
       // Initialize child variants cache in background
+      // ✅ FIX: Always try to preload, even if cache was initialized before
+      // This ensures cache is updated when products change
       const initializeGlobalCache = async () => {
         try {
-          console.log('🚀 Initializing global cache service...');
+          console.log('🚀 [BackgroundDataLoader] Initializing/updating global cache service...');
           const { childVariantsCacheService } = await import('../services/childVariantsCacheService');
 
+          // Check if we have products with variants
+          const productsWithVariants = products.filter(p => p.variants && Array.isArray(p.variants) && p.variants.length > 0);
+          
+          if (productsWithVariants.length === 0) {
+            console.log('ℹ️ [BackgroundDataLoader] No products with variants found, skipping child variants preload');
+            return;
+          }
+
+          console.log(`📊 [BackgroundDataLoader] Found ${productsWithVariants.length} products with variants, preloading child variants...`);
+
           // Preload all child variants for instant variant selection
+          // ✅ FIX: Force refresh if cache is invalid or too old
+          const cacheStats = childVariantsCacheService.getCacheStats();
+          const shouldForceRefresh = !cacheStats.isValid || parseFloat(cacheStats.ageMinutes || '0') > 10;
+          
+          if (shouldForceRefresh) {
+            console.log('🔄 [BackgroundDataLoader] Cache invalid or stale, forcing refresh...');
+            childVariantsCacheService.clearCache();
+          }
+
           await childVariantsCacheService.preloadAllChildVariants(products);
-          console.log('✅ Global cache service initialized successfully');
+          console.log('✅ [BackgroundDataLoader] Global cache service initialized/updated successfully');
+          cacheInitializedRef.current = true;
         } catch (error) {
-          console.warn('⚠️ Failed to initialize global cache service:', error);
+          console.warn('⚠️ [BackgroundDataLoader] Failed to initialize global cache service:', error);
+          // Don't set cacheInitializedRef to false on error - allow retry on next product update
         }
       };
 
       // Initialize cache in background (non-blocking)
       initializeGlobalCache();
+    } else if (products && products.length === 0) {
+      // Reset cache initialization flag when products are cleared
+      cacheInitializedRef.current = false;
     }
   }, [products]);
 

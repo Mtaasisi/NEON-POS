@@ -4,7 +4,6 @@ import { useAuth } from '../../../../context/AuthContext';
 
 interface POSBottomBarProps {
   onViewAnalytics: () => void;
-  onPaymentTracking: () => void;
   onSettings: () => void;
   onCustomers: () => void;
   onReports: () => void;
@@ -14,7 +13,6 @@ interface POSBottomBarProps {
 
 const POSBottomBar: React.FC<POSBottomBarProps> = ({
   onViewAnalytics,
-  onPaymentTracking,
   onSettings,
   onCustomers,
   onReports,
@@ -54,14 +52,6 @@ const POSBottomBar: React.FC<POSBottomBarProps> = ({
             >
               <BarChart3 size={16} />
               <span className="text-sm font-medium">Analytics</span>
-            </button>
-
-            <button
-              onClick={onPaymentTracking}
-              className="flex items-center gap-2 px-4 py-2 bg-lats-finance-50 text-lats-finance-700 rounded-lg hover:bg-lats-finance-100 transition-all duration-200 border border-lats-finance-200 shadow-soft hover:shadow-medium"
-            >
-              <FileText size={16} />
-              <span className="text-sm font-medium">Payments</span>
             </button>
 
             <button

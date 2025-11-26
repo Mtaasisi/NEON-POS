@@ -391,12 +391,17 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
             
             // If status is incorrect, update it in the database
             if (correctPaymentStatus !== response.data.paymentStatus) {
-              console.warn('⚠️ Payment status mismatch detected:', {
-                totalAmount,
-                totalPaid,
-                currentStatus: response.data.paymentStatus,
-                correctStatus: correctPaymentStatus
-              });
+              // ✅ FIX: Use debug level instead of warn since we're auto-fixing it
+              // This prevents console noise for expected data corrections
+              if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+                console.debug('ℹ️ Payment status auto-corrected:', {
+                  totalAmount,
+                  totalPaid,
+                  previousStatus: response.data.paymentStatus,
+                  correctedStatus: correctPaymentStatus,
+                  note: 'Status automatically corrected based on payment amounts'
+                });
+              }
               
               // Update the local data immediately for UI
               response.data.paymentStatus = correctPaymentStatus;
@@ -413,7 +418,10 @@ const PurchaseOrderDetailPage: React.FC<PurchaseOrderDetailPageProps> = ({ editM
                   if (error) {
                     console.error('❌ Failed to update payment status:', error);
                   } else {
-                    console.log('✅ Payment status corrected in database:', correctPaymentStatus);
+                    // Only log success in development to reduce console noise
+                    if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+                      console.debug('✅ Payment status corrected in database:', correctPaymentStatus);
+                    }
                   }
                 });
             }

@@ -205,42 +205,6 @@ const FeaturesTab = forwardRef<FeaturesTabRef>((_props, ref) => {
             )}
           </div>
 
-          {/* Payment Tracking */}
-          <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:border-orange-300 transition-colors">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3 flex-1">
-                <div className="p-2 bg-orange-50 rounded-lg">
-                  <CreditCard className="w-5 h-5 text-orange-600" />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-gray-900 mb-1">Payment Tracking</h4>
-                  <p className="text-sm text-gray-600 mb-2">
-                    Track partial payments, payment plans, na deni za customers.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded">Partial Payments</span>
-                    <span className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded">Payment Plans</span>
-                    <span className="text-xs px-2 py-1 bg-orange-50 text-orange-700 rounded">Balance Tracking</span>
-                  </div>
-                </div>
-              </div>
-              <ToggleSwitch
-                id="enable-payment-tracking"
-                label=""
-                checked={features.enablePaymentTracking}
-                onChange={(checked) => handleFeatureToggle('enablePaymentTracking', checked)}
-              />
-            </div>
-            {features.enablePaymentTracking && (
-              <div className="mt-3 pt-3 border-t border-gray-200">
-                <div className="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle className="w-4 h-4" />
-                  <span className="font-medium">Active</span>
-                  <span className="text-gray-500">- Payment tracking iko enabled</span>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Dynamic Pricing */}
           <div className="bg-white border-2 border-gray-200 rounded-lg p-4 hover:border-yellow-300 transition-colors">

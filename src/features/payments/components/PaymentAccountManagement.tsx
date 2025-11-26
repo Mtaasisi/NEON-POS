@@ -17,7 +17,8 @@ import {
   BarChart3, DollarSign, CreditCard, Building, Smartphone,
   History, Filter, Calendar, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
   RepeatIcon, Download, FileText, Search, ChevronDown, ChevronUp,
-  Copy, ExternalLink, Info, ArrowRight, User, Phone, Mail, MapPin
+  Copy, ExternalLink, Info, ArrowRight, User, Phone, Mail, MapPin,
+  List, LayoutGrid
 } from 'lucide-react';
 
 // Alias for FileText to avoid conflicts
@@ -77,6 +78,7 @@ const PaymentAccountManagement: React.FC = () => {
   const [expandedTransaction, setExpandedTransaction] = useState<string | null>(null);
   const [saleDetails, setSaleDetails] = useState<Record<string, any>>({});
   const [loadingSaleDetails, setLoadingSaleDetails] = useState<Record<string, boolean>>({});
+  const [transactionViewMode, setTransactionViewMode] = useState<'timeline' | 'table'>('timeline');
 
   // Manual transaction modal state
   const [showManualTransactionModal, setShowManualTransactionModal] = useState(false);
@@ -322,24 +324,10 @@ const PaymentAccountManagement: React.FC = () => {
     console.log('✅ handleAccountChange completed');
   }, [refreshPaymentMethods, fetchAccounts]);
 
-  // Initial load only - auto-refresh disabled
+  // Initial load only - NO auto-refresh
   useEffect(() => {
     fetchAccounts();
-    
-    // 🔄 AUTO-REFRESH DISABLED: Update balances every 30 seconds
-    // Auto-refresh has been disabled to prevent page from auto-refreshing
-    // Uncomment below to re-enable auto-refresh:
-    // console.log('🔄 Setting up automatic balance refresh (every 30s)');
-    // const refreshInterval = setInterval(() => {
-    //   console.log('💳 Auto-refreshing account balances...');
-    //   fetchAccounts();
-    // }, 30000); // 30 seconds
-    // 
-    // // Cleanup interval on unmount
-    // return () => {
-    //   console.log('⏹️ Stopping automatic balance refresh');
-    //   clearInterval(refreshInterval);
-    // };
+    // Auto-refresh is completely disabled - accounts only load on initial mount or manual refresh
   }, [fetchAccounts]);
 
   // Handle form input changes
@@ -686,31 +674,84 @@ const PaymentAccountManagement: React.FC = () => {
           </div>
         </div>
 
-        {/* View Tabs */}
-        <div className="border-b border-gray-200">
-          <nav className="flex space-x-8">
-            <button
-              onClick={() => setActiveView('accounts')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
-                activeView === 'accounts'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Wallet size={16} />
-              Payment Accounts
-            </button>
-            <button
-              onClick={() => setActiveView('scheduled')}
-              className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 transition-colors ${
-                activeView === 'scheduled'
-                  ? 'border-purple-500 text-purple-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <RepeatIcon size={16} />
-              Scheduled Transfers
-            </button>
+        {/* View Steps */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <nav className="flex items-center justify-center">
+            <ol className="flex items-center w-full">
+              {/* Step 1: Payment Accounts */}
+              <li className="flex items-center flex-1">
+                <button
+                  onClick={() => setActiveView('accounts')}
+                  className="flex items-center w-full group"
+                >
+                  <div className="flex items-center flex-1">
+                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
+                      activeView === 'accounts'
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/50'
+                        : 'bg-white border-gray-300 text-gray-400 group-hover:border-blue-400 group-hover:text-blue-500'
+                    }`}>
+                      {activeView === 'accounts' ? (
+                        <Wallet size={20} />
+                      ) : (
+                        <span className="font-semibold text-sm">1</span>
+                      )}
+                    </div>
+                    <div className="ml-4 flex-1">
+                      <div className={`text-sm font-semibold transition-colors ${
+                        activeView === 'accounts'
+                          ? 'text-blue-600'
+                          : 'text-gray-500 group-hover:text-gray-700'
+                      }`}>
+                        Payment Accounts
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        Manage your accounts
+                      </div>
+                    </div>
+                  </div>
+                </button>
+                {/* Connector Line */}
+                <div className={`flex-1 h-0.5 mx-4 transition-colors ${
+                  activeView === 'scheduled'
+                    ? 'bg-blue-600'
+                    : 'bg-gray-200'
+                }`} />
+              </li>
+              
+              {/* Step 2: Scheduled Transfers */}
+              <li className="flex items-center flex-1">
+                <button
+                  onClick={() => setActiveView('scheduled')}
+                  className="flex items-center w-full group"
+                >
+                  <div className="flex items-center flex-1">
+                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-2 transition-all ${
+                      activeView === 'scheduled'
+                        ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-500/50'
+                        : 'bg-white border-gray-300 text-gray-400 group-hover:border-purple-400 group-hover:text-purple-500'
+                    }`}>
+                      {activeView === 'scheduled' ? (
+                        <RepeatIcon size={20} />
+                      ) : (
+                        <span className="font-semibold text-sm">2</span>
+                      )}
+                    </div>
+                    <div className="ml-4 flex-1">
+                      <div className={`text-sm font-semibold transition-colors ${
+                        activeView === 'scheduled'
+                          ? 'text-purple-600'
+                          : 'text-gray-500 group-hover:text-gray-700'
+                      }`}>
+                        Scheduled Transfers
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        Recurring payments
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              </li>
+            </ol>
           </nav>
         </div>
 
@@ -1552,17 +1593,46 @@ const PaymentAccountManagement: React.FC = () => {
 
                 {/* Transactions List */}
                 <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-                  <h4 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    <History className="w-5 h-5 text-indigo-600" />
-                    Transactions
-                    {accountTransactions.length > 0 && (
-                      <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl">
-                        <span className="text-sm font-semibold text-indigo-700">
-                          {accountTransactions.length} transaction{accountTransactions.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    )}
-                  </h4>
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-base font-bold text-gray-900 flex items-center gap-2">
+                      <History className="w-5 h-5 text-indigo-600" />
+                      Transactions
+                      {accountTransactions.length > 0 && (
+                        <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 border border-indigo-200 rounded-xl">
+                          <span className="text-sm font-semibold text-indigo-700">
+                            {accountTransactions.length} transaction{accountTransactions.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      )}
+                    </h4>
+                    {/* View Toggle */}
+                    <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setTransactionViewMode('timeline')}
+                        className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-2 ${
+                          transactionViewMode === 'timeline'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                        title="Timeline View"
+                      >
+                        <LayoutGrid className="w-4 h-4" />
+                        <span className="text-sm font-medium">Timeline</span>
+                      </button>
+                      <button
+                        onClick={() => setTransactionViewMode('table')}
+                        className={`px-3 py-1.5 rounded-md transition-all flex items-center gap-2 ${
+                          transactionViewMode === 'table'
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                        title="Table View"
+                      >
+                        <List className="w-4 h-4" />
+                        <span className="text-sm font-medium">Table</span>
+                      </button>
+                    </div>
+                  </div>
                   <div className="space-y-3">
                     {isLoadingTransactions ? (
                       <div className="flex flex-col items-center justify-center py-16">
@@ -1577,7 +1647,7 @@ const PaymentAccountManagement: React.FC = () => {
                         <h3 className="text-xl font-semibold text-gray-900 mb-2">No transactions yet</h3>
                         <p className="text-gray-500">This account has no transaction history.</p>
                       </div>
-                    ) : (
+                    ) : transactionViewMode === 'timeline' ? (
                       <div className="space-y-3 pr-1">
                         {accountTransactions
                           .filter(t => {
@@ -1663,7 +1733,7 @@ const PaymentAccountManagement: React.FC = () => {
                                 >
                                   {/* Left Section */}
                                   <div className="flex items-center gap-4 flex-1">
-                                    {/* Transaction Number Badge - Circular */}
+                                    {/* Transaction Icon Badge - Circular */}
                                     <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg shadow-lg ${
                                       isReversed
                                         ? 'bg-gradient-to-br from-gray-400 to-gray-500'
@@ -1677,7 +1747,21 @@ const PaymentAccountManagement: React.FC = () => {
                                         ? 'bg-gradient-to-br from-red-500 to-red-600'
                                         : 'bg-gradient-to-br from-gray-400 to-gray-500'
                                     } text-white`}>
-                                      {transactionNumber}
+                                      {isInstallment && !isIncome ? (
+                                        // Show number for installments only (but not for regular income)
+                                        transactionNumber
+                                      ) : (
+                                        // Show arrow icons for regular transactions
+                                        // Income/Paid/Partial Income (money coming in) = down arrow
+                                        // Outgoing/Expenses (money going out) = up arrow
+                                        isIncome || isIncoming || isPaid || (isPartial && (isIncome || isIncoming)) ? (
+                                          <ArrowDownRight className="w-6 h-6" />
+                                        ) : isOutgoing || (isPartial && isOutgoing) ? (
+                                          <ArrowUpRight className="w-6 h-6" />
+                                        ) : (
+                                          <ArrowRightLeft className="w-6 h-6" />
+                                        )
+                                      )}
                                       {isPaid && !isReversed && (
                                         <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
                                           <CheckCircle className="w-3 h-3 text-white" />
@@ -1730,15 +1814,10 @@ const PaymentAccountManagement: React.FC = () => {
                                         )}
                                         
                                         {isPaid && !isReversed && (
-                                          <>
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-green-100 text-green-800 border border-green-200">
-                                              <CheckCircle className="w-3.5 h-3.5" />
-                                              paid
-                                            </span>
-                                            <span className="text-xs font-medium text-green-700 bg-green-50 px-2 py-1 rounded border border-green-200">
-                                              Paid on {formattedDate}
-                                            </span>
-                                          </>
+                                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-green-100 text-green-800 border border-green-200">
+                                            <CheckCircle className="w-3.5 h-3.5" />
+                                            paid
+                                          </span>
                                         )}
                                         
                                         {isPartial && !isReversed && (
@@ -1767,30 +1846,6 @@ const PaymentAccountManagement: React.FC = () => {
                                           </span>
                                         )}
                                       </div>
-                                      
-                                      {/* Installment Payment Details */}
-                                      {isInstallment && (
-                                        <div className="space-y-1 mt-2">
-                                          {transaction.metadata?.payment_method && (
-                                            <div className="flex items-center gap-2 text-xs">
-                                              <span className="text-gray-600">Method:</span>
-                                              <span className="font-semibold text-gray-900">{transaction.metadata.payment_method}</span>
-                                            </div>
-                                          )}
-                                          {transaction.reference_number && (
-                                            <div className="flex items-center gap-2 text-xs">
-                                              <span className="text-gray-600">Reference:</span>
-                                              <span className="font-semibold text-gray-900">{transaction.reference_number}</span>
-                                            </div>
-                                          )}
-                                          {transaction.metadata?.notes && (
-                                            <div className="text-xs mt-2 p-2 bg-white rounded-lg border border-gray-200">
-                                              <span className="text-gray-600">Notes: </span>
-                                              <span className="text-gray-700">{transaction.metadata.notes}</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
                                   
@@ -1823,12 +1878,6 @@ const PaymentAccountManagement: React.FC = () => {
                                     {!isInstallment && (
                                       <div className="text-xs text-gray-500 font-medium mt-1">
                                         Balance: {formatMoney(transaction.balance_after, selectedAccount.currency)}
-                                      </div>
-                                    )}
-                                    
-                                    {isInstallment && transaction.reference_number && (
-                                      <div className="text-xs text-gray-600 font-medium mt-1">
-                                        Reference: {transaction.reference_number}
                                       </div>
                                     )}
                                   </div>
@@ -1882,6 +1931,7 @@ const PaymentAccountManagement: React.FC = () => {
                                       setReversalTransaction(transaction);
                                       setShowReversalModal(true);
                                     }}
+                                    currentUserId={currentUser?.id || null}
                                     onFetchSaleDetails={async (saleId: string) => {
                                       if (saleDetails[transaction.id]) return; // Already loaded
                                       setLoadingSaleDetails(prev => ({ ...prev, [transaction.id]: true }));
@@ -1965,6 +2015,18 @@ const PaymentAccountManagement: React.FC = () => {
                             );
                           })}
                       </div>
+                    ) : (
+                      <TableView
+                        accountTransactions={accountTransactions}
+                        transactionTypeFilter={transactionTypeFilter}
+                        dateFilter={dateFilter}
+                        searchQuery={searchQuery}
+                        selectedAccount={selectedAccount}
+                        formatMoney={formatMoney}
+                        formatTransactionType={formatTransactionType}
+                        setExpandedTransaction={setExpandedTransaction}
+                        expandedTransaction={expandedTransaction}
+                      />
                     )}
                   </div>
                 </div>
@@ -2051,6 +2113,7 @@ interface TransactionExpandedContentProps {
   onFetchSaleDetails: (saleId: string) => Promise<void>;
   onViewDetails: (transaction: Transaction) => void;
   onReverse: (transaction: Transaction) => void;
+  currentUserId?: string | null;
 }
 
 const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
@@ -2061,11 +2124,15 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
   loadingSaleDetails,
   onFetchSaleDetails,
   onViewDetails,
-  onReverse
+  onReverse,
+  currentUserId
 }) => {
   const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in' || transaction.transaction_type === 'income';
   const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
-  const isReversed = transaction.metadata?.reversed;
+  const isReversed = transaction.metadata?.reversed || 
+                     saleDetails?.status === 'reversed' || 
+                     saleDetails?.payment_status === 'reversed' ||
+                     (saleDetails?.metadata && typeof saleDetails.metadata === 'object' && saleDetails.metadata.reversed);
   const isPartial = transaction.metadata?.is_partial || 
                    transaction.metadata?.partial || 
                    (transaction.description?.toLowerCase().includes('partial') ?? false);
@@ -2095,7 +2162,7 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                         <div className="flex items-center gap-3">
                                           <div className="text-center">
                                             <div className="text-xs text-gray-600 mb-1">Before</div>
-                                            <div className="text-lg font-bold text-purple-700">{formatMoney(transaction.balance_before, selectedAccount.currency)}</div>
+                                            <div className="text-lg font-bold text-purple-700">{formatMoney(transaction.balance_before, selectedAccount?.currency)}</div>
                                           </div>
                                           <ArrowRight className="w-6 h-6 text-gray-400" />
                                           <div className={`text-center ${isIncoming ? 'text-yellow-700' : isOutgoing ? 'text-red-700' : 'text-gray-700'}`}>
@@ -2104,19 +2171,49 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                               {isIncoming && !isReversed && !isPartial && '+'}
                                               {isOutgoing && !isReversed && !isPartial && '-'}
                                               {isPartial && !isReversed && '~'}
-                                              {formatMoney(transaction.amount, selectedAccount.currency)}
+                                              {formatMoney(transaction.amount, selectedAccount?.currency)}
                                             </div>
                                           </div>
                                           <ArrowRight className="w-6 h-6 text-gray-400" />
                                           <div className="text-center">
                                             <div className="text-xs text-gray-600 mb-1">After</div>
-                                            <div className="text-lg font-bold text-indigo-700">{formatMoney(transaction.balance_after, selectedAccount.currency)}</div>
+                                            <div className="text-lg font-bold text-indigo-700">{formatMoney(transaction.balance_after, selectedAccount?.currency)}</div>
                                           </div>
                                         </div>
                                       </div>
                                     </div>
                             
-
+                                    {/* Installment Payment Details Section */}
+                                    {transaction.description?.toLowerCase().includes('installment') || 
+                                     transaction.metadata?.is_installment ||
+                                     transaction.reference_number?.includes('INS-') ? (
+                                      <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                        <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
+                                          <CreditCard className="w-5 h-5 text-purple-600" />
+                                          Installment Payment Details
+                                        </h4>
+                                        <div className="space-y-3">
+                                          {transaction.metadata?.payment_method && (
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs text-gray-600 font-medium min-w-[80px]">Method:</span>
+                                              <span className="text-sm font-semibold text-gray-900 capitalize">{transaction.metadata.payment_method}</span>
+                                            </div>
+                                          )}
+                                          {transaction.reference_number && (
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs text-gray-600 font-medium min-w-[80px]">Reference:</span>
+                                              <span className="text-sm font-semibold text-gray-900 font-mono">{transaction.reference_number}</span>
+                                            </div>
+                                          )}
+                                          {transaction.metadata?.notes && (
+                                            <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                              <div className="text-xs text-gray-600 font-medium mb-1">Notes:</div>
+                                              <div className="text-sm text-gray-700">{transaction.metadata.notes}</div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ) : null}
 
                                     {/* Sale Details Section */}
                                     {saleId && (
@@ -2346,7 +2443,46 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                           View Details
                                         </button>
                                         
-                                        {!isReversed && (
+                                        {!isReversed && saleId && (
+                                          <button
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              // Reverse the sale (which will also reverse the transaction)
+                                              try {
+                                                const { saleReversalService } = await import('../../../services/saleReversalService');
+                                                
+                                                if (!confirm('Are you sure you want to reverse this sale? This will restore stock and reverse all payments. This action cannot be undone.')) {
+                                                  return;
+                                                }
+
+                                                const reason = prompt('Enter reason for reversal (optional):') || 'Sale reversed by user';
+                                                
+                                                const result = await saleReversalService.reverseSale(
+                                                  saleId,
+                                                  currentUserId || null,
+                                                  reason
+                                                );
+
+                                                if (result.success) {
+                                                  toast.success(`✅ Sale reversed successfully! Stock restored for ${result.data?.itemsRestored || 0} items.`);
+                                                  // Refresh the page or reload data
+                                                  window.location.reload();
+                                                } else {
+                                                  toast.error(`❌ Failed to reverse sale: ${result.error || result.message}`);
+                                                }
+                                              } catch (error) {
+                                                console.error('Error reversing sale:', error);
+                                                toast.error('Failed to reverse sale');
+                                              }
+                                            }}
+                                            className="px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                                          >
+                                            <RepeatIcon className="w-4 h-4" />
+                                            Reverse Sale
+                                          </button>
+                                        )}
+                                        
+                                        {!isReversed && !saleId && (
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
@@ -2383,11 +2519,204 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                             <Copy className="w-4 h-4" />
                                             Copy Ref
                                           </button>
-                                  )}
-                                </div>
+                                        )}
+                                      </div>
                                     </div>
-                              </div>
-                          );
-                        };
+    </div>
+  );
+};
+
+// Table View Component (separate from TransactionExpandedContent)
+const TableView: React.FC<{
+  accountTransactions: any[];
+  transactionTypeFilter: string;
+  dateFilter: any;
+  searchQuery: string;
+  selectedAccount: any;
+  formatMoney: (amount: number, currency?: string) => string;
+  formatTransactionType: (type: string) => string;
+  setExpandedTransaction: (id: string | null) => void;
+  expandedTransaction: string | null;
+}> = ({
+  accountTransactions,
+  transactionTypeFilter,
+  dateFilter,
+  searchQuery,
+  selectedAccount,
+  formatMoney,
+  formatTransactionType,
+  setExpandedTransaction,
+  expandedTransaction
+}) => {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="border-b-2 border-gray-200">
+            <th className="text-left py-3 px-4 font-semibold text-gray-700">Type</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-700">Date</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-700">Description</th>
+            <th className="text-left py-3 px-4 font-semibold text-gray-700">Reference</th>
+            <th className="text-right py-3 px-4 font-semibold text-gray-700">Amount</th>
+            <th className="text-right py-3 px-4 font-semibold text-gray-700">Balance</th>
+            <th className="text-center py-3 px-4 font-semibold text-gray-700">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {accountTransactions
+            .filter(t => {
+              // Filter by transaction type
+              if (transactionTypeFilter !== 'all' && t.transaction_type !== transactionTypeFilter) {
+                return false;
+              }
+              // Filter by date range
+              if (dateFilter.start && new Date(t.created_at) < new Date(dateFilter.start)) {
+                return false;
+              }
+              if (dateFilter.end) {
+                const endDate = new Date(dateFilter.end);
+                endDate.setHours(23, 59, 59, 999);
+                if (new Date(t.created_at) > endDate) {
+                  return false;
+                }
+              }
+              // Filter by search query
+              if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                const matchesDescription = t.description?.toLowerCase().includes(query);
+                const matchesReference = t.reference_number?.toLowerCase().includes(query);
+                const matchesAmount = formatMoney(t.amount, selectedAccount?.currency || 'TZS').toLowerCase().includes(query);
+                if (!matchesDescription && !matchesReference && !matchesAmount) {
+                  return false;
+                }
+              }
+              return true;
+            })
+            .map((transaction, index) => {
+                                const isIncome = transaction.transaction_type === 'income';
+                                const isIncoming = transaction.transaction_type === 'payment_received' || transaction.transaction_type === 'transfer_in';
+                                const isOutgoing = transaction.transaction_type === 'expense' || transaction.transaction_type === 'payment_made' || transaction.transaction_type === 'transfer_out';
+                                const isReversed = transaction.metadata?.reversed;
+                                const isPartial = transaction.metadata?.is_partial || 
+                                                 transaction.metadata?.partial || 
+                                                 (transaction.description?.toLowerCase().includes('partial') ?? false);
+                                
+                                // Format date
+                                const transactionDate = new Date(transaction.created_at);
+                                const formattedDate = transactionDate.toLocaleDateString('en-US', { 
+                                  month: 'short', 
+                                  day: 'numeric', 
+                                  year: 'numeric' 
+                                });
+                                
+                                // Check if it's an installment payment
+                                const isInstallment = transaction.description?.toLowerCase().includes('installment') || 
+                                                     transaction.metadata?.is_installment ||
+                                                     transaction.reference_number?.includes('INS-');
+                                
+                                // Get transaction number (1-based index)
+                                const transactionNumber = index + 1;
+                                
+                                // Determine status
+                                const isPaid = isIncoming && !isReversed;
+                                const isOverdue = isOutgoing && !isReversed && !isPaid;
+                                
+                                return (
+                                  <tr 
+                                    key={transaction.id}
+                                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                                    onClick={() => setExpandedTransaction(expandedTransaction === transaction.id ? null : transaction.id)}
+                                  >
+                                    <td className="py-4 px-4">
+                                      <div className={`relative flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-md ${
+                                        isReversed
+                                          ? 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                          : isPartial
+                                          ? 'bg-gradient-to-br from-yellow-500 to-yellow-600'
+                                          : isIncome
+                                          ? 'bg-gradient-to-br from-yellow-500 to-yellow-600'
+                                          : isIncoming
+                                          ? 'bg-gradient-to-br from-green-500 to-green-600'
+                                          : isOutgoing
+                                          ? 'bg-gradient-to-br from-red-500 to-red-600'
+                                          : 'bg-gradient-to-br from-gray-400 to-gray-500'
+                                      } text-white`}>
+                                        {isInstallment && !isIncome ? (
+                                          transactionNumber
+                                        ) : (
+                                          isIncome || isIncoming || isPaid || (isPartial && (isIncome || isIncoming)) ? (
+                                            <ArrowDownRight className="w-5 h-5" />
+                                          ) : isOutgoing || (isPartial && isOutgoing) ? (
+                                            <ArrowUpRight className="w-5 h-5" />
+                                          ) : (
+                                            <ArrowRightLeft className="w-5 h-5" />
+                                          )
+                                        )}
+                                        {isPaid && !isReversed && (
+                                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full flex items-center justify-center border-2 border-white">
+                                            <CheckCircle className="w-2.5 h-2.5 text-white" />
+                                          </div>
+                                        )}
+                                        {isReversed && (
+                                          <div className="absolute -top-1 -right-1 w-4 h-4 bg-gray-500 rounded-full flex items-center justify-center border-2 border-white">
+                                            <X className="w-2.5 h-2.5 text-white" />
+                                          </div>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="py-4 px-4">
+                                      <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-gray-400" />
+                                        <span className="text-sm font-medium text-gray-900">{formattedDate}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-4 px-4">
+                                      <div className="text-sm font-medium text-gray-900">{transaction.description || 'No description'}</div>
+                                    </td>
+                                    <td className="py-4 px-4">
+                                      <span className="text-sm text-gray-600 font-mono">{transaction.reference_number || '-'}</span>
+                                    </td>
+                                    <td className="py-4 px-4 text-right">
+                                      <span className={`text-sm font-bold ${
+                                        isIncome || isIncoming ? 'text-green-700' : 'text-red-700'
+                                      }`}>
+                                        {isIncome || isIncoming ? '+' : '-'}{formatMoney(Math.abs(transaction.amount), selectedAccount?.currency || 'TZS')}
+                                      </span>
+                                    </td>
+                                    <td className="py-4 px-4 text-right">
+                                      <span className="text-sm font-medium text-gray-600">
+                                        {formatMoney(transaction.balance_after || 0, selectedAccount?.currency || 'TZS')}
+                                      </span>
+                                    </td>
+                                    <td className="py-4 px-4 text-center">
+                                      {isPaid && !isReversed ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-green-100 text-green-800 border border-green-200">
+                                          <CheckCircle className="w-3.5 h-3.5" />
+                                          Paid
+                                        </span>
+                                      ) : isOverdue ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-red-100 text-red-800 border border-red-200">
+                                          <AlertTriangle className="w-3.5 h-3.5" />
+                                          Overdue
+                                        </span>
+                                      ) : isReversed ? (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-gray-100 text-gray-800 border border-gray-200">
+                                          <X className="w-3.5 h-3.5" />
+                                          Reversed
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase bg-gray-100 text-gray-700 border border-gray-200">
+                                          Pending
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 export default PaymentAccountManagement;

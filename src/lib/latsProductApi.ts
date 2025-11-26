@@ -882,6 +882,34 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     
     console.log(`✅ [getProducts] Fetched ${categoriesData.length} categories, ${suppliersData.length} suppliers, ${allVariants.length} variants, ${productImages.length} images`);
     
+    // 🔍 DIAGNOSTIC: Check variant data quality
+    if (allVariants.length > 0) {
+      const variantsWithStock = allVariants.filter(v => (v.quantity || 0) > 0).length;
+      const variantsWithPrice = allVariants.filter(v => (v.selling_price || 0) > 0).length;
+      console.log(`📊 [getProducts] Variant quality check:`, {
+        total: allVariants.length,
+        withStock: variantsWithStock,
+        withoutStock: allVariants.length - variantsWithStock,
+        withPrice: variantsWithPrice,
+        withoutPrice: allVariants.length - variantsWithPrice,
+        uniqueProducts: new Set(allVariants.map(v => v.product_id)).size
+      });
+      
+      // Sample first few variants
+      const sampleVariants = allVariants.slice(0, 3);
+      console.log(`🔍 [getProducts] Sample variants:`, sampleVariants.map(v => ({
+        id: v.id,
+        product_id: v.product_id,
+        name: v.variant_name || v.name,
+        quantity: v.quantity,
+        selling_price: v.selling_price,
+        cost_price: v.cost_price
+      })));
+    } else {
+      console.warn('⚠️ [getProducts] No variants fetched! This might indicate a problem with the variants query.');
+      console.warn('⚠️ [getProducts] Product IDs that should have variants:', productIds.slice(0, 10));
+    }
+    
     // Create lookup maps
     const categoriesMap = new Map();
     (categoriesData || []).forEach(cat => {
@@ -901,6 +929,10 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       }
       variantsByProductId.get(variant.product_id)!.push(variant);
     });
+    
+    // 🔍 DIAGNOSTIC: Check how many products have variants attached
+    const productsWithVariants = products.filter(p => variantsByProductId.has(p.id)).length;
+    console.log(`📊 [getProducts] Products with variants: ${productsWithVariants} / ${products.length}`);
 
     // Group images by product ID (already fetched in parallel above)
     const imagesByProductId = new Map<string, any[]>();
@@ -915,6 +947,7 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
 
     // Map products with their variants and images
     // Fetch shelf data for all products in one query
+    // Try both table names to handle schema differences
     const shelfData: Map<string, any> = new Map();
     try {
       const productIdsWithShelves = products
@@ -922,19 +955,49 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
         .map(p => p.shelf_id);
       
       if (productIdsWithShelves.length > 0) {
-        const { data: shelves } = await supabase
+        // Try lats_store_shelves first (newer schema)
+        let shelvesResult = await supabase
           .from('lats_store_shelves')
           .select('id, name, code')
           .in('id', productIdsWithShelves);
         
-        if (shelves) {
-          shelves.forEach(shelf => {
+        // If that fails, try shelves (older schema)
+        if (shelvesResult.error && shelvesResult.error.code === '42P01') {
+          shelvesResult = await supabase
+            .from('shelves')
+            .select('id, name, code')
+            .in('id', productIdsWithShelves);
+        }
+        
+        if (shelvesResult.data) {
+          shelvesResult.data.forEach(shelf => {
             shelfData.set(shelf.id, shelf);
           });
         }
       }
     } catch (shelfError) {
       console.warn('Could not fetch shelf data:', shelfError);
+      // Try alternative table name
+      try {
+        const productIdsWithShelves = products
+          .filter(p => p.shelf_id)
+          .map(p => p.shelf_id);
+        
+        if (productIdsWithShelves.length > 0) {
+          const { data: shelves } = await supabase
+            .from('shelves')
+            .select('id, name, code')
+            .in('id', productIdsWithShelves);
+          
+          if (shelves) {
+            shelves.forEach(shelf => {
+              shelfData.set(shelf.id, shelf);
+            });
+          }
+        }
+      } catch (altShelfError) {
+        console.warn('Could not fetch shelf data from alternative table:', altShelfError);
+      }
     }
 
     // ✅ FIX: Recalculate parent variant stock from children before mapping products
@@ -966,7 +1029,7 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       }
     }
 
-    const mappedProducts = (products || []).map(product => {
+    const mappedProducts = (products || []).map((product, index) => {
       // Get images for this product - combine image_url field and product_images table
       const images: string[] = [];
       
@@ -986,6 +1049,11 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       const productVariants = variantsByProductId.get(product.id) || [];
       const firstVariant = productVariants[0];
       
+      // 🔍 DIAGNOSTIC: Log if product has no variants (for first few products only)
+      if (productVariants.length === 0 && index < 5) {
+        console.warn(`⚠️ [getProducts] Product "${product.name}" (${product.id}) has no variants attached`);
+      }
+      
       return {
         id: product.id,
         name: product.name,
@@ -999,6 +1067,7 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
         supplierId: product.supplier_id,
         isActive: product.is_active,
         price: product.selling_price || firstVariant?.selling_price || 0,
+        sellingPrice: product.selling_price || firstVariant?.selling_price || 0, // ✅ Add explicit sellingPrice field
         costPrice: product.cost_price || firstVariant?.cost_price || 0,
         stockQuantity: product.stock_quantity || 0,
         minStockLevel: product.min_stock_level || 0,
@@ -1063,9 +1132,39 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     const productsWithoutSupplier = mappedProducts.filter(p => !p.supplier && p.supplierId).length;
     const productsWithNoSupplierId = mappedProducts.filter(p => !p.supplierId).length;
     
-    console.log(`📊 [getProducts] Supplier population stats:
+    // Log price and data quality stats
+    const productsWithPrice = mappedProducts.filter(p => (p.price || p.sellingPrice || 0) > 0).length;
+    const productsWithCategory = mappedProducts.filter(p => p.category).length;
+    const productsWithShelf = mappedProducts.filter(p => p.shelfName || p.shelfCode).length;
+    
+    // Log sample product data for debugging
+    if (mappedProducts.length > 0 && import.meta.env.MODE === 'development') {
+      const sampleProduct = mappedProducts[0];
+      console.log('🔍 [getProducts] Sample product data:', {
+        id: sampleProduct.id,
+        name: sampleProduct.name,
+        sku: sampleProduct.sku,
+        price: sampleProduct.price,
+        sellingPrice: sampleProduct.sellingPrice,
+        costPrice: sampleProduct.costPrice,
+        categoryId: sampleProduct.categoryId,
+        category: sampleProduct.category,
+        supplierId: sampleProduct.supplierId,
+        supplier: sampleProduct.supplier,
+        shelfId: sampleProduct.shelfId,
+        shelfName: sampleProduct.shelfName,
+        shelfCode: sampleProduct.shelfCode,
+        variants: sampleProduct.variants?.length || 0,
+        firstVariantPrice: sampleProduct.variants?.[0]?.sellingPrice || sampleProduct.variants?.[0]?.price || 0
+      });
+    }
+    
+    console.log(`📊 [getProducts] Data quality stats:
       - Total products: ${mappedProducts.length}
-      - Products with supplier object: ${productsWithSupplier}
+      - Products with price: ${productsWithPrice}
+      - Products with category: ${productsWithCategory}
+      - Products with supplier: ${productsWithSupplier}
+      - Products with shelf: ${productsWithShelf}
       - Products with supplier_id but no supplier object: ${productsWithoutSupplier}
       - Products with no supplier_id: ${productsWithNoSupplierId}`);
     

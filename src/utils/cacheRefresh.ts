@@ -74,6 +74,12 @@ export async function clearAllCaches(): Promise<void> {
         }
       }
       
+      // Also explicitly clear SMS proxy server cache
+      if (localStorage.getItem('sms_proxy_server_unavailable')) {
+        localStorage.removeItem('sms_proxy_server_unavailable');
+        console.log('🗑️ Removed SMS proxy server cache');
+      }
+      
       keysToRemove.forEach(key => {
         try {
           localStorage.removeItem(key);

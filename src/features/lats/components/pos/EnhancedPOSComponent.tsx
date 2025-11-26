@@ -388,8 +388,13 @@ const EnhancedPOSComponent: React.FC = () => {
         // Show success message
         toast.success(`Sale completed! Sale #${result.sale?.saleNumber}`);
         
-        // Reload products to update stock
-        await loadProducts();
+        // 🚀 OPTIMIZATION: Defer product reload to prevent blocking/freezing
+        // Reload products in background after a short delay to update stock
+        setTimeout(() => {
+          loadProducts().catch(err => {
+            console.warn('⚠️ Background product reload failed (non-critical):', err);
+          });
+        }, 500); // Defer by 500ms to not block UI
         
       } else {
         toast.error(result.error || 'Failed to process sale');
