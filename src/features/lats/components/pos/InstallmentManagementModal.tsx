@@ -1269,6 +1269,34 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
       return;
     }
 
+    // Validate payment balance: Down Payment + First Payment + (All Installments) must equal Total Amount
+    const totalInstallmentAmounts = installmentAmount * (formData.number_of_installments || 1);
+    const totalPayments = (formData.down_payment || 0) + (firstPayment || 0) + totalInstallmentAmounts;
+    const balanceDifference = Math.abs(totalPayments - (formData.total_amount || 0));
+    
+    // Allow small rounding differences (less than 0.01)
+    if (balanceDifference > 0.01) {
+      console.error('❌ [InstallmentManagementModal] Payment balance mismatch:', {
+        totalAmount: formData.total_amount,
+        downPayment: formData.down_payment,
+        firstPayment: firstPayment,
+        totalInstallments: totalInstallmentAmounts,
+        totalPayments,
+        difference: balanceDifference
+      });
+      toast.error(
+        `Payment amounts don't balance!\n\n` +
+        `Total Amount: ${formatPrice(formData.total_amount || 0)} TZS\n` +
+        `Down Payment: ${formatPrice(formData.down_payment || 0)} TZS\n` +
+        `First Payment: ${formatPrice(firstPayment || 0)} TZS\n` +
+        `Installments Total: ${formatPrice(totalInstallmentAmounts)} TZS\n` +
+        `Total Payments: ${formatPrice(totalPayments)} TZS\n\n` +
+        `Difference: ${formatPrice(balanceDifference)} TZS\n\n` +
+        `Please adjust the amounts so they equal the total amount.`
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // For now, we'll use the standard createInstallmentPlan
@@ -1306,7 +1334,75 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
         toast.error(result.error || 'Failed to create installment plan');
       }
     } catch (error: any) {
-      toast.error(error.message || 'An error occurred');
+      console.error('❌ [InstallmentManagementModal] Error creating installment plan:', error);
+      console.error('❌ [InstallmentManagementModal] Error Details:', {
+        message: error?.message,
+        code: error?.code,
+        status: error?.status,
+        name: error?.name,
+        formData
+      });
+
+      // Categorize and handle different error types
+      let errorMessage = 'An error occurred while creating the installment plan.';
+      let errorTitle = 'Error';
+
+      // Network errors
+      if (error?.message?.includes('Failed to fetch') || 
+          error?.message?.includes('NetworkError') ||
+          error?.message?.includes('timeout') ||
+          error?.code === 'NETWORK_ERROR') {
+        errorTitle = 'Network Error';
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+      }
+      // Database errors
+      else if (error?.code === '23505' || error?.message?.includes('duplicate') || error?.message?.includes('unique')) {
+        errorTitle = 'Duplicate Entry';
+        errorMessage = 'An installment plan with these details already exists. Please check and try again.';
+      }
+      // Validation errors
+      else if (error?.code === '23502' || error?.message?.includes('null value') || error?.message?.includes('required')) {
+        errorTitle = 'Validation Error';
+        errorMessage = 'Some required information is missing. Please check all fields and try again.';
+      }
+      // Permission errors
+      else if (error?.code === '42501' || error?.message?.includes('permission') || error?.message?.includes('unauthorized')) {
+        errorTitle = 'Permission Denied';
+        errorMessage = 'You do not have permission to create installment plans. Please contact your administrator.';
+      }
+      // Service result errors
+      else if (error?.message?.includes('Payment amounts don\'t balance')) {
+        errorTitle = 'Payment Balance Error';
+        errorMessage = error.message;
+      }
+      // Generic error with message
+      else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      // Show user-friendly error
+      toast.error(`${errorTitle}: ${errorMessage}`, {
+        duration: 6000,
+      });
+
+      // Log detailed error for debugging
+      if (import.meta.env.MODE === 'development') {
+        console.group('🔍 [InstallmentManagementModal] Detailed Error Information');
+        console.error('Error Type:', error?.constructor?.name || 'Unknown');
+        console.error('Error Message:', error?.message);
+        console.error('Error Code:', error?.code);
+        console.error('Error Status:', error?.status);
+        console.error('Error Name:', error?.name);
+        console.error('Stack Trace:', error?.stack);
+        console.error('Context:', {
+          customerId: formData.customer_id,
+          totalAmount: formData.total_amount,
+          numberOfInstallments: formData.number_of_installments,
+          downPayment: formData.down_payment,
+          firstPayment: firstPayment
+        });
+        console.groupEnd();
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1868,11 +1964,13 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     const installmentAmount = Number(plan.installment_amount || 0);
     const balanceDue = Number(plan.balance_due || 0);
     
-    if (balanceDue > 0 && balanceDue < installmentAmount) {
-      return Number(balanceDue.toFixed(2));
-    }
+    // Always cap the payment amount at the remaining balance
+    // If balance is less than installment amount, use balance
+    // Otherwise, use installment amount (but never exceed balance)
+    const calculatedAmount = Math.min(installmentAmount, balanceDue);
     
-    return Number(installmentAmount.toFixed(2));
+    // Return 0 if balance is 0 or negative, otherwise return the calculated amount
+    return balanceDue > 0 ? Number(calculatedAmount.toFixed(2)) : 0;
   };
   
   const roundedAmount = calculatePaymentAmount();
@@ -1906,15 +2004,26 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate plan status
-    if (plan.status === 'completed') {
-      toast.error('This installment plan is already completed. No further payments can be recorded.');
-      return;
-    }
+    // Check if there are unpaid installments
+    const installmentsPaid = Number(plan.installments_paid || 0);
+    const totalInstallments = Number(plan.number_of_installments || 0);
+    const hasUnpaidInstallments = installmentsPaid < totalInstallments;
 
+    // Validate plan status
+    // Allow payments if there are unpaid installments, even if status is 'completed'
+    // This fixes data inconsistency issues
     if (plan.status === 'cancelled') {
       toast.error('This installment plan has been cancelled. Payments cannot be recorded.');
       return;
+    }
+
+    if (plan.status === 'completed' && !hasUnpaidInstallments) {
+      const balanceDue = Number(plan.balance_due || 0);
+      if (balanceDue <= 0) {
+        toast.error('This installment plan is already completed. No further payments can be recorded.');
+        return;
+      }
+      // If there's a balance but status is completed, allow payment (data inconsistency fix)
     }
 
     // Validate payment amount
@@ -1926,7 +2035,9 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
       return;
     }
 
-    if (paymentAmount > balanceDue) {
+    // If there are unpaid installments, allow payment even if balance_due is 0
+    // This fixes data inconsistency issues where balance_due is incorrectly calculated
+    if (!hasUnpaidInstallments && paymentAmount > balanceDue && balanceDue > 0) {
       toast.error(`Payment amount (${formatCurrency(paymentAmount)}) cannot exceed the remaining balance (${formatCurrency(balanceDue)}).`);
       return;
     }
@@ -2072,7 +2183,10 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
                   onChange={(e) => {
                     const value = e.target.value.replace(/,/g, '');
                     const numValue = parseFloat(value) || 0;
-                    setFormData(prev => ({ ...prev, amount: numValue }));
+                    const balanceDue = Number(plan.balance_due || 0);
+                    // Cap the amount at the remaining balance
+                    const cappedAmount = Math.min(numValue, balanceDue);
+                    setFormData(prev => ({ ...prev, amount: cappedAmount }));
                   }}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 text-xl font-bold bg-white"
                   placeholder="Enter payment amount"
@@ -3416,9 +3530,20 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                 onClick: () => handleViewPlan(plan)
               });
 
+              // Check if there are unpaid installments
+              const installmentsPaid = Number(plan.installments_paid || 0);
+              const totalInstallments = Number(plan.number_of_installments || 0);
+              const hasUnpaidInstallments = installmentsPaid < totalInstallments;
+              
+              // Show payment button if:
+              // 1. Plan is active and has balance OR unpaid installments
+              // 2. Plan is completed but has unpaid installments (data inconsistency fix)
+              const canRecordPayment = (plan.status === 'active' && (plan.balance_due > 0 || hasUnpaidInstallments)) ||
+                                      (plan.status === 'completed' && hasUnpaidInstallments);
+
               // Status-based actions
-              if (plan.status === 'active') {
-                if (plan.balance_due > 0) {
+              if (plan.status === 'active' || (plan.status === 'completed' && hasUnpaidInstallments)) {
+                if (canRecordPayment) {
                   actions.push({
                     type: 'pay',
                     label: 'Record Payment',
@@ -3426,6 +3551,9 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                     color: 'bg-green-600 hover:bg-green-700',
                     onClick: () => handleRecordPayment(plan)
                   });
+                }
+                
+                if (plan.status === 'active') {
                   actions.push({
                     type: 'edit',
                     label: 'Edit Plan',
@@ -3440,14 +3568,14 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                     color: 'bg-orange-600 hover:bg-orange-700',
                     onClick: () => handleSendReminder(plan.id)
                   });
+                  actions.push({
+                    type: 'cancel',
+                    label: 'Cancel Plan',
+                    icon: <Trash2 className="w-4 h-4" />,
+                    color: 'bg-red-600 hover:bg-red-700',
+                    onClick: () => handleCancelPlan(plan.id)
+                  });
                 }
-                actions.push({
-                  type: 'cancel',
-                  label: 'Cancel Plan',
-                  icon: <Trash2 className="w-4 h-4" />,
-                  color: 'bg-red-600 hover:bg-red-700',
-                  onClick: () => handleCancelPlan(plan.id)
-                });
               }
 
               // Always available actions

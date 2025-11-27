@@ -123,36 +123,37 @@ export const addBranchFilter = async (
   const branch = await getBranchSettings(branchId);
   const shared = await isDataShared(entityType);
 
-  if (shared) {
-    if (branch?.data_isolation_mode === 'shared') {
-      console.log(`📊 No branch filter applied (${entityType} shared in shared mode)`);
-      logQueryDebug(entityType, query, 'shared', false);
-      return query;
-    }
+  // SHARED MODE: Show all data (no filter)
+  if (branch?.data_isolation_mode === 'shared') {
+    console.log(`📊 No branch filter applied (${entityType} shared in shared mode)`);
+    logQueryDebug(entityType, query, 'shared', false);
+    return query;
+  }
 
-    if (branch?.data_isolation_mode === 'hybrid') {
+  // ISOLATED MODE: Only show data from this branch (ignore is_shared flag)
+  if (branch?.data_isolation_mode === 'isolated') {
+    console.log(`🔒 ISOLATED MODE: Filtering ${entityType} by branch ${branchId} (ignoring is_shared flag)`);
+    logQueryDebug(entityType, query, 'isolated', true);
+    return query.eq('branch_id', branchId);
+  }
+
+  // HYBRID MODE: Check if this entity type is shared
+  if (branch?.data_isolation_mode === 'hybrid') {
+    if (shared) {
+      // Entity is shared - show this branch's data + shared data
       console.log(`🔄 HYBRID SHARED: ${entityType} - branch ${branchId} + shared data`);
       logQueryDebug(entityType, query, 'hybrid', true);
-      // Include accounts from this branch OR shared accounts (branch_id is null OR is_shared is true)
       return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
+    } else {
+      // Entity is NOT shared - only show this branch's data
+      console.log(`⚖️ HYBRID NOT SHARED: ${entityType} - only branch ${branchId}`);
+      logQueryDebug(entityType, query, 'hybrid', true);
+      return query.eq('branch_id', branchId);
     }
   }
 
-  // Even in isolated mode, if accounts are marked as shared, we should still show them
-  // This handles the case where accounts were created as shared but branch is in isolated mode
-  if (entityType === 'accounts' && shared) {
-    console.log(`🔄 ACCOUNTS SHARED: Including shared accounts even in isolated mode`);
-    return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
-  }
-
-  // 🔒 CRITICAL FIX: Always include shared customers, even in isolated mode
-  // This ensures customers marked as is_shared=true are visible to all branches
-  if (entityType === 'customers') {
-    console.log(`🔄 CUSTOMERS: Including shared customers even in isolated mode`);
-    return query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
-  }
-
-  console.log(`🔒 ISOLATED DATA: Filtering ${entityType} by branch ${branchId}`);
+  // Default: apply branch filter (shouldn't reach here, but safety fallback)
+  console.log(`🔒 DEFAULT: Filtering ${entityType} by branch ${branchId}`);
   logQueryDebug(entityType, query, branch?.data_isolation_mode || 'isolated', true);
   return query.eq('branch_id', branchId);
 };
@@ -229,18 +230,43 @@ export const getBranchProducts = async () => {
     `)
     .eq('is_active', true);
 
-  // Apply branch filter without awaiting (to keep query builder)
+  // Apply branch filter based on isolation settings
   const branchId = getCurrentBranchId();
+  
+  if (!branchId) {
+    return (await query).data || [];
+  }
+
+  const branch = await getBranchSettings(branchId);
   const shared = await isDataShared('products');
   
-  if (branchId && !shared) {
-    query = query.or(`branch_id.eq.${branchId},is_shared.eq.true`);
+  // SHARED MODE: Show all products (no filter)
+  if (branch?.data_isolation_mode === 'shared') {
+    // No filter needed
+  }
+  // ISOLATED MODE: Only show products from this branch (ignore is_shared flag)
+  else if (branch?.data_isolation_mode === 'isolated') {
+    query = query.eq('branch_id', branchId);
+  }
+  // HYBRID MODE: Check share_products flag
+  else if (branch?.data_isolation_mode === 'hybrid') {
+    if (shared) {
+      // Products are shared - show this branch's products + shared products
+      query = query.or(`branch_id.eq.${branchId},is_shared.eq.true,branch_id.is.null`);
+    } else {
+      // Products are NOT shared - only show this branch's products
+      query = query.eq('branch_id', branchId);
+    }
+  }
+  // Default: show this branch's products + unassigned products
+  else {
+    query = query.or(`branch_id.eq.${branchId},branch_id.is.null`);
   }
 
   const { data, error } = await query;
 
   if (error) throw error;
-  return data;
+  return data || [];
 };
 
 // Get branch-filtered sales

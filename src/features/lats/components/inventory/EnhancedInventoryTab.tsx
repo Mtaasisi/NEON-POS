@@ -112,6 +112,23 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   navigate,
   deleteProduct
 }) => {
+  // 🔍 DEBUG: Log products received
+  useEffect(() => {
+    if (import.meta.env.MODE === 'development') {
+      console.log(`🔍 [EnhancedInventoryTab] Received ${products.length} products to display`);
+      if (products.length > 0) {
+        const productsWithVariants = products.filter(p => p.variants && p.variants.length > 0).length;
+        const productsWithoutVariants = products.length - productsWithVariants;
+        console.log(`🔍 [EnhancedInventoryTab] Products breakdown: ${productsWithVariants} with variants, ${productsWithoutVariants} without variants`);
+        console.log(`🔍 [EnhancedInventoryTab] First 5 products:`, products.slice(0, 5).map(p => ({
+          name: p.name,
+          variantCount: p.variants?.length || 0,
+          stock: p.variants?.reduce((sum, v) => sum + (v.quantity || 0), 0) || 0
+        })));
+      }
+    }
+  }, [products]);
+
   // Format money in short form (e.g., 1.2M, 500K, 1.5B)
   const formatShortMoney = (amount: number): string => {
     if (amount >= 1000000000) {
@@ -791,6 +808,10 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                   const reservedStock = product.variants?.reduce((sum: any, variant: any) => sum + (variant.reservedQuantity || variant.reserved_quantity || 0), 0) || 0;
                   const availableStock = totalStock - reservedStock;
                   const stockStatus = availableStock <= 0 ? 'out-of-stock' : availableStock <= 10 ? 'low-stock' : 'in-stock';
+                  
+                  // ✅ IMPORTANT: Show products even if they have no variants in current branch
+                  // This allows shared products to be visible even when inventory is isolated
+                  // Products will show with 0 stock if they have no variants in the current branch
                   
                   return (
                     <tr 

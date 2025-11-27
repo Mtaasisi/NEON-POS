@@ -264,13 +264,26 @@ async function performFetchAllCustomers() {
                 .range(from, to)
                 .order('created_at', { ascending: false});
               
-              // Apply branch filter in isolated mode
-              if (currentBranchId && !shareCustomers) {
-                // Show customers from this branch OR customers marked as shared
-                query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
-                // console.log removed`);
-              } else {
-                // console.log removed`);
+              // Apply branch filter based on isolation mode
+              if (currentBranchId) {
+                if (isolationMode === 'isolated') {
+                  // ISOLATED MODE: Only show customers from this branch (ignore is_shared flag)
+                  query = query.eq('branch_id', currentBranchId);
+                  console.log(`🔒 [fetchAllCustomers] ISOLATED MODE - Only showing customers from branch ${currentBranchId}`);
+                } else if (isolationMode === 'shared') {
+                  // SHARED MODE: Show all customers (no filter)
+                  console.log(`📊 [fetchAllCustomers] SHARED MODE - Showing all customers`);
+                } else if (isolationMode === 'hybrid') {
+                  // HYBRID MODE: Check share_customers flag
+                  if (shareCustomers) {
+                    // Customers are shared - show all customers (no filter)
+                    console.log(`⚖️ [fetchAllCustomers] HYBRID MODE - Customers are SHARED - Showing all customers`);
+                  } else {
+                    // Customers are NOT shared - only show this branch's customers
+                    query = query.eq('branch_id', currentBranchId);
+                    console.log(`⚖️ [fetchAllCustomers] HYBRID MODE - Customers are NOT SHARED - Only showing branch ${currentBranchId}`);
+                  }
+                }
               }
               
               const result = await query;
@@ -577,9 +590,26 @@ async function performFetchAllCustomersLight() {
             .order('created_at', { ascending: false })
             .limit(5000); // Reasonable limit for initial load
 
-          // Apply branch filter in isolated mode
-          if (currentBranchId && !shareCustomers) {
-            query = query.eq('branch_id', currentBranchId);
+          // Apply branch filter based on isolation mode
+          if (currentBranchId) {
+            if (isolationMode === 'isolated') {
+              // ISOLATED MODE: Only show customers from this branch (ignore is_shared flag)
+              query = query.eq('branch_id', currentBranchId);
+              console.log(`🔒 [fetchAllCustomersLight] ISOLATED MODE - Only showing customers from branch ${currentBranchId}`);
+            } else if (isolationMode === 'shared') {
+              // SHARED MODE: Show all customers (no filter)
+              console.log(`📊 [fetchAllCustomersLight] SHARED MODE - Showing all customers`);
+            } else if (isolationMode === 'hybrid') {
+              // HYBRID MODE: Check share_customers flag
+              if (shareCustomers) {
+                // Customers are shared - show all customers (no filter)
+                console.log(`⚖️ [fetchAllCustomersLight] HYBRID MODE - Customers are SHARED - Showing all customers`);
+              } else {
+                // Customers are NOT shared - only show this branch's customers
+                query = query.eq('branch_id', currentBranchId);
+                console.log(`⚖️ [fetchAllCustomersLight] HYBRID MODE - Customers are NOT SHARED - Only showing branch ${currentBranchId}`);
+              }
+            }
           }
 
           const result = await query;
@@ -693,13 +723,26 @@ async function performFetchAllCustomersSimple() {
               .order('created_at', { ascending: false })
               .limit(100000); // High limit to get all customers
             
-            // Apply branch filter in isolated mode
-            if (currentBranchId && !shareCustomers) {
-              // Show customers from this branch OR customers marked as shared
-              query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
-              // console.log removed');
-            } else {
-              // console.log removed');
+            // Apply branch filter based on isolation mode
+            if (currentBranchId) {
+              if (isolationMode === 'isolated') {
+                // ISOLATED MODE: Only show customers from this branch (ignore is_shared flag)
+                query = query.eq('branch_id', currentBranchId);
+                console.log(`🔒 [fetchAllCustomersSimple] ISOLATED MODE - Only showing customers from branch ${currentBranchId}`);
+              } else if (isolationMode === 'shared') {
+                // SHARED MODE: Show all customers (no filter)
+                console.log(`📊 [fetchAllCustomersSimple] SHARED MODE - Showing all customers`);
+              } else if (isolationMode === 'hybrid') {
+                // HYBRID MODE: Check share_customers flag
+                if (shareCustomers) {
+                  // Customers are shared - show all customers (no filter)
+                  console.log(`⚖️ [fetchAllCustomersSimple] HYBRID MODE - Customers are SHARED - Showing all customers`);
+                } else {
+                  // Customers are NOT shared - only show this branch's customers
+                  query = query.eq('branch_id', currentBranchId);
+                  console.log(`⚖️ [fetchAllCustomersSimple] HYBRID MODE - Customers are NOT SHARED - Only showing branch ${currentBranchId}`);
+                }
+              }
             }
             
             const result = await query;

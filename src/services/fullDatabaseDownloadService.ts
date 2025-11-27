@@ -502,9 +502,18 @@ class FullDatabaseDownloadService {
       // Apply branch filtering
       if (currentBranchId && branchSettings) {
         if (branchSettings.data_isolation_mode === 'isolated') {
-          query = query.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+          // ISOLATED MODE: Only show products from this branch (ignore is_shared flag)
+          query = query.eq('branch_id', currentBranchId);
+        } else if (branchSettings.data_isolation_mode === 'shared') {
+          // SHARED MODE: Show all products (no filter)
         } else if (branchSettings.data_isolation_mode === 'hybrid') {
-          query = query.or(`is_shared.eq.true,branch_id.eq.${currentBranchId},branch_id.is.null`);
+          // HYBRID MODE: Check share_products flag
+          if (branchSettings.share_products) {
+            // Products are shared - show all products (no filter)
+          } else {
+            // Products are NOT shared - only show this branch's products
+            query = query.eq('branch_id', currentBranchId);
+          }
         }
       } else if (currentBranchId) {
         query = query.or(`branch_id.eq.${currentBranchId},branch_id.is.null,is_shared.eq.true`);
@@ -534,15 +543,30 @@ class FullDatabaseDownloadService {
         .eq('is_active', true)
         .order('name');
       
-      // Apply branch filtering to variants
+      // Apply branch filtering to variants based on share_inventory setting
       if (currentBranchId && branchSettings) {
         if (branchSettings.data_isolation_mode === 'isolated') {
-          variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+          // ISOLATED MODE: Only show variants from this branch (ignore is_shared flag)
+          variantQuery = variantQuery.eq('branch_id', currentBranchId);
+          console.log(`🔒 [Download] ISOLATED MODE - Variants: Only showing from branch ${currentBranchId}`);
+        } else if (branchSettings.data_isolation_mode === 'shared') {
+          // SHARED MODE: Show all variants (no filter)
+          console.log(`📊 [Download] SHARED MODE - Variants: Showing all variants`);
         } else if (branchSettings.data_isolation_mode === 'hybrid') {
-          variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId},branch_id.is.null`);
+          // HYBRID MODE: Check share_inventory flag
+          if (branchSettings.share_inventory) {
+            // Inventory is shared - show this branch's variants + shared variants
+            variantQuery = variantQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+            console.log(`⚖️ [Download] HYBRID MODE - Variants are SHARED - Showing branch ${currentBranchId} + shared variants`);
+          } else {
+            // Inventory is NOT shared - only show this branch's variants
+            variantQuery = variantQuery.eq('branch_id', currentBranchId);
+            console.log(`⚖️ [Download] HYBRID MODE - Variants are NOT SHARED - Only showing branch ${currentBranchId}`);
+          }
         }
       } else if (currentBranchId) {
-        variantQuery = variantQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null,is_shared.eq.true`);
+        // Default: show this branch's variants + unassigned variants
+        variantQuery = variantQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
       }
       
       const { data: allVariants, error: variantsError } = await variantQuery;

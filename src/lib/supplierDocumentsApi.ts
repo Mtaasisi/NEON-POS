@@ -63,11 +63,15 @@ export const createSupplierDocument = async (documentData: CreateDocumentData): 
   try {
     const { data: userData } = await supabase.auth.getUser();
     
+    // 🔒 Get current branch for isolation - supplier documents are branch-specific
+    const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+    
     const { data, error } = await supabase
       .from('lats_supplier_documents')
       .insert({
         ...documentData,
-        uploaded_by: userData?.user?.id
+        uploaded_by: userData?.user?.id,
+        branch_id: currentBranchId  // 🔒 Supplier documents are branch-specific
       })
       .select()
       .single();

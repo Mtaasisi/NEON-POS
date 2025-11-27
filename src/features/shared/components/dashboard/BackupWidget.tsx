@@ -168,7 +168,7 @@ export const BackupWidget: React.FC<BackupWidgetProps> = ({ className }) => {
           </div>
         </div>
         <button
-          onClick={() => navigate('/backup-management')}
+          onClick={() => navigate('/admin-settings?section=database')}
           className="px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-medium transition-colors flex items-center gap-1.5"
         >
           <ExternalLink size={14} />

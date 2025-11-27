@@ -379,6 +379,64 @@ const StoreManagementSettings: React.FC = () => {
     }
   };
 
+  const handleEditStore = async (storeId: string) => {
+    try {
+      // Fetch the latest data from the database to ensure we have the most up-to-date values
+      const { data, error } = await supabase
+        .from('store_locations')
+        .select('*')
+        .eq('id', storeId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        // Ensure all boolean fields have default values if they're null
+        const storeData: Store = {
+          ...data,
+          share_products: data.share_products ?? false,
+          share_customers: data.share_customers ?? false,
+          share_inventory: data.share_inventory ?? false,
+          share_suppliers: data.share_suppliers ?? false,
+          share_categories: data.share_categories ?? false,
+          share_employees: data.share_employees ?? false,
+          share_sales: data.share_sales ?? false,
+          share_purchase_orders: data.share_purchase_orders ?? false,
+          share_devices: data.share_devices ?? false,
+          share_payments: data.share_payments ?? false,
+          share_appointments: data.share_appointments ?? false,
+          share_reminders: data.share_reminders ?? false,
+          share_expenses: data.share_expenses ?? false,
+          share_trade_ins: data.share_trade_ins ?? false,
+          share_special_orders: data.share_special_orders ?? false,
+          share_attendance: data.share_attendance ?? false,
+          share_loyalty_points: data.share_loyalty_points ?? false,
+          share_accounts: data.share_accounts ?? true,
+          share_gift_cards: data.share_gift_cards ?? true,
+          share_quality_checks: data.share_quality_checks ?? false,
+          share_recurring_expenses: data.share_recurring_expenses ?? false,
+          share_communications: data.share_communications ?? false,
+          share_reports: data.share_reports ?? false,
+          share_finance_transfers: data.share_finance_transfers ?? false,
+          allow_stock_transfer: data.allow_stock_transfer ?? true,
+          auto_sync_products: data.auto_sync_products ?? true,
+          auto_sync_prices: data.auto_sync_prices ?? true,
+          require_approval_for_transfers: data.require_approval_for_transfers ?? false,
+          data_isolation_mode: data.data_isolation_mode || 'hybrid',
+          pricing_model: data.pricing_model || 'centralized',
+          can_view_other_branches: data.can_view_other_branches ?? false,
+          can_transfer_to_branches: data.can_transfer_to_branches || []
+        };
+        
+        setEditingStore(storeData);
+        setShowAddForm(false);
+      }
+    } catch (error: any) {
+      console.error('Error loading store for editing:', error);
+      toast.error('Failed to load store data. Please try again.');
+    }
+  };
+
 
   const StoreForm: React.FC<{
     store: Store;
@@ -929,6 +987,27 @@ const StoreManagementSettings: React.FC = () => {
                 Configure what data this branch shares with other branches. Toggle each feature individually.
               </p>
 
+              {/* Isolation Mode Selector */}
+              <div className="mb-6 p-4 bg-indigo-50 border-2 border-indigo-200 rounded-xl">
+                <label className="block text-sm font-semibold text-gray-900 mb-2">
+                  Data Isolation Mode *
+                </label>
+                <select
+                  value={formData.data_isolation_mode || 'hybrid'}
+                  onChange={(e) => setFormData({ ...formData, data_isolation_mode: e.target.value as 'shared' | 'isolated' | 'hybrid' })}
+                  className="w-full px-4 py-3 border-2 border-indigo-300 rounded-xl focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 text-gray-900 font-medium transition-colors bg-white"
+                >
+                  <option value="shared">Shared - All data is shared across all branches</option>
+                  <option value="isolated">Isolated - Each branch has completely separate data</option>
+                  <option value="hybrid">Hybrid - Configure sharing per data type (recommended)</option>
+                </select>
+                <p className="text-xs text-gray-600 mt-2">
+                  {formData.data_isolation_mode === 'shared' && 'All data types will be shared regardless of individual toggles below.'}
+                  {formData.data_isolation_mode === 'isolated' && 'All data types will be isolated regardless of individual toggles below.'}
+                  {formData.data_isolation_mode === 'hybrid' && 'Use the toggles below to configure which data types are shared.'}
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {[
                   // Core Data
@@ -960,34 +1039,43 @@ const StoreManagementSettings: React.FC = () => {
                   { key: 'share_communications', label: 'Communications', Icon: MessageSquare, description: 'Share SMS/WhatsApp logs', category: 'Business' },
                   { key: 'share_reports', label: 'Reports', Icon: BarChart3, description: 'Share daily reports and analytics', category: 'Business' },
                   { key: 'share_finance_transfers', label: 'Finance Transfers', Icon: ArrowLeftRight, description: 'Share financial transfers', category: 'Business' }
-                ].map(({ key, label, Icon, description, category }) => (
-                  <div key={key} className={`flex items-center justify-between p-3 border-2 rounded-xl transition-all ${
-                    formData[key as keyof Store] 
-                      ? 'border-green-300 bg-green-50 hover:border-green-400' 
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}>
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <Icon className={`w-5 h-5 flex-shrink-0 ${
-                        formData[key as keyof Store] ? 'text-green-600' : 'text-gray-600'
-                      }`} />
-                      <div className="min-w-0">
-                        <div className={`text-sm font-semibold truncate ${
-                          formData[key as keyof Store] ? 'text-green-900' : 'text-gray-900'
-                        }`}>{label}</div>
-                        <p className="text-xs text-gray-500 truncate">{description}</p>
+                ].map(({ key, label, Icon, description, category }) => {
+                  const isIsolated = formData.data_isolation_mode === 'isolated';
+                  const isShared = formData.data_isolation_mode === 'shared';
+                  const isDisabled = isIsolated || isShared;
+                  
+                  return (
+                    <div key={key} className={`flex items-center justify-between p-3 border-2 rounded-xl transition-all ${
+                      isDisabled 
+                        ? 'opacity-60 cursor-not-allowed bg-gray-50'
+                        : formData[key as keyof Store] 
+                          ? 'border-green-300 bg-green-50 hover:border-green-400' 
+                          : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                      <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                        <Icon className={`w-5 h-5 flex-shrink-0 ${
+                          formData[key as keyof Store] ? 'text-green-600' : 'text-gray-600'
+                        }`} />
+                        <div className="min-w-0">
+                          <div className={`text-sm font-semibold truncate ${
+                            formData[key as keyof Store] ? 'text-green-900' : 'text-gray-900'
+                          }`}>{label}</div>
+                          <p className="text-xs text-gray-500 truncate">{description}</p>
+                        </div>
                       </div>
+                      <label className={`relative inline-flex items-center ml-3 flex-shrink-0 ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <input
+                          type="checkbox"
+                          checked={formData[key as keyof Store] as boolean}
+                          onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })}
+                          disabled={isDisabled}
+                          className="sr-only peer"
+                        />
+                        <div className={`w-11 h-6 ${isDisabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-gray-200 peer-focus:outline-none'} rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600 shadow-sm`}></div>
+                      </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer ml-3 flex-shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={formData[key as keyof Store] as boolean}
-                        onChange={(e) => setFormData({ ...formData, [key]: e.target.checked })}
-                        className="sr-only peer"
-                      />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600 shadow-sm"></div>
-                    </label>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -1406,12 +1494,7 @@ const StoreManagementSettings: React.FC = () => {
                           </button>
                         )}
                         <button
-                          onClick={() => {
-                            // Create a stable copy to prevent reference changes
-                            setEditingStore({ ...store });
-                            // Ensure add form is closed when editing
-                            setShowAddForm(false);
-                          }}
+                          onClick={() => handleEditStore(store.id!)}
                           className="p-2.5 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors border-2 border-blue-200 hover:border-blue-300 shadow-sm"
                           title="Edit store"
                         >

@@ -706,13 +706,22 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     // 🔒 BRANCH FILTERING - Build OR condition to include all relevant products in ONE query
     if (currentBranchId && branchSettings) {
       if (branchSettings.data_isolation_mode === 'isolated') {
-        // ISOLATED MODE: Show products from this branch + shared products
-        query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
+        // ISOLATED MODE: Show ONLY products from this branch (ignore is_shared flag)
+        query = query.eq('branch_id', currentBranchId);
+        console.log(`🔒 [getProducts] ISOLATED MODE - Only showing products from branch ${currentBranchId}`);
       } else if (branchSettings.data_isolation_mode === 'shared') {
         // SHARED MODE: Show all products (no filter)
+        console.log(`📊 [getProducts] SHARED MODE - Showing all products`);
       } else if (branchSettings.data_isolation_mode === 'hybrid') {
-        // HYBRID MODE: Show this branch's products + shared products + unassigned products
-        query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+        // HYBRID MODE: Check share_products flag
+        if (branchSettings.share_products) {
+          // Products are shared - show all products
+          console.log(`⚖️ [getProducts] HYBRID MODE - Products are SHARED - Showing all products`);
+        } else {
+          // Products are NOT shared - only show this branch's products
+          query = query.eq('branch_id', currentBranchId);
+          console.log(`⚖️ [getProducts] HYBRID MODE - Products are NOT SHARED - Only showing branch ${currentBranchId}`);
+        }
       } else {
         // DEFAULT: Show this branch's products + unassigned products
         query = query.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
@@ -726,7 +735,15 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     console.log(`🔍 [getProducts] Executing query with branch filter...`);
     console.log(`   Branch ID: ${currentBranchId || 'none'}`);
     console.log(`   Branch Mode: ${branchSettings?.data_isolation_mode || 'none'}`);
-    console.log(`   Filter: is_active = true${currentBranchId ? ` AND (branch_id = ${currentBranchId} OR is_shared = true OR branch_id IS NULL)` : ''}`);
+    if (branchSettings?.data_isolation_mode === 'isolated') {
+      console.log(`   Filter: is_active = true AND branch_id = ${currentBranchId} (ISOLATED - no shared products)`);
+    } else if (branchSettings?.data_isolation_mode === 'shared') {
+      console.log(`   Filter: is_active = true (SHARED - all products)`);
+    } else if (branchSettings?.data_isolation_mode === 'hybrid') {
+      console.log(`   Filter: is_active = true${branchSettings.share_products ? ' (all products)' : ` AND branch_id = ${currentBranchId}`}`);
+    } else {
+      console.log(`   Filter: is_active = true${currentBranchId ? ` AND (branch_id = ${currentBranchId} OR branch_id IS NULL)` : ''}`);
+    }
     const { data: allProducts, error } = await query;
     const queryTime = Date.now() - startTime;
     
@@ -830,14 +847,30 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       .eq('is_active', true) // ✅ Only show active variants
       .order('name');
     
-    // Apply branch filtering to variants
+    // Apply branch filtering to variants based on share_inventory setting
+    // This allows products to be shared while inventory/stock remains isolated per branch
     if (currentBranchIdForVariants && branchSettings) {
       if (branchSettings.data_isolation_mode === 'isolated') {
-        variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants}`);
+        // ISOLATED MODE: Only show variants from this branch (ignore is_shared flag)
+        variantQuery = variantQuery.eq('branch_id', currentBranchIdForVariants);
+        console.log(`🔒 [getProducts] ISOLATED MODE - Variants: Only showing from branch ${currentBranchIdForVariants}`);
+      } else if (branchSettings.data_isolation_mode === 'shared') {
+        // SHARED MODE: Show all variants (no filter)
+        console.log(`📊 [getProducts] SHARED MODE - Variants: Showing all variants`);
       } else if (branchSettings.data_isolation_mode === 'hybrid') {
-        variantQuery = variantQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchIdForVariants},branch_id.is.null`);
+        // HYBRID MODE: Check share_inventory flag
+        if (branchSettings.share_inventory) {
+          // Inventory is shared - show this branch's variants + shared variants
+          variantQuery = variantQuery.or(`branch_id.eq.${currentBranchIdForVariants},is_shared.eq.true,branch_id.is.null`);
+          console.log(`⚖️ [getProducts] HYBRID MODE - Variants are SHARED - Showing branch ${currentBranchIdForVariants} + shared variants`);
+        } else {
+          // Inventory is NOT shared - only show this branch's variants
+          variantQuery = variantQuery.eq('branch_id', currentBranchIdForVariants);
+          console.log(`⚖️ [getProducts] HYBRID MODE - Variants are NOT SHARED - Only showing branch ${currentBranchIdForVariants}`);
+        }
       }
     } else if (currentBranchIdForVariants) {
+      // Default: show this branch's variants + unassigned variants
       variantQuery = variantQuery.or(`branch_id.eq.${currentBranchIdForVariants},branch_id.is.null`);
     }
     
@@ -932,7 +965,11 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
     
     // 🔍 DIAGNOSTIC: Check how many products have variants attached
     const productsWithVariants = products.filter(p => variantsByProductId.has(p.id)).length;
+    const productsWithoutVariants = products.length - productsWithVariants;
     console.log(`📊 [getProducts] Products with variants: ${productsWithVariants} / ${products.length}`);
+    if (productsWithoutVariants > 0) {
+      console.log(`⚠️ [getProducts] ${productsWithoutVariants} products have NO variants in current branch - they will show with 0 stock but should still be visible`);
+    }
 
     // Group images by product ID (already fetched in parallel above)
     const imagesByProductId = new Map<string, any[]>();
@@ -1049,9 +1086,14 @@ async function _getProductsImpl(): Promise<LatsProduct[]> {
       const productVariants = variantsByProductId.get(product.id) || [];
       const firstVariant = productVariants[0];
       
-      // 🔍 DIAGNOSTIC: Log if product has no variants (for first few products only)
-      if (productVariants.length === 0 && index < 5) {
-        console.warn(`⚠️ [getProducts] Product "${product.name}" (${product.id}) has no variants attached`);
+      // 🔍 DIAGNOSTIC: Log if product has no variants (only in development mode and for first few products)
+      // This can happen if:
+      // 1. Variants are filtered out by branch_id (variants from other branches)
+      // 2. Variants are inactive (is_active = false)
+      // 3. Product was created before auto-variant trigger was set up
+      // 4. Variants haven't been created yet (race condition)
+      if (productVariants.length === 0 && index < 5 && (import.meta.env.DEV || import.meta.env.MODE === 'development')) {
+        console.info(`ℹ️ [getProducts] Product "${product.name}" has no variants in current branch. This is expected if inventory is isolated and the product belongs to another branch.`);
       }
       
       return {

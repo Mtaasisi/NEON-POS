@@ -246,13 +246,11 @@ const ExpenseManagement: React.FC = () => {
     addDebugLog('info', 'INIT', `Preloaded accounts available: ${preloadedPaymentAccounts?.length || 0}`);
 
     if (preloadedPaymentAccounts && preloadedPaymentAccounts.length > 0) {
-      // Filter accounts to only show those for current branch (accounts are now isolated)
-      const branchAccounts = preloadedPaymentAccounts.filter(account =>
-        !account.branch_id || account.branch_id === currentBranchId || account.is_shared
-      );
-      addDebugLog('info', 'INIT', `Branch-filtered accounts: ${branchAccounts.length}/${preloadedPaymentAccounts.length}`);
-      addDebugLog('info', 'INIT', `Filtered accounts: ${branchAccounts.map(a => `${a.name}(branch:${a.branch_id})`).join(', ')}`);
-      setPaymentAccounts(branchAccounts);
+      // Server-side filtering already applied based on isolation settings
+      // No need for additional client-side filtering - trust the server
+      addDebugLog('info', 'INIT', `Using preloaded accounts: ${preloadedPaymentAccounts.length} (already filtered by server)`);
+      addDebugLog('info', 'INIT', `Accounts: ${preloadedPaymentAccounts.map(a => `${a.name}(branch:${a.branch_id})`).join(', ')}`);
+      setPaymentAccounts(preloadedPaymentAccounts);
     } else {
       // If no preloaded accounts, fetch them
       addDebugLog('warning', 'INIT', 'No preloaded payment accounts, fetching directly...');
@@ -298,28 +296,21 @@ const ExpenseManagement: React.FC = () => {
       clearQueryCache(cacheKey);
       addDebugLog('info', 'FETCH_ACCOUNTS', `Cleared cache for key: ${cacheKey}`);
 
-      // If we already have preloaded data, check if it's for the current branch
+      // If we already have preloaded data, use it (server-side filtering already applied)
       if (preloadedPaymentAccounts && preloadedPaymentAccounts.length > 0) {
-        const branchAccounts = preloadedPaymentAccounts.filter(account =>
-          !account.branch_id || account.branch_id === currentBranchId || account.is_shared
-        );
-        addDebugLog('info', 'FETCH_ACCOUNTS', `Using preloaded accounts: ${branchAccounts.length} for current branch`);
-        setPaymentAccounts(branchAccounts);
+        addDebugLog('info', 'FETCH_ACCOUNTS', `Using preloaded accounts: ${preloadedPaymentAccounts.length} (already filtered by server)`);
+        setPaymentAccounts(preloadedPaymentAccounts);
         return;
       }
 
       addDebugLog('info', 'FETCH_ACCOUNTS', 'No preloaded accounts, calling financeAccountService.getPaymentMethods()...');
       const accounts = await financeAccountService.getPaymentMethods();
 
-      addDebugLog('success', 'FETCH_ACCOUNTS', `Service returned ${accounts.length} accounts:`, accounts);
+      addDebugLog('success', 'FETCH_ACCOUNTS', `Service returned ${accounts.length} accounts (already filtered by server based on isolation settings):`, accounts);
 
-      // Filter accounts for current branch (additional safety)
-      const branchAccounts = accounts.filter(account =>
-        !account.branch_id || account.branch_id === currentBranchId || account.is_shared
-      );
-
-      addDebugLog('success', 'FETCH_ACCOUNTS', `After branch filtering: ${branchAccounts.length} accounts`);
-      setPaymentAccounts(branchAccounts);
+      // Server-side filtering in addBranchFilter already handles isolation mode correctly
+      // No need for additional client-side filtering - trust the server
+      setPaymentAccounts(accounts);
 
       const duration = performance.now() - startTime;
       addDebugLog('success', 'FETCH_ACCOUNTS', `Fetch completed in ${duration.toFixed(2)}ms`);

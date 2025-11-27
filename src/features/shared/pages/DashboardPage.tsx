@@ -455,7 +455,7 @@ const DashboardPageContent: React.FC = () => {
       description: 'Data backup',
       icon: HardDrive,
       color: 'from-slate-500 to-slate-600',
-      path: '/backup-management'
+      path: '/admin-settings?section=database'
     },
     
     // SMS & Communication Features

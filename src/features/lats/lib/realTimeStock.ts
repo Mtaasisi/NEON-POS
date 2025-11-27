@@ -89,7 +89,20 @@ export class RealTimeStockService {
       // Get current branch ID for filtering
       const currentBranchId = getCurrentBranchId();
       
-
+      // Get branch settings to check share_inventory flag
+      let branchSettings: any = null;
+      if (currentBranchId) {
+        try {
+          const { data } = await supabase
+            .from('store_locations')
+            .select('data_isolation_mode, share_inventory')
+            .eq('id', currentBranchId)
+            .single();
+          branchSettings = data;
+        } catch (err) {
+          console.warn('⚠️ [RealTimeStockService] Could not fetch branch settings');
+        }
+      }
       
       // Fetch variants for the uncached products, filtered by current branch + shared
       // 🔧 FIX: Exclude IMEI children (only fetch parent variants)
@@ -97,14 +110,33 @@ export class RealTimeStockService {
         .from('lats_product_variants')
         .select('id, product_id, sku, name, variant_name, quantity, branch_id, is_shared')  // 🔧 FIX: Select both name columns
         .in('product_id', validUncachedIds)
-        .is('parent_variant_id', null);  // ✅ FIX: Exclude IMEI children
+        .is('parent_variant_id', null)  // ✅ FIX: Exclude IMEI children
+        .eq('is_active', true);  // Only active variants
 
-      // Apply branch filter if branch ID exists (include shared variants)
-      if (currentBranchId) {
-
-        query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true`);
-      } else {
-
+      // Apply branch filter based on share_inventory setting
+      if (currentBranchId && branchSettings) {
+        if (branchSettings.data_isolation_mode === 'isolated') {
+          // ISOLATED MODE: Only show variants from this branch (ignore is_shared flag)
+          query = query.eq('branch_id', currentBranchId);
+          console.log(`🔒 [RealTimeStockService] ISOLATED MODE - Variants: Only showing from branch ${currentBranchId}`);
+        } else if (branchSettings.data_isolation_mode === 'shared') {
+          // SHARED MODE: Show all variants (no filter)
+          console.log(`📊 [RealTimeStockService] SHARED MODE - Variants: Showing all variants`);
+        } else if (branchSettings.data_isolation_mode === 'hybrid') {
+          // HYBRID MODE: Check share_inventory flag
+          if (branchSettings.share_inventory) {
+            // Inventory is shared - show this branch's variants + shared variants
+            query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+            console.log(`⚖️ [RealTimeStockService] HYBRID MODE - Variants are SHARED - Showing branch ${currentBranchId} + shared variants`);
+          } else {
+            // Inventory is NOT shared - only show this branch's variants
+            query = query.eq('branch_id', currentBranchId);
+            console.log(`⚖️ [RealTimeStockService] HYBRID MODE - Variants are NOT SHARED - Only showing branch ${currentBranchId}`);
+          }
+        }
+      } else if (currentBranchId) {
+        // Default: show this branch's variants + unassigned variants
+        query = query.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
       }
 
       const { data: variants, error } = await query;

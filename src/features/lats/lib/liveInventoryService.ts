@@ -72,11 +72,45 @@ export class LiveInventoryService {
         .from('lats_product_variants')
         .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id, is_shared');
       
-      // 🔒 ISOLATION + SHARED: Show branch data + shared products from other branches
+      // Get branch settings to check share_inventory flag
+      let branchSettings: any = null;
       if (currentBranchId) {
-        console.log('🔒 [LiveInventoryService] ISOLATED MODE - Filtering by branch + shared products:', currentBranchId);
-        // Show variants from current branch OR shared variants OR unassigned variants
-        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+        try {
+          const { data } = await supabase
+            .from('store_locations')
+            .select('data_isolation_mode, share_inventory')
+            .eq('id', currentBranchId)
+            .single();
+          branchSettings = data;
+        } catch (err) {
+          console.warn('⚠️ [LiveInventoryService] Could not fetch branch settings');
+        }
+      }
+      
+      // Apply branch filtering to variants based on share_inventory setting
+      if (currentBranchId && branchSettings) {
+        if (branchSettings.data_isolation_mode === 'isolated') {
+          // ISOLATED MODE: Only show variants from this branch
+          variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+          console.log(`🔒 [LiveInventoryService] ISOLATED MODE - Variants: Only showing from branch ${currentBranchId}`);
+        } else if (branchSettings.data_isolation_mode === 'shared') {
+          // SHARED MODE: Show all variants (no filter)
+          console.log(`📊 [LiveInventoryService] SHARED MODE - Variants: Showing all variants`);
+        } else if (branchSettings.data_isolation_mode === 'hybrid') {
+          // HYBRID MODE: Check share_inventory flag
+          if (branchSettings.share_inventory) {
+            // Inventory is shared - show this branch's variants + shared variants
+            variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+            console.log(`⚖️ [LiveInventoryService] HYBRID MODE - Variants are SHARED - Showing branch ${currentBranchId} + shared variants`);
+          } else {
+            // Inventory is NOT shared - only show this branch's variants
+            variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+            console.log(`⚖️ [LiveInventoryService] HYBRID MODE - Variants are NOT SHARED - Only showing branch ${currentBranchId}`);
+          }
+        }
+      } else if (currentBranchId) {
+        // Default: show this branch's variants + unassigned variants
+        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
       } else {
         console.log('⚠️ [LiveInventoryService] No branch selected - showing all data');
       }

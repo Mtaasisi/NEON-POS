@@ -70,10 +70,30 @@ export const canTrackIMEIs = (variant: any): boolean => {
 /**
  * Load parent variants only for a product
  * Use this in PO creation and similar scenarios
+ * Applies branch filtering based on share_inventory setting
  */
 export const loadParentVariants = async (product_id: string): Promise<any[]> => {
   try {
-    const { data, error } = await supabase
+    // Get current branch ID and settings for filtering
+    const { getCurrentBranchId } = await import('../../../lib/branchAwareApi');
+    const currentBranchId = getCurrentBranchId();
+    
+    // Get branch settings to check share_inventory flag
+    let branchSettings: any = null;
+    if (currentBranchId) {
+      try {
+        const { data } = await supabase
+          .from('store_locations')
+          .select('data_isolation_mode, share_inventory')
+          .eq('id', currentBranchId)
+          .single();
+        branchSettings = data;
+      } catch (err) {
+        console.warn('⚠️ [loadParentVariants] Could not fetch branch settings');
+      }
+    }
+
+    let query = supabase
       .from('lats_product_variants')
       .select('*')
       .eq('product_id', product_id)
@@ -81,6 +101,30 @@ export const loadParentVariants = async (product_id: string): Promise<any[]> => 
       .or('variant_type.eq.parent,variant_type.eq.standard,variant_type.is.null')
       .is('parent_variant_id', null) // Exclude children
       .order('created_at', { ascending: true });
+
+    // Apply branch filtering based on share_inventory setting
+    if (currentBranchId && branchSettings) {
+      if (branchSettings.data_isolation_mode === 'isolated') {
+        // ISOLATED MODE: Only show variants from this branch
+        query = query.eq('branch_id', currentBranchId);
+      } else if (branchSettings.data_isolation_mode === 'shared') {
+        // SHARED MODE: Show all variants (no filter)
+      } else if (branchSettings.data_isolation_mode === 'hybrid') {
+        // HYBRID MODE: Check share_inventory flag
+        if (branchSettings.share_inventory) {
+          // Inventory is shared - show this branch's variants + shared variants
+          query = query.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+        } else {
+          // Inventory is NOT shared - only show this branch's variants
+          query = query.eq('branch_id', currentBranchId);
+        }
+      }
+    } else if (currentBranchId) {
+      // Default: show this branch's variants + unassigned variants
+      query = query.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error loading parent variants:', error);
@@ -356,15 +400,55 @@ export const loadAvailableChildIMEIs = async (parent_variant_id: string): Promis
 
 /**
  * Calculate total stock for a parent variant from its children
+ * Applies branch filtering based on share_inventory setting
  */
 export const calculateParentStock = async (parent_variant_id: string): Promise<number> => {
   try {
-    const { data, error } = await supabase
+    // Get current branch ID and settings for filtering
+    const { getCurrentBranchId } = await import('../../../lib/branchAwareApi');
+    const currentBranchId = getCurrentBranchId();
+    
+    // Get branch settings to check share_inventory flag
+    let branchSettings: any = null;
+    if (currentBranchId) {
+      try {
+        const { data } = await supabase
+          .from('store_locations')
+          .select('data_isolation_mode, share_inventory')
+          .eq('id', currentBranchId)
+          .single();
+        branchSettings = data;
+      } catch (err) {
+        console.warn('⚠️ [calculateParentStock] Could not fetch branch settings');
+      }
+    }
+
+    let childrenQuery = supabase
       .from('lats_product_variants')
-      .select('quantity')
+      .select('quantity, branch_id')
       .eq('parent_variant_id', parent_variant_id)
       .eq('variant_type', 'imei_child')
       .eq('is_active', true);
+
+    // Apply branch filtering based on share_inventory setting
+    if (currentBranchId && branchSettings) {
+      if (branchSettings.data_isolation_mode === 'isolated') {
+        // ISOLATED MODE: Only show children from this branch
+        childrenQuery = childrenQuery.eq('branch_id', currentBranchId);
+      } else if (branchSettings.data_isolation_mode === 'hybrid' && !branchSettings.share_inventory) {
+        // HYBRID MODE: Inventory NOT shared - only show this branch's children
+        childrenQuery = childrenQuery.eq('branch_id', currentBranchId);
+      } else if (branchSettings.data_isolation_mode === 'hybrid' && branchSettings.share_inventory) {
+        // HYBRID MODE: Inventory shared - show this branch's children + shared children
+        childrenQuery = childrenQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+      }
+      // SHARED MODE: No filter needed (show all children)
+    } else if (currentBranchId) {
+      // Default: show this branch's children + unassigned children
+      childrenQuery = childrenQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+    }
+
+    const { data, error } = await childrenQuery;
 
     if (error) {
       console.error('Error calculating parent stock:', error);

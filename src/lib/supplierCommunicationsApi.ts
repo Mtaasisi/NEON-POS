@@ -72,12 +72,16 @@ export const createSupplierCommunication = async (
   try {
     const { data: userData } = await supabase.auth.getUser();
     
+    // 🔒 Get current branch for isolation - supplier communications are branch-specific
+    const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+    
     const { data, error } = await supabase
       .from('lats_supplier_communications')
       .insert({
         ...communicationData,
         user_id: userData?.user?.id,
-        direction: communicationData.direction || 'outbound'
+        direction: communicationData.direction || 'outbound',
+        branch_id: currentBranchId  // 🔒 Supplier communications are branch-specific
       })
       .select()
       .single();

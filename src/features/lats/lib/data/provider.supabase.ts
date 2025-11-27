@@ -324,6 +324,9 @@ const supabaseProvider = {
 
   createCategory: async (data: any) => {
     try {
+      // 🔒 Get current branch for isolation
+      const currentBranchId = getCurrentBranchId();
+      
       const { data: category, error } = await supabase
         .from('lats_categories')
         .insert({
@@ -332,7 +335,8 @@ const supabaseProvider = {
           color: data.color,
           icon: data.icon,
           parent_id: data.parentId,
-          is_active: data.isActive ?? true
+          is_active: data.isActive ?? true,
+          branch_id: currentBranchId  // 🔒 Auto-assign to current branch
         })
         .select()
         .single();
@@ -445,6 +449,8 @@ const supabaseProvider = {
 
   createSupplier: async (data: any) => {
     try {
+      // 🔄 Suppliers are SHARED across all branches
+      // Supplier-related data (POs, payments, etc.) are branch-specific
       const { data: supplier, error } = await supabase
         .from('lats_suppliers')
         .insert({
@@ -457,7 +463,9 @@ const supabaseProvider = {
           country: data.country,
           payment_terms: data.paymentTerms,
           is_active: data.isActive ?? true,
-          notes: data.notes
+          notes: data.notes,
+          branch_id: null,  // 🔄 Suppliers are always shared (null = visible to all branches)
+          is_shared: true   // 🔄 Mark as shared so all branches can see it
         })
         .select()
         .single();
@@ -663,14 +671,62 @@ const supabaseProvider = {
 
   getProductVariants: async (productId: string) => {
     try {
+      // Get current branch ID and settings for filtering
+      // Note: getCurrentBranchId is already defined locally in this file (line 14)
+      const currentBranchId = getCurrentBranchId();
+      
+      // Get branch settings to check share_inventory flag
+      let branchSettings: any = null;
+      if (currentBranchId) {
+        try {
+          const { data } = await supabase
+            .from('store_locations')
+            .select('data_isolation_mode, share_inventory')
+            .eq('id', currentBranchId)
+            .single();
+          branchSettings = data;
+        } catch (err) {
+          console.warn('⚠️ [getProductVariants] Could not fetch branch settings');
+        }
+      }
+
       // ✅ NEW: Filter to show ONLY parent and standard variants
       // Exclude IMEI children (they will be shown separately when needed)
-      const { data: variants, error } = await supabase
+      let variantsQuery = supabase
         .from('lats_product_variants')
         .select('*')
         .eq('product_id', productId)
         .is('parent_variant_id', null)  // ✅ FIX: Exclude IMEI children
+        .eq('is_active', true)
         .order('variant_name');
+
+      // Apply branch filtering based on share_inventory setting
+      if (currentBranchId && branchSettings) {
+        if (branchSettings.data_isolation_mode === 'isolated') {
+          // ISOLATED MODE: Only show variants from this branch (ignore is_shared flag)
+          variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+          console.log(`🔒 [getProductVariants] ISOLATED MODE - Variants: Only showing from branch ${currentBranchId}`);
+        } else if (branchSettings.data_isolation_mode === 'shared') {
+          // SHARED MODE: Show all variants (no filter)
+          console.log(`📊 [getProductVariants] SHARED MODE - Variants: Showing all variants`);
+        } else if (branchSettings.data_isolation_mode === 'hybrid') {
+          // HYBRID MODE: Check share_inventory flag
+          if (branchSettings.share_inventory) {
+            // Inventory is shared - show this branch's variants + shared variants
+            variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+            console.log(`⚖️ [getProductVariants] HYBRID MODE - Variants are SHARED - Showing branch ${currentBranchId} + shared variants`);
+          } else {
+            // Inventory is NOT shared - only show this branch's variants
+            variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+            console.log(`⚖️ [getProductVariants] HYBRID MODE - Variants are NOT SHARED - Only showing branch ${currentBranchId}`);
+          }
+        }
+      } else if (currentBranchId) {
+        // Default: show this branch's variants + unassigned variants
+        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+      }
+
+      const { data: variants, error } = await variantsQuery;
 
       if (error) throw error;
 
@@ -682,12 +738,27 @@ const supabaseProvider = {
           // If this is a parent variant, recalculate stock from children
           if (v.is_parent || v.variant_type === 'parent') {
             try {
-              const { data: children, error: childError } = await supabase
+              let childrenQuery = supabase
                 .from('lats_product_variants')
-                .select('quantity, is_active')
+                .select('quantity, is_active, branch_id')
                 .eq('parent_variant_id', v.id)
                 .eq('variant_type', 'imei_child')
                 .eq('is_active', true);
+              
+              // Apply branch filtering to children as well
+              if (currentBranchId && branchSettings) {
+                if (branchSettings.data_isolation_mode === 'isolated') {
+                  childrenQuery = childrenQuery.eq('branch_id', currentBranchId);
+                } else if (branchSettings.data_isolation_mode === 'hybrid' && !branchSettings.share_inventory) {
+                  childrenQuery = childrenQuery.eq('branch_id', currentBranchId);
+                } else if (branchSettings.data_isolation_mode === 'hybrid' && branchSettings.share_inventory) {
+                  childrenQuery = childrenQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+                }
+              } else if (currentBranchId) {
+                childrenQuery = childrenQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
+              }
+              
+              const { data: children, error: childError } = await childrenQuery;
               
               if (!childError && children) {
                 actualStock = children.reduce((sum: number, child: any) => sum + (child.quantity || 0), 0);

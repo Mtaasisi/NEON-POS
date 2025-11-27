@@ -113,15 +113,47 @@ export async function fetchInventoryStats(cacheDuration: number = 5000) {
   return deduplicatedQuery(
     `inventory-stats-${currentBranchId || 'all'}`,
     async () => {
-      // Get products with branch filter (including shared products)
+      // Get products with branch filter based on isolation settings
       let productsQuery = supabase
         .from('lats_products')
         .select('id, name, is_active, branch_id, is_shared')
         .eq('is_active', true);
       
-      // Apply branch filter if branch is selected (include shared products)
+      // Get branch settings to check share_products flag
+      let productBranchSettings: any = null;
       if (currentBranchId) {
-        productsQuery = productsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+        try {
+          const { data } = await supabase
+            .from('store_locations')
+            .select('data_isolation_mode, share_products')
+            .eq('id', currentBranchId)
+            .single();
+          productBranchSettings = data;
+        } catch (err) {
+          console.warn('⚠️ [fetchInventoryStats] Could not fetch branch settings');
+        }
+      }
+      
+      // Apply branch filter based on share_products setting
+      if (currentBranchId && productBranchSettings) {
+        if (productBranchSettings.data_isolation_mode === 'isolated') {
+          // ISOLATED MODE: Only show products from this branch
+          productsQuery = productsQuery.eq('branch_id', currentBranchId);
+        } else if (productBranchSettings.data_isolation_mode === 'shared') {
+          // SHARED MODE: Show all products (no filter)
+        } else if (productBranchSettings.data_isolation_mode === 'hybrid') {
+          // HYBRID MODE: Check share_products flag
+          if (productBranchSettings.share_products) {
+            // Products are shared - show this branch's products + shared products
+            productsQuery = productsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+          } else {
+            // Products are NOT shared - only show this branch's products
+            productsQuery = productsQuery.eq('branch_id', currentBranchId);
+          }
+        }
+      } else if (currentBranchId) {
+        // Default: show this branch's products + unassigned products
+        productsQuery = productsQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
       }
       
       const { data: products, error: productsError } = await productsQuery;
@@ -129,21 +161,53 @@ export async function fetchInventoryStats(cacheDuration: number = 5000) {
       if (productsError) throw productsError;
       
       // Get all product IDs
-      const productIds = (products || []).map(p => p.id);
+      const productIds = (products || []).map((p: any) => p.id);
       
       if (productIds.length === 0) {
         return [];
       }
       
-      // Get variants for these products (including shared variants)
+      // Get variants for these products
       let variantsQuery = supabase
         .from('lats_product_variants')
         .select('id, product_id, quantity, cost_price, unit_price, selling_price, min_quantity, branch_id, is_shared')
         .in('product_id', productIds);
       
-      // Apply branch filter to variants if branch is selected (include shared variants)
+      // Get branch settings to check share_inventory flag
+      let branchSettings: any = null;
       if (currentBranchId) {
-        variantsQuery = variantsQuery.or(`is_shared.eq.true,branch_id.eq.${currentBranchId}`);
+        try {
+          const { data } = await supabase
+            .from('store_locations')
+            .select('data_isolation_mode, share_inventory')
+            .eq('id', currentBranchId)
+            .single();
+          branchSettings = data;
+        } catch (err) {
+          console.warn('⚠️ [fetchInventoryStats] Could not fetch branch settings');
+        }
+      }
+      
+      // Apply branch filter to variants based on share_inventory setting
+      if (currentBranchId && branchSettings) {
+        if (branchSettings.data_isolation_mode === 'isolated') {
+          // ISOLATED MODE: Only show variants from this branch
+          variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+        } else if (branchSettings.data_isolation_mode === 'shared') {
+          // SHARED MODE: Show all variants (no filter)
+        } else if (branchSettings.data_isolation_mode === 'hybrid') {
+          // HYBRID MODE: Check share_inventory flag
+          if (branchSettings.share_inventory) {
+            // Inventory is shared - show this branch's variants + shared variants
+            variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},is_shared.eq.true,branch_id.is.null`);
+          } else {
+            // Inventory is NOT shared - only show this branch's variants
+            variantsQuery = variantsQuery.eq('branch_id', currentBranchId);
+          }
+        }
+      } else if (currentBranchId) {
+        // Default: show this branch's variants + unassigned variants
+        variantsQuery = variantsQuery.or(`branch_id.eq.${currentBranchId},branch_id.is.null`);
       }
       
       const { data: variants, error: variantsError } = await variantsQuery;
@@ -185,13 +249,23 @@ export async function fetchSettings(cacheDuration: number = 30000) {
  * Fetch suppliers with deduplication
  */
 export async function fetchSuppliers(cacheDuration: number = 30000) {
+  const currentBranchId = getCurrentBranchId();
+  const cacheKey = `suppliers-${currentBranchId || 'all'}`;
+  
   return deduplicatedQuery(
-    'suppliers',
+    cacheKey,
     async () => {
-      const { data, error } = await supabase
+      // Import addBranchFilter dynamically to avoid circular imports
+      const { addBranchFilter } = await import('./branchAwareApi');
+      
+      let query = supabase
         .from('lats_suppliers')
         .select('*')
         .order('name', { ascending: true });
+      
+      // Apply branch filtering based on isolation settings
+      const filteredQuery = await addBranchFilter(query, 'suppliers');
+      const { data, error } = await filteredQuery;
       
       if (error) throw error;
       return data || [];
@@ -234,19 +308,25 @@ export async function fetchPaymentMethods(cacheDuration: number = 30000) {
       }
 
       // Log branch_id for debugging
-      console.log(`📊 [fetchPaymentMethods] Query returned ${data?.length || 0} accounts`);
+      console.log(`📊 [fetchPaymentMethods] Query returned ${data?.length || 0} accounts for branch ${currentBranchId || 'none'}`);
       if (data && data.length > 0) {
         console.log(`✅ Fetched ${data.length} payment methods with branch filtering`);
-        data.forEach((account: any) => {
-          console.log(`   - ${account.name}: branch_id=${account.branch_id || 'NULL (shared)'}, is_shared=${account.is_shared}`);
-        });
+        if (import.meta.env.MODE === 'development') {
+          data.forEach((account: any) => {
+            console.log(`   - ${account.name}: branch_id=${account.branch_id || 'NULL (shared)'}, is_shared=${account.is_shared}`);
+          });
+        }
       } else {
-        console.warn('⚠️ [fetchPaymentMethods] No accounts returned! This might indicate a filtering issue.');
-        // Fallback: try fetching without branch filter to see if accounts exist
-        const { data: allData } = await query;
-        console.log(`   Total accounts in DB (no filter): ${allData?.length || 0}`);
-        if (allData && allData.length > 0) {
-          console.log('   Accounts in DB:', allData.map((a: any) => `${a.name} (branch_id=${a.branch_id || 'NULL'}, is_shared=${a.is_shared})`));
+        // This is expected when accounts are isolated and viewing from a different branch
+        // Only log as info, not warning, unless in development mode
+        if (import.meta.env.MODE === 'development') {
+          console.info(`ℹ️ [fetchPaymentMethods] No accounts returned for branch ${currentBranchId || 'none'}. This is expected if accounts are isolated and you're viewing from a different branch.`);
+          // Fallback: try fetching without branch filter to see if accounts exist
+          const { data: allData } = await query;
+          console.log(`   Total accounts in DB (no filter): ${allData?.length || 0}`);
+          if (allData && allData.length > 0) {
+            console.log('   Accounts in DB:', allData.map((a: any) => `${a.name} (branch_id=${a.branch_id || 'NULL'}, is_shared=${a.is_shared})`));
+          }
         }
       }
 

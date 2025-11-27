@@ -103,7 +103,6 @@ const InstallmentsPage = lazy(() => import('./features/installments/pages/Instal
 const CategoryManagementPage = lazy(() => import('./features/settings/pages/CategoryManagementPage'));
 const StoreLocationManagementPage = lazy(() => import('./features/settings/pages/StoreLocationManagementPage'));
 const DatabaseSetupPage = lazy(() => import('./features/admin/pages/DatabaseSetupPage'));
-const BackupManagementPage = lazy(() => import('./features/backup/pages/BackupManagementPage'));
 const ExcelImportPage = lazy(() => import('./features/reports/pages/ExcelImportPage'));
 const ExcelTemplateDownloadPage = lazy(() => import('./features/lats/pages/ExcelTemplateDownloadPage'));
 
@@ -744,13 +743,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           <RoleProtectedRoute allowedRoles={['admin']}>
             <Suspense fallback={<DynamicPageLoader />}>
               <DatabaseSetupPage />
-            </Suspense>
-          </RoleProtectedRoute>
-        } />
-        <Route path="/backup-management" element={
-          <RoleProtectedRoute allowedRoles={['admin']}>
-            <Suspense fallback={<DynamicPageLoader />}>
-              <BackupManagementPage />
             </Suspense>
           </RoleProtectedRoute>
         } />

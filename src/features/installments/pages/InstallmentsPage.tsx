@@ -716,6 +716,36 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
       return;
     }
 
+    // Validate payment balance: Down Payment + (All Installments) must equal Total Amount
+    const totalInstallmentAmounts = installmentAmount * (formData.number_of_installments || 1);
+    const totalPayments = (formData.down_payment || 0) + totalInstallmentAmounts;
+    const balanceDifference = Math.abs(totalPayments - (formData.total_amount || 0));
+    
+    // Allow small rounding differences (less than 0.01)
+    if (balanceDifference > 0.01) {
+      const formatPrice = (price: number): string => {
+        return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      };
+      
+      console.error('❌ [InstallmentsPage] Payment balance mismatch:', {
+        totalAmount: formData.total_amount,
+        downPayment: formData.down_payment,
+        totalInstallments: totalInstallmentAmounts,
+        totalPayments,
+        difference: balanceDifference
+      });
+      toast.error(
+        `Payment amounts don't balance!\n\n` +
+        `Total Amount: ${formatPrice(formData.total_amount || 0)} TZS\n` +
+        `Down Payment: ${formatPrice(formData.down_payment || 0)} TZS\n` +
+        `Installments Total: ${formatPrice(totalInstallmentAmounts)} TZS\n` +
+        `Total Payments: ${formatPrice(totalPayments)} TZS\n\n` +
+        `Difference: ${formatPrice(balanceDifference)} TZS\n\n` +
+        `Please adjust the amounts so they equal the total amount.`
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const result = await installmentService.createInstallmentPlan(
@@ -740,7 +770,74 @@ const CreateInstallmentPlanModal: React.FC<CreateInstallmentPlanModalProps> = ({
         toast.error(result.error || 'Failed to create installment plan');
       }
     } catch (error: any) {
-      toast.error(error.message || 'An error occurred');
+      console.error('❌ [InstallmentsPage] Error creating installment plan:', error);
+      console.error('❌ [InstallmentsPage] Error Details:', {
+        message: error?.message,
+        code: error?.code,
+        status: error?.status,
+        name: error?.name,
+        formData
+      });
+
+      // Categorize and handle different error types
+      let errorMessage = 'An error occurred while creating the installment plan.';
+      let errorTitle = 'Error';
+
+      // Network errors
+      if (error?.message?.includes('Failed to fetch') || 
+          error?.message?.includes('NetworkError') ||
+          error?.message?.includes('timeout') ||
+          error?.code === 'NETWORK_ERROR') {
+        errorTitle = 'Network Error';
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+      }
+      // Database errors
+      else if (error?.code === '23505' || error?.message?.includes('duplicate') || error?.message?.includes('unique')) {
+        errorTitle = 'Duplicate Entry';
+        errorMessage = 'An installment plan with these details already exists. Please check and try again.';
+      }
+      // Validation errors
+      else if (error?.code === '23502' || error?.message?.includes('null value') || error?.message?.includes('required')) {
+        errorTitle = 'Validation Error';
+        errorMessage = 'Some required information is missing. Please check all fields and try again.';
+      }
+      // Permission errors
+      else if (error?.code === '42501' || error?.message?.includes('permission') || error?.message?.includes('unauthorized')) {
+        errorTitle = 'Permission Denied';
+        errorMessage = 'You do not have permission to create installment plans. Please contact your administrator.';
+      }
+      // Service result errors
+      else if (error?.message?.includes('Payment amounts don\'t balance')) {
+        errorTitle = 'Payment Balance Error';
+        errorMessage = error.message;
+      }
+      // Generic error with message
+      else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      // Show user-friendly error
+      toast.error(`${errorTitle}: ${errorMessage}`, {
+        duration: 6000,
+      });
+
+      // Log detailed error for debugging
+      if (import.meta.env.MODE === 'development') {
+        console.group('🔍 [InstallmentsPage] Detailed Error Information');
+        console.error('Error Type:', error?.constructor?.name || 'Unknown');
+        console.error('Error Message:', error?.message);
+        console.error('Error Code:', error?.code);
+        console.error('Error Status:', error?.status);
+        console.error('Error Name:', error?.name);
+        console.error('Stack Trace:', error?.stack);
+        console.error('Context:', {
+          customerId: formData.customer_id,
+          totalAmount: formData.total_amount,
+          numberOfInstallments: formData.number_of_installments,
+          downPayment: formData.down_payment
+        });
+        console.groupEnd();
+      }
     } finally {
       setIsSubmitting(false);
     }

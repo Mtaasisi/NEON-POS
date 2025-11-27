@@ -87,11 +87,18 @@ export const getActiveSuppliers = async (): Promise<any[]> => {
   try {
     console.log('🔍 Fetching suppliers with statistics from database...');
     
-    // First, get all suppliers
-    const { data: suppliersData, error: suppliersError } = await supabase
+    // Import addBranchFilter dynamically to avoid circular imports
+    const { addBranchFilter } = await import('./branchAwareApi');
+    
+    // First, get suppliers with branch filtering
+    let suppliersQuery = supabase
       .from('lats_suppliers')
       .select('*')
       .order('name');
+    
+    // Apply branch filtering based on isolation settings
+    const filteredQuery = await addBranchFilter(suppliersQuery, 'suppliers');
+    const { data: suppliersData, error: suppliersError } = await filteredQuery;
 
     if (suppliersError) {
       console.error('❌ Error fetching suppliers:', suppliersError);
@@ -164,10 +171,17 @@ export const getActiveSuppliers = async (): Promise<any[]> => {
 // Get all suppliers (including inactive, but excluding trade-in customers)
 export const getAllSuppliers = async (): Promise<Supplier[]> => {
   try {
-    const { data, error } = await supabase
+    // Import addBranchFilter dynamically to avoid circular imports
+    const { addBranchFilter } = await import('./branchAwareApi');
+    
+    let query = supabase
       .from('lats_suppliers')
       .select('*')
       .order('name');
+    
+    // Apply branch filtering based on isolation settings
+    const filteredQuery = await addBranchFilter(query, 'suppliers');
+    const { data, error } = await filteredQuery;
 
     if (error) {
       console.error('Error fetching all suppliers:', error);
@@ -185,11 +199,19 @@ export const getAllSuppliers = async (): Promise<Supplier[]> => {
 // Create a new supplier
 export const createSupplier = async (supplierData: CreateSupplierData): Promise<Supplier> => {
   try {
+    // 🔄 Suppliers are SHARED across all branches
+    // Supplier-related data (POs, payments, etc.) are branch-specific
     // Clean up the data to avoid type conflicts
     const dataToInsert: any = { ...supplierData };
     
     // Always set suppliers as active
     dataToInsert.is_active = true;
+    
+    // 🔄 Suppliers are always shared - set branch_id to null and is_shared to true
+    // This allows all branches to see the same supplier list
+    // But purchase orders, payments, and communications remain branch-specific
+    dataToInsert.branch_id = null;
+    dataToInsert.is_shared = true;
     
     // Remove any undefined values
     Object.keys(dataToInsert).forEach(key => {

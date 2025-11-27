@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, CreditCard, DollarSign, Calendar, User, Building, AlertTriangle, FileText, TrendingUp, Plus, Minus, Check, ChevronDown, ChevronUp, Edit } from 'lucide-react';
+import { X, CreditCard, DollarSign, Calendar, User, Building, AlertTriangle, FileText, TrendingUp, Plus, Minus, Check, ChevronDown, ChevronUp, Edit, Package } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { installmentService } from '../../../../lib/installmentService';
 import { saleProcessingService } from '../../../../lib/saleProcessingService';
@@ -253,11 +253,14 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
             amounts.push(customInstallmentAmounts[i] || installmentAmount);
           }
           setCustomInstallmentAmounts(amounts);
+          // Reset manual customization tracking when installments change
+          setManuallyCustomizedAmounts(new Set());
         }
       } else {
         // If all payments are covered by first payment, clear custom dates/amounts
         setCustomInstallmentDates([]);
         setCustomInstallmentAmounts([]);
+        setManuallyCustomizedAmounts(new Set());
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -275,6 +278,83 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.number_of_installments, cartTotal, isOpen]);
+
+  // Function to auto-calculate remaining installments when one is changed
+  const autoCalculateRemainingInstallments = (
+    changedIndex: number,
+    newAmount: number,
+    currentAmounts: number[]
+  ): number[] => {
+    const numberOfRemainingPayments = formData.down_payment > 0 
+      ? formData.number_of_installments - 1 
+      : formData.number_of_installments;
+    
+    // Calculate total already allocated
+    let totalAllocated = formData.down_payment; // Start with first payment if exists
+    
+    // Add up all installment amounts (using new amount for the changed one)
+    for (let i = 0; i < numberOfRemainingPayments; i++) {
+      if (i === changedIndex) {
+        totalAllocated += newAmount;
+      } else {
+        totalAllocated += currentAmounts[i] || installmentAmount;
+      }
+    }
+    
+    // Calculate remaining amount needed
+    const remainingAmount = cartTotal - totalAllocated;
+    
+    // Calculate how many installments need to be adjusted
+    const remainingInstallments = numberOfRemainingPayments - 1; // Exclude the one being changed
+    
+    if (remainingInstallments <= 0) {
+      // Only one installment, just return the new amounts
+      return [newAmount];
+    }
+    
+    // Distribute remaining amount equally among remaining installments
+    const adjustedAmount = remainingAmount / remainingInstallments;
+    
+    // Create new amounts array
+    const newAmounts = [...currentAmounts];
+    newAmounts[changedIndex] = newAmount;
+    
+    // Update remaining installments
+    for (let i = 0; i < numberOfRemainingPayments; i++) {
+      if (i !== changedIndex) {
+        newAmounts[i] = Math.round(adjustedAmount * 100) / 100; // Round to 2 decimal places
+      }
+    }
+    
+    return newAmounts;
+  };
+
+  // Track if amounts have been manually customized
+  const [manuallyCustomizedAmounts, setManuallyCustomizedAmounts] = useState<Set<number>>(new Set());
+
+  // Auto-calculate installments when first payment changes (only if amounts haven't been manually customized)
+  useEffect(() => {
+    if (formData.down_payment >= 0 && formData.number_of_installments > 0 && cartTotal > 0) {
+      const numberOfRemainingPayments = formData.down_payment > 0 
+        ? formData.number_of_installments - 1 
+        : formData.number_of_installments;
+      
+      if (numberOfRemainingPayments > 0) {
+        const remainingAmount = cartTotal - formData.down_payment;
+        const adjustedAmount = remainingAmount / numberOfRemainingPayments;
+        
+        // Only auto-calculate if no amounts have been manually customized
+        if (manuallyCustomizedAmounts.size === 0) {
+          const newAmounts: number[] = [];
+          for (let i = 0; i < numberOfRemainingPayments; i++) {
+            newAmounts[i] = Math.round(adjustedAmount * 100) / 100;
+          }
+          setCustomInstallmentAmounts(newAmounts);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.down_payment, cartTotal, formData.number_of_installments]);
 
   // Update next payment date when plan start date or frequency changes
   useEffect(() => {
@@ -349,6 +429,42 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
     if (formData.down_payment < 0 || formData.down_payment > cartTotal) {
       console.error('❌ [POS Installment] Invalid down payment:', formData.down_payment);
       toast.error('Invalid down payment amount');
+      return;
+    }
+
+    // Validate payment balance: First Payment + (All Installments) must equal Total Amount
+    const numberOfRemainingPaymentsForValidation = formData.down_payment > 0 
+      ? formData.number_of_installments - 1 
+      : formData.number_of_installments;
+    
+    // Calculate total of all installment amounts (use custom amounts if available, otherwise calculated amount)
+    let totalInstallmentAmounts = 0;
+    for (let i = 0; i < numberOfRemainingPaymentsForValidation; i++) {
+      const amount = customInstallmentAmounts[i] || installmentAmount;
+      totalInstallmentAmounts += amount;
+    }
+    
+    const totalPayments = formData.down_payment + totalInstallmentAmounts;
+    const balanceDifference = Math.abs(totalPayments - cartTotal);
+    
+    // Allow small rounding differences (less than 0.01)
+    if (balanceDifference > 0.01) {
+      console.error('❌ [POS Installment] Payment balance mismatch:', {
+        totalAmount: cartTotal,
+        firstPayment: formData.down_payment,
+        totalInstallments: totalInstallmentAmounts,
+        totalPayments,
+        difference: balanceDifference
+      });
+      toast.error(
+        `Payment amounts don't balance!\n\n` +
+        `Total Amount: ${formatPrice(cartTotal)} TZS\n` +
+        `First Payment: ${formatPrice(formData.down_payment)} TZS\n` +
+        `Installments Total: ${formatPrice(totalInstallmentAmounts)} TZS\n` +
+        `Total Payments: ${formatPrice(totalPayments)} TZS\n\n` +
+        `Difference: ${formatPrice(balanceDifference)} TZS\n\n` +
+        `Please adjust the amounts so they equal the total amount.`
+      );
       return;
     }
 
@@ -473,21 +589,111 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
 
       console.log('📥 [POS Installment] Installment Result:', installmentResult);
 
-      if (installmentResult.success) {
+      if (installmentResult.success && installmentResult.plan) {
         console.log('✅ [POS Installment] Installment plan created successfully!');
-        console.log('🔢 [POS Installment] Plan Number:', installmentResult.plan?.plan_number);
-        console.log('🔢 [POS Installment] Plan ID:', installmentResult.plan?.id);
-        toast.success(`✅ Sale completed with installment plan!\nSale: ${saleResult.sale.saleNumber}\nPlan: ${installmentResult.plan?.plan_number}`);
+        console.log('🔢 [POS Installment] Plan Number:', installmentResult.plan.plan_number);
+        console.log('🔢 [POS Installment] Plan ID:', installmentResult.plan.id);
+        toast.success(`✅ Sale completed with installment plan!\nSale: ${saleResult.sale.saleNumber}\nPlan: ${installmentResult.plan.plan_number}`);
         setHasAttemptedSubmit(false);
         onSuccess();
       } else {
-        console.error('❌ [POS Installment] Installment plan creation failed:', installmentResult.error);
-        toast.error(installmentResult.error || 'Failed to create installment plan');
+        const errorMsg = installmentResult.error || 'Failed to create installment plan';
+        console.error('❌ [POS Installment] Installment plan creation failed:', errorMsg);
+        
+        // If sale was created but installment plan failed, warn user
+        if (saleResult.success && saleResult.sale) {
+          console.warn('⚠️ [POS Installment] Sale was created but installment plan failed. Sale ID:', saleResult.sale.id);
+          toast.error(
+            `Sale was created (${saleResult.sale.saleNumber}), but installment plan creation failed:\n${errorMsg}\n\nPlease contact support.`,
+            { duration: 8000 }
+          );
+        } else {
+          toast.error(errorMsg, { duration: 6000 });
+        }
       }
     } catch (error: any) {
       console.error('❌ [POS Installment] Error creating installment sale:', error);
-      console.error('❌ [POS Installment] Error Stack:', error.stack);
-      toast.error(error.message || 'An error occurred');
+      console.error('❌ [POS Installment] Error Stack:', error?.stack);
+      console.error('❌ [POS Installment] Error Details:', {
+        message: error?.message,
+        code: error?.code,
+        status: error?.status,
+        name: error?.name,
+        customer: customer?.id,
+        cartTotal,
+        formData
+      });
+
+      // Categorize and handle different error types
+      let errorMessage = 'An error occurred while creating the installment plan.';
+      let errorTitle = 'Error';
+
+      // Network errors
+      if (error?.message?.includes('Failed to fetch') || 
+          error?.message?.includes('NetworkError') ||
+          error?.message?.includes('timeout') ||
+          error?.code === 'NETWORK_ERROR') {
+        errorTitle = 'Network Error';
+        errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+      }
+      // Database errors
+      else if (error?.code === '23505' || error?.message?.includes('duplicate') || error?.message?.includes('unique')) {
+        errorTitle = 'Duplicate Entry';
+        errorMessage = 'An installment plan with these details already exists. Please check and try again.';
+      }
+      // Validation errors
+      else if (error?.code === '23502' || error?.message?.includes('null value') || error?.message?.includes('required')) {
+        errorTitle = 'Validation Error';
+        errorMessage = 'Some required information is missing. Please check all fields and try again.';
+      }
+      // Permission errors
+      else if (error?.code === '42501' || error?.message?.includes('permission') || error?.message?.includes('unauthorized')) {
+        errorTitle = 'Permission Denied';
+        errorMessage = 'You do not have permission to create installment plans. Please contact your administrator.';
+      }
+      // Service-specific errors
+      else if (error?.message?.includes('Payment amounts don\'t balance')) {
+        errorTitle = 'Payment Balance Error';
+        errorMessage = error.message;
+      }
+      // Sale creation errors
+      else if (error?.message?.includes('sale') || error?.message?.includes('Sale')) {
+        errorTitle = 'Sale Creation Failed';
+        errorMessage = `Failed to create the sale: ${error.message || 'Unknown error'}. The installment plan was not created.`;
+      }
+      // Installment plan creation errors
+      else if (error?.message?.includes('installment') || error?.message?.includes('plan')) {
+        errorTitle = 'Installment Plan Error';
+        errorMessage = `Failed to create installment plan: ${error.message || 'Unknown error'}`;
+      }
+      // Generic error with message
+      else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      // Show user-friendly error
+      toast.error(`${errorTitle}: ${errorMessage}`, {
+        duration: 6000,
+      });
+
+      // Log detailed error for debugging
+      if (import.meta.env.MODE === 'development') {
+        console.group('🔍 [POS Installment] Detailed Error Information');
+        console.error('Error Type:', error?.constructor?.name || 'Unknown');
+        console.error('Error Message:', error?.message);
+        console.error('Error Code:', error?.code);
+        console.error('Error Status:', error?.status);
+        console.error('Error Name:', error?.name);
+        console.error('Stack Trace:', error?.stack);
+        console.error('Context:', {
+          customerId: customer?.id,
+          cartTotal,
+          numberOfInstallments: formData.number_of_installments,
+          downPayment: formData.down_payment,
+          accountId: formData.account_id
+        });
+        console.groupEnd();
+      }
     } finally {
       console.log('🏁 [POS Installment] Process complete, resetting submit state');
       setIsSubmitting(false);
@@ -776,7 +982,9 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
                   />
                 </div>
                     <p className="text-xs text-gray-500 mt-1 text-center">
-                      {formData.down_payment > 0 ? 'Initial payment amount (optional)' : 'Optional initial payment'}
+                      {formData.down_payment > 0 
+                        ? 'Initial payment - remaining installments will auto-adjust' 
+                        : 'Optional initial payment'}
                     </p>
             </div>
           </div>
@@ -943,10 +1151,21 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
                                   }
                       const value = e.target.value.replace(/,/g, '');
                       const numValue = parseFloat(value) || 0;
-                                  const newAmounts = [...customInstallmentAmounts];
+                                  
+                                  // Get the index of the installment being changed
                                   const amountIndex = installment.number - (formData.down_payment > 0 ? 2 : 1);
-                                  newAmounts[amountIndex] = numValue;
-                                  setCustomInstallmentAmounts(newAmounts);
+                                  
+                                  // Mark this amount as manually customized
+                                  setManuallyCustomizedAmounts(prev => new Set([...prev, amountIndex]));
+                                  
+                                  // Auto-calculate remaining installments
+                                  const adjustedAmounts = autoCalculateRemainingInstallments(
+                                    amountIndex,
+                                    numValue,
+                                    customInstallmentAmounts
+                                  );
+                                  
+                                  setCustomInstallmentAmounts(adjustedAmounts);
                     }}
                                 disabled={installment.number === 1 && formData.down_payment > 0}
                                 className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 font-medium bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
@@ -956,7 +1175,7 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
               <p className="text-xs text-gray-500 mt-1">
                               {installment.number === 1 && formData.down_payment > 0
                                 ? 'First payment amount (edit in First Payment field)'
-                                : 'Edit amount for this installment'}
+                                : 'Edit amount - remaining installments will auto-adjust'}
                             </p>
                           </div>
                           {installment.number === 1 && formData.down_payment > 0 && (
@@ -980,60 +1199,63 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
             {/* Step 3: Summary */}
             {activeTab === 'summary' && (
               <>
-            {/* Installment Plan Summary - Expandable Card */}
+            {/* Installment Plan Summary - Redesigned */}
             <div className="space-y-6">
-              {/* Expandable Summary Card */}
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                {/* Header - Always Visible */}
+              {/* Main Summary Card */}
+              <div className="bg-gradient-to-br from-white to-gray-50 rounded-2xl border-2 border-gray-200 shadow-lg overflow-hidden">
+                {/* Header */}
                 <div 
-                  className="p-5 cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 cursor-pointer hover:from-blue-700 hover:to-indigo-700 transition-all"
                   onClick={() => setIsSummaryExpanded(!isSummaryExpanded)}
                 >
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-                        <CreditCard className="w-5 h-5 text-white" />
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                        <CreditCard className="w-7 h-7 text-white" />
                       </div>
-                      <div className="flex-1">
-                        <h4 className="text-base font-bold text-gray-900">Installment Plan Summary</h4>
+                      <div>
+                        <h4 className="text-xl font-bold text-white mb-1">Installment Plan Summary</h4>
                         {!isSummaryExpanded && (
-                          <div className="flex items-center gap-4 mt-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">Customer:</span>
-                              <span className="text-xs font-semibold text-gray-900">{customer?.name || 'N/A'}</span>
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">
+                              <User className="w-4 h-4 text-white" />
+                              <span className="text-sm font-semibold text-white">{customer?.name || 'N/A'}</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">Total:</span>
-                              <span className="text-xs font-semibold text-gray-900">{formatPrice(cartTotal)} TZS</span>
+                            <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">
+                              <DollarSign className="w-4 h-4 text-white" />
+                              <span className="text-sm font-semibold text-white">{formatPrice(cartTotal)} TZS</span>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">Installments:</span>
-                              <span className="text-xs font-semibold text-gray-900">{formData.number_of_installments}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">Per Payment:</span>
-                              <span className="text-xs font-semibold text-purple-700">{formatPrice(installmentAmount)} TZS</span>
+                            <div className="flex items-center gap-2 bg-white/20 px-3 py-1 rounded-lg backdrop-blur-sm">
+                              <Calendar className="w-4 h-4 text-white" />
+                              <span className="text-sm font-semibold text-white">{formData.number_of_installments} payments</span>
                             </div>
                           </div>
                         )}
                       </div>
                     </div>
+                    <div className="flex-shrink-0">
                     {isSummaryExpanded ? (
-                      <ChevronUp className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                        <ChevronUp className="w-6 h-6 text-white" />
                     ) : (
-                      <ChevronDown className="w-5 h-5 text-gray-400 flex-shrink-0" />
+                        <ChevronDown className="w-6 h-6 text-white" />
                     )}
+                    </div>
               </div>
             </div>
 
                 {/* Expanded Content */}
                 {isSummaryExpanded && (
-                  <div className="px-5 pb-5 border-t border-gray-100 pt-4 space-y-4">
-                    {/* Products Section */}
+                  <div className="p-6 space-y-6">
+                    {/* Products Section - Enhanced */}
                     {cartItems && cartItems.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">Products ({cartItems.length})</p>
-                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                      <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Package className="w-5 h-5 text-blue-600" />
+                          <h5 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+                            Products ({cartItems.length})
+                          </h5>
+                        </div>
+                        <div className="space-y-3 max-h-40 overflow-y-auto pr-2">
                           {cartItems.map((item, index) => {
                             const productName = item.productName || item.name || item.product_name || `Item ${index + 1}`;
                             const variantName = item.variantName || item.variant_name;
@@ -1042,18 +1264,18 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
                             const totalPrice = item.totalPrice || item.total_price || (unitPrice * quantity);
                             
                             return (
-                              <div key={index} className="flex justify-between items-start py-2 border-b border-gray-100 last:border-0">
+                              <div key={index} className="flex justify-between items-center p-3 bg-gradient-to-r from-gray-50 to-white rounded-lg border border-gray-100 hover:border-blue-200 transition-colors">
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-gray-900 truncate">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">
                                     {productName}
-                                    {variantName && <span className="text-gray-500"> - {variantName}</span>}
+                                    {variantName && <span className="text-gray-500 font-normal"> - {variantName}</span>}
                                   </p>
-                                  <p className="text-xs text-gray-500 mt-0.5">
+                                  <p className="text-xs text-gray-500 mt-1">
                                     Qty: {quantity} {unitPrice > 0 && `× ${formatPrice(unitPrice)}`}
                                   </p>
                                 </div>
-                                <div className="text-right ml-2 flex-shrink-0">
-                                  <p className="text-xs font-bold text-gray-900">
+                                <div className="text-right ml-4 flex-shrink-0">
+                                  <p className="text-base font-bold text-gray-900">
                                     {formatPrice(totalPrice)} TZS
                                   </p>
                                 </div>
@@ -1064,57 +1286,97 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
                       </div>
                     )}
 
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Left Column */}
-                      <div className="space-y-3">
+                    {/* Two Column Layout - Enhanced */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Left Column - Customer & Plan Details */}
+                      <div className="space-y-4">
+                        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200">
+                          <h5 className="text-xs font-bold text-blue-900 uppercase tracking-wide mb-4 flex items-center gap-2">
+                            <User className="w-4 h-4" />
+                            Customer Information
+                          </h5>
+                          <div className="space-y-4">
                         <div>
-                          <p className="text-xs font-medium text-gray-500 mb-0.5">Customer</p>
-                          <p className="text-sm font-bold text-gray-900">{customer?.name || 'N/A'}</p>
+                              <p className="text-xs font-medium text-blue-700 mb-1">Customer Name</p>
+                              <p className="text-lg font-bold text-gray-900">{customer?.name || 'N/A'}</p>
                           {customer?.phone && (
-                            <p className="text-xs text-gray-600 mt-0.5">{customer.phone}</p>
+                                <p className="text-sm text-blue-600 mt-1 flex items-center gap-1">
+                                  <span>📞</span> {customer.phone}
+                                </p>
                           )}
                         </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 mb-0.5">Payment Frequency</p>
-                          <p className="text-sm font-bold text-gray-900 capitalize">
-                            {formData.payment_frequency.replace('_', '-')}
-                          </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-xs font-medium text-gray-500 mb-0.5">Number of Installments</p>
-                          <p className="text-sm font-bold text-gray-900">{formData.number_of_installments}</p>
+
+                        <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-5 border border-purple-200">
+                          <h5 className="text-xs font-bold text-purple-900 uppercase tracking-wide mb-4 flex items-center gap-2">
+                            <Calendar className="w-4 h-4" />
+                            Payment Schedule
+                          </h5>
+                          <div className="space-y-3">
+                            <div className="flex justify-between items-center p-2 bg-white/60 rounded-lg">
+                              <span className="text-xs font-medium text-purple-700">Frequency</span>
+                              <span className="text-sm font-bold text-gray-900 capitalize px-3 py-1 bg-purple-100 rounded-md">
+                            {formData.payment_frequency.replace('_', '-')}
+                              </span>
+                        </div>
+                            <div className="flex justify-between items-center p-2 bg-white/60 rounded-lg">
+                              <span className="text-xs font-medium text-purple-700">Total Installments</span>
+                              <span className="text-lg font-bold text-purple-900">
+                                {formData.number_of_installments}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Right Column - Financial */}
+                      {/* Right Column - Financial Summary */}
+                      <div className="space-y-4">
+                        <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-5 border border-emerald-200">
+                          <h5 className="text-xs font-bold text-emerald-900 uppercase tracking-wide mb-4 flex items-center gap-2">
+                            <DollarSign className="w-4 h-4" />
+                            Financial Summary
+                          </h5>
                       <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-medium text-gray-500">Total Amount</span>
-                          <span className="text-sm font-bold text-gray-900">{formatPrice(cartTotal)} TZS</span>
+                            <div className="flex justify-between items-center p-3 bg-white/80 rounded-lg border border-emerald-100">
+                              <span className="text-sm font-semibold text-gray-700">Total Amount</span>
+                              <span className="text-xl font-bold text-emerald-700">{formatPrice(cartTotal)} TZS</span>
                         </div>
+                            
                         {formData.down_payment > 0 && (
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-medium text-gray-500">First Payment</span>
-                            <span className="text-sm font-bold text-blue-700">{formatPrice(formData.down_payment)} TZS</span>
+                              <div className="flex justify-between items-center p-3 bg-gradient-to-r from-blue-50 to-blue-100/50 rounded-lg border border-blue-200">
+                                <span className="text-sm font-semibold text-blue-700 flex items-center gap-2">
+                                  <CreditCard className="w-4 h-4" />
+                                  First Payment
+                                </span>
+                                <span className="text-lg font-bold text-blue-900">{formatPrice(formData.down_payment)} TZS</span>
                           </div>
                         )}
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-medium text-gray-500">Amount to Finance</span>
-                          <span className="text-sm font-bold text-indigo-700">{formatPrice(amountFinanced)} TZS</span>
+                            
+                            <div className="flex justify-between items-center p-3 bg-white/80 rounded-lg border border-indigo-100">
+                              <span className="text-sm font-semibold text-gray-700">Amount to Finance</span>
+                              <span className="text-lg font-bold text-indigo-700">{formatPrice(amountFinanced)} TZS</span>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs font-medium text-gray-500">Per Installment</span>
-                          <span className="text-sm font-bold text-purple-700">{formatPrice(installmentAmount)} TZS</span>
+                            
+                            <div className="flex justify-between items-center p-3 bg-gradient-to-r from-purple-50 to-purple-100/50 rounded-lg border border-purple-200">
+                              <span className="text-sm font-semibold text-purple-700 flex items-center gap-2">
+                                <TrendingUp className="w-4 h-4" />
+                                Per Installment
+                              </span>
+                              <span className="text-lg font-bold text-purple-900">{formatPrice(installmentAmount)} TZS</span>
                         </div>
+                            
                         {formData.late_fee_amount > 0 && (
-                          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                            <span className="text-xs font-medium text-gray-500 flex items-center gap-1">
-                              <AlertTriangle className="w-3.5 h-3.5 text-orange-500" />
+                              <div className="flex justify-between items-center p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-lg border border-orange-200 mt-2">
+                                <span className="text-sm font-semibold text-orange-700 flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4" />
                               Late Fee
                             </span>
-                            <span className="text-sm font-bold text-orange-700">{formatPrice(formData.late_fee_amount)} TZS</span>
+                                <span className="text-lg font-bold text-orange-900">{formatPrice(formData.late_fee_amount)} TZS</span>
                           </div>
                         )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -215,9 +215,17 @@ export const getCategoryHierarchy = async (): Promise<Category[]> => {
 // Create a new category
 export const createCategory = async (categoryData: CreateCategoryData): Promise<Category> => {
   try {
+    // 🔒 Get current branch for isolation
+    const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+    
+    const categoryDataWithBranch = {
+      ...categoryData,
+      ...(currentBranchId && { branch_id: currentBranchId })  // 🔒 Auto-assign to current branch
+    };
+    
     const { data, error } = await supabase
       .from('lats_categories')
-      .insert([categoryData])
+      .insert([categoryDataWithBranch])
       .select()
       .single();
 

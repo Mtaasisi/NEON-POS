@@ -101,7 +101,7 @@ const AdHeader: React.FC<AdHeaderProps> = ({ message }) => {
   const navigationItems = [
     {
       name: 'Backup Management',
-      href: '/backup-management',
+      href: '/admin-settings?section=database',
       icon: '🔄',
       description: 'Manage data backups'
     }

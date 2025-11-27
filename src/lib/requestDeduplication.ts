@@ -46,18 +46,42 @@ class RequestDeduplicator {
       timestamp: Date.now(),
     });
 
+    let timeoutId: NodeJS.Timeout | null = null;
+    
     try {
       // Add timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          // Clear the request from pending map before rejecting
+          this.pendingRequests.delete(key);
+          reject(new Error(`Request timeout: ${key}`));
+        }, timeout);
+      });
+
       const result = await Promise.race([
         promise,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Request timeout: ${key}`)), timeout)
-        ),
+        timeoutPromise,
       ]);
 
+      // Clear timeout if request completed successfully
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
       return result;
+    } catch (error) {
+      // On error (including timeout), make sure to clean up
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      // Request is already deleted in timeout case, but ensure cleanup for other errors
+      this.pendingRequests.delete(key);
+      throw error;
     } finally {
-      // Clean up after request completes
+      // Final cleanup - ensure request is removed
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       this.pendingRequests.delete(key);
     }
   }

@@ -98,6 +98,9 @@ export const createSupplierContract = async (contractData: CreateContractData): 
   try {
     const { data: userData } = await supabase.auth.getUser();
     
+    // 🔒 Get current branch for isolation - supplier contracts are branch-specific
+    const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+    
     const { data, error } = await supabase
       .from('lats_supplier_contracts')
       .insert({
@@ -106,7 +109,8 @@ export const createSupplierContract = async (contractData: CreateContractData): 
         auto_renew: contractData.auto_renew ?? false,
         renewal_notice_days: contractData.renewal_notice_days || 30,
         status: 'active',
-        created_by: userData?.user?.id
+        created_by: userData?.user?.id,
+        branch_id: currentBranchId  // 🔒 Supplier contracts are branch-specific
       })
       .select()
       .single();

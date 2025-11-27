@@ -127,7 +127,7 @@ const AdminManagementPage: React.FC = () => {
       title: 'Backup Management',
       description: 'Manage system backups and recovery',
       icon: <HardDrive size={24} />,
-      path: '/backup-management',
+      path: '/admin-settings?section=database',
       color: 'from-teal-500 to-teal-600',
       category: 'system'
     },

@@ -522,9 +522,15 @@ const UnifiedInventoryPage: React.FC = () => {
     // Note: Showing ALL products including test/sample products as per user preference
     // Previously filtered out: products with 'sample', 'test', or 'dummy' in the name
 
+    // 🔍 DEBUG: Log initial product count
+    if (import.meta.env.MODE === 'development' && filtered.length > 0) {
+      console.log(`🔍 [UnifiedInventoryPage] Starting with ${filtered.length} products`);
+    }
+
     // Apply search filter with enhanced variant search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
+      const beforeSearch = filtered.length;
       filtered = filtered.filter(product => 
         product.name.toLowerCase().includes(query) ||
         product.description?.toLowerCase().includes(query) ||
@@ -536,6 +542,9 @@ const UnifiedInventoryPage: React.FC = () => {
           variant.barcode?.toLowerCase().includes(query)
         )
       );
+      if (import.meta.env.MODE === 'development') {
+        console.log(`🔍 [UnifiedInventoryPage] Search filter "${searchQuery}": ${beforeSearch} → ${filtered.length} products`);
+      }
     }
 
     // Apply category filter
@@ -603,6 +612,19 @@ const UnifiedInventoryPage: React.FC = () => {
           return 0;
       }
     });
+
+    // 🔍 DEBUG: Log final filtered count
+    if (import.meta.env.MODE === 'development' && filtered.length !== products.length) {
+      console.log(`🔍 [UnifiedInventoryPage] After all filters: ${products.length} → ${filtered.length} products`);
+      console.log(`🔍 [UnifiedInventoryPage] Active filters:`, {
+        searchQuery,
+        selectedCategory,
+        selectedStatus,
+        showLowStockOnly,
+        showFeaturedOnly,
+        activeTab
+      });
+    }
 
     return filtered;
   }, [products, searchQuery, selectedCategory, selectedStatus, showLowStockOnly, showFeaturedOnly, sortBy, activeTab, categories]);

@@ -50,20 +50,198 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
     };
   }, [isOpen]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const text = event.target?.result as string;
-        parseCSV(text);
-      } catch (error) {
-        toast.error('Failed to read file');
+    const fileName = file.name.toLowerCase();
+    const isExcel = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
+    const isCSV = fileName.endsWith('.csv');
+
+    if (isExcel) {
+      await processExcelFile(file);
+    } else if (isCSV) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const text = event.target?.result as string;
+          parseCSV(text);
+        } catch (error) {
+          toast.error('Failed to read CSV file');
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      toast.error('Unsupported file format. Please upload CSV or Excel (.xlsx, .xls) file');
+    }
+  };
+
+  const processExcelFile = async (file: File) => {
+    setIsProcessing(true);
+    try {
+      // Dynamically import xlsx library
+      const XLSX = await import('xlsx');
+      
+      // Read the Excel file
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      // Get the first worksheet (instructions are now in the same sheet)
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      
+      // Convert to JSON with header row
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+        header: 1,
+        defval: ''
+      }) as any[][];
+
+      if (jsonData.length < 2) {
+        toast.error('Excel file must contain at least a header row and one data row');
+        setIsProcessing(false);
+        return;
       }
-    };
-    reader.readAsText(file);
+
+      // Get headers (first row) and normalize them
+      const headers = (jsonData[0] || []).map((h: any) => String(h || '').toLowerCase().trim());
+      
+      // Find column indices
+      const getColumnIndex = (possibleNames: string[]): number => {
+        for (const name of possibleNames) {
+          const nameLower = name.toLowerCase();
+          let index = headers.findIndex(h => h === nameLower);
+          if (index >= 0) return index;
+          index = headers.findIndex(h => h.includes(nameLower));
+          if (index >= 0) return index;
+        }
+        return -1;
+      };
+
+      // Map Excel columns to our data structure (handle simplified template)
+      const skuIdx = getColumnIndex(['sku', 'product sku', 'product_sku']);
+      const quantityIdx = getColumnIndex(['quantity', 'qty', 'qty to order']);
+      const costPriceIdx = getColumnIndex(['costprice', 'cost price', 'cost_price', 'price']);
+      const notesIdx = getColumnIndex(['notes', 'note', 'comments']);
+      const variantNameIdx = getColumnIndex(['variantname', 'variant name', 'variant_name']);
+
+      // If SKU column not found, assume first column is SKU (for simplified template)
+      if (skuIdx === -1) {
+        if (headers.length > 0 && headers[0]) {
+          // Try position-based parsing for simplified template: SKU, Quantity, CostPrice, Notes
+          console.log('Using position-based parsing for simplified template structure');
+        } else {
+          toast.error('Could not find SKU column in Excel file. Please check the template format.');
+          setIsProcessing(false);
+          return;
+        }
+      }
+
+      const rows: ImportRow[] = [];
+
+      // Process data rows (skip header row)
+      for (let i = 1; i < jsonData.length; i++) {
+        const row = jsonData[i];
+        if (!row || row.length === 0) continue;
+
+        // Extract values based on column indices or position (simplified template: SKU, Quantity, CostPrice, Notes)
+        const sku = skuIdx >= 0 
+          ? String(row[skuIdx] || '').trim() 
+          : String(row[0] || '').trim();
+        
+        // Quantity: use found index or fall back to position-based (column 1)
+        let quantity = 1;
+        if (quantityIdx >= 0) {
+          quantity = parseFloat(String(row[quantityIdx] || '0')) || 1;
+        } else if (row[1] !== undefined && row[1] !== null && row[1] !== '') {
+          quantity = parseFloat(String(row[1])) || 1;
+        }
+        
+        // CostPrice: use found index or fall back to position-based (column 2)
+        let costPrice: number | undefined = undefined;
+        if (costPriceIdx >= 0 && row[costPriceIdx] !== undefined && row[costPriceIdx] !== null && row[costPriceIdx] !== '') {
+          costPrice = parseFloat(String(row[costPriceIdx]));
+        } else if (row[2] !== undefined && row[2] !== null && row[2] !== '') {
+          const parsed = parseFloat(String(row[2]));
+          if (!isNaN(parsed)) costPrice = parsed;
+        }
+        
+        // Notes: use found index or fall back to position-based (column 3)
+        const notes = notesIdx >= 0 
+          ? String(row[notesIdx] || '').trim() 
+          : (row[3] ? String(row[3]).trim() : '');
+        
+        const variantName = variantNameIdx >= 0 ? String(row[variantNameIdx] || '').trim() : '';
+
+        // Skip empty rows and instruction rows (rows that don't look like data)
+        if (!sku) continue;
+        
+        // Skip rows that are clearly instructions (contain instruction keywords)
+        const firstCell = String(row[0] || '').toLowerCase();
+        if (firstCell.includes('instruction') || 
+            firstCell.includes('required') || 
+            firstCell.includes('optional') ||
+            firstCell.includes('auto-filled') ||
+            firstCell.includes('tips:') ||
+            firstCell.includes('quick start') ||
+            firstCell.includes('important:') ||
+            firstCell.startsWith('═') ||
+            firstCell.startsWith('📋') ||
+            firstCell.startsWith('✅') ||
+            firstCell.startsWith('🔄') ||
+            firstCell.startsWith('💡') ||
+            firstCell.startsWith('📝') ||
+            firstCell.startsWith('⚠️')) {
+          continue;
+        }
+
+        const importRow: ImportRow = {
+          sku: sku,
+          variantName: variantName,
+          quantity: quantity || 1,
+          costPrice: costPrice,
+          notes: notes,
+          rowIndex: i + 1,
+          status: 'pending',
+        };
+
+        // Validate SKU exists in products and enrich with product data
+        const productData = findProductAndVariantBySKU(importRow.sku);
+        if (!productData) {
+          importRow.status = 'invalid';
+          importRow.error = 'Product/Variant not found';
+        } else if (importRow.quantity <= 0) {
+          importRow.status = 'invalid';
+          importRow.error = 'Invalid quantity';
+        } else {
+          importRow.status = 'valid';
+          importRow.productName = productData.product.name;
+          importRow.foundVariantName = productData.variant.name;
+          importRow.currentStock = productData.variant.quantity || 0;
+          importRow.suggestedCostPrice = productData.variant.costPrice || productData.product.costPrice;
+          if (!importRow.costPrice && importRow.suggestedCostPrice) {
+            importRow.costPrice = importRow.suggestedCostPrice;
+          }
+        }
+
+        rows.push(importRow);
+      }
+
+      setImportData(rows);
+      
+      const validCount = rows.filter(r => r.status === 'valid').length;
+      const invalidCount = rows.filter(r => r.status === 'invalid').length;
+      
+      if (validCount > 0) {
+        toast.success(`✅ Parsed ${validCount} valid items from Excel${invalidCount > 0 ? ` (${invalidCount} invalid)` : ''}`);
+      } else {
+        toast.error('No valid items found in Excel file');
+      }
+    } catch (error) {
+      console.error('Error parsing Excel:', error);
+      toast.error(`Failed to parse Excel file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const parseCSV = (csvText: string) => {
@@ -156,7 +334,13 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
     return null;
   };
 
-  const handleDownloadTemplate = () => {
+  const handleDownloadTemplate = async (format: 'csv' | 'excel' = 'csv') => {
+    if (format === 'excel') {
+      await handleDownloadExcelTemplate();
+      return;
+    }
+
+    // CSV template (existing logic)
     // Create comprehensive template with instructions and all useful columns
     const instructions = `# ============================================================================
 # PURCHASE ORDER BULK IMPORT TEMPLATE - COMPREHENSIVE EDITION
@@ -293,7 +477,158 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
     a.download = 'purchase-order-bulk-import-template.csv';
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('📥 Comprehensive template downloaded with 10 sample products from your inventory!');
+    toast.success('📥 Comprehensive CSV template downloaded with 10 sample products from your inventory!');
+  };
+
+  const handleDownloadExcelTemplate = async () => {
+    try {
+      setIsProcessing(true);
+      
+      // Dynamically import xlsx library
+      const XLSX = await import('xlsx');
+      
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      
+      // ============================================
+      // MAIN WORKSHEET: Only essential columns
+      // ============================================
+      const headers = [
+        'SKU *',
+        'Quantity *',
+        'CostPrice',
+        'Notes'
+      ];
+      
+      // Prepare data rows with sample data
+      const dataRows: any[][] = [headers];
+      
+      // Get up to 10 sample products
+      const sampleProducts = products.slice(0, 10);
+      sampleProducts.forEach(product => {
+        if (product.variants && product.variants.length > 0) {
+          const variant = product.variants[0];
+          const sku = variant.sku || 'SAMPLE-SKU';
+          const currentStock = variant.quantity || variant.stockQuantity || 0;
+          const minStock = product.minStock || variant.minStockLevel || 5;
+          const suggestedQty = Math.max(minStock * 2 - currentStock, 0) || 10;
+          const costPrice = variant.costPrice || product.costPrice || '';
+          
+          let notes = '';
+          if (currentStock === 0) {
+            notes = 'OUT OF STOCK - URGENT';
+          } else if (currentStock <= minStock) {
+            notes = 'Below minimum stock - reorder';
+          } else if (currentStock <= minStock * 1.5) {
+            notes = 'Low stock - consider restocking';
+          }
+          
+          dataRows.push([
+            sku,
+            suggestedQty,
+            costPrice || '',
+            notes
+          ]);
+        }
+      });
+      
+      // Add generic examples if no products available
+      if (dataRows.length === 1) {
+        dataRows.push(
+          ['IPHONE14-128GB', 15, 1200000, 'Below minimum - urgent restock'],
+          ['SAMS23-256GB', 20, 1000000, 'OUT OF STOCK - Priority order'],
+          ['MBA-M2-256', 10, 7500000, 'Low stock - corporate demand'],
+          ['AIRPODS-PRO2', 30, 280000, 'Regular restock'],
+          ['GW6-44MM', 15, 320000, 'Moderate stock']
+        );
+      }
+      
+      // Add empty row separator
+      dataRows.push(['', '', '', '']);
+      
+      // ============================================
+      // INSTRUCTIONS (add below sample products)
+      // ============================================
+      const instructionsRows = [
+        ['═══════════════════════════════════════════════════════════════════════════════'],
+        ['PURCHASE ORDER IMPORT TEMPLATE - INSTRUCTIONS'],
+        ['═══════════════════════════════════════════════════════════════════════════════'],
+        [''],
+        ['📋 REQUIRED COLUMNS (must be filled):'],
+        ['  1. SKU * - Product variant SKU from your inventory (MUST match exactly)'],
+        ['  2. Quantity * - Number of units to order'],
+        [''],
+        ['✅ OPTIONAL COLUMNS:'],
+        ['  3. CostPrice - Cost per unit (if blank, uses last purchase price automatically)'],
+        ['  4. Notes - Additional information (urgent, quality concerns, etc.)'],
+        [''],
+        ['🔄 AUTO-FILLED COLUMNS (filled automatically during import):'],
+        ['  • ProductName - Full product name'],
+        ['  • VariantName - Variant specification'],
+        ['  • Category - Product category'],
+        ['  • CurrentStock - Current inventory level'],
+        ['  • MinStock - Minimum stock level'],
+        ['  • LastPurchasePrice - Historical cost price'],
+        ['  • SellingPrice - Current selling price'],
+        ['  • Supplier - Preferred supplier name'],
+        [''],
+        ['💡 TIPS:'],
+        ['  • Only SKU and Quantity are required - fill these for each item you want to order'],
+        ['  • CostPrice is optional - if left blank, the system uses the last purchase price'],
+        ['  • All other product details are automatically filled when you upload the file'],
+        ['  • Use Notes column to mark urgent items or add special instructions'],
+        ['  • You can delete the sample rows above and add your own products'],
+        [''],
+        ['📝 QUICK START:'],
+        ['  1. Review the sample products above (you can modify or delete them)'],
+        ['  2. Fill in SKU column with product SKUs from your inventory'],
+        ['  3. Fill in Quantity column with the number of units to order'],
+        ['  4. (Optional) Add CostPrice if different from last purchase price'],
+        ['  5. (Optional) Add Notes for any special instructions'],
+        ['  6. Save and upload the file'],
+        ['  7. Review the preview - all product details will be automatically filled'],
+        ['  8. Import to add all items to your purchase order'],
+        [''],
+        ['⚠️ IMPORTANT:'],
+        ['  • SKU must match exactly with your inventory (case-sensitive)'],
+        ['  • Quantity must be a positive number'],
+        ['  • Invalid SKUs will be highlighted during preview'],
+        ['  • You can preview and validate before importing'],
+        ['  • Delete these instruction rows before uploading if you prefer']
+      ];
+      
+      // Add instructions to data rows
+      instructionsRows.forEach(row => {
+        dataRows.push(row);
+      });
+      
+      // ============================================
+      // CREATE WORKSHEET
+      // ============================================
+      const worksheet = XLSX.utils.aoa_to_sheet(dataRows);
+      
+      // Set column widths for better readability
+      worksheet['!cols'] = [
+        { wch: 20 }, // SKU
+        { wch: 12 }, // Quantity
+        { wch: 15 }, // CostPrice
+        { wch: 50 }  // Notes (wider for instructions)
+      ];
+      
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Purchase Order Items');
+      
+      // Write file
+      XLSX.writeFile(workbook, 'purchase-order-bulk-import-template.xlsx');
+      
+      toast.success('📥 Excel template downloaded! Only essential columns shown - other fields auto-filled on import.');
+    } catch (error) {
+      console.error('Error generating Excel template:', error);
+      toast.error('Failed to generate Excel template. Falling back to CSV.');
+      handleDownloadTemplate('csv');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleImport = () => {
@@ -354,7 +689,7 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
             </button>
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Bulk Import</h2>
-          <p className="text-gray-700">Import multiple items from CSV file</p>
+          <p className="text-gray-700">Import multiple items from CSV or Excel file</p>
         </div>
 
         {/* Actions Bar */}
@@ -362,17 +697,36 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
           <div className="flex items-center gap-3">
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold shadow-lg transition-colors"
+              disabled={isProcessing}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-orange-600 hover:bg-orange-700 text-white rounded-xl font-semibold shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Upload className="w-5 h-5" />
-              Upload CSV File
+              {isProcessing ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-5 h-5" />
+                  Upload File (CSV/Excel)
+                </>
+              )}
             </button>
             <button
-              onClick={handleDownloadTemplate}
+              onClick={() => handleDownloadTemplate('csv')}
               className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-gray-300 hover:bg-gray-100 text-gray-700 rounded-xl font-semibold transition-colors"
+              title="Download CSV template"
             >
               <Download className="w-5 h-5" />
-              Template
+              CSV
+            </button>
+            <button
+              onClick={() => handleDownloadTemplate('excel')}
+              className="flex items-center gap-2 px-4 py-3 bg-white border-2 border-blue-300 hover:bg-blue-50 text-blue-700 rounded-xl font-semibold transition-colors"
+              title="Download Excel template"
+            >
+              <FileSpreadsheet className="w-5 h-5" />
+              Excel
             </button>
             {importData.length > 0 && (
               <button
@@ -387,19 +741,28 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv"
+            accept=".csv,.xlsx,.xls"
             onChange={handleFileUpload}
             className="hidden"
           />
         </div>
 
         {/* Content */}
-        <div className="p-8 overflow-y-auto flex-1">
+        <div className="p-8 overflow-y-auto flex-1 relative">
+          {isProcessing && importData.length === 0 ? (
+            <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center z-10 rounded-2xl">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-orange-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-700 font-medium text-lg">Processing file...</p>
+                <p className="text-gray-500 text-sm mt-2">Please wait while we parse your file</p>
+              </div>
+            </div>
+          ) : null}
           {importData.length === 0 ? (
             <div className="text-center py-12">
               <FileSpreadsheet className="w-16 h-16 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-gray-900 mb-2">No File Uploaded</h3>
-              <p className="text-gray-600 mb-6">Upload a CSV file or download the template to get started</p>
+              <p className="text-gray-600 mb-6">Upload a CSV or Excel file (.xlsx, .xls) or download the template to get started</p>
               
               <div className="max-w-4xl mx-auto bg-blue-50 border border-blue-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
@@ -544,7 +907,7 @@ SKU,ProductName,VariantName,Category,CurrentStock,MinStock,Quantity,CostPrice,La
                             <li>Open in Excel/Google Sheets</li>
                             <li>Delete comment lines (starting with #)</li>
                             <li>Modify quantities and SKUs for your order</li>
-                            <li>Save as CSV and upload here</li>
+                            <li>Save as CSV or Excel (.xlsx) and upload here</li>
                             <li>Review validation and import</li>
                           </ol>
                         </div>

@@ -200,12 +200,34 @@ class InstallmentService {
       const amountFinanced = input.total_amount - input.down_payment;
       const installmentAmount = amountFinanced / input.number_of_installments;
       
+      // Validate payment balance: Down Payment + (All Installments) must equal Total Amount
+      const totalInstallmentAmounts = installmentAmount * input.number_of_installments;
+      const totalPayments = input.down_payment + totalInstallmentAmounts;
+      const balanceDifference = Math.abs(totalPayments - input.total_amount);
+      
+      // Allow small rounding differences (less than 0.01)
+      if (balanceDifference > 0.01) {
+        const errorMessage = `Payment amounts don't balance! Total: ${input.total_amount}, Down Payment: ${input.down_payment}, Installments Total: ${totalInstallmentAmounts}, Total Payments: ${totalPayments}, Difference: ${balanceDifference}`;
+        console.error('❌ [InstallmentService] Payment balance mismatch:', {
+          totalAmount: input.total_amount,
+          downPayment: input.down_payment,
+          totalInstallments: totalInstallmentAmounts,
+          totalPayments,
+          difference: balanceDifference
+        });
+        return {
+          success: false,
+          error: errorMessage
+        };
+      }
+      
       console.log('💰 [InstallmentService] Calculations:');
       console.log('   - Total Amount:', input.total_amount);
       console.log('   - Down Payment:', input.down_payment);
       console.log('   - Amount Financed:', amountFinanced);
       console.log('   - Installment Amount:', installmentAmount);
       console.log('   - Number of Installments:', input.number_of_installments);
+      console.log('   - Payment Balance Check: ✅ PASSED');
       
       const schedule = this.calculateSchedule(
         input.start_date,
@@ -313,9 +335,73 @@ class InstallmentService {
       return { success: true, plan: plan as InstallmentPlan };
     } catch (error: any) {
       console.error('❌ [InstallmentService] Error creating installment plan:', error);
-      console.error('❌ [InstallmentService] Error message:', error.message);
-      console.error('❌ [InstallmentService] Error stack:', error.stack);
-      return { success: false, error: error.message };
+      console.error('❌ [InstallmentService] Error Details:', {
+        message: error?.message,
+        code: error?.code,
+        status: error?.status,
+        name: error?.name,
+        hint: error?.hint,
+        details: error?.details,
+        input: {
+          customerId: input.customer_id,
+          totalAmount: input.total_amount,
+          numberOfInstallments: input.number_of_installments,
+          downPayment: input.down_payment
+        }
+      });
+
+      // Categorize errors for better error messages
+      let errorMessage = 'Failed to create installment plan.';
+      
+      // Network errors
+      if (error?.message?.includes('Failed to fetch') || 
+          error?.message?.includes('NetworkError') ||
+          error?.message?.includes('timeout') ||
+          error?.code === 'NETWORK_ERROR') {
+        errorMessage = 'Network error: Unable to connect to the database. Please check your internet connection and try again.';
+      }
+      // Database constraint errors
+      else if (error?.code === '23505') {
+        errorMessage = `Duplicate entry: ${error?.hint || 'An installment plan with these details already exists.'}`;
+      }
+      // Not null constraint errors
+      else if (error?.code === '23502') {
+        errorMessage = `Validation error: ${error?.hint || 'A required field is missing.'}`;
+      }
+      // Foreign key constraint errors
+      else if (error?.code === '23503') {
+        errorMessage = `Reference error: ${error?.hint || 'Invalid customer or sale reference.'}`;
+      }
+      // Check constraint errors
+      else if (error?.code === '23514') {
+        errorMessage = `Validation error: ${error?.hint || 'Invalid data provided.'}`;
+      }
+      // Permission errors
+      else if (error?.code === '42501' || error?.message?.includes('permission denied')) {
+        errorMessage = 'Permission denied: You do not have permission to create installment plans.';
+      }
+      // Generic database errors
+      else if (error?.code?.startsWith('23')) {
+        errorMessage = `Database error: ${error?.message || 'Invalid data provided.'}`;
+      }
+      // Supabase-specific errors
+      else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      // Log stack trace in development
+      if (import.meta.env.MODE === 'development') {
+        console.error('❌ [InstallmentService] Error stack:', error?.stack);
+        console.group('🔍 [InstallmentService] Detailed Error Information');
+        console.error('Error Type:', error?.constructor?.name || 'Unknown');
+        console.error('Full Error Object:', error);
+        console.groupEnd();
+      }
+
+      return { 
+        success: false, 
+        error: errorMessage 
+      };
     }
   }
 
@@ -344,31 +430,6 @@ class InstallmentService {
         status: plan.status
       });
 
-      // Validate plan status
-      if (plan.status === 'completed') {
-        console.error('❌ [Installment Payment] Plan is already completed');
-        return { success: false, error: 'This installment plan is already completed. No further payments can be recorded.' };
-      }
-
-      if (plan.status === 'cancelled') {
-        console.error('❌ [Installment Payment] Plan is cancelled');
-        return { success: false, error: 'This installment plan has been cancelled. Payments cannot be recorded.' };
-      }
-
-      // Validate payment amount
-      const balanceDue = Number(plan.balance_due || 0);
-      const paymentAmount = Number(input.amount || 0);
-      
-      if (paymentAmount <= 0) {
-        console.error('❌ [Installment Payment] Invalid payment amount:', paymentAmount);
-        return { success: false, error: 'Payment amount must be greater than zero.' };
-      }
-
-      if (paymentAmount > balanceDue) {
-        console.error('❌ [Installment Payment] Payment amount exceeds balance:', { paymentAmount, balanceDue });
-        return { success: false, error: `Payment amount (${this.formatCurrency(paymentAmount)}) cannot exceed the remaining balance (${this.formatCurrency(balanceDue)}).` };
-      }
-
       // Get existing payments to determine the next installment number
       const { data: existingPayments, error: paymentsError } = await supabase
         .from('installment_payments')
@@ -395,8 +456,53 @@ class InstallmentService {
         }
       }
 
+      // Check if there are unpaid installments
+      const hasUnpaidInstallments = paidInstallmentNumbers.size < plan.number_of_installments;
+
+      // Validate plan status - allow payments if there are unpaid installments
+      if (plan.status === 'cancelled') {
+        console.error('❌ [Installment Payment] Plan is cancelled');
+        return { success: false, error: 'This installment plan has been cancelled. Payments cannot be recorded.' };
+      }
+
+      // If status is 'completed' but there are unpaid installments, allow the payment
+      // This handles cases where the status was incorrectly set to completed
+      if (plan.status === 'completed' && !hasUnpaidInstallments) {
+        const balanceDue = Number(plan.balance_due || 0);
+        if (balanceDue <= 0) {
+          console.error('❌ [Installment Payment] Plan is already completed with no balance');
+          return { success: false, error: 'This installment plan is already completed. No further payments can be recorded.' };
+        }
+        // If there's a balance but status is completed, allow payment (data inconsistency fix)
+        console.warn('⚠️ [Installment Payment] Plan status is completed but balance exists. Allowing payment to fix inconsistency.');
+      }
+
+      // Validate payment amount
+      const balanceDue = Number(plan.balance_due || 0);
+      const paymentAmount = Number(input.amount || 0);
+      
+      if (paymentAmount <= 0) {
+        console.error('❌ [Installment Payment] Invalid payment amount:', paymentAmount);
+        return { success: false, error: 'Payment amount must be greater than zero.' };
+      }
+
+      // If there are unpaid installments, allow payment even if balance_due is 0 or negative
+      // This fixes data inconsistency issues where balance_due is incorrectly calculated
+      if (hasUnpaidInstallments && balanceDue <= 0) {
+        console.warn('⚠️ [Installment Payment] Balance is 0 or negative but unpaid installments exist. Allowing payment to fix data inconsistency:', {
+          balanceDue,
+          unpaidInstallments: plan.number_of_installments - paidInstallmentNumbers.size,
+          paymentAmount
+        });
+        // Skip balance validation - the database trigger will recalculate balance_due after payment
+      } else if (!hasUnpaidInstallments && paymentAmount > balanceDue && balanceDue > 0) {
+        // Only validate balance if all installments are paid and there's a positive balance
+        console.error('❌ [Installment Payment] Payment amount exceeds balance:', { paymentAmount, balanceDue });
+        return { success: false, error: `Payment amount (${this.formatCurrency(paymentAmount)}) cannot exceed the remaining balance (${this.formatCurrency(balanceDue)}).` };
+      }
+
       // If all installments are paid, check if this is an overpayment
-      if (paidInstallmentNumbers.size >= plan.number_of_installments) {
+      if (!hasUnpaidInstallments) {
         if (balanceDue > 0) {
           // Allow overpayment if there's still a balance
           installmentNumber = plan.number_of_installments;
@@ -472,10 +578,14 @@ class InstallmentService {
       // Check if plan will be completed after this payment
       // Get updated plan to check actual installments_paid after trigger
       const updatedPlan = await this.getInstallmentPlanById(input.installment_plan_id);
-      const willBeCompleted = updatedPlan && (
-        (paidInstallmentNumbers.size + 1 >= plan.number_of_installments) ||
-        (Number(updatedPlan.balance_due || 0) <= 0)
-      );
+      
+      // Plan is completed only if:
+      // 1. All installments are paid (paidInstallmentNumbers.size + 1 >= total installments)
+      // 2. AND balance_due is 0 or negative
+      // This prevents marking as completed when there are still unpaid installments
+      const allInstallmentsPaid = (paidInstallmentNumbers.size + 1) >= plan.number_of_installments;
+      const balanceIsZero = updatedPlan && Number(updatedPlan.balance_due || 0) <= 0;
+      const willBeCompleted = updatedPlan && allInstallmentsPaid && balanceIsZero;
       
       // Update next payment date only (installments_paid, total_paid, balance_due are auto-updated by DB trigger)
       const isCompleted = willBeCompleted || false;
@@ -492,6 +602,14 @@ class InstallmentService {
       } else {
         // When plan is not completed, set next payment date to calculated schedule
         updateData.next_payment_date = schedule.nextPaymentDate;
+        
+        // If status was incorrectly set to 'completed' but there are still unpaid installments, reset to 'active'
+        // This fixes data inconsistency issues
+        if (plan.status === 'completed' && hasUnpaidInstallments) {
+          updateData.status = 'active';
+          updateData.completion_date = null;
+          console.log('🔄 [Installment Payment] Resetting status from completed to active - unpaid installments remain');
+        }
       }
       
       console.log('🔄 [Installment Payment] Updating plan:', updateData);

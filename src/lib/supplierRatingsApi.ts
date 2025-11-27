@@ -105,12 +105,16 @@ export const createSupplierRating = async (ratingData: CreateRatingData): Promis
   try {
     const { data: userData } = await supabase.auth.getUser();
     
+    // 🔒 Get current branch for isolation - supplier ratings are branch-specific
+    const currentBranchId = typeof localStorage !== 'undefined' ? localStorage.getItem('current_branch_id') : null;
+    
     const { data, error } = await supabase
       .from('lats_supplier_ratings')
       .insert({
         ...ratingData,
         would_recommend: ratingData.would_recommend ?? true,
-        rated_by: userData?.user?.id
+        rated_by: userData?.user?.id,
+        branch_id: currentBranchId  // 🔒 Supplier ratings are branch-specific
       })
       .select()
       .single();

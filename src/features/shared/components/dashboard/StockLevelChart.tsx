@@ -32,9 +32,50 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
       setIsLoading(true);
       
       if (currentUser?.id) {
-        // Fetch real products with variants
+        // Fetch real products with variants with retry logic for timeouts
         console.log('📦 Stock Levels: Loading product data...');
-        const products = await getProducts();
+        
+        let products: any[] | undefined;
+        let retryCount = 0;
+        const maxRetries = 2;
+        let lastError: any;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            // Clear any stuck requests on retry
+            if (retryCount > 0) {
+              const { requestDeduplicator } = await import('../../../../lib/requestDeduplication');
+              const currentBranchId = localStorage.getItem('current_branch_id');
+              const cacheKey = `products:${currentBranchId || 'default'}`;
+              requestDeduplicator.clear(cacheKey);
+              console.log(`🔄 [StockLevelChart] Retry attempt ${retryCount}/${maxRetries} - cleared stuck request`);
+              
+              // Wait a bit before retrying
+              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            }
+            
+            products = await getProducts({ forceRefresh: retryCount > 0 });
+            break; // Success, exit retry loop
+          } catch (error: any) {
+            lastError = error;
+            const isTimeout = error?.message?.includes('timeout') || error?.message?.includes('Request timeout');
+            
+            if (isTimeout && retryCount < maxRetries) {
+              retryCount++;
+              console.warn(`⏰ [StockLevelChart] Request timeout, retrying (${retryCount}/${maxRetries})...`);
+              continue;
+            } else {
+              // Either not a timeout or max retries reached
+              throw error;
+            }
+          }
+        }
+        
+        // Ensure products is defined
+        if (!products) {
+          throw lastError || new Error('Failed to load products after retries');
+        }
+        
         console.log(`📊 Loaded ${products.length} products for stock analysis`);
         console.log('📊 Sample products:', products.slice(0, 3).map(p => ({ name: p.name, variants: p.variants?.length || 0 })));
         
@@ -53,19 +94,25 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
             }, 0);
             
             const totalMinQuantity = product.variants.reduce((sum, v) => {
-              const minQty = Number(v.minQuantity);
-              return sum + (isNaN(minQty) ? 0 : minQty);
+              const minQty = Number(v.minQuantity || v.min_quantity || 0);
+              return sum + (isNaN(minQty) || !isFinite(minQty) ? 0 : minQty);
             }, 0);
             
-            const avgMinQuantity = totalMinQuantity / product.variants.length;
+            // Calculate average min quantity, but ensure we don't divide by zero
+            const avgMinQuantity = product.variants.length > 0 
+              ? totalMinQuantity / product.variants.length 
+              : 0;
             
             // Calculate stock percentage (quantity vs min quantity)
             // Add additional safety checks to prevent NaN
             let stockPercentage = 0;
-            if (avgMinQuantity > 0 && !isNaN(avgMinQuantity) && !isNaN(totalQuantity)) {
-              stockPercentage = Math.min(100, Math.round((totalQuantity / avgMinQuantity) * 100));
+            if (avgMinQuantity > 0 && !isNaN(avgMinQuantity) && isFinite(avgMinQuantity) && !isNaN(totalQuantity) && isFinite(totalQuantity)) {
+              const calculated = (totalQuantity / avgMinQuantity) * 100;
+              stockPercentage = isNaN(calculated) || !isFinite(calculated) ? 0 : Math.min(100, Math.max(0, Math.round(calculated)));
             } else if (totalQuantity > 0) {
               stockPercentage = 100;
+            } else {
+              stockPercentage = 0;
             }
             
             // Final safety check to ensure stockPercentage is a valid number
@@ -89,12 +136,17 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
               .trim()
               .substring(0, 25); // Increased from 15 to 25 characters
             
+            // Ensure all values are valid numbers before adding to array
+            const safeAvgMinQuantity = isNaN(avgMinQuantity) || !isFinite(avgMinQuantity) ? 0 : Math.round(avgMinQuantity);
+            const safeTotalQuantity = isNaN(totalQuantity) || !isFinite(totalQuantity) ? 0 : totalQuantity;
+            const safeStockPercentage = isNaN(stockPercentage) || !isFinite(stockPercentage) ? 0 : stockPercentage;
+            
             stockItems.push({
               name: productName.length > 25 ? cleanName + '...' : cleanName,
-              stock: stockPercentage,
+              stock: safeStockPercentage,
               status,
-              actualQuantity: totalQuantity,
-              minQuantity: Math.round(avgMinQuantity)
+              actualQuantity: safeTotalQuantity,
+              minQuantity: safeAvgMinQuantity
             });
             
             console.log(`📦 Product: "${productName}" | Qty: ${totalQuantity} | Min: ${Math.round(avgMinQuantity)} | Stock%: ${stockPercentage} | Status: ${status}`);
@@ -131,9 +183,21 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
         setLowStockCount(lowStockCounter + criticalStockCounter);
       }
       
-    } catch (error) {
+    } catch (error: any) {
+      const errorMessage = error?.message || 'Unknown error';
+      const isTimeout = errorMessage.includes('timeout') || errorMessage.includes('Request timeout');
+      
       console.error('❌ Error loading stock data:', error);
       console.error('❌ Error details:', error);
+      
+      if (isTimeout) {
+        console.error('⏰ Request timed out. This may be due to:');
+        console.error('   - Slow network connection');
+        console.error('   - Database cold start (Neon)');
+        console.error('   - Large dataset being fetched');
+        console.error('   - Server overload');
+      }
+      
       // Set empty data on error
       setStockData([]);
       setLowStockCount(0);
@@ -201,17 +265,26 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
 
   // Filter out any items with invalid stock values before rendering
   const validStockData = safeStockData.filter(item => {
-    const isValid = !isNaN(item.stock) && isFinite(item.stock) && item.stock >= 0;
+    const stockValid = !isNaN(item.stock) && isFinite(item.stock) && item.stock >= 0 && item.stock <= 100;
+    const quantityValid = !isNaN(item.actualQuantity) && isFinite(item.actualQuantity) && item.actualQuantity >= 0;
+    const minValid = !isNaN(item.minQuantity) && isFinite(item.minQuantity) && item.minQuantity >= 0;
+    const isValid = stockValid && quantityValid && minValid;
     if (!isValid) {
       console.warn('⚠️ Filtering out invalid stock item:', item);
     }
     return isValid;
   });
   
-  console.log('📊 Rendering chart with data:', validStockData);
-  console.log('📊 Data length:', validStockData.length);
-  console.log('📊 First item:', validStockData[0]);
-  console.log('📊 All items stock values:', validStockData.map(item => ({ name: item.name, stock: item.stock, status: item.status })));
+  // Ensure all stock values are within valid range [0, 100]
+  const sanitizedStockData = validStockData.map(item => ({
+    ...item,
+    stock: Math.max(0, Math.min(100, item.stock)),
+    actualQuantity: Math.max(0, item.actualQuantity),
+    minQuantity: Math.max(0, item.minQuantity)
+  }));
+  
+  console.log('📊 Rendering chart with data:', sanitizedStockData);
+  console.log('📊 Data length:', sanitizedStockData.length);
 
   return (
     <div className={`bg-white rounded-2xl p-6 h-full flex flex-col ${className}`}>
@@ -222,9 +295,9 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
             <Package className="w-5 h-5 text-gray-700" />
             <h3 className="text-sm font-medium text-gray-900">Stock Levels</h3>
           </div>
-          <p className="text-3xl font-bold text-gray-900">{validStockData.length}</p>
+          <p className="text-3xl font-bold text-gray-900">{sanitizedStockData.length}</p>
           <p className="text-xs text-gray-500 mt-1">
-            {validStockData.length === 10 ? 'Top 10 products' : `Product${validStockData.length !== 1 ? 's' : ''} tracked`}
+            {sanitizedStockData.length === 10 ? 'Top 10 products' : `Product${sanitizedStockData.length !== 1 ? 's' : ''} tracked`}
           </p>
         </div>
         {lowStockCount > 0 && (
@@ -240,7 +313,7 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
       </div>
 
       {/* No Data Message */}
-      {validStockData.length === 0 ? (
+      {sanitizedStockData.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-gray-400">
           <Package className="w-12 h-12 mb-2 opacity-50" />
           <p className="text-sm">No inventory data available</p>
@@ -250,10 +323,10 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
         <>
           {/* Chart */}
           <div className="flex-grow -mx-2 min-h-48">
-        {validStockData.length > 0 && (
+        {sanitizedStockData.length > 0 && (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart 
-              data={validStockData} 
+              data={sanitizedStockData} 
               layout="horizontal" 
               margin={{ left: 0, right: 10 }}
             >
@@ -268,7 +341,8 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
                 axisLine={false}
                 tickFormatter={(value) => {
                   const num = Number(value);
-                  return isNaN(num) ? '0%' : `${num}%`;
+                  if (isNaN(num) || !isFinite(num)) return '0%';
+                  return `${Math.max(0, Math.min(100, num))}%`;
                 }}
               />
               <YAxis 
@@ -282,7 +356,7 @@ export const StockLevelChart: React.FC<StockLevelChartProps> = ({ className }) =
               />
               <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
               <Bar dataKey="stock" radius={[0, 4, 4, 0]} maxBarSize={20} fill="#10b981">
-                {validStockData.map((entry, index) => (
+                {sanitizedStockData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={getBarColor(entry.status)} />
                 ))}
               </Bar>

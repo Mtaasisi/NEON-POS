@@ -94,12 +94,26 @@ async function getTablePrimaryKey(client, tableName) {
       JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
       WHERE i.indrelid = $1::regclass
       AND i.indisprimary
+      ORDER BY a.attnum
       LIMIT 1;
     `, [`public.${tableName}`]);
     
     return result.rows[0]?.attname || null;
   } catch (error) {
-    return null;
+    // Try alternative method for tables without explicit primary key
+    try {
+      const result = await client.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = $1 
+        AND table_schema = 'public'
+        AND column_name IN ('id', 'uuid', 'key')
+        LIMIT 1;
+      `, [tableName]);
+      return result.rows[0]?.column_name || null;
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -262,8 +276,16 @@ async function main() {
     
     if (dryRun) {
       const wouldMigrate = results.filter(r => !r.skipped && !r.error).reduce((sum, r) => sum + (r.wouldMigrate || 0), 0);
-      console.log(`Would migrate: ${wouldMigrate} rows across ${results.filter(r => !r.skipped && !r.error).length} tables`);
-      console.log(`\nTo apply, run without --dry-run flag`);
+      const tablesToMigrate = results.filter(r => !r.skipped && !r.error && (r.wouldMigrate || 0) > 0).length;
+      console.log(`Would migrate: ${wouldMigrate} rows across ${tablesToMigrate} tables`);
+      console.log(`⏭️  Skipped: ${results.filter(r => r.skipped).length} tables`);
+      if (results.filter(r => r.error).length > 0) {
+        console.log(`✗ Errors: ${results.filter(r => r.error).length} tables`);
+        results.filter(r => r.error).forEach(r => {
+          console.log(`   - ${r.table}: ${r.error}`);
+        });
+      }
+      console.log(`\nTo apply, run: node migrate-data-to-production.mjs`);
     } else {
       const inserted = results.filter(r => !r.skipped && !r.error).reduce((sum, r) => sum + (r.inserted || 0), 0);
       const errors = results.filter(r => r.error).length;
@@ -273,6 +295,9 @@ async function main() {
       console.log(`⏭️  Skipped: ${skipped} tables`);
       if (errors > 0) {
         console.log(`✗ Errors: ${errors} tables`);
+        results.filter(r => r.error).forEach(r => {
+          console.log(`   - ${r.table}: ${r.error}`);
+        });
       }
     }
     
