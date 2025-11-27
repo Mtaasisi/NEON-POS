@@ -37,7 +37,7 @@ import { BranchProductSharing } from '../components/BranchProductSharing';
 import DashboardCustomizationSettings from '../components/DashboardCustomizationSettings';
 import { DatabaseDataCleanupPanel } from '../components/DatabaseDataCleanupPanel';
 import DatabaseBranchMigration from '../components/DatabaseBranchMigration';
-import DatabaseManagementSettings from '../components/DatabaseManagementSettings';
+// DatabaseManagementSettings merged into DatabaseSettings
 import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { 
   Settings,
@@ -130,6 +130,9 @@ import {
   getRestoreFormats,
   BackupResult
 } from '../../../lib/backupApi';
+import { fullDatabaseDownloadService } from '../../../services/fullDatabaseDownloadService';
+import { offlineSaleSyncService } from '../../../services/offlineSaleSyncService';
+import { autoSyncService } from '../../../services/autoSyncService';
 
 interface SystemSettings {
   branding: {
@@ -624,7 +627,6 @@ const AdminSettingsPageContent: React.FC = () => {
                   { id: 'appearance', label: 'Appearance', icon: Palette, color: 'rose' },
                   { id: 'notifications', label: 'Notifications', icon: Bell, color: 'amber' },
                   { id: 'database', label: 'Database', icon: Database, color: 'slate' },
-                  { id: 'database-management', label: 'Offline Database', icon: HardDrive, color: 'indigo' },
                   { id: 'branch-migration', label: 'Branch Migration', icon: GitBranch, color: 'sky' },
                   { id: 'automation', label: 'Automation', icon: RotateCcw, color: 'lime' }
                 ].map((section) => {
@@ -791,26 +793,6 @@ const AdminSettingsPageContent: React.FC = () => {
               </div>
             )}
 
-            {activeSection === 'database-management' && (
-              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
-                <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
-                  <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
-                    <div className="w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg">
-                      <HardDrive className="w-8 h-8 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-bold text-gray-900 mb-3">Offline Database Management</h2>
-                      <p className="text-sm text-gray-600">Download full database for offline-first operation and faster performance</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
-                  <div className="py-6">
-                    <DatabaseManagementSettings />
-                  </div>
-                </div>
-              </div>
-            )}
 
             {activeSection === 'branch-migration' && (
               <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
@@ -2083,12 +2065,62 @@ const DatabaseSettings: React.FC = () => {
   const [restoreSelectedTables, setRestoreSelectedTables] = useState<string[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [showRestoreTableSelection, setShowRestoreTableSelection] = useState(false);
+  
+  // Offline Database Management state
+  const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number; currentTask: string; percentage: number } | null>(null);
+  const [downloadMetadata, setDownloadMetadata] = useState<any>(null);
+  const [pendingSales, setPendingSales] = useState(0);
+  const [pendingSalesList, setPendingSalesList] = useState<any[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const [autoSyncStatus, setAutoSyncStatus] = useState(autoSyncService.getStatus());
+  const [showSyncSettings, setShowSyncSettings] = useState(false);
+  const [syncInterval, setSyncInterval] = useState(30);
 
   // Load automatic backup settings from database
   useEffect(() => {
     fetchAutoBackupSettings();
     loadRestoreFormats();
+    loadDownloadMetadata();
+    loadPendingSales();
+    
+    // Start auto sync for offline sales
+    offlineSaleSyncService.startAutoSync();
+    
+    // Subscribe to auto sync status updates
+    const unsubscribe = autoSyncService.subscribe((status) => {
+      setAutoSyncStatus(status);
+    });
+    
+    // Load sync interval from settings
+    const savedInterval = localStorage.getItem('auto_sync_interval');
+    if (savedInterval) {
+      setSyncInterval(Math.round(parseInt(savedInterval, 10) / 1000 / 60));
+    }
+    
+    // Update pending sales count periodically
+    const interval = setInterval(() => {
+      loadPendingSales();
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      offlineSaleSyncService.stopAutoSync();
+      unsubscribe();
+    };
   }, []);
+
+  const loadDownloadMetadata = () => {
+    const meta = fullDatabaseDownloadService.getDownloadMetadata();
+    setDownloadMetadata(meta);
+  };
+
+  const loadPendingSales = () => {
+    const allSales = offlineSaleSyncService.getOfflineSales();
+    const pending = allSales.filter(s => !s.synced);
+    setPendingSales(pending.length);
+    setPendingSalesList(pending);
+  };
 
   const loadRestoreFormats = async () => {
     try {
