@@ -81,6 +81,8 @@ jobs:
             fi
             echo "BRANCH_CREATED=false" >> $GITHUB_ENV
           fi
+          # Always exit successfully to allow workflow to continue
+          exit 0
       
       - name: Wait for branch to be ready
         if: env.BRANCH_CREATED == 'true'
