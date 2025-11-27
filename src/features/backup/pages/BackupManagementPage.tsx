@@ -257,14 +257,51 @@ export const BackupManagementPage: React.FC<BackupManagementPageProps> = () => {
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validate file type
+      // Validate file type - support .sql, .json, and .gz (compressed)
       const isSql = file.name.endsWith('.sql');
       const isJson = file.name.endsWith('.json');
+      const isGz = file.name.endsWith('.gz') || file.name.endsWith('.sql.gz');
       
-      if (!isSql && !isJson) {
-        alert('❌ Invalid file type. Please select a .sql or .json backup file.');
+      if (!isSql && !isJson && !isGz) {
+        alert('❌ Invalid file type. Please select a .sql, .json, or .sql.gz backup file.');
         event.target.value = ''; // Clear input
         return;
+      }
+      
+      // Handle compressed .gz files
+      if (isGz) {
+        try {
+          // Decompress using browser's CompressionStream API (if available) or show instructions
+          if (typeof DecompressionStream !== 'undefined') {
+            const stream = file.stream();
+            const decompressionStream = new DecompressionStream('gzip');
+            const decompressedStream = stream.pipeThrough(decompressionStream);
+            const decompressedBlob = await new Response(decompressedStream).blob();
+            
+            // Create a new File object with .sql extension
+            const decompressedFile = new File(
+              [decompressedBlob],
+              file.name.replace(/\.gz$/, ''),
+              { type: 'application/sql' }
+            );
+            
+            setRestoreFile(decompressedFile);
+            setPreviewData(null);
+            setSelectedTables([]);
+            setShowTableSelection(false);
+            await handlePreviewFile(decompressedFile);
+            return;
+          } else {
+            // Fallback: show instructions to extract manually
+            alert('⚠️ Compressed file detected.\n\nPlease extract the .gz file first:\n1. Download the backup ZIP from GitHub Actions\n2. Extract the ZIP\n3. Extract the .gz file (gunzip or 7-Zip)\n4. Upload the .sql file here');
+            event.target.value = '';
+            return;
+          }
+        } catch (error) {
+          alert('❌ Failed to decompress file. Please extract the .gz file manually first.');
+          event.target.value = '';
+          return;
+        }
       }
       
       // Validate file size (1GB limit)
@@ -626,9 +663,29 @@ export const BackupManagementPage: React.FC<BackupManagementPageProps> = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-xl font-semibold text-gray-900">Restore from Backup File</h3>
-              <p className="text-gray-600">Upload and restore a backup file (.sql or .json format)</p>
+              <p className="text-gray-600">Upload and restore a backup file (.sql, .json, or .sql.gz format)</p>
             </div>
             <Upload className="w-8 h-8 text-orange-600" />
+          </div>
+
+          {/* GitHub Actions Backup Instructions */}
+          <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <div className="flex items-start space-x-3">
+              <Cloud className="w-5 h-5 text-purple-600 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-purple-900 mb-1">📥 Download from GitHub Actions:</p>
+                <ol className="text-xs text-purple-800 space-y-1 ml-4 list-decimal">
+                  <li>Go to <a href="https://github.com/Mtaasisi/NEON-POS/actions" target="_blank" rel="noopener noreferrer" className="underline">Actions tab</a></li>
+                  <li>Find "Automatic Neon Database Backup" or "Automatic NEON 02 Database Backup"</li>
+                  <li>Click on a workflow run → Scroll to "Artifacts" section</li>
+                  <li>Download the backup ZIP file</li>
+                  <li>Extract the ZIP → Extract the .gz file → Upload the .sql file here</li>
+                </ol>
+                <p className="text-xs text-purple-700 mt-2">
+                  💡 Tip: You can also upload the .sql.gz file directly - it will be automatically decompressed!
+                </p>
+              </div>
+            </div>
           </div>
 
           {restoreFormats && (
@@ -658,7 +715,7 @@ export const BackupManagementPage: React.FC<BackupManagementPageProps> = () => {
               <div className="flex items-center space-x-4">
                 <input
                   type="file"
-                  accept=".sql,.json"
+                  accept=".sql,.json,.gz,.sql.gz"
                   onChange={handleFileSelect}
                   className="block w-full text-sm text-gray-500
                     file:mr-4 file:py-2 file:px-4
