@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull PostgreSQL 17 Docker image
         run: |
@@ -100,49 +102,55 @@ jobs:
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
       - name: Create GitHub Release with Backup
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.TAG_NAME }}
-          name: 🗄️ Database Backup - ${{ env.BACKUP_TIMESTAMP }}
-          body: |
-            ## 🗄️ Neon Database Automatic Backup
-            
-            **📅 Backup Date:** ${{ env.BACKUP_TIMESTAMP }} UTC
-            **🔄 Workflow Run:** #${{ github.run_number }}
-            **📝 Commit:** ${{ github.sha }}
-            **📊 Backup Size:** ${{ env.BACKUP_SIZE }}
-            
-            ### 📦 Backup Details
-            - **Type:** Full Database Backup (Schema + Data)
-            - **Format:** SQL (gzipped)
-            - **File:** `${{ env.BACKUP_FILE }}`
-            
-            ### 📥 How to Restore
-            
-            ```bash
-            # 1. Download the backup file from this release
-            # 2. Extract the gzipped file
-            gunzip neon-backup-full-*.sql.gz
-            # 3. Restore to your database
-            psql "$DATABASE_URL" -f neon-backup-full-*.sql
-            ```
-            
-            ### ⚙️ For Neon Database
-            
-            ```bash
-            # Make sure to use direct endpoint (not pooler) for restore
-            # If your URL has "-pooler", remove it:
-            DB_URL="${DATABASE_URL//-pooler/}"
-            psql "$DB_URL" -f neon-backup-full-*.sql
-            ```
-            
-            ---
-            *This backup was automatically created by GitHub Actions*
-            *Backup runs daily at 02:00 UTC*
-          files: ${{ env.BACKUP_FILE }}
-          draft: false
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Creating release with tag: ${{ env.TAG_NAME }}"
+          echo "Backup file: ${{ env.BACKUP_FILE }}"
+          
+          # Create release notes file
+          cat > /tmp/release_notes.md << EOF
+          ## 🗄️ Neon Database Automatic Backup
+          
+          **📅 Backup Date:** ${{ env.BACKUP_TIMESTAMP }} UTC
+          **🔄 Workflow Run:** #${{ github.run_number }}
+          **📝 Commit:** ${{ github.sha }}
+          **📊 Backup Size:** ${{ env.BACKUP_SIZE }}
+          
+          ### 📦 Backup Details
+          - **Type:** Full Database Backup (Schema + Data)
+          - **Format:** SQL (gzipped)
+          - **File:** \`${{ env.BACKUP_FILE }}\`
+          
+          ### 📥 How to Restore
+          
+          \`\`\`bash
+          # 1. Download the backup file from this release
+          # 2. Extract the gzipped file
+          gunzip neon-backup-full-*.sql.gz
+          # 3. Restore to your database
+          psql "\$DATABASE_URL" -f neon-backup-full-*.sql
+          \`\`\`
+          
+          ### ⚙️ For Neon Database
+          
+          \`\`\`bash
+          # Make sure to use direct endpoint (not pooler) for restore
+          # If your URL has "-pooler", remove it:
+          DB_URL="\${DATABASE_URL//-pooler/}"
+          psql "\$DB_URL" -f neon-backup-full-*.sql
+          \`\`\`
+          
+          ---
+          *This backup was automatically created by GitHub Actions*
+          *Backup runs daily at 02:00 UTC*
+          EOF
+          
+          # Create release using GitHub CLI
+          gh release create "${{ env.TAG_NAME }}" \
+            --title "🗄️ Database Backup - ${{ env.BACKUP_TIMESTAMP }}" \
+            --notes-file /tmp/release_notes.md \
+            "${{ env.BACKUP_FILE }}"
 
       - name: Cleanup local files
         if: always()
