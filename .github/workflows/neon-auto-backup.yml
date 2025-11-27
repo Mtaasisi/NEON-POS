@@ -9,8 +9,6 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # Required to create releases
     
     steps:
       - name: Checkout repository
@@ -91,66 +89,19 @@ jobs:
           echo "✅ Compressed: $BACKUP_FILE"
           echo "📊 Compressed size: $COMPRESSED_SIZE"
           
-          # Generate tag name for release
-          TAG_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          TAG_NAME="backup-${TAG_TIMESTAMP}"
-          
           # Set outputs for next step
           echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
           echo "BACKUP_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
           echo "BACKUP_SIZE=$COMPRESSED_SIZE" >> $GITHUB_ENV
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
-      - name: Create GitHub Release with Backup
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Creating release with tag: ${{ env.TAG_NAME }}"
-          echo "Backup file: ${{ env.BACKUP_FILE }}"
-          
-          # Create release notes file
-          cat > /tmp/release_notes.md << EOF
-          ## 🗄️ Neon Database Automatic Backup
-          
-          **📅 Backup Date:** ${{ env.BACKUP_TIMESTAMP }} UTC
-          **🔄 Workflow Run:** #${{ github.run_number }}
-          **📝 Commit:** ${{ github.sha }}
-          **📊 Backup Size:** ${{ env.BACKUP_SIZE }}
-          
-          ### 📦 Backup Details
-          - **Type:** Full Database Backup (Schema + Data)
-          - **Format:** SQL (gzipped)
-          - **File:** \`${{ env.BACKUP_FILE }}\`
-          
-          ### 📥 How to Restore
-          
-          \`\`\`bash
-          # 1. Download the backup file from this release
-          # 2. Extract the gzipped file
-          gunzip neon-backup-full-*.sql.gz
-          # 3. Restore to your database
-          psql "\$DATABASE_URL" -f neon-backup-full-*.sql
-          \`\`\`
-          
-          ### ⚙️ For Neon Database
-          
-          \`\`\`bash
-          # Make sure to use direct endpoint (not pooler) for restore
-          # If your URL has "-pooler", remove it:
-          DB_URL="\${DATABASE_URL//-pooler/}"
-          psql "\$DB_URL" -f neon-backup-full-*.sql
-          \`\`\`
-          
-          ---
-          *This backup was automatically created by GitHub Actions*
-          *Backup runs daily at 02:00 UTC*
-          EOF
-          
-          # Create release using GitHub CLI
-          gh release create "${{ env.TAG_NAME }}" \
-            --title "🗄️ Database Backup - ${{ env.BACKUP_TIMESTAMP }}" \
-            --notes-file /tmp/release_notes.md \
-            "${{ env.BACKUP_FILE }}"
+      - name: Upload Backup as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-database-backup-${{ env.BACKUP_TIMESTAMP }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: 90
+          if-no-files-found: error
+          compression-level: 0  # Already compressed with gzip
 
       - name: Cleanup local files
         if: always()
@@ -162,5 +113,14 @@ jobs:
           echo "✅ Backup completed successfully!"
           echo "📦 Backup file: ${{ env.BACKUP_FILE }}"
           echo "📊 Size: ${{ env.BACKUP_SIZE }}"
-          echo "🔗 View release: https://github.com/${{ github.repository }}/releases"
+          echo "📅 Timestamp: ${{ env.BACKUP_TIMESTAMP }}"
+          echo ""
+          echo "🔗 Download backup from:"
+          echo "   https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo ""
+          echo "💡 How to restore:"
+          echo "   1. Go to Actions tab → Find this workflow run"
+          echo "   2. Download the artifact: neon-database-backup-${{ env.BACKUP_TIMESTAMP }}"
+          echo "   3. Extract: gunzip neon-backup-full-*.sql.gz"
+          echo "   4. Restore: psql \"\$DATABASE_URL\" -f neon-backup-full-*.sql"
 
