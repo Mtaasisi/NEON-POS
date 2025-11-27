@@ -28,7 +28,7 @@ jobs:
           set -e  # Exit on any error
           
           TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
-          BACKUP_FILE="neon-backup-full-${TIMESTAMP}.sql"
+          BACKUP_FILE="production-backup-${TIMESTAMP}.sql"
           
           echo "📥 Creating full database backup..."
           echo "🕐 Timestamp: $TIMESTAMP"
@@ -118,7 +118,7 @@ jobs:
       - name: Upload Backup as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: neon-database-backup-${{ env.BACKUP_TIMESTAMP }}
+          name: production-backup-${{ env.BACKUP_TIMESTAMP }}
           path: ${{ env.BACKUP_FILE }}
           retention-days: 90
           if-no-files-found: error
@@ -128,7 +128,7 @@ jobs:
       - name: Cleanup local files
         if: always()
         run: |
-          rm -f neon-backup-*.sql*
+          rm -f production-backup-*.sql*
 
       - name: Summary
         run: |
@@ -142,7 +142,7 @@ jobs:
           echo ""
           echo "💡 How to restore:"
           echo "   1. Go to Actions tab → Find this workflow run"
-          echo "   2. Download the artifact: neon-database-backup-${{ env.BACKUP_TIMESTAMP }}"
-          echo "   3. Extract: gunzip neon-backup-full-*.sql.gz"
-          echo "   4. Restore: psql \"\$DATABASE_URL\" -f neon-backup-full-*.sql"
+          echo "   2. Download the artifact: production-backup-${{ env.BACKUP_TIMESTAMP }}"
+          echo "   3. Extract: gunzip production-backup-*.sql.gz"
+          echo "   4. Restore: psql \"\$DATABASE_URL\" -f production-backup-*.sql"
 
