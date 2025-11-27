@@ -21,6 +21,11 @@ jobs:
           echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
           echo "BACKUP_BRANCH_NAME=${BACKUP_BRANCH_NAME}" >> $GITHUB_ENV
       
+      - name: Install jq for JSON parsing
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+      
       - name: Create backup branch in Neon
         id: create_branch
         env:
@@ -29,9 +34,11 @@ jobs:
           NEON_PARENT_BRANCH: ${{ secrets.NEON_PARENT_BRANCH }}
         run: |
           echo "Creating backup branch: ${{ env.BACKUP_BRANCH_NAME }}"
+          echo "Project ID: ${NEON_PROJECT_ID}"
+          echo "Parent Branch ID: ${NEON_PARENT_BRANCH}"
           
           # Create a new branch from the parent branch
-          RESPONSE=$(curl -s -X POST \
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" -X POST \
             "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
             -H "Authorization: Bearer ${NEON_API_KEY}" \
             -H "Content-Type: application/json" \
@@ -42,16 +49,33 @@ jobs:
               }
             }")
           
+          # Extract HTTP status code
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS:" | cut -d: -f2)
+          BODY=$(echo "$RESPONSE" | sed '/HTTP_STATUS:/d')
+          
+          echo "HTTP Status: ${HTTP_STATUS}"
+          echo "Response: ${BODY}"
+          
           # Check if the request was successful
-          if echo "$RESPONSE" | grep -q '"id"'; then
-            echo "Branch created successfully"
-            echo "$RESPONSE" | jq -r '.branch.id' > branch_id.txt
-            BRANCH_ID=$(cat branch_id.txt)
-            echo "branch_id=${BRANCH_ID}" >> $GITHUB_OUTPUT
-            echo "Created branch ID: ${BRANCH_ID}"
+          if [ "${HTTP_STATUS}" = "201" ] || echo "$BODY" | grep -q '"id"'; then
+            echo "✓ Branch created successfully"
+            BRANCH_ID=$(echo "$BODY" | jq -r '.branch.id // empty')
+            if [ -n "$BRANCH_ID" ]; then
+              echo "branch_id=${BRANCH_ID}" >> $GITHUB_OUTPUT
+              echo "Created branch ID: ${BRANCH_ID}"
+            fi
           else
-            echo "Error creating branch:"
-            echo "$RESPONSE"
+            echo "❌ Error creating branch"
+            echo "Response body: ${BODY}"
+            if echo "$BODY" | grep -q "no access to projects"; then
+              echo ""
+              echo "⚠️  PERMISSION ERROR: Your Neon API key doesn't have access to create branches."
+              echo "   Please check:"
+              echo "   1. Go to https://console.neon.tech"
+              echo "   2. Navigate to Settings → API Keys"
+              echo "   3. Create a new API key or verify your existing key has project access"
+              echo "   4. Update the NEON_API_KEY secret in GitHub"
+            fi
             exit 1
           fi
       
