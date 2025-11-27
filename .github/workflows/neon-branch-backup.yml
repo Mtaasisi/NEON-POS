@@ -28,6 +28,7 @@ jobs:
       
       - name: Create backup branch in Neon
         id: create_branch
+        continue-on-error: true
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
@@ -64,22 +65,25 @@ jobs:
               echo "branch_id=${BRANCH_ID}" >> $GITHUB_OUTPUT
               echo "Created branch ID: ${BRANCH_ID}"
             fi
+            echo "BRANCH_CREATED=true" >> $GITHUB_ENV
           else
-            echo "❌ Error creating branch"
+            echo "⚠️  Warning: Could not create backup branch"
             echo "Response body: ${BODY}"
             if echo "$BODY" | grep -q "no access to projects"; then
               echo ""
               echo "⚠️  PERMISSION ERROR: Your Neon API key doesn't have access to create branches."
-              echo "   Please check:"
+              echo "   The backup will still proceed, but no branch will be created."
+              echo "   To enable branch creation:"
               echo "   1. Go to https://console.neon.tech"
               echo "   2. Navigate to Settings → API Keys"
-              echo "   3. Create a new API key or verify your existing key has project access"
+              echo "   3. Create a new API key with project/branch management permissions"
               echo "   4. Update the NEON_API_KEY secret in GitHub"
             fi
-            exit 1
+            echo "BRANCH_CREATED=false" >> $GITHUB_ENV
           fi
       
       - name: Wait for branch to be ready
+        if: env.BRANCH_CREATED == 'true'
         run: |
           echo "Waiting for branch to be ready..."
           sleep 5
@@ -119,4 +123,15 @@ jobs:
           path: backups/*.sql
           retention-days: 30
           if-no-files-found: error
+      
+      - name: Backup summary
+        run: |
+          echo "## Backup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Database backup completed successfully" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ env.BRANCH_CREATED }}" = "true" ]; then
+            echo "- ✅ Neon backup branch created" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⚠️  Neon backup branch creation skipped (permission issue)" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- 📦 Backup artifact: neon-database-backup-${{ env.TIMESTAMP }}" >> $GITHUB_STEP_SUMMARY
 
