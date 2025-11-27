@@ -9,6 +9,8 @@ on:
 jobs:
   backup:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create releases
     
     steps:
       - name: Checkout repository
@@ -87,15 +89,20 @@ jobs:
           echo "✅ Compressed: $BACKUP_FILE"
           echo "📊 Compressed size: $COMPRESSED_SIZE"
           
+          # Generate tag name for release
+          TAG_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          TAG_NAME="backup-${TAG_TIMESTAMP}"
+          
           # Set outputs for next step
           echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
           echo "BACKUP_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
           echo "BACKUP_SIZE=$COMPRESSED_SIZE" >> $GITHUB_ENV
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
       - name: Create GitHub Release with Backup
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: backup-${{ github.run_number }}-$(date +%Y%m%d-%H%M%S)
+          tag_name: ${{ env.TAG_NAME }}
           name: 🗄️ Database Backup - ${{ env.BACKUP_TIMESTAMP }}
           body: |
             ## 🗄️ Neon Database Automatic Backup
