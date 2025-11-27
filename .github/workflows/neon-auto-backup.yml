@@ -1,0 +1,129 @@
+name: Automatic Neon Database Backup
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC (you can change this)
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual triggering from GitHub UI
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create full database backup
+        env:
+          DATABASE_URL: ${{ secrets.NEON_DB_URL }}
+        run: |
+          TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+          BACKUP_FILE="neon-backup-full-${TIMESTAMP}.sql"
+          
+          echo "📥 Creating full database backup..."
+          echo "🕐 Timestamp: $TIMESTAMP"
+          
+          # Parse connection string and convert pooler to direct endpoint
+          DB_URL="$DATABASE_URL"
+          if [[ "$DB_URL" == *"-pooler"* ]]; then
+            DB_URL="${DB_URL//-pooler/}"
+            echo "🔄 Converted pooler endpoint to direct endpoint"
+          fi
+          
+          # Create full backup (schema + data)
+          echo "⏳ Running pg_dump (this may take a few minutes)..."
+          pg_dump "$DB_URL" \
+            --no-owner \
+            --no-privileges \
+            --clean \
+            --if-exists \
+            --verbose \
+            > "$BACKUP_FILE" 2>&1
+          
+          # Verify backup was created successfully
+          if [ ! -f "$BACKUP_FILE" ] || [ ! -s "$BACKUP_FILE" ]; then
+            echo "❌ Error: Backup file is empty or missing"
+            exit 1
+          fi
+          
+          # Get file size
+          FILE_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+          echo "✅ Backup created: $BACKUP_FILE"
+          echo "📊 Size: $FILE_SIZE"
+          
+          # Compress backup to save space
+          echo "📦 Compressing backup..."
+          gzip "$BACKUP_FILE"
+          BACKUP_FILE="${BACKUP_FILE}.gz"
+          COMPRESSED_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+          echo "✅ Compressed: $BACKUP_FILE"
+          echo "📊 Compressed size: $COMPRESSED_SIZE"
+          
+          # Set outputs for next step
+          echo "BACKUP_FILE=$BACKUP_FILE" >> $GITHUB_ENV
+          echo "BACKUP_TIMESTAMP=$TIMESTAMP" >> $GITHUB_ENV
+          echo "BACKUP_SIZE=$COMPRESSED_SIZE" >> $GITHUB_ENV
+
+      - name: Create GitHub Release with Backup
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: backup-${{ github.run_number }}-$(date +%Y%m%d-%H%M%S)
+          name: 🗄️ Database Backup - ${{ env.BACKUP_TIMESTAMP }}
+          body: |
+            ## 🗄️ Neon Database Automatic Backup
+            
+            **📅 Backup Date:** ${{ env.BACKUP_TIMESTAMP }} UTC
+            **🔄 Workflow Run:** #${{ github.run_number }}
+            **📝 Commit:** ${{ github.sha }}
+            **📊 Backup Size:** ${{ env.BACKUP_SIZE }}
+            
+            ### 📦 Backup Details
+            - **Type:** Full Database Backup (Schema + Data)
+            - **Format:** SQL (gzipped)
+            - **File:** `${{ env.BACKUP_FILE }}`
+            
+            ### 📥 How to Restore
+            
+            ```bash
+            # 1. Download the backup file from this release
+            # 2. Extract the gzipped file
+            gunzip neon-backup-full-*.sql.gz
+            # 3. Restore to your database
+            psql "$DATABASE_URL" -f neon-backup-full-*.sql
+            ```
+            
+            ### ⚙️ For Neon Database
+            
+            ```bash
+            # Make sure to use direct endpoint (not pooler) for restore
+            # If your URL has "-pooler", remove it:
+            DB_URL="${DATABASE_URL//-pooler/}"
+            psql "$DB_URL" -f neon-backup-full-*.sql
+            ```
+            
+            ---
+            *This backup was automatically created by GitHub Actions*
+            *Backup runs daily at 02:00 UTC*
+          files: ${{ env.BACKUP_FILE }}
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup local files
+        if: always()
+        run: |
+          rm -f neon-backup-*.sql*
+
+      - name: Summary
+        run: |
+          echo "✅ Backup completed successfully!"
+          echo "📦 Backup file: ${{ env.BACKUP_FILE }}"
+          echo "📊 Size: ${{ env.BACKUP_SIZE }}"
+          echo "🔗 View release: https://github.com/${{ github.repository }}/releases"
+
