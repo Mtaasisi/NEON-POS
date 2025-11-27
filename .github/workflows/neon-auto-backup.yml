@@ -14,18 +14,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL 17 client
+      - name: Pull PostgreSQL 17 Docker image
         run: |
-          sudo apt-get update
-          sudo apt-get install -y wget ca-certificates lsb-release gnupg
-          # Add PostgreSQL official APT repository
-          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql-keyring.gpg
-          sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          sudo apt-get update
-          # Install PostgreSQL 17 client
-          sudo apt-get install -y postgresql-client-17
-          # Verify version
-          pg_dump --version
+          docker pull postgres:17-alpine
+          echo "✅ PostgreSQL 17 Docker image ready"
+          echo "PostgreSQL client version:"
+          docker run --rm postgres:17-alpine pg_dump --version
 
       - name: Create full database backup
         env:
@@ -44,9 +38,25 @@ jobs:
             echo "🔄 Converted pooler endpoint to direct endpoint"
           fi
           
-          # Create full backup (schema + data)
-          echo "⏳ Running pg_dump (this may take a few minutes)..."
-          pg_dump "$DB_URL" \
+          # Create full backup (schema + data) using Docker with PostgreSQL 17
+          echo "⏳ Running pg_dump with PostgreSQL 17 (this may take a few minutes)..."
+          
+          # Parse connection string to extract components
+          # Format: postgresql://user:password@host:port/database?params
+          DB_USER=$(echo "$DB_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+          DB_PASS=$(echo "$DB_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+          DB_HOST=$(echo "$DB_URL" | sed -n 's/.*@\([^/]*\)\/.*/\1/p' | sed 's/:.*//')
+          DB_PORT=$(echo "$DB_URL" | sed -n 's/.*@[^:]*:\([0-9]*\)\/.*/\1/p' || echo "5432")
+          DB_NAME=$(echo "$DB_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
+          
+          echo "Connecting to: $DB_HOST:$DB_PORT/$DB_NAME"
+          
+          # Run pg_dump via Docker with PostgreSQL 17
+          # Pass connection string directly - Docker handles URL encoding
+          docker run --rm \
+            -e PGPASSWORD="$DB_PASS" \
+            postgres:17-alpine \
+            pg_dump "$DB_URL" \
             --no-owner \
             --no-privileges \
             --clean \
