@@ -4,11 +4,17 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Download, Database, CheckCircle, AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff, HardDrive, Cloud, Clock, Play, Pause, Settings } from 'lucide-react';
+import { Download, Database, CheckCircle, AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff, HardDrive, Cloud, Clock, Play, Pause, Settings, Upload, FileText, Eye } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { fullDatabaseDownloadService } from '../../../services/fullDatabaseDownloadService';
 import { offlineSaleSyncService } from '../../../services/offlineSaleSyncService';
 import { autoSyncService } from '../../../services/autoSyncService';
+import { 
+  restoreFromBackup,
+  previewBackupFile,
+  getRestoreFormats,
+  BackupResult
+} from '../../../lib/backupApi';
 
 const DatabaseManagementSettings: React.FC = () => {
   const [downloading, setDownloading] = useState(false);
@@ -20,10 +26,20 @@ const DatabaseManagementSettings: React.FC = () => {
   const [autoSyncStatus, setAutoSyncStatus] = useState(autoSyncService.getStatus());
   const [showSyncSettings, setShowSyncSettings] = useState(false);
   const [syncInterval, setSyncInterval] = useState(30);
+  
+  // Restore functionality state
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restoreFormats, setRestoreFormats] = useState<any>(null);
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [selectedTables, setSelectedTables] = useState<string[]>([]);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [showTableSelection, setShowTableSelection] = useState(false);
 
   useEffect(() => {
     loadMetadata();
     loadPendingSales();
+    loadRestoreFormats();
     
     // Start auto sync for offline sales
     offlineSaleSyncService.startAutoSync();
@@ -53,6 +69,15 @@ const DatabaseManagementSettings: React.FC = () => {
       unsubscribe();
     };
   }, []);
+
+  const loadRestoreFormats = async () => {
+    try {
+      const formats = await getRestoreFormats();
+      setRestoreFormats(formats);
+    } catch (error) {
+      console.error('Failed to load restore formats:', error);
+    }
+  };
 
   const loadMetadata = () => {
     const meta = fullDatabaseDownloadService.getDownloadMetadata();
@@ -231,6 +256,172 @@ const DatabaseManagementSettings: React.FC = () => {
     toast.success(`Auto sync interval set to ${syncInterval} minutes`);
     setShowSyncSettings(false);
     console.log(`⚙️ [AutoSync] Interval changed to ${syncInterval} minutes`);
+  };
+
+  // Restore functionality handlers
+  const handleRestoreFromFile = async () => {
+    if (!restoreFile) {
+      toast.error('❌ Please select a backup file to restore');
+      return;
+    }
+
+    // Check if tables are selected
+    if (selectedTables.length === 0) {
+      toast.error('❌ Please select at least one table to restore');
+      return;
+    }
+
+    const tablesToRestore = selectedTables.length === previewData?.tables.length 
+      ? 'all tables' 
+      : `${selectedTables.length} selected table(s)`;
+
+    if (!confirm(`⚠️ WARNING: Restoring ${tablesToRestore} from "${restoreFile.name}" will overwrite current database data.\n\nAre you sure you want to continue?`)) {
+      return;
+    }
+
+    try {
+      setIsRestoring(true);
+      const result = await restoreFromBackup(restoreFile, selectedTables);
+      
+      if (result.success) {
+        const data = result.data;
+        const message = `✅ Restore completed successfully!\n\n` +
+          `Tables restored: ${data?.tablesRestored || 'N/A'}\n` +
+          `Records restored: ${data?.recordsRestored || 'N/A'}\n` +
+          `Format: ${data?.format || 'N/A'}\n` +
+          `Selected: ${data?.selectedTables || 'all'}`;
+        
+        if (data?.warnings && data.warnings.length > 0) {
+          toast.success(message + `\n\n⚠️ Warnings:\n${data.warnings.join('\n')}`);
+        } else {
+          toast.success(message);
+        }
+        
+        // Reset everything
+        setRestoreFile(null);
+        setPreviewData(null);
+        setSelectedTables([]);
+        setShowTableSelection(false);
+        // Refresh metadata
+        loadMetadata();
+      } else {
+        const errorMsg = result.error || result.message || 'Unknown error';
+        toast.error(`❌ Restore failed: ${errorMsg}`);
+      }
+    } catch (error) {
+      let errorMsg = 'Unknown error';
+      if (error instanceof Error) {
+        errorMsg = error.message;
+      }
+      toast.error(`❌ Restore failed: ${errorMsg}`);
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validate file type - support .sql, .json, and .gz (compressed)
+      const isSql = file.name.endsWith('.sql');
+      const isJson = file.name.endsWith('.json');
+      const isGz = file.name.endsWith('.gz') || file.name.endsWith('.sql.gz');
+      
+      if (!isSql && !isJson && !isGz) {
+        toast.error('❌ Invalid file type. Please select a .sql, .json, or .sql.gz backup file.');
+        event.target.value = '';
+        return;
+      }
+      
+      // Handle compressed .gz files
+      if (isGz) {
+        try {
+          // Decompress using browser's CompressionStream API (if available)
+          if (typeof DecompressionStream !== 'undefined') {
+            const stream = file.stream();
+            const decompressionStream = new DecompressionStream('gzip');
+            const decompressedStream = stream.pipeThrough(decompressionStream);
+            const decompressedBlob = await new Response(decompressedStream).blob();
+            
+            // Create a new File object with .sql extension
+            const decompressedFile = new File(
+              [decompressedBlob],
+              file.name.replace(/\.gz$/, ''),
+              { type: 'application/sql' }
+            );
+            
+            setRestoreFile(decompressedFile);
+            setPreviewData(null);
+            setSelectedTables([]);
+            setShowTableSelection(false);
+            await handlePreviewFile(decompressedFile);
+            return;
+          } else {
+            toast.error('⚠️ Please extract the .gz file manually first. Download from GitHub Actions → Extract ZIP → Extract .gz → Upload .sql file here');
+            event.target.value = '';
+            return;
+          }
+        } catch (error) {
+          toast.error('❌ Failed to decompress file. Please extract the .gz file manually first.');
+          event.target.value = '';
+          return;
+        }
+      }
+      
+      // Validate file size (1GB limit)
+      if (file.size > 1024 * 1024 * 1024) {
+        toast.error('❌ File too large. Maximum file size is 1GB (1024MB).');
+        event.target.value = '';
+        return;
+      }
+      
+      setRestoreFile(file);
+      setPreviewData(null);
+      setSelectedTables([]);
+      setShowTableSelection(false);
+      
+      // Automatically preview the file
+      await handlePreviewFile(file);
+    }
+  };
+
+  const handlePreviewFile = async (file: File) => {
+    try {
+      setIsPreviewing(true);
+      const result = await previewBackupFile(file);
+      
+      if (result.success && result.data) {
+        setPreviewData(result.data);
+        // Select all tables by default
+        setSelectedTables(result.data.tables.map((t: any) => t.name));
+        setShowTableSelection(true);
+        toast.success(`✅ Backup preview loaded: ${result.data.totalTables} tables found`);
+      } else {
+        toast.error(`❌ Failed to preview backup file: ${result.error}`);
+      }
+    } catch (error) {
+      toast.error(`❌ Error previewing backup file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
+  const handleToggleTable = (tableName: string) => {
+    setSelectedTables(prev => 
+      prev.includes(tableName)
+        ? prev.filter(t => t !== tableName)
+        : [...prev, tableName]
+    );
+  };
+
+  const handleSelectAllTables = () => {
+    if (previewData?.tables) {
+      setSelectedTables(previewData.tables.map((t: any) => t.name));
+    }
+  };
+
+  const handleDeselectAllTables = () => {
+    setSelectedTables([]);
   };
 
   const formatDate = (dateString: string) => {
@@ -814,6 +1005,177 @@ const DatabaseManagementSettings: React.FC = () => {
         </div>
       </div>
 
+      {/* Restore from Backup Section */}
+      <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Restore from Backup</h3>
+            <p className="text-sm text-gray-600 mt-1">Upload and restore a backup file (.sql, .json, or .sql.gz format)</p>
+          </div>
+          <Upload className="w-8 h-8 text-orange-600" />
+        </div>
+
+        {/* GitHub Actions Backup Instructions */}
+        <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+          <div className="flex items-start space-x-3">
+            <Cloud className="w-5 h-5 text-purple-600 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-purple-900 mb-1">📥 Download from GitHub Actions:</p>
+              <ol className="text-xs text-purple-800 space-y-1 ml-4 list-decimal">
+                <li>Go to <a href="https://github.com/Mtaasisi/NEON-POS/actions" target="_blank" rel="noopener noreferrer" className="underline">Actions tab</a></li>
+                <li>Find "Automatic Neon Database Backup" or "Automatic NEON 02 Database Backup"</li>
+                <li>Click on a workflow run → Scroll to "Artifacts" section</li>
+                <li>Download the backup ZIP file</li>
+                <li>Extract the ZIP → Extract the .gz file → Upload the .sql file here</li>
+              </ol>
+              <p className="text-xs text-purple-700 mt-2">
+                💡 Tip: You can also upload the .sql.gz file directly - it will be automatically decompressed!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {restoreFormats && (
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-sm font-medium text-blue-900 mb-2">📋 Supported Formats:</p>
+            <div className="space-y-2">
+              {restoreFormats.formats.map((format: any, index: number) => (
+                <div key={index} className="text-sm text-blue-800">
+                  <span className="font-semibold">{format.format}</span> ({format.extension}) - {format.description}
+                  {format.format === restoreFormats.recommended && (
+                    <span className="ml-2 px-2 py-0.5 bg-blue-200 rounded text-xs">RECOMMENDED</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-blue-700 mt-2">
+              💡 {restoreFormats.note || 'SQL format is recommended as it is the easiest to restore.'}
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select Backup File
+            </label>
+            <div className="flex items-center space-x-4">
+              <input
+                type="file"
+                accept=".sql,.json,.gz,.sql.gz"
+                onChange={handleFileSelect}
+                className="block w-full text-sm text-gray-500
+                  file:mr-4 file:py-2 file:px-4
+                  file:rounded-md file:border-0
+                  file:text-sm file:font-semibold
+                  file:bg-blue-50 file:text-blue-700
+                  hover:file:bg-blue-100
+                  cursor-pointer"
+                disabled={isRestoring}
+              />
+            </div>
+            {restoreFile && (
+              <div className="mt-2 p-3 bg-green-50 rounded-md border border-green-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <FileText className="w-5 h-5 text-green-600" />
+                    <div>
+                      <p className="text-sm font-medium text-green-900">{restoreFile.name}</p>
+                      <p className="text-xs text-green-700">
+                        {(restoreFile.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setRestoreFile(null);
+                      setPreviewData(null);
+                      setSelectedTables([]);
+                      setShowTableSelection(false);
+                    }}
+                    className="text-red-600 hover:text-red-800"
+                    disabled={isRestoring}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isPreviewing && (
+              <div className="mt-2 p-3 bg-blue-50 rounded-md border border-blue-200">
+                <div className="flex items-center space-x-2">
+                  <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+                  <p className="text-sm text-blue-900">Analyzing backup file...</p>
+                </div>
+              </div>
+            )}
+
+            {previewData && showTableSelection && (
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">Select Tables to Restore</h4>
+                    <p className="text-sm text-gray-600">
+                      Found {previewData.totalTables} tables with {previewData.totalRecords.toLocaleString()} total records
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={handleSelectAllTables}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      onClick={handleDeselectAllTables}
+                      className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+                    >
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {previewData.tables.map((table: any) => (
+                    <label key={table.name} className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedTables.includes(table.name)}
+                        onChange={() => handleToggleTable(table.name)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-900 flex-1">{table.name}</span>
+                      <span className="text-xs text-gray-500">{table.recordCount.toLocaleString()} records</span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-600 mt-3">
+                  Selected: {selectedTables.length} of {previewData.tables.length} tables
+                </p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleRestoreFromFile}
+            disabled={!restoreFile || selectedTables.length === 0 || isRestoring}
+            className="w-full px-4 py-2.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {isRestoring ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Restoring...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4" />
+                Restore Selected Tables
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Info Box */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
         <div className="flex items-start gap-3">
@@ -826,6 +1188,7 @@ const DatabaseManagementSettings: React.FC = () => {
               <li>Sales are saved locally first, then synced to online database in background</li>
               <li>Automatic sync runs every 30 seconds when online</li>
               <li>Download again to refresh your local database</li>
+              <li>Restore backups from GitHub Actions or local backup files</li>
             </ul>
           </div>
         </div>
