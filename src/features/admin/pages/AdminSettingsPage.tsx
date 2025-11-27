@@ -3383,165 +3383,193 @@ Generated: ${new Date().toLocaleString()}
 
     {/* Restore from Backup Section */}
     <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
           <h3 className="text-lg font-semibold text-gray-900">Restore from Backup</h3>
-          <p className="text-sm text-gray-600 mt-1">Upload and restore a backup file (.sql, .json, or .sql.gz format)</p>
-        </div>
-        <Upload className="w-8 h-8 text-orange-600" />
-      </div>
-
-      {/* GitHub Actions Backup Instructions */}
-      <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-        <div className="flex items-start space-x-3">
-          <Cloud className="w-5 h-5 text-purple-600 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-purple-900 mb-1">📥 Download from GitHub Actions:</p>
-            <ol className="text-xs text-purple-800 space-y-1 ml-4 list-decimal">
-              <li>Go to <a href="https://github.com/Mtaasisi/NEON-POS/actions" target="_blank" rel="noopener noreferrer" className="underline">Actions tab</a></li>
-              <li>Find "Automatic Neon Database Backup" or "Automatic NEON 02 Database Backup"</li>
-              <li>Click on a workflow run → Scroll to "Artifacts" section</li>
-              <li>Download the backup ZIP file</li>
-              <li>Extract the ZIP → Extract the .gz file → Upload the .sql file here</li>
-            </ol>
-            <p className="text-xs text-purple-700 mt-2">
-              💡 Tip: You can also upload the .sql.gz file directly - it will be automatically decompressed!
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {restoreFormats && (
-        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <p className="text-sm font-medium text-blue-900 mb-2">📋 Supported Formats:</p>
-          <div className="space-y-2">
-            {restoreFormats.formats.map((format: any, index: number) => (
-              <div key={index} className="text-sm text-blue-800">
-                <span className="font-semibold">{format.format}</span> ({format.extension}) - {format.description}
-                {format.format === restoreFormats.recommended && (
-                  <span className="ml-2 px-2 py-0.5 bg-blue-200 rounded text-xs">RECOMMENDED</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <p className="text-xs text-blue-700 mt-2">
-            💡 {restoreFormats.note || 'SQL format is recommended as it is the easiest to restore.'}
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Backup File
-          </label>
-          <div className="flex items-center space-x-4">
-            <input
-              type="file"
-              accept=".sql,.json,.gz,.sql.gz"
-              onChange={handleRestoreFileSelect}
-              className="block w-full text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4
-                file:rounded-md file:border-0
-                file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100
-                cursor-pointer"
-              disabled={isRestoring}
-            />
-          </div>
-          {restoreFile && (
-            <div className="mt-2 p-3 bg-green-50 rounded-md border border-green-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <FileText className="w-5 h-5 text-green-600" />
-                  <div>
-                    <p className="text-sm font-medium text-green-900">{restoreFile.name}</p>
-                    <p className="text-xs text-green-700">
-                      {(restoreFile.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setRestoreFile(null);
-                    setPreviewData(null);
-                    setRestoreSelectedTables([]);
-                    setShowRestoreTableSelection(false);
-                  }}
-                  className="text-red-600 hover:text-red-800"
-                  disabled={isRestoring}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {isPreviewing && (
-            <div className="mt-2 p-3 bg-blue-50 rounded-md border border-blue-200">
-              <div className="flex items-center space-x-2">
-                <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
-                <p className="text-sm text-blue-900">Analyzing backup file...</p>
-              </div>
-            </div>
-          )}
-
-          {previewData && showRestoreTableSelection && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h4 className="font-semibold text-gray-900">Select Tables to Restore</h4>
-                  <p className="text-sm text-gray-600">
-                    Found {previewData.totalTables} tables with {previewData.totalRecords.toLocaleString()} total records
+          <div className="group relative">
+            <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+            <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-96 p-4 bg-gray-900 text-white text-xs rounded-xl shadow-xl border-2 border-gray-700">
+              <div className="space-y-3">
+                <p className="font-semibold text-sm mb-2">📥 How to Download from GitHub Actions:</p>
+                <ol className="space-y-1 ml-4 list-decimal">
+                  <li>Go to <a href="https://github.com/Mtaasisi/NEON-POS/actions" target="_blank" rel="noopener noreferrer" className="underline text-blue-300">Actions tab</a></li>
+                  <li>Find "Automatic Neon Database Backup" or "Automatic NEON 02 Database Backup"</li>
+                  <li>Click on a workflow run → Scroll to "Artifacts" section</li>
+                  <li>Download the backup ZIP file</li>
+                  <li>Extract the ZIP → Extract the .gz file → Upload the .sql file here</li>
+                </ol>
+                <p className="text-blue-300 mt-2">
+                  💡 Tip: You can also upload the .sql.gz file directly - it will be automatically decompressed!
+                </p>
+                <div className="border-t border-gray-700 pt-2 mt-2">
+                  <p className="font-semibold text-sm mb-1">📋 Supported Formats:</p>
+                  {restoreFormats?.formats.map((format: any, index: number) => (
+                    <div key={index} className="text-xs">
+                      <span className="font-semibold">{format.format}</span> ({format.extension}) - {format.description}
+                      {format.format === restoreFormats.recommended && (
+                        <span className="ml-1 px-1 py-0.5 bg-blue-600 rounded text-xs">RECOMMENDED</span>
+                      )}
+                    </div>
+                  ))}
+                  <p className="text-xs text-gray-300 mt-1">
+                    {restoreFormats?.note || 'SQL format is recommended as it is the easiest to restore.'}
                   </p>
                 </div>
+              </div>
+              <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+            </div>
+          </div>
+        </div>
+        <Upload className="w-6 h-6 text-orange-600" />
+      </div>
+
+      <div className="space-y-4">
+        {/* File Upload */}
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Select Backup File
+            </label>
+            <div className="group relative">
+              <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+              <div className="invisible group-hover:visible absolute left-0 top-5 z-50 w-80 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl border-2 border-gray-700">
+                <p className="font-semibold mb-1">Accepted File Types:</p>
+                <ul className="space-y-1 ml-3 list-disc">
+                  <li>.sql - SQL dump file (recommended)</li>
+                  <li>.json - JSON backup file</li>
+                  <li>.sql.gz or .gz - Compressed SQL file (auto-decompressed)</li>
+                </ul>
+                <p className="mt-2 text-gray-300">Maximum file size: 1GB</p>
+                <div className="absolute -top-1 left-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+              </div>
+            </div>
+          </div>
+          <input
+            type="file"
+            accept=".sql,.json,.gz,.sql.gz"
+            onChange={handleRestoreFileSelect}
+            className="block w-full text-sm text-gray-500
+              file:mr-4 file:py-2 file:px-4
+              file:rounded-md file:border-0
+              file:text-sm file:font-semibold
+              file:bg-blue-50 file:text-blue-700
+              hover:file:bg-blue-100
+              cursor-pointer border border-gray-300 rounded-md p-2"
+            disabled={isRestoring}
+          />
+        </div>
+
+        {/* File Preview */}
+        {restoreFile && (
+          <div className="p-3 bg-green-50 rounded-md border border-green-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <FileText className="w-5 h-5 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium text-green-900">{restoreFile.name}</p>
+                  <p className="text-xs text-green-700">
+                    {(restoreFile.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setRestoreFile(null);
+                  setPreviewData(null);
+                  setRestoreSelectedTables([]);
+                  setShowRestoreTableSelection(false);
+                }}
+                className="text-red-600 hover:text-red-800 transition-colors"
+                disabled={isRestoring}
+                title="Remove file"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Preview Loading */}
+        {isPreviewing && (
+          <div className="p-3 bg-blue-50 rounded-md border border-blue-200">
+            <div className="flex items-center space-x-2">
+              <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+              <p className="text-sm text-blue-900">Analyzing backup file...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Table Selection */}
+        {previewData && showRestoreTableSelection && (
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <h4 className="font-semibold text-gray-900">Select Tables to Restore</h4>
+                <div className="group relative">
+                  <HelpCircle className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+                  <div className="invisible group-hover:visible absolute left-0 top-5 z-50 w-80 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl border-2 border-gray-700">
+                    <p className="font-semibold mb-1">Table Selection:</p>
+                    <ul className="space-y-1 ml-3 list-disc">
+                      <li>Select specific tables to restore only those tables</li>
+                      <li>Or select all tables to restore the entire backup</li>
+                      <li>Restoring will overwrite existing data in selected tables</li>
+                    </ul>
+                    <p className="mt-2 text-yellow-300">⚠️ Warning: This action cannot be undone!</p>
+                    <div className="absolute -top-1 left-3 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">
+                  {previewData.totalTables} tables • {previewData.totalRecords.toLocaleString()} records
+                </span>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => setRestoreSelectedTables(previewData.tables.map((t: any) => t.name))}
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
                   >
-                    Select All
+                    All
                   </button>
                   <button
                     onClick={() => setRestoreSelectedTables([])}
-                    className="px-3 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700"
+                    className="px-2 py-1 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors"
                   >
-                    Deselect All
+                    None
                   </button>
                 </div>
               </div>
-              <div className="max-h-64 overflow-y-auto space-y-2">
-                {previewData.tables.map((table: any) => (
-                  <label key={table.name} className="flex items-center space-x-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={restoreSelectedTables.includes(table.name)}
-                      onChange={() => {
-                        setRestoreSelectedTables(prev => 
-                          prev.includes(table.name)
-                            ? prev.filter(t => t !== table.name)
-                            : [...prev, table.name]
-                        );
-                      }}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-900 flex-1">{table.name}</span>
-                    <span className="text-xs text-gray-500">{table.recordCount.toLocaleString()} records</span>
-                  </label>
-                ))}
-              </div>
-              <p className="text-xs text-gray-600 mt-3">
-                Selected: {restoreSelectedTables.length} of {previewData.tables.length} tables
-              </p>
             </div>
-          )}
-        </div>
+            <div className="max-h-64 overflow-y-auto space-y-1 border border-gray-200 rounded-md p-2 bg-white">
+              {previewData.tables.map((table: any) => (
+                <label key={table.name} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={restoreSelectedTables.includes(table.name)}
+                    onChange={() => {
+                      setRestoreSelectedTables(prev => 
+                        prev.includes(table.name)
+                          ? prev.filter(t => t !== table.name)
+                          : [...prev, table.name]
+                      );
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-900 flex-1 font-mono">{table.name}</span>
+                  <span className="text-xs text-gray-500">{table.recordCount.toLocaleString()}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-gray-600 mt-3 text-center">
+              Selected: <span className="font-semibold">{restoreSelectedTables.length}</span> of {previewData.tables.length} tables
+            </p>
+          </div>
+        )}
 
+        {/* Restore Button */}
         <button
           onClick={handleRestoreFromFile}
           disabled={!restoreFile || restoreSelectedTables.length === 0 || isRestoring}
-          className="w-full px-4 py-2.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="w-full px-4 py-2.5 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
         >
           {isRestoring ? (
             <>

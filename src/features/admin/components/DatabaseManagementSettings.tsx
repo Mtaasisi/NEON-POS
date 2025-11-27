@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Download, Database, CheckCircle, AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff, HardDrive, Cloud, Clock, Play, Pause, Settings, Upload, FileText, Eye } from 'lucide-react';
+import { Download, Database, CheckCircle, AlertTriangle, RefreshCw, Trash2, Wifi, WifiOff, HardDrive, Cloud, Clock, Play, Pause, Settings, Upload, FileText, Eye, HelpCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { fullDatabaseDownloadService } from '../../../services/fullDatabaseDownloadService';
 import { offlineSaleSyncService } from '../../../services/offlineSaleSyncService';
@@ -1007,52 +1007,47 @@ const DatabaseManagementSettings: React.FC = () => {
 
       {/* Restore from Backup Section */}
       <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-        <div className="flex items-center justify-between mb-6">
-          <div>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
             <h3 className="text-lg font-semibold text-gray-900">Restore from Backup</h3>
-            <p className="text-sm text-gray-600 mt-1">Upload and restore a backup file (.sql, .json, or .sql.gz format)</p>
-          </div>
-          <Upload className="w-8 h-8 text-orange-600" />
-        </div>
-
-        {/* GitHub Actions Backup Instructions */}
-        <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-          <div className="flex items-start space-x-3">
-            <Cloud className="w-5 h-5 text-purple-600 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-purple-900 mb-1">📥 Download from GitHub Actions:</p>
-              <ol className="text-xs text-purple-800 space-y-1 ml-4 list-decimal">
-                <li>Go to <a href="https://github.com/Mtaasisi/NEON-POS/actions" target="_blank" rel="noopener noreferrer" className="underline">Actions tab</a></li>
-                <li>Find "Automatic Neon Database Backup" or "Automatic NEON 02 Database Backup"</li>
-                <li>Click on a workflow run → Scroll to "Artifacts" section</li>
-                <li>Download the backup ZIP file</li>
-                <li>Extract the ZIP → Extract the .gz file → Upload the .sql file here</li>
-              </ol>
-              <p className="text-xs text-purple-700 mt-2">
-                💡 Tip: You can also upload the .sql.gz file directly - it will be automatically decompressed!
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {restoreFormats && (
-          <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm font-medium text-blue-900 mb-2">📋 Supported Formats:</p>
-            <div className="space-y-2">
-              {restoreFormats.formats.map((format: any, index: number) => (
-                <div key={index} className="text-sm text-blue-800">
-                  <span className="font-semibold">{format.format}</span> ({format.extension}) - {format.description}
-                  {format.format === restoreFormats.recommended && (
-                    <span className="ml-2 px-2 py-0.5 bg-blue-200 rounded text-xs">RECOMMENDED</span>
+            <div className="group relative">
+              <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+              <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-96 p-4 bg-gray-900 text-white text-xs rounded-xl shadow-xl border-2 border-gray-700">
+                <div className="space-y-3">
+                  <p className="font-semibold text-sm mb-2">📥 How to Download from GitHub Actions:</p>
+                  <ol className="space-y-1 ml-4 list-decimal">
+                    <li>Go to <a href="https://github.com/Mtaasisi/NEON-POS/actions" target="_blank" rel="noopener noreferrer" className="underline text-blue-300">Actions tab</a></li>
+                    <li>Find "Automatic Neon Database Backup" or "Automatic NEON 02 Database Backup"</li>
+                    <li>Click on a workflow run → Scroll to "Artifacts" section</li>
+                    <li>Download the backup ZIP file</li>
+                    <li>Extract the ZIP → Extract the .gz file → Upload the .sql file here</li>
+                  </ol>
+                  <p className="text-blue-300 mt-2">
+                    💡 Tip: You can also upload the .sql.gz file directly - it will be automatically decompressed!
+                  </p>
+                  {restoreFormats && (
+                    <div className="border-t border-gray-700 pt-2 mt-2">
+                      <p className="font-semibold text-sm mb-1">📋 Supported Formats:</p>
+                      {restoreFormats.formats.map((format: any, index: number) => (
+                        <div key={index} className="text-xs">
+                          <span className="font-semibold">{format.format}</span> ({format.extension}) - {format.description}
+                          {format.format === restoreFormats.recommended && (
+                            <span className="ml-1 px-1 py-0.5 bg-blue-600 rounded text-xs">RECOMMENDED</span>
+                          )}
+                        </div>
+                      ))}
+                      <p className="text-xs text-gray-300 mt-1">
+                        {restoreFormats.note || 'SQL format is recommended as it is the easiest to restore.'}
+                      </p>
+                    </div>
                   )}
                 </div>
-              ))}
+                <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 transform rotate-45"></div>
+              </div>
             </div>
-            <p className="text-xs text-blue-700 mt-2">
-              💡 {restoreFormats.note || 'SQL format is recommended as it is the easiest to restore.'}
-            </p>
           </div>
-        )}
+          <Upload className="w-6 h-6 text-orange-600" />
+        </div>
 
         <div className="space-y-4">
           <div>
