@@ -14,10 +14,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install PostgreSQL client
+      - name: Install PostgreSQL 17 client
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          sudo apt-get install -y wget ca-certificates lsb-release gnupg
+          # Add PostgreSQL official APT repository
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql-keyring.gpg
+          sudo sh -c 'echo "deb [signed-by=/usr/share/keyrings/postgresql-keyring.gpg] http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update
+          # Install PostgreSQL 17 client
+          sudo apt-get install -y postgresql-client-17
+          # Verify version
+          pg_dump --version
 
       - name: Create full database backup
         env:
@@ -44,7 +52,11 @@ jobs:
             --clean \
             --if-exists \
             --verbose \
-            > "$BACKUP_FILE" 2>&1
+            > "$BACKUP_FILE" 2>pg_dump_errors.log || {
+            echo "❌ pg_dump failed. Error log:"
+            cat pg_dump_errors.log
+            exit 1
+          }
           
           # Verify backup was created successfully
           if [ ! -f "$BACKUP_FILE" ] || [ ! -s "$BACKUP_FILE" ]; then
