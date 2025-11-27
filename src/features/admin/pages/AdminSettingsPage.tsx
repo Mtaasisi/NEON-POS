@@ -3541,7 +3541,7 @@ Generated: ${new Date().toLocaleString()}
             </div>
             <div className="max-h-64 overflow-y-auto space-y-1 border border-gray-200 rounded-md p-2 bg-white">
               {previewData.tables.map((table: any) => (
-                <label key={table.name} className="flex items-center space-x-2 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors">
+                <label key={table.name} className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer transition-colors">
                   <input
                     type="checkbox"
                     checked={restoreSelectedTables.includes(table.name)}
@@ -3552,16 +3552,31 @@ Generated: ${new Date().toLocaleString()}
                           : [...prev, table.name]
                       );
                     }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    disabled={isRestoring}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
-                  <span className="text-sm text-gray-900 flex-1 font-mono">{table.name}</span>
-                  <span className="text-xs text-gray-500">{table.recordCount.toLocaleString()}</span>
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-gray-900">{table.name}</span>
+                    <span className="ml-2 text-xs text-gray-500">
+                      ({table.recordCount.toLocaleString()} records)
+                    </span>
+                  </div>
                 </label>
               ))}
             </div>
-            <p className="text-xs text-gray-600 mt-3 text-center">
-              Selected: <span className="font-semibold">{restoreSelectedTables.length}</span> of {previewData.tables.length} tables
-            </p>
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                <strong>{restoreSelectedTables.length}</strong> of <strong>{previewData.tables.length}</strong> tables selected
+                {restoreSelectedTables.length > 0 && (
+                  <span className="ml-2 text-green-600 font-semibold">
+                    ({previewData.tables
+                      .filter((t: any) => restoreSelectedTables.includes(t.name))
+                      .reduce((sum: number, t: any) => sum + t.recordCount, 0)
+                      .toLocaleString()} records will be restored)
+                  </span>
+                )}
+              </p>
+            </div>
           </div>
         )}
 
@@ -3576,13 +3591,26 @@ Generated: ${new Date().toLocaleString()}
               <RefreshCw className="w-4 h-4 animate-spin" />
               Restoring...
             </>
+          ) : restoreSelectedTables.length === 0 ? (
+            <>
+              <Upload className="w-4 h-4" />
+              Select Tables to Restore
+            </>
           ) : (
             <>
               <Upload className="w-4 h-4" />
-              Restore Selected Tables
+              Restore {restoreSelectedTables.length} Selected Table{restoreSelectedTables.length !== 1 ? 's' : ''}
             </>
           )}
         </button>
+
+        {/* Warning Box */}
+        <div className="p-3 bg-yellow-50 rounded-md border border-yellow-200">
+          <p className="text-xs text-yellow-800">
+            ⚠️ <strong>Warning:</strong> Restoring will overwrite existing data in the database. 
+            Make sure you have a current backup before proceeding.
+          </p>
+        </div>
       </div>
     </div>
 
