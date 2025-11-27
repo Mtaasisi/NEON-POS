@@ -66,6 +66,8 @@ import {
   HardDrive,
   Wifi,
   WifiOff,
+  Play,
+  Pause,
   ChevronRight,
   ChevronDown,
   ChevronUp,
