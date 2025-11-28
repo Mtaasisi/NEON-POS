@@ -2964,10 +2964,22 @@ Generated: ${new Date().toLocaleString()}
       {/* Scrollable Content Section */}
       <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
         <div className="py-6 space-y-6">
+          
+          {/* Backup & Restore Section */}
+          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center shadow-md">
+                <Download className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Backup & Restore</h3>
+                <p className="text-sm text-gray-600">Create and restore database backups</p>
+              </div>
+            </div>
 
-      <div className="space-y-6">
-        {/* Automatic Backup */}
-        <div className="border-2 border-gray-200 rounded-xl p-6 shadow-sm">
+            <div className="space-y-6">
+              {/* Automatic Backup */}
+              <div className="border border-gray-200 rounded-lg p-5 bg-gray-50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <RotateCcw className="h-5 w-5 text-blue-600" />
@@ -3085,13 +3097,13 @@ Generated: ${new Date().toLocaleString()}
             </div>
             </div>
           )}
-          </div>
+              </div>
 
-        {/* Manual Backup */}
-        <div>
-          <div className="flex items-center gap-2 mb-4">
-            <Download className="h-5 w-5 text-orange-600" />
-            <h4 className="font-medium text-gray-900">Manual Backup</h4>
+              {/* Manual Backup */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Download className="h-5 w-5 text-orange-600" />
+                  <h4 className="font-semibold text-gray-900">Manual Backup</h4>
             <div className="group relative">
               <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
               <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-72 p-3 bg-gray-900 text-white text-xs rounded-lg shadow-lg">
@@ -3416,16 +3428,23 @@ Generated: ${new Date().toLocaleString()}
                 )}
               </GlassButton>
                 </div>
-                </div>
-        </div>
-      
-    </div>
+              </div>
+            </div>
+          </div>
 
-    {/* Restore from Backup Section */}
-    <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold text-gray-900">Restore from Backup</h3>
+          {/* Restore from Backup */}
+          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center shadow-md">
+                <Upload className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Restore from Backup</h3>
+                <p className="text-sm text-gray-600">Restore database from backup files</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
           <div className="group relative">
             <HelpCircle className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
             <div className="invisible group-hover:visible absolute left-0 top-6 z-50 w-96 p-4 bg-gray-900 text-white text-xs rounded-xl shadow-xl border-2 border-gray-700">
@@ -4310,8 +4329,20 @@ Generated: ${new Date().toLocaleString()}
           </ul>
         </div>
       </div>
-    </div>
 
+          {/* Database Data Cleanup Panel */}
+          <div>
+            <DatabaseDataCleanupPanel />
+          </div>
+
+          {/* Database Branch Migration */}
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <GitBranch className="w-5 h-5 text-sky-600" />
+              <h3 className="text-lg font-semibold text-gray-900">Database Branch Migration</h3>
+            </div>
+            <DatabaseBranchMigration />
+          </div>
         </div>
       </div>
     </div>
