@@ -2966,7 +2966,7 @@ Generated: ${new Date().toLocaleString()}
         <div className="py-6 space-y-6">
           
           {/* Backup & Restore Section */}
-          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center shadow-md">
                 <Download className="w-6 h-6 text-white" />
@@ -2979,7 +2979,7 @@ Generated: ${new Date().toLocaleString()}
 
             <div className="space-y-6">
               {/* Automatic Backup */}
-              <div className="border border-gray-200 rounded-lg p-5 bg-gray-50">
+              <div className="border border-gray-200 rounded-lg p-5 bg-gray-50/50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <RotateCcw className="h-5 w-5 text-blue-600" />
@@ -3433,7 +3433,7 @@ Generated: ${new Date().toLocaleString()}
           </div>
 
           {/* Restore from Backup */}
-          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-orange-600 rounded-lg flex items-center justify-center shadow-md">
                 <Upload className="w-6 h-6 text-white" />
@@ -3674,7 +3674,7 @@ Generated: ${new Date().toLocaleString()}
     </div>
 
           {/* Offline Database Management */}
-          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center shadow-md">
                 <HardDrive className="w-6 h-6 text-white" />
@@ -4286,7 +4286,7 @@ Generated: ${new Date().toLocaleString()}
           </div>
 
           {/* Database Tools & Migration */}
-          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 bg-sky-600 rounded-lg flex items-center justify-center shadow-md">
                 <GitBranch className="w-6 h-6 text-white" />
