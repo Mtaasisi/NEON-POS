@@ -629,7 +629,6 @@ const AdminSettingsPageContent: React.FC = () => {
                   { id: 'appearance', label: 'Appearance', icon: Palette, color: 'rose' },
                   { id: 'notifications', label: 'Notifications', icon: Bell, color: 'amber' },
                   { id: 'database', label: 'Database', icon: Database, color: 'slate' },
-                  { id: 'branch-migration', label: 'Branch Migration', icon: GitBranch, color: 'sky' },
                   { id: 'automation', label: 'Automation', icon: RotateCcw, color: 'lime' }
                 ].map((section) => {
                   const isActive = activeSection === section.id;
@@ -795,12 +794,6 @@ const AdminSettingsPageContent: React.FC = () => {
               </div>
             )}
 
-
-            {activeSection === 'branch-migration' && (
-              <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
-                <DatabaseBranchMigration />
-              </div>
-            )}
 
             {activeSection === 'automation' && (
               <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
@@ -4309,6 +4302,15 @@ Generated: ${new Date().toLocaleString()}
     {/* Database Data Cleanup Panel */}
     <div className="mt-6">
       <DatabaseDataCleanupPanel />
+    </div>
+
+    {/* Database Branch Migration */}
+    <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        <GitBranch className="w-5 h-5 text-sky-600" />
+        <h3 className="text-lg font-semibold text-gray-900">Database Branch Migration</h3>
+      </div>
+      <DatabaseBranchMigration />
     </div>
   </>
   );
