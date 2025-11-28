@@ -3673,25 +3673,29 @@ Generated: ${new Date().toLocaleString()}
       </div>
     </div>
 
-    {/* Offline Database Management Section */}
-    <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <HardDrive className="w-5 h-5" />
-            Offline Database Management
-          </h3>
-          <p className="text-sm text-gray-600 mt-1">
-            Download full database for offline-first operation and faster performance
-          </p>
-        </div>
-        {fullDatabaseDownloadService.isDownloaded() && (
-          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" />
-            Downloaded
-          </span>
-        )}
-      </div>
+          {/* Offline Database Management */}
+          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                <HardDrive className="w-6 h-6 text-white" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Offline Database</h3>
+                    <p className="text-sm text-gray-600">Download database for offline-first operation</p>
+                  </div>
+                  {fullDatabaseDownloadService.isDownloaded() && (
+                    <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      Downloaded
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
 
       {/* Download Status */}
       <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
@@ -3835,15 +3839,18 @@ Generated: ${new Date().toLocaleString()}
         </div>
       </div>
 
-      {/* Automatic Background Sync */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h4 className="text-sm font-semibold text-gray-900">Automatic Background Sync</h4>
-            <p className="text-xs text-gray-500 mt-1">
-              Automatically syncs database when WiFi/network is available
-            </p>
-          </div>
+              {/* Automatic Background Sync */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5 text-blue-600" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-900">Automatic Background Sync</h4>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Automatically syncs database when WiFi/network is available
+                      </p>
+                    </div>
+                  </div>
           {navigator.onLine ? (
             <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
               <Wifi className="w-3 h-3" />
@@ -4053,10 +4060,13 @@ Generated: ${new Date().toLocaleString()}
         </div>
       </div>
 
-      {/* Offline Sales Sync */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-sm font-semibold text-gray-900">Offline Sales Sync</h4>
+              {/* Offline Sales Sync */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="h-5 w-5 text-green-600" />
+                    <h4 className="text-sm font-semibold text-gray-900">Offline Sales Sync</h4>
+                  </div>
           {navigator.onLine ? (
             <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
               <Wifi className="w-3 h-3" />
@@ -4242,9 +4252,12 @@ Generated: ${new Date().toLocaleString()}
         </div>
       </div>
 
-      {/* Storage Information */}
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <h4 className="text-sm font-semibold text-gray-900 mb-3">Storage Information</h4>
+              {/* Storage Information */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <HardDrive className="h-5 w-5 text-gray-600" />
+                  <h4 className="text-sm font-semibold text-gray-900">Storage Information</h4>
+                </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-600 flex items-center gap-2">
@@ -4268,13 +4281,12 @@ Generated: ${new Date().toLocaleString()}
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-600">Storage Limit</span>
             <span className="text-xs font-semibold text-gray-900">~5-10 MB</span>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
 
-    {/* Database Connection Info */}
-    <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+          {/* Database Connection Info */}
+          <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
       <div className="flex items-center gap-2 mb-4">
         <Database className="w-5 h-5 text-blue-600" />
         <h3 className="text-lg font-semibold text-gray-900">Database Connection</h3>
@@ -4313,8 +4325,8 @@ Generated: ${new Date().toLocaleString()}
       </div>
     </div>
 
-    {/* Info Box */}
-    <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+          {/* Info Box */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
       <div className="flex items-start gap-3">
         <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
         <div className="text-sm text-blue-800">
