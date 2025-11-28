@@ -4354,7 +4354,8 @@ Generated: ${new Date().toLocaleString()}
       </div>
     </div>
   );
-}; 
+};
+ 
 
 // Integrations Settings Component
 const IntegrationsSettings: React.FC<{
