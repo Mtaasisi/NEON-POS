@@ -4291,7 +4291,13 @@ Generated: ${new Date().toLocaleString()}
           <div className="grid grid-cols-2 gap-2">
             <button 
               onClick={() => {
-                toast('Use the backup section above to manage your database');
+                // Scroll to backup section
+                const backupSection = document.querySelector('[class*="Database Backup"]');
+                if (backupSection) {
+                  backupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
               }}
               className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
@@ -4300,7 +4306,13 @@ Generated: ${new Date().toLocaleString()}
             </button>
             <button 
               onClick={() => {
-                toast('Database settings are available in this tab');
+                // Scroll to automatic backup settings
+                const autoBackupSection = document.querySelector('[class*="Auto Backup"]');
+                if (autoBackupSection) {
+                  autoBackupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } else {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
               }}
               className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
