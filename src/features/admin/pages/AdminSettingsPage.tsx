@@ -2481,7 +2481,7 @@ const DatabaseSettings: React.FC = () => {
         if (backupHistory.length > 30) {
           const removed = backupHistory.shift();
           console.log(`🗑️ Backup rotation: Removed old backup from history - ${removed.fileName}`);
-          toast.info(`Old backup removed from tracking. Delete file from Desktop if needed.`, { duration: 4000 });
+          toast(`Old backup removed from tracking. Delete file from Desktop if needed.`, { duration: 4000 });
         }
         
         localStorage.setItem('autoBackupHistory', JSON.stringify(backupHistory));
@@ -4291,7 +4291,7 @@ Generated: ${new Date().toLocaleString()}
           <div className="grid grid-cols-2 gap-2">
             <button 
               onClick={() => {
-                toast.info('Use the backup section above to manage your database');
+                toast('Use the backup section above to manage your database');
               }}
               className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
@@ -4300,7 +4300,7 @@ Generated: ${new Date().toLocaleString()}
             </button>
             <button 
               onClick={() => {
-                toast.info('Database settings are available in this tab');
+                toast('Database settings are available in this tab');
               }}
               className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
             >
