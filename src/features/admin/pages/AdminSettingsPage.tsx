@@ -3648,6 +3648,688 @@ Generated: ${new Date().toLocaleString()}
       </div>
     </div>
 
+    {/* Offline Database Management Section */}
+    <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <HardDrive className="w-5 h-5" />
+            Offline Database Management
+          </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Download full database for offline-first operation and faster performance
+          </p>
+        </div>
+        {fullDatabaseDownloadService.isDownloaded() && (
+          <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
+            <CheckCircle className="w-3 h-3" />
+            Downloaded
+          </span>
+        )}
+      </div>
+
+      {/* Download Status */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        {downloadMetadata ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Last Downloaded</p>
+                <p className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {new Date(downloadMetadata.timestamp).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">Download Time</p>
+                <p className="text-sm font-medium text-gray-900">
+                  {(downloadMetadata.downloadTime / 1000).toFixed(1)}s
+                </p>
+              </div>
+            </div>
+            <div className="pt-3 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-2">Downloaded Data</p>
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Products:</span>
+                  <span className="font-semibold">{downloadMetadata.data.products || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Customers:</span>
+                  <span className="font-semibold">{downloadMetadata.data.customers || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Categories:</span>
+                  <span className="font-semibold">{downloadMetadata.data.categories || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Suppliers:</span>
+                  <span className="font-semibold">{downloadMetadata.data.suppliers || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Variants:</span>
+                  <span className="font-semibold">{downloadMetadata.data.variants || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Employees:</span>
+                  <span className="font-semibold">{downloadMetadata.data.employees || 0}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4 text-gray-500">
+            <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">No database downloaded yet</p>
+          </div>
+        )}
+
+        {downloading && downloadProgress && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-blue-900">
+                Downloading {downloadProgress.currentTask}...
+              </span>
+              <span className="text-sm font-semibold text-blue-700">
+                {downloadProgress.percentage}%
+              </span>
+            </div>
+            <div className="w-full bg-blue-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${downloadProgress.percentage}%` }}
+              />
+            </div>
+            <p className="text-xs text-blue-700 mt-2">
+              {downloadProgress.current} of {downloadProgress.total} tasks completed
+            </p>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 mt-4">
+          <button
+            onClick={async () => {
+              if (!confirm('This will download all essential data to your local storage. This may take a few minutes. Continue?')) {
+                return;
+              }
+              setDownloading(true);
+              setDownloadProgress(null);
+              try {
+                const result = await fullDatabaseDownloadService.downloadFullDatabase((prog) => {
+                  setDownloadProgress(prog);
+                });
+                if (result.success) {
+                  const totalItems = Object.values(result.data).reduce((a: number, b: number) => a + b, 0);
+                  toast.success(`✅ Database downloaded successfully! ${totalItems} items downloaded.`);
+                  loadDownloadMetadata();
+                  if (navigator.onLine && !autoSyncService.isEnabled()) {
+                    autoSyncService.startAutoSync();
+                  }
+                } else {
+                  toast.error(`❌ Download failed: ${result.error}`);
+                }
+              } catch (error) {
+                toast.error('Failed to download database');
+              } finally {
+                setDownloading(false);
+                setDownloadProgress(null);
+              }
+            }}
+            disabled={downloading}
+            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {downloading ? (
+              <>
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Downloading...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                Download Full Database
+              </>
+            )}
+          </button>
+          {downloadMetadata && (
+            <button
+              onClick={() => {
+                if (!confirm('Are you sure you want to clear all downloaded database? This will remove all locally cached data.')) {
+                  return;
+                }
+                fullDatabaseDownloadService.clearDownload();
+                autoSyncService.stopAutoSync();
+                toast.success('✅ Local database cleared');
+                loadDownloadMetadata();
+              }}
+              className="px-4 py-2.5 border border-red-300 text-red-700 rounded-lg font-semibold hover:bg-red-50 transition-colors flex items-center gap-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Automatic Background Sync */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900">Automatic Background Sync</h4>
+            <p className="text-xs text-gray-500 mt-1">
+              Automatically syncs database when WiFi/network is available
+            </p>
+          </div>
+          {navigator.onLine ? (
+            <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
+              <Wifi className="w-3 h-3" />
+              Online
+            </span>
+          ) : (
+            <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold flex items-center gap-1">
+              <WifiOff className="w-3 h-3" />
+              Offline
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <p className="text-gray-500 mb-1">Sync Status</p>
+              <p className="font-semibold text-gray-900 flex items-center gap-1">
+                {autoSyncStatus.isSyncing ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin text-blue-600" />
+                    <span className="text-blue-600">Syncing...</span>
+                  </>
+                ) : autoSyncService.isEnabled() ? (
+                  <>
+                    <CheckCircle className="w-3 h-3 text-green-600" />
+                    <span className="text-green-600">Active</span>
+                  </>
+                ) : (
+                  <>
+                    <Pause className="w-3 h-3 text-gray-400" />
+                    <span className="text-gray-600">Paused</span>
+                  </>
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 mb-1">Last Sync</p>
+              <p className="font-medium text-gray-900">
+                {autoSyncStatus.lastSyncTime ? (
+                  <>
+                    {new Date(autoSyncStatus.lastSyncTime).toLocaleTimeString()}
+                    {autoSyncStatus.lastSyncSuccess ? (
+                      <CheckCircle className="w-3 h-3 text-green-600 inline-block ml-1" />
+                    ) : (
+                      <AlertTriangle className="w-3 h-3 text-red-600 inline-block ml-1" />
+                    )}
+                  </>
+                ) : (
+                  <span className="text-gray-400">Never</span>
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 mb-1">Next Sync</p>
+              <p className="font-medium text-gray-900">
+                {autoSyncStatus.nextSyncTime ? (
+                  new Date(autoSyncStatus.nextSyncTime).toLocaleTimeString()
+                ) : (
+                  <span className="text-gray-400">Not scheduled</span>
+                )}
+              </p>
+            </div>
+            <div>
+              <p className="text-gray-500 mb-1">Sync Interval</p>
+              <p className="font-medium text-gray-900">
+                {Math.round(autoSyncStatus.syncInterval / 1000 / 60)} minutes
+              </p>
+            </div>
+          </div>
+
+          {autoSyncStatus.error && (
+            <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-800">
+              <AlertTriangle className="w-3 h-3 inline-block mr-1" />
+              {autoSyncStatus.error}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (autoSyncService.isEnabled()) {
+                  autoSyncService.stopAutoSync();
+                  toast.success('Auto sync stopped');
+                } else {
+                  if (!navigator.onLine) {
+                    toast.error('Cannot start auto sync - offline');
+                    return;
+                  }
+                  autoSyncService.startAutoSync();
+                  toast.success('Auto sync started');
+                }
+              }}
+              disabled={!navigator.onLine && !autoSyncService.isEnabled()}
+              className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                autoSyncService.isEnabled()
+                  ? 'bg-orange-600 text-white hover:bg-orange-700'
+                  : 'bg-green-600 text-white hover:bg-green-700'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {autoSyncService.isEnabled() ? 'Pause Auto Sync' : 'Start Auto Sync'}
+            </button>
+            <button
+              onClick={async () => {
+                if (!navigator.onLine) {
+                  toast.error('Cannot sync - offline');
+                  return;
+                }
+                setSyncing(true);
+                try {
+                  const result = await autoSyncService.syncNow();
+                  if (result.success) {
+                    toast.success('✅ Database synced successfully');
+                    loadDownloadMetadata();
+                    const verification = await fullDatabaseDownloadService.verifyAllData();
+                    if (verification.allOk) {
+                      console.log('✅ [Sync] All data verified successfully after sync');
+                    } else {
+                      console.warn('⚠️ [Sync] Some data issues detected:', verification.summary);
+                    }
+                  } else {
+                    toast.error(`❌ Sync failed: ${result.error}`);
+                  }
+                } catch (error) {
+                  toast.error('Failed to sync');
+                } finally {
+                  setSyncing(false);
+                }
+              }}
+              disabled={syncing || !navigator.onLine}
+              className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {syncing ? (
+                <>
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3 h-3" />
+                  Sync Now
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => setShowSyncSettings(!showSyncSettings)}
+              className="px-3 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors flex items-center gap-2"
+            >
+              <Settings className="w-3 h-3" />
+            </button>
+          </div>
+
+          {/* Sync Settings */}
+          {showSyncSettings && (
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs font-semibold text-blue-900 mb-2">Sync Interval</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="5"
+                  max="120"
+                  value={syncInterval}
+                  onChange={(e) => setSyncInterval(parseInt(e.target.value) || 30)}
+                  className="w-20 px-2 py-1.5 border border-blue-300 rounded-lg text-xs font-semibold"
+                />
+                <span className="text-xs text-blue-800">minutes</span>
+                <button
+                  onClick={() => {
+                    autoSyncService.setSyncInterval(syncInterval * 60 * 1000);
+                    localStorage.setItem('auto_sync_interval', String(syncInterval * 60 * 1000));
+                    toast.success(`Auto sync interval set to ${syncInterval} minutes`);
+                    setShowSyncSettings(false);
+                  }}
+                  className="ml-auto px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+              <p className="text-xs text-blue-700 mt-2">
+                Database will automatically sync every {syncInterval} minutes when online
+              </p>
+            </div>
+          )}
+
+          {/* Verify Data Button */}
+          <div className="p-2 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+              <AlertTriangle className="w-3 h-3" />
+              <span className="font-semibold">Console Logs:</span> Open browser console (F12) to see detailed sync logs
+            </p>
+            <button
+              onClick={async () => {
+                console.log('🔍 [Database] Manual verification triggered by user');
+                const verification = await fullDatabaseDownloadService.verifyAllData();
+                if (verification.allOk) {
+                  toast.success('✅ All data verified successfully');
+                } else {
+                  toast.error(`⚠️ ${verification.summary}`);
+                }
+              }}
+              className="w-full px-3 py-2 bg-gray-600 text-white rounded-lg text-xs font-semibold hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <CheckCircle className="w-3 h-3" />
+              Verify All Data
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Offline Sales Sync */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-semibold text-gray-900">Offline Sales Sync</h4>
+          {navigator.onLine ? (
+            <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
+              <Wifi className="w-3 h-3" />
+              Online
+            </span>
+          ) : (
+            <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold flex items-center gap-1">
+              <WifiOff className="w-3 h-3" />
+              Offline
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Pending Sales</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Sales waiting to be synced to online database
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold text-gray-900">{pendingSales}</p>
+                {pendingSales > 0 && (
+                  <p className="text-xs text-orange-600 mt-1">Needs sync</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Pending Sales List */}
+          {pendingSales > 0 && (
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
+                <p className="text-xs font-semibold text-gray-900">Pending Sales Details</p>
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left text-xs font-semibold text-gray-600">Sale ID</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-semibold text-gray-600">Customer</th>
+                      <th className="px-3 py-1.5 text-right text-xs font-semibold text-gray-600">Amount</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-semibold text-gray-600">Items</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-semibold text-gray-600">Created</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-semibold text-gray-600">Attempts</th>
+                      <th className="px-3 py-1.5 text-left text-xs font-semibold text-gray-600">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {pendingSalesList.map((sale) => (
+                      <tr key={sale.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-1.5">
+                          <div className="font-mono text-xs text-gray-900">
+                            {sale.id.substring(0, 16)}...
+                          </div>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <div className="text-gray-900">
+                            {sale.saleData?.customerName || sale.saleData?.customer_name || 'Walk-in'}
+                          </div>
+                          {sale.saleData?.customerPhone && (
+                            <div className="text-xs text-gray-500">{sale.saleData.customerPhone}</div>
+                          )}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <div className="font-semibold text-gray-900">
+                            {new Intl.NumberFormat('en-TZ', {
+                              style: 'currency',
+                              currency: 'TZS',
+                              minimumFractionDigits: 0,
+                            }).format(sale.saleData?.total || sale.saleData?.total_amount || 0)}
+                          </div>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <div className="text-gray-900">
+                            {sale.saleData?.items?.length || 0} items
+                          </div>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <div className="text-xs text-gray-600">
+                            {new Date(sale.timestamp).toLocaleString('en-TZ', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <div className="flex items-center gap-1">
+                            <span className={`text-xs font-semibold ${
+                              sale.syncAttempts >= 3 ? 'text-red-600' : 'text-orange-600'
+                            }`}>
+                              {sale.syncAttempts}/3
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-1.5">
+                          {sale.error ? (
+                            <div className="flex items-center gap-1 group relative">
+                              <AlertTriangle className="w-3 h-3 text-red-500" />
+                              <span className="text-xs text-red-600 font-semibold cursor-help">
+                                Failed
+                              </span>
+                              <div className="absolute left-0 top-full mt-1 hidden group-hover:block z-10 bg-red-50 border border-red-200 rounded-lg p-2 shadow-lg max-w-xs">
+                                <p className="text-xs text-red-800 font-semibold mb-1">Sync Error:</p>
+                                <p className="text-xs text-red-700">{sale.error}</p>
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-orange-600 font-semibold">Pending</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {pendingSales === 0 && (
+            <div className="p-6 text-center border border-gray-200 rounded-lg bg-gray-50">
+              <Cloud className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-sm font-medium text-gray-900">No Pending Sales</p>
+              <p className="text-xs text-gray-500 mt-1">All sales have been synced successfully</p>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                if (!navigator.onLine) {
+                  toast.error('You are offline. Please connect to the internet to sync sales.');
+                  return;
+                }
+                setSyncing(true);
+                try {
+                  const result = await offlineSaleSyncService.syncAllPendingSales();
+                  if (result.synced > 0) {
+                    toast.success(`✅ Synced ${result.synced} sales successfully`);
+                  }
+                  if (result.failed > 0) {
+                    toast.error(`⚠️ ${result.failed} sales failed to sync`);
+                  }
+                  if (result.synced === 0 && result.failed === 0) {
+                    toast.success('✅ No pending sales to sync');
+                  }
+                  loadPendingSales();
+                } catch (error) {
+                  toast.error('Failed to sync sales');
+                } finally {
+                  setSyncing(false);
+                }
+              }}
+              disabled={syncing || !navigator.onLine || pendingSales === 0}
+              className="flex-1 px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {syncing ? (
+                <>
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <Cloud className="w-3 h-3" />
+                  Sync Pending Sales
+                </>
+              )}
+            </button>
+          </div>
+
+          {pendingSales > 0 && !navigator.onLine && (
+            <div className="p-2 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-2">
+              <AlertTriangle className="w-3 h-3 text-orange-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-orange-800">
+                You have {pendingSales} sales waiting to sync. They will automatically sync when you go online.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Storage Information */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <h4 className="text-sm font-semibold text-gray-900 mb-3">Storage Information</h4>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600 flex items-center gap-2">
+              <HardDrive className="w-3 h-3" />
+              Local Storage Used
+            </span>
+            <span className="text-xs font-semibold text-gray-900">
+              {(() => {
+                let total = 0;
+                for (let key in localStorage) {
+                  if (localStorage.hasOwnProperty(key)) {
+                    total += localStorage[key].length + key.length;
+                  }
+                }
+                if (total < 1024) return total + ' B';
+                if (total < 1024 * 1024) return (total / 1024).toFixed(2) + ' KB';
+                return (total / (1024 * 1024)).toFixed(2) + ' MB';
+              })()}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-600">Storage Limit</span>
+            <span className="text-xs font-semibold text-gray-900">~5-10 MB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Database Connection Info */}
+    <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        <Database className="w-5 h-5 text-blue-600" />
+        <h3 className="text-lg font-semibold text-gray-900">Database Connection</h3>
+      </div>
+      
+      <div className="space-y-3">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle className="w-5 h-5 text-green-600" />
+            <p className="text-green-800 font-semibold">Database Connected</p>
+          </div>
+          <p className="text-green-700 text-sm">
+            ✅ Your Neon database is successfully connected and ready to use!
+          </p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h4 className="font-semibold text-blue-900 mb-2 text-sm">Connection Details:</h4>
+          <ul className="list-disc list-inside text-blue-800 space-y-1 text-xs">
+            <li>Database: Neon PostgreSQL</li>
+            <li>Connection: Pooled (Serverless)</li>
+            <li>Status: Active</li>
+          </ul>
+        </div>
+
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+          <h4 className="font-semibold text-gray-900 mb-2 text-sm">Features:</h4>
+          <ul className="list-disc list-inside text-gray-700 space-y-1 text-xs">
+            <li>Real-time database queries</li>
+            <li>Automatic connection pooling</li>
+            <li>Full PostgreSQL compatibility</li>
+            <li>Optimized for serverless applications</li>
+          </ul>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h4 className="font-semibold text-gray-900 mb-3 text-sm">Quick Actions</h4>
+          <div className="grid grid-cols-2 gap-2">
+            <button 
+              onClick={() => {
+                toast.info('Use the backup section above to manage your database');
+              }}
+              className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
+            >
+              <h5 className="font-semibold text-xs mb-1">Backup Data</h5>
+              <p className="text-xs text-gray-600">Create a database backup</p>
+            </button>
+            <button 
+              onClick={() => {
+                toast.info('Database settings are available in this tab');
+              }}
+              className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
+            >
+              <h5 className="font-semibold text-xs mb-1">Settings</h5>
+              <p className="text-xs text-gray-600">Configure database settings</p>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Info Box */}
+    <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className="text-sm text-blue-800">
+          <p className="font-semibold mb-1">How it works:</p>
+          <ul className="list-disc list-inside space-y-1 text-xs">
+            <li>Download full database to enable offline-first operation</li>
+            <li>All data is stored locally for instant access</li>
+            <li>Sales are saved locally first, then synced to online database in background</li>
+            <li>Automatic sync runs every 30 seconds when online</li>
+            <li>Download again to refresh your local database</li>
+            <li>Restore backups from GitHub Actions or local backup files</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
     {/* Database Data Cleanup Panel */}
     <div className="mt-6">
       <DatabaseDataCleanupPanel />
