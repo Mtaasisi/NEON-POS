@@ -102,7 +102,7 @@ const InstallmentsPage = lazy(() => import('./features/installments/pages/Instal
 
 const CategoryManagementPage = lazy(() => import('./features/settings/pages/CategoryManagementPage'));
 const StoreLocationManagementPage = lazy(() => import('./features/settings/pages/StoreLocationManagementPage'));
-const DatabaseSetupPage = lazy(() => import('./features/admin/pages/DatabaseSetupPage'));
+// DatabaseSetupPage merged into AdminSettingsPage Database tab
 const ExcelImportPage = lazy(() => import('./features/reports/pages/ExcelImportPage'));
 const ExcelTemplateDownloadPage = lazy(() => import('./features/lats/pages/ExcelTemplateDownloadPage'));
 
@@ -739,13 +739,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
             </Suspense>
           </RoleProtectedRoute>
         } />
-        <Route path="/database-setup" element={
-          <RoleProtectedRoute allowedRoles={['admin']}>
-            <Suspense fallback={<DynamicPageLoader />}>
-              <DatabaseSetupPage />
-            </Suspense>
-          </RoleProtectedRoute>
-        } />
+        {/* Database Setup merged into Admin Settings Database tab */}
         <Route path="/customers/import" element={
           <RoleProtectedRoute allowedRoles={['admin']}>
             <Suspense fallback={<DynamicPageLoader />}>

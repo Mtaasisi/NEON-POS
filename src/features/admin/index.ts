@@ -1,6 +1,6 @@
 // Admin Feature Module
 export * from './pages/AdminSettingsPage';
-export * from './pages/DatabaseSetupPage';
+// DatabaseSetupPage merged into AdminSettingsPage Database tab
 
 export * from './components/AdminFeedbackModal';
 export * from './components/AdminGoalsManagement';

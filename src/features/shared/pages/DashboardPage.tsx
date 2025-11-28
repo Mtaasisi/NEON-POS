@@ -541,7 +541,7 @@ const DashboardPageContent: React.FC = () => {
       description: 'Database configuration',
       icon: Database,
       color: 'from-slate-500 to-slate-600',
-      path: '/database-setup'
+      path: '/admin-settings?section=database'
     },
     {
       id: 'integrationSettings' as const,

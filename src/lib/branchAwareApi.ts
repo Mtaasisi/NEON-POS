@@ -5,6 +5,8 @@
 
 import { supabase } from './supabaseClient';
 import { logQueryDebug, isDebugMode } from './branchIsolationDebugger';
+import type { ShareableEntityType, StoreLocationSchema } from './database/schema';
+import { ENTITY_TO_COLUMN_MAP } from './database/schema';
 
 // Cache for branch settings
 const branchSettingsCache = new Map<string, any>();
@@ -23,7 +25,7 @@ export const clearBranchCache = () => {
 };
 
 // Get branch settings
-export const getBranchSettings = async (branchId: string) => {
+export const getBranchSettings = async (branchId: string): Promise<StoreLocationSchema | null> => {
   try {
     // Check cache
     const now = Date.now();
@@ -50,7 +52,7 @@ export const getBranchSettings = async (branchId: string) => {
     branchSettingsCache.set(branchId, data);
     cacheTimestamp = now;
     
-    return data;
+    return data as StoreLocationSchema;
   } catch (error) {
     // Only log non-PGRST116 errors as actual errors
     if ((error as any)?.code !== 'PGRST116') {
@@ -61,9 +63,7 @@ export const getBranchSettings = async (branchId: string) => {
 };
 
 // Check if data type is shared for current branch
-export const isDataShared = async (
-  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 'payments' | 'accounts' | 'gift_cards' | 'quality_checks' | 'recurring_expenses' | 'communications' | 'reports' | 'finance_transfers'
-): Promise<boolean> => {
+export const isDataShared = async (entityType: ShareableEntityType): Promise<boolean> => {
   const branchId = getCurrentBranchId();
   if (!branchId) return true; // No branch selected = show all data
 
@@ -81,25 +81,13 @@ export const isDataShared = async (
       return false;
     }
 
-    // Hybrid mode = check specific flag
-    const shareMapping = {
-      products: branch.share_products,
-      customers: branch.share_customers,
-      inventory: branch.share_inventory,
-      suppliers: branch.share_suppliers,
-      categories: branch.share_categories,
-      employees: branch.share_employees,
-      payments: branch.share_payments,
-      accounts: branch.share_accounts,
-      gift_cards: branch.share_gift_cards,
-      quality_checks: branch.share_quality_checks,
-      recurring_expenses: branch.share_recurring_expenses,
-      communications: branch.share_communications,
-      reports: branch.share_reports,
-      finance_transfers: branch.share_finance_transfers
-    };
+    // Hybrid mode = check specific flag using schema mapping
+    const columnName = ENTITY_TO_COLUMN_MAP[entityType];
+    if (columnName && columnName in branch) {
+      return branch[columnName] as boolean;
+    }
 
-    return shareMapping[entityType] ?? true;
+    return true; // Default to shared if entity type not found
   } catch (error) {
     console.error('Error checking data sharing:', error);
     return true; // Default to shared on error
@@ -109,7 +97,7 @@ export const isDataShared = async (
 // Add branch filter to query builder
 export const addBranchFilter = async (
   query: any,
-  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 'payments' | 'accounts' | 'gift_cards' | 'quality_checks' | 'recurring_expenses' | 'communications' | 'reports' | 'finance_transfers'
+  entityType: ShareableEntityType
 ) => {
   const branchId = getCurrentBranchId();
   
@@ -162,7 +150,7 @@ export const addBranchFilter = async (
 export const createWithBranch = async (
   tableName: string,
   data: any,
-  entityType: 'products' | 'customers' | 'inventory' | 'suppliers' | 'categories' | 'employees' | 'payments' | 'accounts' | 'gift_cards' | 'quality_checks' | 'recurring_expenses' | 'communications' | 'reports' | 'finance_transfers'
+  entityType: ShareableEntityType
 ) => {
   const branchId = getCurrentBranchId();
   const shared = await isDataShared(entityType);

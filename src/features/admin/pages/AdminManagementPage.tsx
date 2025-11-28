@@ -118,7 +118,7 @@ const AdminManagementPage: React.FC = () => {
       title: 'Database Setup',
       description: 'Configure and manage database settings',
       icon: <Database size={24} />,
-      path: '/database-setup',
+      path: '/admin-settings?section=database',
       color: 'from-indigo-500 to-indigo-600',
       category: 'system'
     },
