@@ -4285,75 +4285,72 @@ Generated: ${new Date().toLocaleString()}
             </div>
           </div>
 
-          {/* Database Connection Info */}
+          {/* Database Tools & Migration */}
           <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <Database className="w-5 h-5 text-blue-600" />
-        <h3 className="text-lg font-semibold text-gray-900">Database Connection</h3>
-      </div>
-      
-      <div className="space-y-3">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <p className="text-green-800 font-semibold">Database Connected</p>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 bg-sky-600 rounded-lg flex items-center justify-center shadow-md">
+                <GitBranch className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Database Tools</h3>
+                <p className="text-sm text-gray-600">Migration, cleanup, and connection info</p>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {/* Database Branch Migration */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-sky-600" />
+                  Branch Migration
+                </h4>
+                <DatabaseBranchMigration />
+              </div>
+
+              {/* Database Data Cleanup */}
+              <div className="border-t border-gray-200 pt-6">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                  Data Cleanup
+                </h4>
+                <DatabaseDataCleanupPanel />
+              </div>
+
+              {/* Connection Info - Simplified */}
+              <div className="border-t border-gray-200 pt-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <Database className="w-4 h-4 text-blue-600" />
+                  <h4 className="text-sm font-semibold text-gray-900">Connection Status</h4>
+                </div>
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <p className="text-green-800 font-semibold text-sm">Database Connected</p>
+                  </div>
+                  <p className="text-green-700 text-xs">
+                    Neon PostgreSQL • Pooled (Serverless) • Active
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-          <p className="text-green-700 text-sm">
-            ✅ Your Neon database is successfully connected and ready to use!
-          </p>
-        </div>
-
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <h4 className="font-semibold text-blue-900 mb-2 text-sm">Connection Details:</h4>
-          <ul className="list-disc list-inside text-blue-800 space-y-1 text-xs">
-            <li>Database: Neon PostgreSQL</li>
-            <li>Connection: Pooled (Serverless)</li>
-            <li>Status: Active</li>
-          </ul>
-        </div>
-
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-          <h4 className="font-semibold text-gray-900 mb-2 text-sm">Features:</h4>
-          <ul className="list-disc list-inside text-gray-700 space-y-1 text-xs">
-            <li>Real-time database queries</li>
-            <li>Automatic connection pooling</li>
-            <li>Full PostgreSQL compatibility</li>
-            <li>Optimized for serverless applications</li>
-          </ul>
-        </div>
-
-      </div>
-    </div>
 
           {/* Info Box */}
           <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-      <div className="flex items-start gap-3">
-        <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-        <div className="text-sm text-blue-800">
-          <p className="font-semibold mb-1">How it works:</p>
-          <ul className="list-disc list-inside space-y-1 text-xs">
-            <li>Download full database to enable offline-first operation</li>
-            <li>All data is stored locally for instant access</li>
-            <li>Sales are saved locally first, then synced to online database in background</li>
-            <li>Automatic sync runs every 30 seconds when online</li>
-            <li>Download again to refresh your local database</li>
-            <li>Restore backups from GitHub Actions or local backup files</li>
-          </ul>
-        </div>
-      </div>
-
-          {/* Database Data Cleanup Panel */}
-          <div>
-            <DatabaseDataCleanupPanel />
-          </div>
-
-          {/* Database Branch Migration */}
-          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <GitBranch className="w-5 h-5 text-sky-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Database Branch Migration</h3>
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-800">
+                <p className="font-semibold mb-1">How it works:</p>
+                <ul className="list-disc list-inside space-y-1 text-xs">
+                  <li>Download full database to enable offline-first operation</li>
+                  <li>All data is stored locally for instant access</li>
+                  <li>Sales are saved locally first, then synced to online database in background</li>
+                  <li>Automatic sync runs every 30 seconds when online</li>
+                  <li>Download again to refresh your local database</li>
+                  <li>Restore backups from GitHub Actions or local backup files</li>
+                </ul>
+              </div>
             </div>
-            <DatabaseBranchMigration />
           </div>
         </div>
       </div>
