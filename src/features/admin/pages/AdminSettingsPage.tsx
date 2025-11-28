@@ -2943,8 +2943,6 @@ Generated: ${new Date().toLocaleString()}
   }
 
   return (
-    <>
-    {/* Icon Header - Fixed - Matching Store Management style */}
     <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
       <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
         <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
@@ -4355,7 +4353,6 @@ Generated: ${new Date().toLocaleString()}
         </div>
       </div>
     </div>
-  </>
   );
 }; 
 
