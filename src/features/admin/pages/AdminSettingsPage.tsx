@@ -2944,13 +2944,26 @@ Generated: ${new Date().toLocaleString()}
 
   return (
     <>
-    <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Database className="w-6 h-6 text-blue-600" />
-          <h2 className="text-xl font-semibold text-gray-800">Database Backup & Management</h2>
+    {/* Icon Header - Fixed - Matching Store Management style */}
+    <div className="bg-white rounded-2xl shadow-2xl max-w-7xl w-full flex flex-col overflow-hidden relative">
+      <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+        <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+          {/* Icon */}
+          <div className="w-16 h-16 bg-slate-600 rounded-full flex items-center justify-center shadow-lg">
+            <Database className="w-8 h-8 text-white" />
+          </div>
+          
+          {/* Text */}
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Database Management</h2>
+            <p className="text-sm text-gray-600">Backup, restore, and manage your database</p>
+          </div>
         </div>
       </div>
+
+      {/* Scrollable Content Section */}
+      <div className="flex-1 overflow-y-auto px-6 border-t border-gray-100">
+        <div className="py-6 space-y-6">
 
       <div className="space-y-6">
         {/* Automatic Backup */}
@@ -4299,18 +4312,8 @@ Generated: ${new Date().toLocaleString()}
       </div>
     </div>
 
-    {/* Database Data Cleanup Panel */}
-    <div className="mt-6">
-      <DatabaseDataCleanupPanel />
-    </div>
-
-    {/* Database Branch Migration */}
-    <div className="mt-6 bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
-      <div className="flex items-center gap-2 mb-4">
-        <GitBranch className="w-5 h-5 text-sky-600" />
-        <h3 className="text-lg font-semibold text-gray-900">Database Branch Migration</h3>
+        </div>
       </div>
-      <DatabaseBranchMigration />
     </div>
   </>
   );
