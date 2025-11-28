@@ -4285,42 +4285,6 @@ Generated: ${new Date().toLocaleString()}
           </ul>
         </div>
 
-        {/* Quick Actions */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="font-semibold text-gray-900 mb-3 text-sm">Quick Actions</h4>
-          <div className="grid grid-cols-2 gap-2">
-            <button 
-              onClick={() => {
-                // Scroll to backup section
-                const backupSection = document.querySelector('[class*="Database Backup"]');
-                if (backupSection) {
-                  backupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                } else {
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-              }}
-              className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
-            >
-              <h5 className="font-semibold text-xs mb-1">Backup Data</h5>
-              <p className="text-xs text-gray-600">Create a database backup</p>
-            </button>
-            <button 
-              onClick={() => {
-                // Scroll to automatic backup settings
-                const autoBackupSection = document.querySelector('[class*="Auto Backup"]');
-                if (autoBackupSection) {
-                  autoBackupSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                } else {
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }
-              }}
-              className="p-3 border border-gray-300 rounded-lg hover:bg-gray-50 text-left transition-colors"
-            >
-              <h5 className="font-semibold text-xs mb-1">Settings</h5>
-              <p className="text-xs text-gray-600">Configure database settings</p>
-            </button>
-          </div>
-        </div>
       </div>
     </div>
 
