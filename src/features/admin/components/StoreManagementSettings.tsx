@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '../../../lib/supabaseClient';
 import { addBranchFilter } from '../../../lib/branchAwareApi';
+import type { StoreLocationSchema } from '../../../lib/database/schema';
+import { STORE_LOCATION_DEFAULTS, validateStoreLocation, applyStoreLocationDefaults } from '../../../lib/database/schema';
 import { 
   Building2, 
   MapPin, 
@@ -42,70 +44,15 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface Store {
+// Use schema type with optional id for form usage (new stores don't have id yet)
+type Store = Partial<StoreLocationSchema> & {
   id?: string;
   name: string;
   code: string;
   address: string;
   city: string;
-  state: string;
-  zip_code: string;
   country: string;
-  phone: string;
-  email: string;
-  manager_name: string;
-  is_main: boolean;
-  is_active: boolean;
-  opening_time: string;
-  closing_time: string;
-  
-  // Data Isolation & Sharing
-  data_isolation_mode: 'shared' | 'isolated' | 'hybrid';
-  
-  // What data is shared vs isolated - Core Data
-  share_products: boolean;
-  share_customers: boolean;
-  share_inventory: boolean;
-  share_suppliers: boolean;
-  share_categories: boolean;
-  share_employees: boolean;
-  
-  // Additional Isolation Options - Business Operations
-  share_sales: boolean;
-  share_purchase_orders: boolean;
-  share_devices: boolean;
-  share_payments: boolean;
-  share_appointments: boolean;
-  share_reminders: boolean;
-  share_expenses: boolean;
-  share_trade_ins: boolean;
-  share_special_orders: boolean;
-  share_attendance: boolean;
-  share_loyalty_points: boolean;
-  share_accounts: boolean;
-
-  // Additional Business Features
-  share_gift_cards: boolean;
-  share_quality_checks: boolean;
-  share_recurring_expenses: boolean;
-  share_communications: boolean;
-  share_reports: boolean;
-  share_finance_transfers: boolean;
-
-  // Transfer & Sync Options
-  allow_stock_transfer: boolean;
-  auto_sync_products: boolean;
-  auto_sync_prices: boolean;
-  require_approval_for_transfers: boolean;
-  
-  // Pricing & Tax
-  pricing_model: 'centralized' | 'location-specific';
-  tax_rate_override?: number;
-  
-  // Permissions
-  can_view_other_branches: boolean;
-  can_transfer_to_branches: string[]; // Array of branch IDs
-}
+};
 
 const StoreManagementSettings: React.FC = () => {
   const [stores, setStores] = useState<Store[]>([]);
@@ -114,66 +61,24 @@ const StoreManagementSettings: React.FC = () => {
   const [editingStore, setEditingStore] = useState<Store | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Create empty store template outside component to ensure stability
+  // Create empty store template using schema defaults
   const emptyStore: Store = useMemo(() => ({
-    name: '',
-    code: '',
-    address: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    country: '',
-    phone: '',
-    email: '',
-    manager_name: '',
-    is_main: false,
-    is_active: true,
-    opening_time: '09:00',
-    closing_time: '18:00',
-
-    // Data Isolation Defaults - Users must manually configure
-    data_isolation_mode: 'hybrid',
-    share_products: false,
-    share_customers: false,
-    share_inventory: false,
-    share_suppliers: false,
-    share_categories: false,
-    share_employees: false,
-
-    // Additional isolation defaults
-    share_sales: false,
-    share_purchase_orders: false,
-    share_devices: false,
-    share_payments: false,
-    share_appointments: false,
-    share_reminders: false,
-    share_expenses: false,
-    share_trade_ins: false,
-    share_special_orders: false,
-    share_attendance: false,
-    share_loyalty_points: false,
-    share_accounts: true,
-
-    // Additional business feature defaults
-    share_gift_cards: true,
-    share_quality_checks: false,
-    share_recurring_expenses: false,
-    share_communications: false,
-    share_reports: false,
-    share_finance_transfers: false,
-
-    // Transfer Options
-    allow_stock_transfer: true,
-    auto_sync_products: true,
-    auto_sync_prices: true,
-    require_approval_for_transfers: false,
-
-    // Pricing
-    pricing_model: 'centralized',
-
-    // Permissions
-    can_view_other_branches: false,
-    can_transfer_to_branches: []
+    ...applyStoreLocationDefaults({
+      name: '',
+      code: '',
+      address: '',
+      city: '',
+      country: 'Tanzania',
+      // Override defaults for new stores - use hybrid mode for flexibility
+      data_isolation_mode: 'hybrid',
+      share_products: false,
+      share_customers: false,
+      share_inventory: false,
+      share_suppliers: false,
+      share_categories: false,
+      share_employees: false,
+      share_accounts: true,
+    }) as Store,
   }), []);
 
   useEffect(() => {
@@ -223,7 +128,14 @@ const StoreManagementSettings: React.FC = () => {
   };
 
   const handleSaveStore = useCallback(async (store: Store) => {
-    // Validate required fields
+    // Validate using schema validator
+    const validation = validateStoreLocation(store);
+    if (!validation.valid) {
+      toast.error(`Validation failed: ${validation.errors.join(', ')}`);
+      return;
+    }
+
+    // Validate required fields (additional check)
     if (!store.name || !store.code) {
       toast.error('Store name and code are required');
       return;
@@ -233,12 +145,13 @@ const StoreManagementSettings: React.FC = () => {
     try {
       console.log('💾 Attempting to save store:', store);
       
-      // Prepare store data - remove empty arrays to avoid PostgreSQL type errors
-      const storeData = { ...store };
+      // Apply defaults to ensure all required fields are present
+      const storeData = applyStoreLocationDefaults(store);
       
+      // Prepare store data - remove empty arrays to avoid PostgreSQL type errors
       // PostgreSQL can't determine type of empty arrays, so remove or set to null
       if (Array.isArray(storeData.can_transfer_to_branches) && storeData.can_transfer_to_branches.length === 0) {
-        delete storeData.can_transfer_to_branches; // Let database use default value
+        delete (storeData as any).can_transfer_to_branches; // Let database use default value
       }
       
       if (store.id) {

@@ -3428,6 +3428,7 @@ Generated: ${new Date().toLocaleString()}
                 </div>
               </div>
             </div>
+            </div>
           </div>
 
           {/* Restore from Backup */}
@@ -4058,27 +4059,27 @@ Generated: ${new Date().toLocaleString()}
         </div>
       </div>
 
-              {/* Offline Sales Sync */}
-              <div className="border-t border-gray-200 pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Cloud className="h-5 w-5 text-green-600" />
-                    <h4 className="text-sm font-semibold text-gray-900">Offline Sales Sync</h4>
-                  </div>
-          {navigator.onLine ? (
-            <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
-              <Wifi className="w-3 h-3" />
-              Online
-            </span>
-          ) : (
-            <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold flex items-center gap-1">
-              <WifiOff className="w-3 h-3" />
-              Offline
-            </span>
-          )}
-        </div>
+          {/* Offline Sales Sync */}
+          <div className="border-t border-gray-200 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Cloud className="h-5 w-5 text-green-600" />
+                <h4 className="text-sm font-semibold text-gray-900">Offline Sales Sync</h4>
+              </div>
+              {navigator.onLine ? (
+                <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold flex items-center gap-1">
+                  <Wifi className="w-3 h-3" />
+                  Online
+                </span>
+              ) : (
+                <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold flex items-center gap-1">
+                  <WifiOff className="w-3 h-3" />
+                  Offline
+                </span>
+              )}
+            </div>
 
-        <div className="space-y-3">
+            <div className="space-y-3">
           <div className="p-3 bg-gray-50 rounded-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -4247,38 +4248,38 @@ Generated: ${new Date().toLocaleString()}
               </p>
             </div>
           )}
-        </div>
-      </div>
-
-              {/* Storage Information */}
-              <div className="border-t border-gray-200 pt-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <HardDrive className="h-5 w-5 text-gray-600" />
-                  <h4 className="text-sm font-semibold text-gray-900">Storage Information</h4>
-                </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600 flex items-center gap-2">
-              <HardDrive className="w-3 h-3" />
-              Local Storage Used
-            </span>
-            <span className="text-xs font-semibold text-gray-900">
-              {(() => {
-                let total = 0;
-                for (let key in localStorage) {
-                  if (localStorage.hasOwnProperty(key)) {
-                    total += localStorage[key].length + key.length;
-                  }
-                }
-                if (total < 1024) return total + ' B';
-                if (total < 1024 * 1024) return (total / 1024).toFixed(2) + ' KB';
-                return (total / (1024 * 1024)).toFixed(2) + ' MB';
-              })()}
-            </span>
+            </div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-600">Storage Limit</span>
-            <span className="text-xs font-semibold text-gray-900">~5-10 MB</span>
+
+          {/* Storage Information */}
+          <div className="border-t border-gray-200 pt-6">
+            <div className="flex items-center gap-2 mb-3">
+              <HardDrive className="h-5 w-5 text-gray-600" />
+              <h4 className="text-sm font-semibold text-gray-900">Storage Information</h4>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600 flex items-center gap-2">
+                  <HardDrive className="w-3 h-3" />
+                  Local Storage Used
+                </span>
+                <span className="text-xs font-semibold text-gray-900">
+                  {(() => {
+                    let total = 0;
+                    for (let key in localStorage) {
+                      if (localStorage.hasOwnProperty(key)) {
+                        total += localStorage[key].length + key.length;
+                      }
+                    }
+                    if (total < 1024) return total + ' B';
+                    if (total < 1024 * 1024) return (total / 1024).toFixed(2) + ' KB';
+                    return (total / (1024 * 1024)).toFixed(2) + ' MB';
+                  })()}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-600">Storage Limit</span>
+                <span className="text-xs font-semibold text-gray-900">~5-10 MB</span>
               </div>
             </div>
           </div>
