@@ -3,9 +3,6 @@
  * Utility to diagnose and fix service connection issues
  */
 
-// WhatsApp credentials have been removed
-const getWhatsAppCredentials = () => ({ instanceId: '', apiToken: '' });
-const getWhatsAppApiUrl = () => '';
 import { APP_CONFIG } from '../config/appConfig';
 
 export interface ServiceStatus {
@@ -17,7 +14,6 @@ export interface ServiceStatus {
 }
 
 export interface SystemStatus {
-  whatsapp: ServiceStatus;
   ai: ServiceStatus;
   database: ServiceStatus;
   api: ServiceStatus;
@@ -35,54 +31,6 @@ class ServiceStatusChecker {
     return ServiceStatusChecker.instance;
   }
 
-  /**
-   * Check WhatsApp service status
-   */
-  async checkWhatsAppStatus(): Promise<ServiceStatus> {
-    const cacheKey = 'whatsapp';
-    const cached = this.getCachedStatus(cacheKey);
-    if (cached) return cached;
-
-    const status: ServiceStatus = {
-      service: 'WhatsApp',
-      status: 'unknown',
-      lastCheck: new Date().toISOString()
-    };
-
-    try {
-      const credentials = getWhatsAppCredentials();
-      
-      if (!credentials.instanceId || !credentials.apiToken) {
-        status.status = 'unhealthy';
-        status.error = 'Missing credentials';
-        return this.cacheStatus(cacheKey, status);
-      }
-
-      const apiUrl = getWhatsAppApiUrl('getStateInstance');
-      const response = await fetch(apiUrl, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(10000) // 10 second timeout
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        status.status = 'healthy';
-        status.details = {
-          state: data.stateInstance,
-          instanceId: credentials.instanceId
-        };
-      } else {
-        status.status = 'unhealthy';
-        status.error = `API Error: ${response.status} ${response.statusText}`;
-      }
-    } catch (error) {
-      status.status = 'unhealthy';
-      status.error = error instanceof Error ? error.message : 'Unknown error';
-    }
-
-    return this.cacheStatus(cacheKey, status);
-  }
 
   /**
    * Check AI service status
@@ -218,15 +166,13 @@ class ServiceStatusChecker {
    * Get comprehensive system status
    */
   async getSystemStatus(): Promise<SystemStatus> {
-    const [whatsapp, ai, database, api] = await Promise.allSettled([
-      this.checkWhatsAppStatus(),
+    const [ai, database, api] = await Promise.allSettled([
       this.checkAIStatus(),
       this.checkDatabaseStatus(),
       this.checkAPIStatus()
     ]);
 
     return {
-      whatsapp: whatsapp.status === 'fulfilled' ? whatsapp.value : this.createErrorStatus('WhatsApp', whatsapp.reason),
       ai: ai.status === 'fulfilled' ? ai.value : this.createErrorStatus('AI', ai.reason),
       database: database.status === 'fulfilled' ? database.value : this.createErrorStatus('Database', database.reason),
       api: api.status === 'fulfilled' ? api.value : this.createErrorStatus('API', api.reason)

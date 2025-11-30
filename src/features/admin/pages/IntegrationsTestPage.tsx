@@ -31,7 +31,6 @@ import {
   type Integration,
 } from '../../../lib/integrationsApi';
 import { smsService } from '../../../services/smsService';
-import { whatsappService } from '../../../services/whatsappService';
 
 interface TestResult {
   integration: string;
@@ -136,58 +135,6 @@ const IntegrationsTestPage: React.FC = () => {
     }
   };
 
-  /**
-   * Test WhatsApp Integration
-   */
-  const testWhatsApp = async () => {
-    if (!testPhone) {
-      toast.error('Please enter a phone number');
-      return;
-    }
-
-    const startTime = Date.now();
-    const testIndex = testResults.length;
-    
-    addTestResult({
-      integration: 'WhatsApp',
-      test: 'Send Test WhatsApp Message',
-      status: 'running',
-    });
-
-    try {
-      const credentials = await getCredentials('WHATSAPP_GATEWAY');
-      if (!credentials) {
-        throw new Error('WhatsApp not configured');
-      }
-
-      const result = await whatsappService.sendWhatsAppMessage(testPhone, testMessage);
-      const duration = Date.now() - startTime;
-
-      if (result.success) {
-        updateTestResult(testIndex, {
-          status: 'passed',
-          message: `WhatsApp message sent successfully in ${duration}ms`,
-          duration,
-        });
-        toast.success('WhatsApp test passed!');
-      } else {
-        updateTestResult(testIndex, {
-          status: 'failed',
-          message: result.error || 'Unknown error',
-          duration,
-        });
-        toast.error('WhatsApp test failed');
-      }
-    } catch (error: any) {
-      const duration = Date.now() - startTime;
-      updateTestResult(testIndex, {
-        status: 'failed',
-        message: error.message,
-        duration,
-      });
-      toast.error('WhatsApp test error: ' + error.message);
-    }
-  };
 
   /**
    * Test Credentials Fetch
@@ -469,7 +416,7 @@ const IntegrationsTestPage: React.FC = () => {
               </div>
 
               {/* Test Buttons */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <GlassButton
                   onClick={testSMS}
                   disabled={!testPhone || !testMessage}
@@ -477,14 +424,6 @@ const IntegrationsTestPage: React.FC = () => {
                 >
                   <Smartphone className="w-4 h-4" />
                   Test SMS
-                </GlassButton>
-                <GlassButton
-                  onClick={testWhatsApp}
-                  disabled={!testPhone || !testMessage}
-                  className="flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  Test WhatsApp
                 </GlassButton>
               </div>
             </div>

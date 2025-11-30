@@ -56,7 +56,6 @@ import {
   PerformanceMetricsChart,
   SalesFunnelChart,
   PurchaseOrderChart,
-  SalesChart,
   PaymentMethodsChart,
   SalesByCategoryChart,
   ProfitMarginChart,
@@ -81,6 +80,7 @@ const DashboardPageContent: React.FC = () => {
     isQuickActionEnabled,
     isWidgetEnabled,
     getWidgetSize,
+    getWidgetRowSpanClass,
     loading: settingsLoading
   } = useDashboardSettings();
   
@@ -121,8 +121,8 @@ const DashboardPageContent: React.FC = () => {
         console.log('📂 Loaded saved widget order:', filteredOrder);
       } else {
         // Use default order if no saved order exists
-        const DEFAULT_WIDGET_ORDER = [
-          'revenueTrendChart', 'salesChart', 'deviceStatusChart', 'appointmentsTrendChart',
+          const DEFAULT_WIDGET_ORDER = [
+          'revenueTrendChart', 'deviceStatusChart', 'appointmentsTrendChart',
           'purchaseOrderChart', 'paymentMethodsChart', 'analyticsWidget', 'salesByCategoryChart', 'profitMarginChart',
           'stockLevelChart', 'performanceMetricsChart', 'customerActivityChart',
           'appointmentWidget', 'employeeWidget', 'notificationWidget',
@@ -416,14 +416,6 @@ const DashboardPageContent: React.FC = () => {
       icon: Users,
       color: 'from-teal-500 to-teal-600',
       path: '/employees'
-    },
-    {
-      id: 'whatsapp' as const,
-      title: 'WhatsApp',
-      description: 'WhatsApp chat',
-      icon: MessageCircle,
-      color: 'from-green-500 to-green-600',
-      path: '/lats/whatsapp-chat'
     },
     {
       id: 'settings' as const,
@@ -742,7 +734,6 @@ const DashboardPageContent: React.FC = () => {
           // All chart widget components mapping
           const CHART_COMPONENTS: Record<string, React.FC<any>> = {
             'revenueTrendChart': RevenueTrendChart,
-            'salesChart': SalesChart,
             'deviceStatusChart': DeviceStatusChart,
             'appointmentsTrendChart': AppointmentsTrendChart,
             'purchaseOrderChart': PurchaseOrderChart,
@@ -774,9 +765,10 @@ const DashboardPageContent: React.FC = () => {
 
           return (
             <div
-              className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full"
+              className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-auto gap-4 md:gap-6 w-full"
               style={{
-                alignItems: 'stretch'
+                alignItems: 'stretch',
+                gridAutoRows: 'minmax(400px, auto)'
               }}
             >
               {smartLayout.widgets.map((widget) => {
@@ -786,15 +778,20 @@ const DashboardPageContent: React.FC = () => {
 
                 if (!ChartComponent) return null;
 
-                // Get user's chosen size for this widget
+                // Get user's chosen size and row span for this widget
                 const widgetSize = getWidgetSize(key);
+                const rowSpanClass = getWidgetRowSpanClass(key);
 
                 // Convert widget size to Tailwind responsive classes based on gridColumn
                 const getResponsiveClass = () => {
                   const colSpan = parseInt(gridColumn.split(' ')[1]);
-                  if (colSpan === 3) return 'md:col-span-2 lg:col-span-3';
-                  if (colSpan === 2) return 'md:col-span-2 lg:col-span-2';
-                  return 'md:col-span-1'; // colSpan === 1
+                  let colClass = '';
+                  if (colSpan === 3) colClass = 'md:col-span-2 lg:col-span-3';
+                  else if (colSpan === 2) colClass = 'md:col-span-2 lg:col-span-2';
+                  else colClass = 'md:col-span-1'; // colSpan === 1
+                  
+                  // Combine column and row span classes
+                  return rowSpanClass ? `${colClass} ${rowSpanClass}` : colClass;
                 };
 
                 return (
@@ -889,9 +886,10 @@ const DashboardPageContent: React.FC = () => {
 
           return (
             <div
-              className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 w-full"
+              className="dashboard-cards grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 auto-rows-auto gap-4 md:gap-6 w-full"
               style={{
-                alignItems: 'stretch'
+                alignItems: 'stretch',
+                gridAutoRows: 'minmax(400px, auto)'
               }}
             >
               {smartLayout.widgets.map((widget) => {
@@ -901,15 +899,20 @@ const DashboardPageContent: React.FC = () => {
 
                 if (!WidgetComponent) return null;
 
-                // Get user's chosen size for this widget
+                // Get user's chosen size and row span for this widget
                 const widgetSize = getWidgetSize(key);
+                const rowSpanClass = getWidgetRowSpanClass(key);
 
                 // Convert widget size to Tailwind responsive classes based on gridColumn
                 const getResponsiveClass = () => {
                   const colSpan = parseInt(gridColumn.split(' ')[1]);
-                  if (colSpan === 3) return 'md:col-span-2 lg:col-span-3';
-                  if (colSpan === 2) return 'md:col-span-2 lg:col-span-2';
-                  return 'md:col-span-1'; // colSpan === 1
+                  let colClass = '';
+                  if (colSpan === 3) colClass = 'md:col-span-2 lg:col-span-3';
+                  else if (colSpan === 2) colClass = 'md:col-span-2 lg:col-span-2';
+                  else colClass = 'md:col-span-1'; // colSpan === 1
+                  
+                  // Combine column and row span classes
+                  return rowSpanClass ? `${colClass} ${rowSpanClass}` : colClass;
                 };
 
                 return (

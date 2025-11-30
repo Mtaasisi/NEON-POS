@@ -13,7 +13,6 @@ interface WidgetOrderSettingsProps {
 
 const WIDGET_LABELS: Record<string, string> = {
   revenueTrendChart: 'Revenue Trend',
-  salesChart: 'Sales Overview',
   deviceStatusChart: 'Device Status',
   appointmentsTrendChart: 'Appointments Trend',
   purchaseOrderChart: 'Purchase Orders',
@@ -47,7 +46,6 @@ const WIDGET_LABELS: Record<string, string> = {
 const DEFAULT_ORDER = [
   'purchaseOrderChart',      // 1. Purchase Orders This Week
   'revenueTrendChart',       // 2. Revenue This Week
-  'salesChart',              // 3. Sales This Week
   'deviceStatusChart',       // 4. Repair Status
   'appointmentWidget',       // 5. Appointments
   'paymentMethodsChart',     // 6. Payment Methods

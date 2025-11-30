@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Building2, Upload, X, Save } from 'lucide-react';
+import { Building2, Upload, X, Save, Share2 } from 'lucide-react';
 // Removed GlassCard, GlassButton - using native elements matching SetPricingModal style
 import { supabase } from '../../../lib/supabaseClient';
 import { businessInfoService } from '../../../lib/businessInfoService';
 import toast from 'react-hot-toast';
 import { useSettingsSave } from '../../../context/SettingsSaveContext';
+import { MultiPhoneInput } from '../../../components/ui/MultiPhoneInput';
 
 /**
  * Business Information Settings
@@ -26,7 +27,10 @@ const UnifiedBrandingSettings: React.FC = () => {
     businessEmail: '',
     businessWebsite: '',
     businessAddress: '',
-    businessLogo: null as string | null
+    businessLogo: null as string | null,
+    businessInstagram: '',
+    businessTiktok: '',
+    businessWhatsapp: ''
   });
 
   useEffect(() => {
@@ -36,27 +40,43 @@ const UnifiedBrandingSettings: React.FC = () => {
   const fetchBusinessInfo = async () => {
     try {
       setLoading(true);
+      
+      // First, fetch basic fields without social media columns
       // @ts-ignore - Neon query builder implements thenable interface
-      const { data, error } = await supabase
+      const { data: baseData, error: baseError } = await supabase
         .from('lats_pos_general_settings')
         .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
         .limit(1)
         .single();
 
-      if (error) throw error;
-
-      if (data) {
-        setSettingsId(data.id);
-        setFormData({
-          businessName: data.business_name || '',
-          businessPhone: data.business_phone || '',
-          businessEmail: data.business_email || '',
-          businessWebsite: data.business_website || '',
-          businessAddress: data.business_address || '',
-          businessLogo: data.business_logo || null
-        });
-        setLogoPreview(data.business_logo || null);
+      if (baseError) {
+        throw baseError;
       }
+
+      if (!baseData) {
+        throw new Error('No settings record found');
+      }
+
+      // Set basic data first
+      setSettingsId(baseData.id);
+      let formDataToSet = {
+        businessName: baseData.business_name || '',
+        businessPhone: baseData.business_phone || '',
+        businessEmail: baseData.business_email || '',
+        businessWebsite: baseData.business_website || '',
+        businessAddress: baseData.business_address || '',
+        businessLogo: baseData.business_logo || null,
+        businessInstagram: '',
+        businessTiktok: '',
+        businessWhatsapp: ''
+      };
+      setLogoPreview(baseData.business_logo || null);
+
+      // Note: Social media columns may not exist in the database
+      // We'll just use empty strings as defaults
+      // They'll be saved if columns exist, ignored if they don't
+      
+      setFormData(formDataToSet);
     } catch (error: any) {
       console.error('Error fetching business info:', error);
       toast.error('Failed to load business information');
@@ -118,20 +138,69 @@ const UnifiedBrandingSettings: React.FC = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
+      
+      // First, prepare basic data without social media columns
+      const basicUpdateData = {
+        business_name: formData.businessName || null,
+        business_phone: formData.businessPhone || null,
+        business_email: formData.businessEmail || null,
+        business_website: formData.businessWebsite || null,
+        business_address: formData.businessAddress || null,
+        business_logo: formData.businessLogo || null,
+        updated_at: new Date().toISOString()
+      };
+      
+      // Try to save basic data first
+      console.log('💾 Saving basic business info...');
+      
       // @ts-ignore - Neon query builder implements thenable interface
-      const { error } = await supabase
+      let { data, error } = await supabase
         .from('lats_pos_general_settings')
-        .update({
-          business_name: formData.businessName,
-          business_phone: formData.businessPhone,
-          business_email: formData.businessEmail,
-          business_website: formData.businessWebsite,
-          business_address: formData.businessAddress,
-          business_logo: formData.businessLogo
-        })
-        .eq('id', settingsId);
+        .update(basicUpdateData)
+        .eq('id', settingsId)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+      
+      // Try to save social media columns if they have values
+      if (formData.businessInstagram?.trim() || formData.businessTiktok?.trim() || formData.businessWhatsapp?.trim()) {
+        try {
+          const socialData: any = {};
+          if (formData.businessInstagram?.trim()) socialData.business_instagram = formData.businessInstagram.trim();
+          if (formData.businessTiktok?.trim()) socialData.business_tiktok = formData.businessTiktok.trim();
+          if (formData.businessWhatsapp?.trim()) socialData.business_whatsapp = formData.businessWhatsapp.trim();
+          
+          console.log('💾 Attempting to save social media fields:', socialData);
+          
+          // @ts-ignore - Neon query builder implements thenable interface
+          const { data: socialResult, error: socialError } = await supabase
+            .from('lats_pos_general_settings')
+            .update(socialData)
+            .eq('id', settingsId)
+            .select('business_instagram, business_tiktok, business_whatsapp');
+          
+          if (socialError) {
+            console.error('❌ Error saving social media fields:', socialError);
+            console.error('   Error code:', socialError.code);
+            console.error('   Error message:', socialError.message);
+            // Don't throw - basic info is already saved
+          } else {
+            console.log('✅ Social media fields saved successfully:', socialResult?.[0]);
+          }
+        } catch (err: any) {
+          console.error('❌ Exception saving social media fields:', err);
+          // Don't throw - basic info is already saved
+        }
+      }
+      
+      console.log('✅ Successfully saved business info:', {
+        saved: data?.[0],
+        instagram: data?.[0]?.business_instagram,
+        tiktok: data?.[0]?.business_tiktok,
+        whatsapp: data?.[0]?.business_whatsapp
+      });
 
       // Clear business info cache to force all components to refresh
       businessInfoService.clearCache();
@@ -142,7 +211,15 @@ const UnifiedBrandingSettings: React.FC = () => {
       toast.success('Business information updated successfully - All components will refresh');
     } catch (error: any) {
       console.error('Error updating business info:', error);
-      toast.error('Failed to update business information');
+      
+      // Check if it's a missing column error for social media
+      const errorMessage = String(error.message || '').toLowerCase();
+      if (errorMessage.includes('business_instagram') || errorMessage.includes('business_tiktok') || errorMessage.includes('business_whatsapp') || errorMessage.includes('does not exist')) {
+        console.warn('⚠️ Social media columns may not exist in this database connection');
+        toast.error(`Failed to update business information: ${error.message || 'Database column error'}`);
+      } else {
+        toast.error(`Failed to update business information: ${error.message || 'Unknown error'}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -215,16 +292,13 @@ const UnifiedBrandingSettings: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Business Phone
-                </label>
-                <input
-                  type="tel"
+              <div className="md:col-span-2">
+                <MultiPhoneInput
                   value={formData.businessPhone}
-                  onChange={(e) => setFormData({ ...formData, businessPhone: e.target.value })}
+                  onChange={(value) => setFormData({ ...formData, businessPhone: value })}
                   placeholder="+255 123 456 789"
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
+                  label="Business Phone"
+                  maxPhones={5}
                 />
               </div>
 
@@ -266,6 +340,57 @@ const UnifiedBrandingSettings: React.FC = () => {
                 placeholder="123 Main Street, City, Country"
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
               />
+            </div>
+          </div>
+
+          {/* Social Media Section */}
+          <div className="bg-white rounded-xl p-6 border-2 border-gray-200 shadow-sm">
+            <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-sm">
+                <Share2 className="w-4 h-4 text-white" />
+              </div>
+              Social Media
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  Instagram Handle
+                </label>
+                <input
+                  type="text"
+                  value={formData.businessInstagram}
+                  onChange={(e) => setFormData({ ...formData, businessInstagram: e.target.value })}
+                  placeholder="@yourhandle"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  TikTok Handle
+                </label>
+                <input
+                  type="text"
+                  value={formData.businessTiktok}
+                  onChange={(e) => setFormData({ ...formData, businessTiktok: e.target.value })}
+                  placeholder="@yourhandle"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-gray-900 focus:ring-2 focus:ring-gray-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-2">
+                  WhatsApp Number
+                </label>
+                <input
+                  type="tel"
+                  value={formData.businessWhatsapp}
+                  onChange={(e) => setFormData({ ...formData, businessWhatsapp: e.target.value })}
+                  placeholder="+255 123 456 789"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-200 text-gray-900 font-medium bg-white"
+                />
+              </div>
             </div>
           </div>
 

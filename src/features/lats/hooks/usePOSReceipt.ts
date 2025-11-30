@@ -1,4 +1,6 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
+import { businessInfoService } from '../../../lib/businessInfoService';
+import jsPDF from 'jspdf';
 
 interface ReceiptItem {
   id: string;
@@ -7,6 +9,14 @@ interface ReceiptItem {
   quantity: number;
   unitPrice: number;
   totalPrice: number;
+  sku?: string;
+  selectedSerialNumbers?: Array<{ 
+    id?: string; 
+    serial_number?: string; 
+    imei?: string; 
+    mac_address?: string;
+  }>;
+  attributes?: Record<string, any>;
 }
 
 interface Receipt {
@@ -54,6 +64,24 @@ export const usePOSReceipt = () => {
     paperSize: 'thermal'
   });
 
+  // Load business info and update header
+  useEffect(() => {
+    const loadBusinessInfo = async () => {
+      try {
+        const businessInfo = await businessInfoService.getBusinessInfo();
+        if (businessInfo.name) {
+          setReceiptTemplate(prev => ({
+            ...prev,
+            header: businessInfo.name.toUpperCase()
+          }));
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not load business info for receipt header');
+      }
+    };
+    loadBusinessInfo();
+  }, []);
+
   // Generate receipt number
   const generateReceiptNumber = useCallback(() => {
     const timestamp = Date.now();
@@ -65,9 +93,9 @@ export const usePOSReceipt = () => {
   const createReceipt = useCallback((
     items: ReceiptItem[],
     totals: { subtotal: number; tax: number; discount: number; total: number },
-    customer?: { name: string; phone?: string; email?: string },
     paymentMethod: string,
     cashierName: string,
+    customer?: { name: string; phone?: string; email?: string },
     transactionId?: string
   ): Receipt => {
     const receipt: Receipt = {
@@ -142,7 +170,7 @@ export const usePOSReceipt = () => {
     content += '-'.repeat(40) + '\n';
     
     receipt.items.forEach(item => {
-      const itemName = item.variantName ? `${item.productName} (${item.variantName})` : item.productName;
+      const itemName = item.variantName ? `${item.name} (${item.variantName})` : item.name;
       content += `${item.quantity}x ${itemName}\n`;
       content += `  ${formatMoney(item.unitPrice)} each\n`;
       content += `  ${formatMoney(item.totalPrice)}\n\n`;
@@ -220,21 +248,376 @@ export const usePOSReceipt = () => {
 
   // Export receipt as PDF
   const exportReceiptPDF = useCallback(async (receipt: Receipt) => {
-    // This would integrate with a PDF library like jsPDF
-    console.log('Exporting receipt as PDF:', receipt.receiptNumber);
-    
-    // For now, just simulate PDF generation
-    const content = generateReceiptContent(receipt);
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `receipt-${receipt.receiptNumber}.txt`;
-    a.click();
-    
-    URL.revokeObjectURL(url);
-  }, [generateReceiptContent]);
+    try {
+      // Get business info
+      const businessInfo = await businessInfoService.getBusinessInfo();
+      
+      // Generate PDF with modern design
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - (margin * 2);
+      let yPos = margin;
+
+      // Helper function to add new page if needed
+      const checkPageBreak = (requiredHeight: number) => {
+        if (yPos + requiredHeight > pageHeight - margin) {
+          doc.addPage();
+          yPos = margin;
+        }
+      };
+
+      // Helper to draw a box/rectangle
+      const drawBox = (x: number, y: number, width: number, height: number, fill: boolean = false, borderColor?: number[]) => {
+        if (fill) {
+          doc.setFillColor(249, 250, 251); // Light gray background
+          doc.rect(x, y, width, height, 'F');
+        }
+        if (borderColor) {
+          doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
+        } else {
+          doc.setDrawColor(229, 231, 235); // Gray border
+        }
+        doc.setLineWidth(0.5);
+        doc.rect(x, y, width, height);
+      };
+
+      // Header Section with Professional Design (like SetPricingModal)
+      const headerHeight = 55;
+      // Header background with green accent
+      doc.setFillColor(16, 185, 129); // Green-500
+      doc.rect(margin, yPos, contentWidth, 8, 'F');
+      // Main header box
+      drawBox(margin, yPos + 8, contentWidth, headerHeight - 8, true, [255, 255, 255]);
+      
+      // Try to add logo if available
+      if (businessInfo.logo) {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          
+          await new Promise<void>((resolve) => {
+            img.onload = () => {
+              try {
+                const logoWidth = 40;
+                const logoHeight = (img.height / img.width) * logoWidth;
+                const logoX = margin + 12;
+                const logoY = yPos + 8 + (headerHeight - 8 - logoHeight) / 2;
+                doc.addImage(businessInfo.logo!, 'PNG', logoX, logoY, logoWidth, logoHeight);
+              } catch (error) {
+                // Continue without logo
+              }
+              resolve();
+            };
+            img.onerror = () => resolve();
+            img.src = businessInfo.logo!;
+          });
+        } catch (error) {
+          // Continue without logo
+        }
+      }
+
+      // Business Name (centered or next to logo) - Larger, bolder
+      doc.setFontSize(22);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(17, 24, 39); // Gray-900
+      const businessNameX = businessInfo.logo ? margin + 60 : pageWidth / 2;
+      const businessNameY = yPos + 8 + 18;
+      const businessNameWidth = doc.getTextWidth(businessInfo.name);
+      const businessNameXPos = businessInfo.logo ? businessNameX : businessNameX - businessNameWidth / 2;
+      doc.text(businessInfo.name, businessNameXPos, businessNameY);
+
+      // Business Info (below name) - Smaller, gray
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(107, 114, 128); // Gray-500
+      let infoY = businessNameY + 8;
+      if (businessInfo.address) {
+        const addressWidth = doc.getTextWidth(businessInfo.address);
+        const addressX = businessInfo.logo ? businessNameX : pageWidth / 2 - addressWidth / 2;
+        doc.text(businessInfo.address, addressX, infoY);
+        infoY += 5;
+      }
+      if (businessInfo.phone) {
+        const phones = businessInfo.phone.split(',').map(p => p.trim()).filter(p => p.length > 0);
+        phones.forEach((phone, index) => {
+          const phoneWidth = doc.getTextWidth(phone);
+          const phoneX = businessInfo.logo ? businessNameX : pageWidth / 2 - phoneWidth / 2;
+          doc.text(phone, phoneX, infoY);
+          if (index < phones.length - 1) {
+            infoY += 5; // Add spacing between multiple phones
+          }
+        });
+      }
+
+      // Reset text color
+      doc.setTextColor(0, 0, 0);
+      yPos += headerHeight + 12;
+
+      // Receipt Info Section (Two Column Layout) - Professional Card Design
+      const receiptInfoHeight = receipt.customer && receiptTemplate.showCustomerInfo ? 50 : 35;
+      drawBox(margin, yPos, contentWidth, receiptInfoHeight, true, [229, 231, 235]);
+      
+      // Section divider line
+      doc.setDrawColor(229, 231, 235);
+      doc.setLineWidth(1);
+      doc.line(pageWidth / 2, yPos + 5, pageWidth / 2, yPos + receiptInfoHeight - 5);
+      
+      const leftColX = margin + 10;
+      const rightColX = pageWidth / 2 + 10;
+      let leftY = yPos + 10;
+      let rightY = yPos + 10;
+
+      // Left Column - Receipt Details with green accent
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(34, 197, 94); // Green-500
+      doc.text('RECEIPT DETAILS', leftColX, leftY);
+      leftY += 8;
+      
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(17, 24, 39); // Gray-900
+      doc.text(`Receipt #: ${receipt.receiptNumber}`, leftColX, leftY);
+      leftY += 6;
+      
+      const formatDate = (date: Date) => {
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      };
+      doc.text(`Date: ${formatDate(receipt.date)}`, leftColX, leftY);
+      leftY += 6;
+      doc.text(`Cashier: ${receipt.cashierName}`, leftColX, leftY);
+      if (receipt.transactionId) {
+        leftY += 6;
+        doc.text(`TXN: ${receipt.transactionId}`, leftColX, leftY);
+      }
+
+      // Right Column - Customer Info
+      if (receipt.customer && receiptTemplate.showCustomerInfo) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(34, 197, 94); // Green-500
+        doc.text('CUSTOMER', rightColX, rightY);
+        rightY += 8;
+        
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(17, 24, 39); // Gray-900
+        doc.text(receipt.customer.name, rightColX, rightY);
+        rightY += 6;
+        if (receipt.customer.phone) {
+          doc.text(receipt.customer.phone, rightColX, rightY);
+          rightY += 6;
+        }
+        if (receipt.customer.email) {
+          doc.text(receipt.customer.email, rightColX, rightY);
+        }
+      }
+
+      // Reset text color
+      doc.setTextColor(0, 0, 0);
+      yPos += receiptInfoHeight + 12;
+      checkPageBreak(35);
+
+      // Items Section Header - Professional Style
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(17, 24, 39); // Gray-900
+      doc.text('ITEMS PURCHASED', margin, yPos);
+      yPos += 10;
+      
+      // Draw professional line under header
+      doc.setDrawColor(229, 231, 235);
+      doc.setLineWidth(1);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 8;
+
+      // Items with Professional Card Design (like SetPricingModal)
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      receipt.items.forEach(item => {
+        // Calculate dynamic height based on content
+        let estimatedHeight = 25; // Base height
+        if (item.sku) estimatedHeight += 5;
+        if (item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0) {
+          estimatedHeight += item.selectedSerialNumbers.length * 5;
+        }
+        if (item.attributes && Object.keys(item.attributes).length > 0) {
+          const attrCount = Object.keys(item.attributes).filter(key => 
+            !['id', 'created_at', 'updated_at', 'variant_id', 'product_id'].includes(key)
+          ).length;
+          estimatedHeight += attrCount * 4;
+        }
+        estimatedHeight = Math.max(estimatedHeight, 50); // Minimum height
+        
+        checkPageBreak(estimatedHeight + 5);
+        
+        // Item Card with green border (like SetPricingModal's completed items)
+        const cardBorderColor = [34, 197, 94]; // Green-500
+        drawBox(margin, yPos, contentWidth, estimatedHeight, true, cardBorderColor);
+        
+        const itemMargin = margin + 10;
+        let itemY = yPos + 10;
+        
+        // Product Name with Variant (Top Left) - Bold, larger
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(17, 24, 39); // Gray-900
+        const productName = item.variantName && item.variantName !== 'Default' 
+          ? `${item.name} - ${item.variantName}`
+          : item.name;
+        const itemText = `${item.quantity}x ${productName}`;
+        const itemLines = doc.splitTextToSize(itemText, contentWidth - 120);
+        doc.text(itemLines, itemMargin, itemY);
+        itemY += itemLines.length * 6 + 3;
+        
+        // Price Badge (Top Right) - Green background like SetPricingModal
+        doc.setFillColor(34, 197, 94); // Green-500
+        const priceText = `${item.totalPrice.toLocaleString()}`;
+        const priceWidth = doc.getTextWidth(priceText) + 8;
+        const priceX = pageWidth - margin - 10 - priceWidth;
+        doc.rect(priceX, yPos + 8, priceWidth, 12, 'F');
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255); // White text
+        doc.text(priceText, priceX + 4, yPos + 16);
+        doc.setTextColor(0, 0, 0); // Reset
+        
+        // Specifications Section (Indented) - Smaller, gray text
+        const specX = itemMargin + 5;
+        let specY = itemY;
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(107, 114, 128); // Gray-500
+        
+        // SKU with icon-like styling
+        if (item.sku) {
+          doc.setFont('helvetica', 'italic');
+          doc.text(`SKU: ${item.sku}`, specX, specY);
+          specY += 5;
+        }
+        
+        // Serial Numbers/IMEI - Monospace-like styling
+        if (item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0) {
+          item.selectedSerialNumbers.forEach((serial) => {
+            const serialInfo: string[] = [];
+            if (serial.serial_number) serialInfo.push(`S/N: ${serial.serial_number}`);
+            if (serial.imei) serialInfo.push(`IMEI: ${serial.imei}`);
+            if (serial.mac_address) serialInfo.push(`MAC: ${serial.mac_address}`);
+            if (serialInfo.length > 0) {
+              doc.setFont('helvetica', 'normal');
+              doc.text(serialInfo.join(' | '), specX, specY);
+              specY += 5;
+            }
+          });
+        }
+        
+        // Attributes (specifications) - Clean formatting
+        if (item.attributes && Object.keys(item.attributes).length > 0) {
+          Object.entries(item.attributes).forEach(([key, value]) => {
+            if (!['id', 'created_at', 'updated_at', 'variant_id', 'product_id'].includes(key) && value) {
+              const keyLabel = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+              doc.text(`${keyLabel}: ${value}`, specX, specY);
+              specY += 4;
+            }
+          });
+        }
+        
+        // Unit Price (Bottom) - Smaller, gray
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(107, 114, 128); // Gray-500
+        const unitPriceText = `${item.unitPrice.toLocaleString()} each`;
+        doc.text(unitPriceText, itemMargin, yPos + estimatedHeight - 6);
+        
+        // Reset text color
+        doc.setTextColor(0, 0, 0);
+        yPos += estimatedHeight + 6;
+      });
+
+      yPos += 10;
+      checkPageBreak(40);
+
+      // Totals Section with Box
+      const totalsBoxHeight = 50;
+      drawBox(margin, yPos, contentWidth, totalsBoxHeight, true);
+      
+      const totalsY = yPos + 10;
+      let totalsLineY = totalsY;
+      
+      const formatMoney = (amount: number) => {
+        return amount.toLocaleString('en-US', {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        });
+      };
+
+      // Subtotal
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Subtotal:', margin + 8, totalsLineY);
+      doc.text(`${formatMoney(receipt.subtotal)}`, pageWidth - margin - 8 - doc.getTextWidth(`${formatMoney(receipt.subtotal)}`), totalsLineY);
+      totalsLineY += 7;
+      
+      if (receiptTemplate.showTax && receipt.tax > 0) {
+        doc.text('Tax (18%):', margin + 8, totalsLineY);
+        doc.text(`${formatMoney(receipt.tax)}`, pageWidth - margin - 8 - doc.getTextWidth(`${formatMoney(receipt.tax)}`), totalsLineY);
+        totalsLineY += 7;
+      }
+      
+      if (receipt.discount > 0) {
+        doc.text('Discount:', margin + 8, totalsLineY);
+        doc.text(`-${formatMoney(receipt.discount)}`, pageWidth - margin - 8 - doc.getTextWidth(`-${formatMoney(receipt.discount)}`), totalsLineY);
+        totalsLineY += 7;
+      }
+      
+      // Total (Prominent)
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      const totalText = `TOTAL: ${formatMoney(receipt.total)}`;
+      const totalWidth = doc.getTextWidth(totalText);
+      doc.text(totalText, pageWidth - margin - 8 - totalWidth, totalsLineY);
+      
+      yPos += totalsBoxHeight + 10;
+
+      // Payment method
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Payment Method: ${receipt.paymentMethod}`, margin, yPos);
+      yPos += 10;
+
+      // Footer Section
+      doc.setDrawColor(200, 200, 200);
+      doc.line(margin, yPos, pageWidth - margin, yPos);
+      yPos += 8;
+      
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'italic');
+      const footerText = receiptTemplate.footer;
+      const footerWidth = doc.getTextWidth(footerText);
+      doc.text(footerText, pageWidth / 2 - footerWidth / 2, yPos);
+      
+      yPos += 6;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      const returnPolicy = 'Please keep this receipt for your records';
+      const returnPolicyWidth = doc.getTextWidth(returnPolicy);
+      doc.text(returnPolicy, pageWidth / 2 - returnPolicyWidth / 2, yPos);
+
+      // Save PDF
+      doc.save(`receipt-${receipt.receiptNumber}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      throw error;
+    }
+  }, [receiptTemplate]);
 
   // Search receipts
   const searchReceipts = useCallback((query: string) => {

@@ -941,14 +941,14 @@ const VariantSelectionModal: React.FC<VariantSelectionModalProps> = ({
                               <p className="text-gray-500 text-sm mb-4">
                                 {variantChildCounts[variant.id] > 0
                                   ? "All devices are currently out of stock"
-                                  : "This variant has no individual devices tracked"}
+                                  : "This variant has no individual devices tracked. You can add the parent variant directly."}
                               </p>
                               {variantChildCounts[variant.id] === 0 && (
                                 <button
                                   onClick={() => handleVariantSelect(variant)}
                                   className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
                                 >
-                                  Add Variant
+                                  Add Parent Variant to Cart
                                 </button>
                               )}
                             </div>

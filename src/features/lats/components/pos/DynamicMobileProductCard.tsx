@@ -311,12 +311,14 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
       const variant = product.variants[0];
       const isParentByFlag = variant.is_parent || variant.variant_type === 'parent';
       
-      // Also check if variant has IMEI children in database
+      // ✅ FIX: Always check if variant has IMEI children in database, regardless of parent flag
+      // Some products may be marked as parent but have no actual children
       let hasChildren = false;
-      if (!isParentByFlag) {
         try {
           const { supabase } = await import('../../../../lib/supabaseClient');
-          const { count } = await supabase
+        
+        // Check for IMEI child variants
+        const { count: imeiCount } = await supabase
             .from('lats_product_variants')
             .select('id', { count: 'exact', head: true })
             .eq('parent_variant_id', variant.id)
@@ -324,17 +326,37 @@ const DynamicMobileProductCard: React.FC<DynamicMobileProductCardProps> = ({
             .eq('is_active', true)
             .gt('quantity', 0);
           
-          hasChildren = (count || 0) > 0;
-          console.log(`🔍 Mobile: Checking variant ${variant.id} for children: ${hasChildren ? 'HAS CHILDREN' : 'NO CHILDREN'}`);
+        // Also check for legacy inventory_items (serial numbers)
+        const { count: legacyCount } = await supabase
+          .from('inventory_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('product_id', product.id)
+          .eq('variant_id', variant.id)
+          .not('serial_number', 'is', null)
+          .eq('status', 'available');
+        
+        hasChildren = ((imeiCount || 0) + (legacyCount || 0)) > 0;
+        console.log(`🔍 Mobile: Checking variant ${variant.id} for children: ${hasChildren ? `HAS ${(imeiCount || 0) + (legacyCount || 0)} CHILDREN` : 'NO CHILDREN'} (IMEI: ${imeiCount || 0}, Legacy: ${legacyCount || 0})`);
         } catch (error) {
           console.error('Error checking for children:', error);
+        // On error, if variant is marked as parent, assume it might have children and show modal
+        // Otherwise, treat as regular variant
+        if (isParentByFlag) {
+          console.log('⚠️ Mobile: Error checking children, but variant is marked as parent - opening modal');
+          setIsVariantModalOpen(true);
+          return;
         }
       }
       
-      if (isParentByFlag || hasChildren) {
-        console.log('✅ Mobile: Opening variant modal - parent variant detected');
+      // Only open modal if variant actually has children OR is marked as parent (with error fallback above)
+      if (hasChildren) {
+        console.log('✅ Mobile: Opening variant modal - variant has children');
         setIsVariantModalOpen(true);
         return;
+      } else if (isParentByFlag) {
+        // Variant is marked as parent but has no children - treat as regular variant
+        console.log('ℹ️ Mobile: Variant marked as parent but has no children - treating as regular variant');
+        // Fall through to add directly to cart below
       }
     }
     

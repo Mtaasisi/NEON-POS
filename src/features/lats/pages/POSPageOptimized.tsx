@@ -590,7 +590,7 @@ const POSPageOptimized: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [priceRange, setPriceRange] = useState({ min: '', max: '' });
-  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('in-stock'); // Default to in-stock to show only available products
+  const [stockFilter, setStockFilter] = useState<'all' | 'in-stock' | 'low-stock' | 'out-of-stock'>('all'); // Default to 'all' to show all products
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'name' | 'price' | 'stock' | 'recent' | 'sales'>('sales');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
@@ -1865,6 +1865,11 @@ const POSPageOptimized: React.FC = () => {
           totalPrice: price * quantity,
           availableQuantity: availableStock,
           image: product.thumbnail_url || product.image,
+          attributes: { 
+            ...(variant.attributes || {}), 
+            ...(variant.variant_attributes || {}),
+            ...(variant.variantAttributes || {})
+          }, // Include variant attributes from all sources
           // ✅ FIX: Treat legacy items as IMEI children
           selectedIMEIVariants: variant && (variant.attributes?.imei || variant.is_legacy || variant.is_imei_child) ? [variant] : [] // Store IMEI variant or legacy item if provided
         };
@@ -2533,7 +2538,7 @@ const POSPageOptimized: React.FC = () => {
           onAddCustomer={() => handleShowAddCustomerModal()}
           onRemoveCustomer={handleRemoveCustomer}
           onScanBarcode={startQrCodeScanner}
-          onViewReceipts={() => alert('Receipts view coming soon!')}
+          onViewReceipts={() => toast.info('Receipts view feature coming soon!', { duration: 3000 })}
           onToggleSettings={() => setShowSettings(true)}
           onViewSales={async () => {
             await loadSales();
@@ -2637,6 +2642,58 @@ const POSPageOptimized: React.FC = () => {
           receiptData={currentReceipt}
           onShare={() => setShowShareReceiptModal(true)}
         />
+
+        {/* TEST BUTTON - Remove in production */}
+        {import.meta.env.DEV && (
+          <button
+            onClick={() => {
+              // Create test receipt data
+              const testReceipt = {
+                id: 'test-' + Date.now(),
+                date: new Date().toLocaleDateString(),
+                time: new Date().toLocaleTimeString(),
+                items: [
+                  {
+                    productName: 'Test Product 1',
+                    variantName: 'Variant A',
+                    quantity: 2,
+                    unitPrice: 50000,
+                    totalPrice: 100000
+                  },
+                  {
+                    productName: 'Test Product 2',
+                    variantName: 'Variant B',
+                    quantity: 1,
+                    unitPrice: 75000,
+                    totalPrice: 75000
+                  }
+                ],
+                customer: {
+                  name: 'Test Customer',
+                  phone: '+255 123 456 789',
+                  email: 'test@example.com'
+                },
+                subtotal: 175000,
+                tax: 0,
+                discount: 10000,
+                total: 165000,
+                paymentMethod: {
+                  name: 'Cash',
+                  description: 'Cash Payment',
+                  icon: '💵'
+                },
+                cashier: 'Test Cashier',
+                receiptNumber: 'TEST-' + Date.now()
+              };
+              setCurrentReceipt(testReceipt);
+              setShowReceiptModal(true);
+            }}
+            className="fixed bottom-4 right-4 z-50 px-4 py-2 bg-purple-600 text-white rounded-lg shadow-lg hover:bg-purple-700 transition-colors font-semibold"
+            title="Test Receipt Modal (Dev Only)"
+          >
+            🧪 Test Receipt
+          </button>
+        )}
 
         <ShareReceiptModal
           isOpen={showShareReceiptModal}
@@ -2820,14 +2877,61 @@ const POSPageOptimized: React.FC = () => {
                   id: result.sale?.id || '',
                   date: new Date().toLocaleDateString(),
                   time: new Date().toLocaleTimeString(),
-                  items: cartItems.map(item => ({
+                  items: cartItems.map(item => {
+                    // Find product and variant to get full attributes/specifications
+                    const product = products.find(p => p.id === item.productId);
+                    const variant = product?.variants?.find((v: any) => v.id === item.variantId);
+                    
+                    // Extract attributes from variant - check both variant_attributes and attributes
+                    let attributes = item.attributes || {};
+                    
+                    // Merge variant_attributes (JSONB column from database)
+                    if (variant?.variant_attributes) {
+                      attributes = { ...attributes, ...variant.variant_attributes };
+                    }
+                    // Also check variantAttributes (camelCase)
+                    if (variant?.variantAttributes) {
+                      attributes = { ...attributes, ...variant.variantAttributes };
+                    }
+                    // Merge regular attributes
+                    if (variant?.attributes) {
+                      attributes = { ...attributes, ...variant.attributes };
+                    }
+                    
+                    // Handle specification field - can be in variant_attributes or attributes
+                    const specSource = variant?.variant_attributes?.specification || 
+                                     variant?.variantAttributes?.specification ||
+                                     variant?.attributes?.specification;
+                    
+                    if (specSource) {
+                      try {
+                        const parsed = typeof specSource === 'string' 
+                          ? JSON.parse(specSource)
+                          : specSource;
+                        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                          // Merge specification fields into attributes
+                          attributes = { ...attributes, ...parsed };
+                        }
+                      } catch {
+                        // If parsing fails, keep original
+                      }
+                    }
+                    
+                    return {
                     productName: item.productName,
                     variantName: item.variantName,
                     quantity: item.quantity,
                     unitPrice: item.unitPrice,
                     totalPrice: item.totalPrice,
-                    serialNumbers: item.selectedSerialNumbers || [] // Include serial numbers
-                  })),
+                      sku: item.sku,
+                      image: item.image,
+                      selectedSerialNumbers: item.selectedSerialNumbers || [],
+                      attributes: attributes
+                    };
+                  }),
+                  customerName: selectedCustomer?.name || null,
+                  customerPhone: selectedCustomer?.phone || null,
+                  customerEmail: selectedCustomer?.email || null,
                   customer: selectedCustomer ? {
                     name: selectedCustomer.name,
                     phone: selectedCustomer.phone,
@@ -2990,12 +3094,15 @@ const POSPageOptimized: React.FC = () => {
 
   // Render Desktop UI
   return (
-    <div className="min-h-screen pos-auto-scale" data-pos-page="true">
+    <div className="flex flex-col h-screen pos-auto-scale" data-pos-page="true">
       {/* Breadcrumb */}
-      <LATSBreadcrumb />
+      <div className="flex-shrink-0 px-4 sm:px-6 py-2">
+        <LATSBreadcrumb />
+      </div>
 
       {/* POS Top Bar */}
-      <POSTopBar
+      <div className="flex-shrink-0">
+        <POSTopBar
         cartItemsCount={cartItems.length}
         totalAmount={totalAmount}
         onProcessPayment={handleProcessPayment}
@@ -3085,7 +3192,7 @@ const POSPageOptimized: React.FC = () => {
         onScanQrCode={isQrCodeScannerEnabled ? startQrCodeScanner : () => {}}
         onAddCustomer={() => handleShowAddCustomerModal()}
         onViewReceipts={() => {
-          alert('Receipts view coming soon!');
+          toast.info('Receipts view feature coming soon!', { duration: 3000 });
         }}
         onViewSales={async () => {
           // Refresh sales data before navigating
@@ -3111,6 +3218,7 @@ const POSPageOptimized: React.FC = () => {
         onCloseDay={() => setShowDailyClosingModal(true)}
         canCloseDay={canCloseDailySales}
       />
+      </div>
 
       {/* Temporary Migration Button - Remove after migration is applied */}
       {/* {currentUser?.role === 'admin' && (
@@ -3124,7 +3232,8 @@ const POSPageOptimized: React.FC = () => {
         </div>
       )} */}
 
-      <div className="p-4 sm:p-6 max-w-full mx-auto pos-page-container overflow-hidden h-[calc(100vh-120px)]">
+      {/* Main Content Area - Takes remaining space */}
+      <div className="flex-1 min-h-0 p-4 sm:p-6 max-w-full mx-auto pos-page-container overflow-hidden">
         <div className="flex flex-col lg:flex-row gap-6 h-full">
           {/* Product Search Section - Fixed height to prevent layout shift */}
           <div className="flex-1 min-h-0 relative h-full">
@@ -3149,30 +3258,30 @@ const POSPageOptimized: React.FC = () => {
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               isSearching={isSearching}
-            showAdvancedFilters={showAdvancedFilters}
-            setShowAdvancedFilters={setShowAdvancedFilters}
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
-            selectedBrand={selectedBrand}
-            setSelectedBrand={setSelectedBrand}
-            priceRange={priceRange}
-            setPriceRange={setPriceRange}
-            stockFilter={stockFilter}
-            setStockFilter={setStockFilter}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            sortOrder={sortOrder}
-            setSortOrder={setSortOrder}
-            categories={categories?.map(cat => cat.name) || []}
-            brands={[]}
-            onAddToCart={addToCart}
-            onAddExternalProduct={() => setShowAddExternalProductModal(true)}
-            onSearch={handleUnifiedSearch}
-            onScanQrCode={startQrCodeScanner}
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
-            totalPages={totalPages}
-            productsPerPage={productsPerPageFromSettings}
+              showAdvancedFilters={showAdvancedFilters}
+              setShowAdvancedFilters={setShowAdvancedFilters}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              selectedBrand={selectedBrand}
+              setSelectedBrand={setSelectedBrand}
+              priceRange={priceRange}
+              setPriceRange={setPriceRange}
+              stockFilter={stockFilter}
+              setStockFilter={setStockFilter}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+              categories={categories?.map(cat => cat.name) || []}
+              brands={[]}
+              onAddToCart={addToCart}
+              onAddExternalProduct={() => setShowAddExternalProductModal(true)}
+              onSearch={handleUnifiedSearch}
+              onScanQrCode={startQrCodeScanner}
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              totalPages={totalPages}
+              productsPerPage={productsPerPageFromSettings}
             />
           </div>
 
@@ -3482,13 +3591,48 @@ const POSPageOptimized: React.FC = () => {
                 id: result.sale?.id || '',
                 date: new Date().toLocaleDateString(),
                 time: new Date().toLocaleTimeString(),
-                items: cartItems.map(item => ({
+                items: cartItems.map(item => {
+                  // Find product and variant to get full attributes/specifications
+                  const product = products.find(p => p.id === item.productId);
+                  const variant = product?.variants?.find((v: any) => v.id === item.variantId);
+                  
+                  // Extract attributes from variant or use item attributes
+                  let attributes = item.attributes || {};
+                  
+                  // If variant exists, merge its attributes
+                  if (variant?.attributes) {
+                    attributes = { ...attributes, ...variant.attributes };
+                  }
+                  
+                  // Also check for specification field in variant attributes
+                  if (variant?.attributes?.specification) {
+                    try {
+                      const parsed = typeof variant.attributes.specification === 'string' 
+                        ? JSON.parse(variant.attributes.specification)
+                        : variant.attributes.specification;
+                      if (typeof parsed === 'object' && parsed !== null) {
+                        attributes = { ...attributes, ...parsed };
+                      }
+                    } catch {
+                      // If parsing fails, keep original
+                    }
+                  }
+                  
+                  return {
                   productName: item.productName,
                   variantName: item.variantName,
                   quantity: item.quantity,
                   unitPrice: item.unitPrice,
-                  totalPrice: item.totalPrice
-                })),
+                    totalPrice: item.totalPrice,
+                    sku: item.sku,
+                    image: item.image,
+                    selectedSerialNumbers: item.selectedSerialNumbers || [],
+                    attributes: attributes
+                  };
+                }),
+                customerName: selectedCustomer?.name || null,
+                customerPhone: selectedCustomer?.phone || null,
+                customerEmail: selectedCustomer?.email || null,
                 customer: selectedCustomer ? {
                   name: selectedCustomer.name,
                   phone: selectedCustomer.phone,
@@ -4148,13 +4292,115 @@ const POSPageOptimized: React.FC = () => {
                 id: result.sale?.id || '',
                 date: new Date().toLocaleDateString(),
                 time: new Date().toLocaleTimeString(),
-                items: cartItems.map(item => ({
+                items: cartItems.map(item => {
+                  // Find product and variant to get full attributes/specifications
+                  const product = products.find(p => p.id === item.productId);
+                  const variant = product?.variants?.find((v: any) => v.id === item.variantId);
+                  
+                  // Debug logging
+                  console.log('🔍 Receipt: Processing item:', {
+                    productId: item.productId,
+                    variantId: item.variantId,
+                    productName: item.productName,
+                    variantFound: !!variant,
+                    variantData: variant ? {
+                      id: variant.id,
+                      hasVariantAttributes: !!variant.variant_attributes,
+                      hasAttributes: !!variant.attributes,
+                      variantAttributesType: typeof variant.variant_attributes,
+                      attributesType: typeof variant.attributes
+                    } : null
+                  });
+                  
+                  // Extract attributes from variant - check both variant_attributes and attributes
+                  let attributes = item.attributes || {};
+                  
+                  // Helper function to parse JSONB data
+                  const parseJsonb = (data: any): any => {
+                    if (!data) return {};
+                    if (typeof data === 'string') {
+                      try {
+                        return JSON.parse(data);
+                      } catch {
+                        return {};
+                      }
+                    }
+                    if (typeof data === 'object') {
+                      return data;
+                    }
+                    return {};
+                  };
+                  
+                  // Merge variant_attributes (JSONB column from database) - parse if needed
+                  if (variant?.variant_attributes) {
+                    const parsedVariantAttrs = parseJsonb(variant.variant_attributes);
+                    attributes = { ...attributes, ...parsedVariantAttrs };
+                    console.log('✅ Receipt: Merged variant_attributes:', parsedVariantAttrs);
+                  }
+                  // Also check variantAttributes (camelCase)
+                  if (variant?.variantAttributes) {
+                    const parsedVariantAttrs = parseJsonb(variant.variantAttributes);
+                    attributes = { ...attributes, ...parsedVariantAttrs };
+                    console.log('✅ Receipt: Merged variantAttributes:', parsedVariantAttrs);
+                  }
+                  // Merge regular attributes
+                  if (variant?.attributes) {
+                    const parsedAttrs = parseJsonb(variant.attributes);
+                    attributes = { ...attributes, ...parsedAttrs };
+                    console.log('✅ Receipt: Merged attributes:', parsedAttrs);
+                  }
+                  
+                  // Handle specification field - can be in variant_attributes or attributes
+                  const specSource = variant?.variant_attributes?.specification || 
+                                   variant?.variantAttributes?.specification ||
+                                   variant?.attributes?.specification;
+                  
+                  if (specSource) {
+                    try {
+                      const parsed = typeof specSource === 'string' 
+                        ? JSON.parse(specSource)
+                        : specSource;
+                      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                        // Merge specification fields into attributes
+                        attributes = { ...attributes, ...parsed };
+                        console.log('✅ Receipt: Merged specification:', parsed);
+                      }
+                    } catch (e) {
+                      console.warn('⚠️ Receipt: Failed to parse specification:', e);
+                    }
+                  }
+                  
+                  // Also check if variant_attributes itself contains specification keys
+                  const variantAttrs = variant?.variant_attributes ? parseJsonb(variant.variant_attributes) : {};
+                  if (variantAttrs && typeof variantAttrs === 'object' && !variantAttrs.specification) {
+                    // If variant_attributes is an object with keys (not a specification field), merge all keys
+                    Object.keys(variantAttrs).forEach(key => {
+                      if (key !== 'id' && key !== 'created_at' && key !== 'updated_at' && 
+                          key !== 'variant_id' && key !== 'product_id' && 
+                          key !== 'imei' && key !== 'is_legacy' && key !== 'is_imei_child') {
+                        attributes[key] = variantAttrs[key];
+                      }
+                    });
+                    console.log('✅ Receipt: Merged all variant_attributes keys:', Object.keys(variantAttrs));
+                  }
+                  
+                  console.log('📋 Receipt: Final attributes for item:', attributes);
+                  
+                  return {
                   productName: item.productName,
                   variantName: item.variantName,
                   quantity: item.quantity,
                   unitPrice: item.unitPrice,
-                  totalPrice: item.totalPrice
-                })),
+                    totalPrice: item.totalPrice,
+                    sku: item.sku,
+                    image: item.image,
+                    selectedSerialNumbers: item.selectedSerialNumbers || [],
+                    attributes: attributes
+                  };
+                }),
+                customerName: selectedCustomer?.name || null,
+                customerPhone: selectedCustomer?.phone || null,
+                customerEmail: selectedCustomer?.email || null,
                 customer: selectedCustomer ? {
                   name: selectedCustomer.name,
                   phone: selectedCustomer.phone,
@@ -5193,3 +5439,4 @@ const POSPageOptimized: React.FC = () => {
 };
 
 export default POSPageOptimized;
+

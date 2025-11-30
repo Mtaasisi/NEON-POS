@@ -768,13 +768,30 @@ const supabaseProvider = {
             }
           }
 
+          // Parse variant_attributes if it's a string (JSONB from database)
+          const parseVariantAttributes = (data: any): any => {
+            if (!data) return {};
+            if (typeof data === 'string') {
+              try {
+                return JSON.parse(data);
+              } catch {
+                return {};
+              }
+            }
+            return data || {};
+          };
+
+          const variantAttrs = parseVariantAttributes(v.variant_attributes);
+          const regularAttrs = parseVariantAttributes(v.attributes);
+
           return {
             id: v.id,
             productId: v.product_id,
             name: v.variant_name || v.name || 'Unnamed',
             sku: v.sku,
-            attributes: v.attributes || v.variant_attributes || {},
-            variant_attributes: v.variant_attributes || v.attributes || {},
+            attributes: regularAttrs,
+            variant_attributes: variantAttrs,
+            variantAttributes: variantAttrs, // Also provide camelCase version
             price: v.selling_price || 0,
             costPrice: v.cost_price || 0,
             sellingPrice: v.selling_price || 0,
@@ -1222,7 +1239,24 @@ const supabaseProvider = {
             brand: p.brand,
             model: p.model,
             description: p.description,
-            variants: productVariants.map((v: any) => ({
+            variants: productVariants.map((v: any) => {
+              // Parse variant_attributes if it's a string (JSONB from database)
+              const parseVariantAttributes = (data: any): any => {
+                if (!data) return {};
+                if (typeof data === 'string') {
+                  try {
+                    return JSON.parse(data);
+                  } catch {
+                    return {};
+                  }
+                }
+                return data || {};
+              };
+
+              const variantAttrs = parseVariantAttributes(v.variant_attributes);
+              const regularAttrs = parseVariantAttributes(v.attributes);
+
+              return {
               id: v.id,
               name: v.name,
               sku: v.sku,
@@ -1235,9 +1269,11 @@ const supabaseProvider = {
               quantity: v.quantity, // Add quantity field for consistency
               barcode: v.barcode,
               variant_name: v.variant_name, // ⭐ ADD: For IMEI extraction
-              variant_attributes: v.variant_attributes || v.attributes || {},  // ⭐ PRESERVE: For trade-in detection
-              attributes: v.attributes || v.variant_attributes || {}
-            }))
+                variant_attributes: variantAttrs,  // ⭐ PRESERVE: For trade-in detection
+                variantAttributes: variantAttrs, // Also provide camelCase version
+                attributes: regularAttrs
+              };
+            })
           };
         })
       };

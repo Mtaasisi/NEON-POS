@@ -267,7 +267,10 @@ const InteractiveMessageCharts: React.FC<InteractiveMessageChartsProps> = ({
     if (onNavigateToChat) {
       onNavigateToChat(customerId);
     } else {
-      navigate('/lats/whatsapp-chat' + (customerId ? `?customerId=${customerId}` : ''));
+      // WhatsApp functionality removed - navigate to customer detail instead
+      if (customerId) {
+        navigate(`/customers/${customerId}`);
+      }
     }
   };
 

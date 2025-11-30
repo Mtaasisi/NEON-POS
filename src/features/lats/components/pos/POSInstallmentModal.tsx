@@ -159,6 +159,37 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
   const numberOfRemainingPayments = formData.down_payment > 0 
     ? formData.number_of_installments - 1 
     : formData.number_of_installments;
+  
+  // Helper function to calculate balanced installment amounts
+  // The last installment will be the remainder to ensure perfect balance
+  const calculateBalancedInstallments = (
+    totalAmount: number,
+    firstPayment: number,
+    numInstallments: number
+  ): number[] => {
+    const remaining = totalAmount - firstPayment;
+    const numRemainingPayments = firstPayment > 0 ? numInstallments - 1 : numInstallments;
+    
+    if (numRemainingPayments <= 0) return [];
+    
+    const amounts: number[] = [];
+    const baseAmount = remaining / numRemainingPayments;
+    
+    // Calculate all installments except the last one as rounded amounts
+    let totalCalculated = 0;
+    for (let i = 0; i < numRemainingPayments - 1; i++) {
+      const rounded = Math.round(baseAmount * 100) / 100;
+      amounts.push(rounded);
+      totalCalculated += rounded;
+    }
+    
+    // Last installment is the remainder to ensure perfect balance
+    const lastAmount = Math.round((remaining - totalCalculated) * 100) / 100;
+    amounts.push(lastAmount);
+    
+    return amounts;
+  };
+  
   const installmentAmount = numberOfRemainingPayments > 0 
     ? amountFinanced / numberOfRemainingPayments 
     : 0;
@@ -247,10 +278,17 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
         
         // Initialize amounts only if the array length doesn't match or is empty
         if (customInstallmentAmounts.length !== numberOfRemainingPayments) {
+          // Use balanced calculation to ensure perfect balance
+          const balancedAmounts = calculateBalancedInstallments(
+            cartTotal,
+            formData.down_payment,
+            formData.number_of_installments
+          );
+          
+          // Preserve existing custom amounts if available, otherwise use balanced amounts
           const amounts: number[] = [];
           for (let i = 0; i < numberOfRemainingPayments; i++) {
-            // Preserve existing custom amounts if available, otherwise use calculated amount
-            amounts.push(customInstallmentAmounts[i] || installmentAmount);
+            amounts.push(customInstallmentAmounts[i] || balancedAmounts[i] || installmentAmount);
           }
           setCustomInstallmentAmounts(amounts);
           // Reset manual customization tracking when installments change
@@ -270,11 +308,17 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
   // Divide total amount equally by number of installments
   useEffect(() => {
     if (isOpen && formData.number_of_installments > 0 && cartTotal > 0) {
+      // Calculate first payment and ensure installments will balance perfectly
       const calculatedFirstPayment = cartTotal / formData.number_of_installments;
+      const roundedFirstPayment = Math.round(calculatedFirstPayment * 100) / 100;
+      
       setFormData(prev => ({ 
         ...prev, 
-        down_payment: Math.round(calculatedFirstPayment * 100) / 100 // Round to 2 decimal places
+        down_payment: roundedFirstPayment // Round to 2 decimal places
       }));
+      
+      // After setting first payment, the installment calculation effect will 
+      // automatically recalculate installments using balanced calculation
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.number_of_installments, cartTotal, isOpen]);
@@ -308,22 +352,40 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
     const remainingInstallments = numberOfRemainingPayments - 1; // Exclude the one being changed
     
     if (remainingInstallments <= 0) {
-      // Only one installment, just return the new amounts
-      return [newAmount];
+      // Only one installment, ensure it balances perfectly
+      const balancedAmount = cartTotal - formData.down_payment;
+      return [Math.round(balancedAmount * 100) / 100];
     }
-    
-    // Distribute remaining amount equally among remaining installments
-    const adjustedAmount = remainingAmount / remainingInstallments;
     
     // Create new amounts array
     const newAmounts = [...currentAmounts];
-    newAmounts[changedIndex] = newAmount;
+    newAmounts[changedIndex] = Math.round(newAmount * 100) / 100;
     
-    // Update remaining installments
+    // Calculate which installments need to be adjusted (excluding the changed one)
+    const indicesToAdjust: number[] = [];
     for (let i = 0; i < numberOfRemainingPayments; i++) {
       if (i !== changedIndex) {
-        newAmounts[i] = Math.round(adjustedAmount * 100) / 100; // Round to 2 decimal places
+        indicesToAdjust.push(i);
       }
+    }
+    
+    // Distribute remaining amount, making the last installment the remainder for perfect balance
+    let totalAdjusted = 0;
+    const baseAmount = remainingAmount / indicesToAdjust.length;
+    
+    // Calculate all but the last installment as rounded amounts
+    for (let i = 0; i < indicesToAdjust.length - 1; i++) {
+      const idx = indicesToAdjust[i];
+      const rounded = Math.round(baseAmount * 100) / 100;
+      newAmounts[idx] = rounded;
+      totalAdjusted += rounded;
+    }
+    
+    // Last installment is the remainder to ensure perfect balance
+    if (indicesToAdjust.length > 0) {
+      const lastIdx = indicesToAdjust[indicesToAdjust.length - 1];
+      const lastAmount = Math.round((remainingAmount - totalAdjusted) * 100) / 100;
+      newAmounts[lastIdx] = lastAmount;
     }
     
     return newAmounts;
@@ -340,16 +402,15 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
         : formData.number_of_installments;
       
       if (numberOfRemainingPayments > 0) {
-        const remainingAmount = cartTotal - formData.down_payment;
-        const adjustedAmount = remainingAmount / numberOfRemainingPayments;
-        
         // Only auto-calculate if no amounts have been manually customized
         if (manuallyCustomizedAmounts.size === 0) {
-          const newAmounts: number[] = [];
-          for (let i = 0; i < numberOfRemainingPayments; i++) {
-            newAmounts[i] = Math.round(adjustedAmount * 100) / 100;
-          }
-          setCustomInstallmentAmounts(newAmounts);
+          // Use balanced calculation to ensure perfect balance
+          const balancedAmounts = calculateBalancedInstallments(
+            cartTotal,
+            formData.down_payment,
+            formData.number_of_installments
+          );
+          setCustomInstallmentAmounts(balancedAmounts);
         }
       }
     }
@@ -437,18 +498,47 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
       ? formData.number_of_installments - 1 
       : formData.number_of_installments;
     
-    // Calculate total of all installment amounts (use custom amounts if available, otherwise calculated amount)
+    // Get current installment amounts and ensure they balance perfectly
+    let finalAmounts = [...customInstallmentAmounts];
+    for (let i = 0; i < numberOfRemainingPaymentsForValidation; i++) {
+      if (finalAmounts[i] === undefined) {
+        finalAmounts[i] = installmentAmount;
+      }
+    }
+    
+    // Calculate total of all installment amounts
     let totalInstallmentAmounts = 0;
     for (let i = 0; i < numberOfRemainingPaymentsForValidation; i++) {
-      const amount = customInstallmentAmounts[i] || installmentAmount;
-      totalInstallmentAmounts += amount;
+      totalInstallmentAmounts += finalAmounts[i] || 0;
     }
     
     const totalPayments = formData.down_payment + totalInstallmentAmounts;
     const balanceDifference = Math.abs(totalPayments - cartTotal);
     
-    // Allow small rounding differences (less than 0.01)
-    if (balanceDifference > 0.01) {
+    // Automatically adjust last installment if there's a small rounding difference (less than 0.01)
+    // This handles floating-point precision issues
+    if (balanceDifference > 0 && balanceDifference <= 0.01 && numberOfRemainingPaymentsForValidation > 0) {
+      const lastIndex = numberOfRemainingPaymentsForValidation - 1;
+      const adjustment = cartTotal - formData.down_payment - totalInstallmentAmounts;
+      finalAmounts[lastIndex] = Math.round((finalAmounts[lastIndex] + adjustment) * 100) / 100;
+      
+      // Update the state with adjusted amounts for next render
+      setCustomInstallmentAmounts(finalAmounts);
+      
+      // Recalculate total with adjusted amount
+      totalInstallmentAmounts = 0;
+      for (let i = 0; i < numberOfRemainingPaymentsForValidation; i++) {
+        totalInstallmentAmounts += finalAmounts[i] || 0;
+      }
+      
+      console.log('🔧 [POS Installment] Auto-adjusted last installment for perfect balance:', {
+        adjustment,
+        lastIndex,
+        newLastAmount: finalAmounts[lastIndex],
+        totalPayments: formData.down_payment + totalInstallmentAmounts,
+        cartTotal
+      });
+    } else if (balanceDifference > 0.01) {
       console.error('❌ [POS Installment] Payment balance mismatch:', {
         totalAmount: cartTotal,
         firstPayment: formData.down_payment,
@@ -467,6 +557,9 @@ const POSInstallmentModal: React.FC<POSInstallmentModalProps> = ({
       );
       return;
     }
+    
+    // Store final balanced amounts for use in submission
+    const balancedInstallmentAmounts = finalAmounts;
 
     if (!currentUser) {
       console.error('❌ [POS Installment] CurrentUser is null/undefined');

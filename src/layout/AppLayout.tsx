@@ -402,13 +402,6 @@ const AppLayout: React.FC = () => {
 
       // Communication
       {
-        path: '/lats/whatsapp-chat',
-        label: 'WhatsApp',
-        icon: <MessageCircle size={20} strokeWidth={1.5} />,
-        roles: ['admin', 'customer-care'],
-        count: 0
-      },
-      {
         path: '/sms',
         label: 'SMS',
         icon: <MessageSquare size={20} strokeWidth={1.5} />,

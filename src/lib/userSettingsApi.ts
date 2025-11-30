@@ -149,6 +149,9 @@ export interface UserSettings {
     widgetSizes?: {
       [key: string]: 'small' | 'medium' | 'large';
     };
+    widgetRowSpans?: {
+      [key: string]: 'single' | 'double';
+    };
     autoArrange?: boolean;
   };
 }

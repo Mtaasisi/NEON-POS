@@ -8,7 +8,6 @@ import {
   SpecialOrdersStats,
   SpecialOrderStatus
 } from '../types/specialOrders';
-import { whatsappService } from '../services/whatsappService';
 
 class SpecialOrderService {
   // Generate unique order number
@@ -351,14 +350,7 @@ class SpecialOrderService {
 
       const message = `✅ Special Order Confirmed!\n\nThank you for your order ${order.order_number}!\n\nProduct: ${order.product_name}\nQuantity: ${order.quantity}\nTotal: ${this.formatCurrency(order.total_amount)}\nDeposit Paid: ${this.formatCurrency(order.deposit_paid)}\nBalance: ${this.formatCurrency(order.balance_due)}\n\n${order.expected_arrival_date ? `Expected Arrival: ${this.formatDate(order.expected_arrival_date)}\n` : ''}We'll keep you updated on your order status!`;
 
-      // Send WhatsApp if customer has phone
-      if (order.customer.phone) {
-        await whatsappService.sendWhatsAppMessage(
-          order.customer.phone,
-          message,
-          order.customer_id
-        );
-      }
+      // WhatsApp functionality removed
 
       // Create in-app notification
       try {
@@ -412,14 +404,7 @@ class SpecialOrderService {
       const title = statusMessages[newStatus];
       const message = `${title}\n\nOrder: ${order.order_number}\nProduct: ${order.product_name}\n\n${detailedMessages[newStatus]}`;
 
-      // Send WhatsApp/SMS
-      if (order.customer.phone) {
-        await whatsappService.sendWhatsAppMessage(
-          order.customer.phone,
-          message,
-          order.customer_id
-        );
-      }
+      // WhatsApp functionality removed
 
       // Create in-app notification
       try {
@@ -452,14 +437,7 @@ class SpecialOrderService {
 
       const message = `✅ Payment Received!\n\nOrder: ${order.order_number}\nProduct: ${order.product_name}\n\nAmount Paid: ${this.formatCurrency(amount)}\nTotal Paid: ${this.formatCurrency(order.deposit_paid)}\nRemaining Balance: ${this.formatCurrency(order.balance_due)}\n\nThank you for your payment!`;
 
-      // Send WhatsApp/SMS
-      if (order.customer.phone) {
-        await whatsappService.sendWhatsAppMessage(
-          order.customer.phone,
-          message,
-          order.customer_id
-        );
-      }
+      // WhatsApp functionality removed
 
       // Create in-app notification
       try {

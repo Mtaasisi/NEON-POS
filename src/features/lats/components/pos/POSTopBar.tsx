@@ -227,8 +227,7 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                   <span className="hidden lg:inline">Closed</span>
                 </div>
               )}
-          </div>
-
+            </div>
           </div>
 
           {/* Center: Time + Sales */}

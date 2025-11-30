@@ -66,11 +66,15 @@
     "check:connection": "node check-database-connection.mjs",
     "verify:env": "node verify-database-config.mjs",
     "verify:db-config": "node verify-database-config.mjs",
-
     "db:sync": "node db-sync.mjs sync",
     "db:sync:auto": "node db-sync.mjs auto",
-    "db:check": "node db-sync.mjs check",
-    "import:customers": "node import-customers.mjs"
+    "import:customers": "node import-customers.mjs",
+    "backup:schema": "node backup-schema-only.mjs",
+    "backup:schema:custom": "node backup-schema-only.mjs",
+    "backup:full": "node backup-full-database.mjs",
+    "backup:database": "node backup-full-database.mjs",
+    "restore:full": "node restore-full-database.mjs",
+    "restore:database": "node restore-full-database.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

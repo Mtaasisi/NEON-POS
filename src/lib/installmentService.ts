@@ -9,7 +9,6 @@ import {
   InstallmentSchedule,
   PaymentFrequency
 } from '../types/specialOrders';
-import { whatsappService } from '../services/whatsappService';
 
 class InstallmentService {
   // Generate unique plan number
@@ -198,22 +197,52 @@ class InstallmentService {
       console.log('✅ [InstallmentService] Plan number generated:', planNumber);
       
       const amountFinanced = input.total_amount - input.down_payment;
-      const installmentAmount = amountFinanced / input.number_of_installments;
+      
+      // If down_payment exists, it counts as payment #1, so we have one less remaining installment
+      const numberOfRemainingInstallments = input.down_payment > 0 
+        ? input.number_of_installments - 1 
+        : input.number_of_installments;
+      
+      // Calculate balanced installment amounts
+      // The last installment will be the remainder to ensure perfect balance
+      let installmentAmount = 0;
+      let balancedInstallmentAmounts: number[] = [];
+      
+      if (numberOfRemainingInstallments > 0) {
+        const baseAmount = amountFinanced / numberOfRemainingInstallments;
+        
+        // Calculate all installments except the last one as rounded amounts
+        let totalCalculated = 0;
+        for (let i = 0; i < numberOfRemainingInstallments - 1; i++) {
+          const rounded = Math.round(baseAmount * 100) / 100;
+          balancedInstallmentAmounts.push(rounded);
+          totalCalculated += rounded;
+        }
+        
+        // Last installment is the remainder to ensure perfect balance
+        const lastAmount = Math.round((amountFinanced - totalCalculated) * 100) / 100;
+        balancedInstallmentAmounts.push(lastAmount);
+        
+        // Use the first installment amount as the standard installment amount
+        installmentAmount = balancedInstallmentAmounts[0] || baseAmount;
+      }
       
       // Validate payment balance: Down Payment + (All Installments) must equal Total Amount
-      const totalInstallmentAmounts = installmentAmount * input.number_of_installments;
+      const totalInstallmentAmounts = balancedInstallmentAmounts.reduce((sum, amt) => sum + amt, 0);
       const totalPayments = input.down_payment + totalInstallmentAmounts;
       const balanceDifference = Math.abs(totalPayments - input.total_amount);
       
-      // Allow small rounding differences (less than 0.01)
-      if (balanceDifference > 0.01) {
+      // Allow tiny rounding differences (less than 0.001) due to floating point precision
+      if (balanceDifference > 0.001) {
         const errorMessage = `Payment amounts don't balance! Total: ${input.total_amount}, Down Payment: ${input.down_payment}, Installments Total: ${totalInstallmentAmounts}, Total Payments: ${totalPayments}, Difference: ${balanceDifference}`;
         console.error('❌ [InstallmentService] Payment balance mismatch:', {
           totalAmount: input.total_amount,
           downPayment: input.down_payment,
           totalInstallments: totalInstallmentAmounts,
           totalPayments,
-          difference: balanceDifference
+          difference: balanceDifference,
+          numberOfRemainingInstallments,
+          balancedInstallmentAmounts
         });
         return {
           success: false,
@@ -225,8 +254,14 @@ class InstallmentService {
       console.log('   - Total Amount:', input.total_amount);
       console.log('   - Down Payment:', input.down_payment);
       console.log('   - Amount Financed:', amountFinanced);
-      console.log('   - Installment Amount:', installmentAmount);
-      console.log('   - Number of Installments:', input.number_of_installments);
+      console.log('   - Number of Total Installments:', input.number_of_installments);
+      console.log('   - Number of Remaining Installments:', numberOfRemainingInstallments);
+      console.log('   - Base Installment Amount:', amountFinanced / numberOfRemainingInstallments);
+      console.log('   - Balanced Installment Amounts:', balancedInstallmentAmounts);
+      console.log('   - Installment Amount (stored):', installmentAmount);
+      console.log('   - Total Installment Amounts:', totalInstallmentAmounts);
+      console.log('   - Total Payments:', totalPayments);
+      console.log('   - Balance Difference:', balanceDifference);
       console.log('   - Payment Balance Check: ✅ PASSED');
       
       const schedule = this.calculateSchedule(
@@ -280,20 +315,25 @@ class InstallmentService {
       console.log('✅ [InstallmentService] Plan created successfully:', plan);
       console.log('🔢 [InstallmentService] Plan ID:', plan.id);
 
-      // Record down payment if any
+      // Record down payment if any (as installment #1)
       if (input.down_payment > 0) {
-        console.log('💵 [InstallmentService] Recording down payment:', input.down_payment);
+        console.log('💵 [InstallmentService] Recording down payment as installment #1:', input.down_payment);
+        
+        // Calculate plan start date: if there's a down payment, it's due today (plan creation date)
+        // The start_date in input might be the next payment date, so we calculate backwards
+        // or use the plan's created_at date for the down payment due date
+        const planStartDate = new Date(plan.created_at || new Date().toISOString()).toISOString().split('T')[0];
         
         const downPaymentData = {
           installment_plan_id: plan.id,
           customer_id: input.customer_id,
-          installment_number: 0,
+          installment_number: 1, // Down payment is payment #1
           amount: input.down_payment,
           payment_method: input.payment_method,
-          due_date: input.start_date,
+          due_date: planStartDate, // Down payment is due on plan start date (creation date)
           account_id: input.account_id,
           reference_number: `${planNumber}-DOWN`,
-          notes: 'Down payment',
+          notes: 'Down payment (First Payment)',
           status: 'paid',
           created_by: userId
         };
@@ -457,7 +497,15 @@ class InstallmentService {
       }
 
       // Check if there are unpaid installments
-      const hasUnpaidInstallments = paidInstallmentNumbers.size < plan.number_of_installments;
+      // Exclude down payment (installment_number 0) to match database logic
+      const paidInstallmentsExcludingDownPayment = new Set(
+        existingPayments
+          ? existingPayments
+              .filter(p => p.installment_number > 0)
+              .map(p => p.installment_number)
+          : []
+      );
+      const hasUnpaidInstallments = paidInstallmentsExcludingDownPayment.size < plan.number_of_installments;
 
       // Validate plan status - allow payments if there are unpaid installments
       if (plan.status === 'cancelled') {
@@ -491,7 +539,7 @@ class InstallmentService {
       if (hasUnpaidInstallments && balanceDue <= 0) {
         console.warn('⚠️ [Installment Payment] Balance is 0 or negative but unpaid installments exist. Allowing payment to fix data inconsistency:', {
           balanceDue,
-          unpaidInstallments: plan.number_of_installments - paidInstallmentNumbers.size,
+          unpaidInstallments: plan.number_of_installments - paidInstallmentsExcludingDownPayment.size,
           paymentAmount
         });
         // Skip balance validation - the database trigger will recalculate balance_due after payment
@@ -579,16 +627,35 @@ class InstallmentService {
       // Get updated plan to check actual installments_paid after trigger
       const updatedPlan = await this.getInstallmentPlanById(input.installment_plan_id);
       
+      // Calculate how many unique paid installments we'll have after this payment
+      // Add the current installment number to the set (excluding down payment)
+      const updatedPaidInstallmentNumbers = new Set(
+        existingPayments
+          ? existingPayments
+              .filter(p => p.installment_number > 0)
+              .map(p => p.installment_number)
+          : []
+      );
+      updatedPaidInstallmentNumbers.add(installmentNumber);
+      
       // Plan is completed only if:
-      // 1. All installments are paid (paidInstallmentNumbers.size + 1 >= total installments)
+      // 1. All installments are paid (updatedPaidInstallmentNumbers.size >= total installments, excluding down payment)
       // 2. AND balance_due is 0 or negative
       // This prevents marking as completed when there are still unpaid installments
-      const allInstallmentsPaid = (paidInstallmentNumbers.size + 1) >= plan.number_of_installments;
+      const allInstallmentsPaid = updatedPaidInstallmentNumbers.size >= plan.number_of_installments;
       const balanceIsZero = updatedPlan && Number(updatedPlan.balance_due || 0) <= 0;
-      const willBeCompleted = updatedPlan && allInstallmentsPaid && balanceIsZero;
+      const willBeCompleted = allInstallmentsPaid && balanceIsZero;
       
-      // Update next payment date only (installments_paid, total_paid, balance_due are auto-updated by DB trigger)
-      const isCompleted = willBeCompleted || false;
+      // Double check: ensure all installments from 1 to number_of_installments are paid
+      let trulyAllPaid = true;
+      for (let i = 1; i <= plan.number_of_installments; i++) {
+        if (!updatedPaidInstallmentNumbers.has(i)) {
+          trulyAllPaid = false;
+          break;
+        }
+      }
+      
+      const isCompleted = willBeCompleted && trulyAllPaid;
       const updateData: any = {
         updated_at: new Date().toISOString()
       };
@@ -603,12 +670,19 @@ class InstallmentService {
         // When plan is not completed, set next payment date to calculated schedule
         updateData.next_payment_date = schedule.nextPaymentDate;
         
-        // If status was incorrectly set to 'completed' but there are still unpaid installments, reset to 'active'
-        // This fixes data inconsistency issues
-        if (plan.status === 'completed' && hasUnpaidInstallments) {
-          updateData.status = 'active';
-          updateData.completion_date = null;
-          console.log('🔄 [Installment Payment] Resetting status from completed to active - unpaid installments remain');
+        // Always reset to active if not truly completed
+        // This fixes data inconsistency issues where status was incorrectly set to completed
+        if (!isCompleted) {
+          // Check if all installments are truly paid by verifying with updated plan
+          const finalCheck = updatedPlan && 
+            Number(updatedPlan.installments_paid || 0) >= plan.number_of_installments &&
+            Number(updatedPlan.balance_due || 0) <= 0;
+          
+          if (!finalCheck && plan.status === 'completed') {
+            updateData.status = 'active';
+            updateData.completion_date = null;
+            console.log('🔄 [Installment Payment] Resetting status from completed to active - not all installments paid');
+          }
         }
       }
       
@@ -916,17 +990,6 @@ class InstallmentService {
         (new Date(plan.next_payment_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      const message = `📅 Payment Reminder\n\nHi ${plan.customer.name},\n\nYour installment payment of ${this.formatCurrency(plan.installment_amount)} is due on ${this.formatDate(plan.next_payment_date)} (${daysUntilDue} days).\n\nPlan: ${plan.plan_number}\nCurrent Balance: ${this.formatCurrency(plan.balance_due)}\nInstallments Paid: ${plan.installments_paid}/${plan.number_of_installments}\n\nPlease make your payment on time. Thank you!`;
-
-      // Send WhatsApp/SMS
-      if (plan.customer.phone) {
-        await whatsappService.sendWhatsAppMessage(
-          plan.customer.phone,
-          message,
-          plan.customer_id
-        );
-      }
-
       // Update reminder count
       await supabase
         .from('customer_installment_plans')
@@ -1072,16 +1135,6 @@ class InstallmentService {
       const plan = await this.getInstallmentPlanById(planId);
       if (!plan || !plan.customer) return;
 
-      const message = `✅ Installment Plan Created!\n\nPlan: ${plan.plan_number}\nTotal Amount: ${this.formatCurrency(plan.total_amount)}\nDown Payment: ${this.formatCurrency(plan.down_payment)}\nAmount to Finance: ${this.formatCurrency(plan.amount_financed)}\n\nPayment Schedule:\n- ${this.formatCurrency(plan.installment_amount)} per ${plan.payment_frequency === 'monthly' ? 'month' : plan.payment_frequency === 'weekly' ? 'week' : 'payment'}\n- ${plan.number_of_installments} installments\n- Next payment: ${this.formatDate(plan.next_payment_date)}\n\nThank you for choosing our installment plan!`;
-
-      if (plan.customer.phone) {
-        await whatsappService.sendWhatsAppMessage(
-          plan.customer.phone,
-          message,
-          plan.customer_id
-        );
-      }
-
       try {
         await supabase.from('notifications').insert({
           user_id: userId,
@@ -1109,16 +1162,6 @@ class InstallmentService {
     try {
       const plan = await this.getInstallmentPlanById(planId);
       if (!plan || !plan.customer) return;
-
-      const message = `✅ Payment Received!\n\nPlan: ${plan.plan_number}\nAmount Paid: ${this.formatCurrency(amount)}\nRemaining Balance: ${this.formatCurrency(plan.balance_due)}\n\nInstallments Paid: ${plan.installments_paid}/${plan.number_of_installments}\nNext Payment Due: ${this.formatDate(plan.next_payment_date)}\n\nThank you for your payment!`;
-
-      if (plan.customer.phone) {
-        await whatsappService.sendWhatsAppMessage(
-          plan.customer.phone,
-          message,
-          plan.customer_id
-        );
-      }
 
       try {
         await supabase.from('notifications').insert({

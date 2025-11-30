@@ -81,7 +81,6 @@ const IntegrationsTestPage = lazy(() => import('./features/admin/pages/Integrati
 const UserManagementPage = lazy(() => import('./features/users/pages/UserManagementPage'));
 const EnhancedSupplierManagementPage = lazy(() => import('./features/settings/pages/EnhancedSupplierManagementPage'));
 import { SuppliersProvider } from './context/SuppliersContext';
-import { WhatsAppProvider } from './context/WhatsAppContext';
 const SMSControlCenterPage = lazy(() => import('./features/sms/pages/SMSControlCenterPage'));
 const EnhancedPaymentManagementPage = lazy(() => import('./features/payments/pages/EnhancedPaymentManagementPage'));
 const ExpensesPage = lazy(() => import('./features/payments/pages/ExpensesPage'));
@@ -164,9 +163,6 @@ const POSPage = createSafeLazyComponent(() => import('./features/lats/pages/POSP
 const InventoryManagementPage = lazy(() => import('./features/lats/pages/InventoryManagementPage'));
 const StorageRoomManagementPage = lazy(() => import('./features/lats/pages/StorageRoomManagementPage'));
 const StorageRoomDetailPage = lazy(() => import('./features/lats/pages/StorageRoomDetailPage'));
-
-const WhatsAppConnectionManager = lazy(() => import('./features/lats/pages/WhatsAppConnectionManager'));
-const WhatsAppChatPage = lazy(() => import('./features/lats/pages/WhatsAppChatPage'));
 const BluetoothPrinterPage = lazy(() => import('./pages/BluetoothPrinterPage'));
 
 // Dashboard page - unified for all roles
@@ -477,6 +473,7 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
   useEffect(() => {
     initializeDatabaseCheck().catch(console.error);
   }, []);
+
 
   // Handle offline sync - start auto-sync for pending sales
   // ⚠️ CRITICAL FIX: Prevent multiple initializations that cause boot loops
@@ -930,10 +927,6 @@ const AppContent: React.FC<{ isOnline: boolean; isSyncing: boolean }> = ({ isOnl
           <Route path="/lats/trade-in/management" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><TradeInManagementPage /></Suspense></RoleProtectedRoute>} />
           <Route path="/lats/trade-in/create" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><TradeInTestPage /></Suspense></RoleProtectedRoute>} />
 
-        {/* WhatsApp Module Routes */}
-        <Route path="/lats/whatsapp-chat" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppChatPage /></Suspense></RoleProtectedRoute>} />
-        <Route path="/lats/whatsapp-connection-manager" element={<RoleProtectedRoute allowedRoles={['admin']}><Suspense fallback={<DynamicPageLoader />}><WhatsAppConnectionManager /></Suspense></RoleProtectedRoute>} />
-
         {/* Bluetooth Printer Management Route */}
         <Route path="/bluetooth-printer" element={<RoleProtectedRoute allowedRoles={['admin', 'customer-care']}><Suspense fallback={<DynamicPageLoader />}><BluetoothPrinterPage /></Suspense></RoleProtectedRoute>} />
           
@@ -1336,7 +1329,6 @@ function App() {
                           <LoadingProvider>
                           <GeneralSettingsProvider>
                               <SuppliersProvider>
-                                <WhatsAppProvider>
                                 <POSSettingsDatabaseSetup>
                                   <StorageLocationPickerProvider>
                                     <MobileOnlyRedirect>
@@ -1353,7 +1345,6 @@ function App() {
                                     </MobileOnlyRedirect>
                                   </StorageLocationPickerProvider>
                                 </POSSettingsDatabaseSetup>
-                              </WhatsAppProvider>
                             </SuppliersProvider>
                         </GeneralSettingsProvider>
                         </LoadingProvider>

@@ -7,6 +7,9 @@ export interface BusinessInfo {
   email?: string;
   website?: string;
   logo?: string | null;
+  instagram?: string;
+  tiktok?: string;
+  whatsapp?: string;
 }
 
 class BusinessInfoService {
@@ -52,7 +55,9 @@ class BusinessInfoService {
             email: this.cachedInfo.email,
             website: this.cachedInfo.website,
             address: this.cachedInfo.address,
-            hasLogo: !!this.cachedInfo.logo
+            hasLogo: !!this.cachedInfo.logo,
+            logoType: this.cachedInfo.logo ? (this.cachedInfo.logo.startsWith('data:') ? 'base64' : 'url') : 'none',
+            logoLength: this.cachedInfo.logo ? this.cachedInfo.logo.length : 0
           });
         }
         
@@ -91,7 +96,7 @@ class BusinessInfoService {
    */
   async updateBusinessInfo(info: Partial<BusinessInfo>): Promise<boolean> {
     try {
-      const updateData = {
+      const updateData: any = {
         business_name: info.name,
         business_address: info.address,
         business_phone: info.phone,

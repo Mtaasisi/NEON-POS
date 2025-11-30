@@ -1,5 +1,4 @@
 // Notification Settings Service - Access notification settings from anywhere in the app
-import { whatsappService } from './whatsappService';
 import { smsService } from './smsService';
 import toast from 'react-hot-toast';
 import { format } from '../features/lats/lib/format';
@@ -181,40 +180,10 @@ class NotificationSettingsService {
 
   /**
    * Send invoice via WhatsApp
+   * @deprecated WhatsApp functionality has been removed
    */
   async sendWhatsAppInvoice(invoice: InvoiceData): Promise<{ success: boolean; error?: string }> {
-    try {
-      const settings = this.getSettings();
-      
-      if (!settings.whatsappEnabled) {
-        return { success: false, error: 'WhatsApp notifications are disabled in settings' };
-      }
-
-      if (!invoice.customer_phone) {
-        return { success: false, error: 'Customer phone number is required' };
-      }
-
-      const message = this.generateWhatsAppMessage(invoice, settings);
-      
-      console.log('📱 Sending WhatsApp invoice:', {
-        to: invoice.customer_phone,
-        invoice_no: invoice.invoice_no
-      });
-
-      const result = await whatsappService.sendWhatsAppMessage(
-        invoice.customer_phone,
-        message
-      );
-
-      if (result.success) {
-        toast.success('WhatsApp invoice sent successfully! ✅');
-      }
-
-      return result;
-    } catch (error: any) {
-      console.error('Error sending WhatsApp invoice:', error);
-      return { success: false, error: error.message };
-    }
+    return { success: false, error: 'WhatsApp functionality has been removed' };
   }
 
   /**

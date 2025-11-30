@@ -201,20 +201,39 @@ ALTER TABLE customer_installment_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE installment_payments ENABLE ROW LEVEL SECURITY;
 
 -- Policies for special orders
+-- Drop existing policies if they exist to avoid errors
+DROP POLICY IF EXISTS "Enable read access for all users" ON customer_special_orders;
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON customer_special_orders;
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON customer_special_orders;
+DROP POLICY IF EXISTS "Enable delete for authenticated users" ON customer_special_orders;
+
 CREATE POLICY "Enable read access for all users" ON customer_special_orders FOR SELECT USING (true);
 CREATE POLICY "Enable insert for authenticated users" ON customer_special_orders FOR INSERT WITH CHECK (true);
 CREATE POLICY "Enable update for authenticated users" ON customer_special_orders FOR UPDATE USING (true);
 CREATE POLICY "Enable delete for authenticated users" ON customer_special_orders FOR DELETE USING (true);
+
+DROP POLICY IF EXISTS "Enable read access for all users" ON special_order_payments;
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON special_order_payments;
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON special_order_payments;
 
 CREATE POLICY "Enable read access for all users" ON special_order_payments FOR SELECT USING (true);
 CREATE POLICY "Enable insert for authenticated users" ON special_order_payments FOR INSERT WITH CHECK (true);
 CREATE POLICY "Enable update for authenticated users" ON special_order_payments FOR UPDATE USING (true);
 
 -- Policies for installment plans
+DROP POLICY IF EXISTS "Enable read access for all users" ON customer_installment_plans;
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON customer_installment_plans;
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON customer_installment_plans;
+DROP POLICY IF EXISTS "Enable delete for authenticated users" ON customer_installment_plans;
+
 CREATE POLICY "Enable read access for all users" ON customer_installment_plans FOR SELECT USING (true);
 CREATE POLICY "Enable insert for authenticated users" ON customer_installment_plans FOR INSERT WITH CHECK (true);
 CREATE POLICY "Enable update for authenticated users" ON customer_installment_plans FOR UPDATE USING (true);
 CREATE POLICY "Enable delete for authenticated users" ON customer_installment_plans FOR DELETE USING (true);
+
+DROP POLICY IF EXISTS "Enable read access for all users" ON installment_payments;
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON installment_payments;
+DROP POLICY IF EXISTS "Enable update for authenticated users" ON installment_payments;
 
 CREATE POLICY "Enable read access for all users" ON installment_payments FOR SELECT USING (true);
 CREATE POLICY "Enable insert for authenticated users" ON installment_payments FOR INSERT WITH CHECK (true);
@@ -255,40 +274,50 @@ CREATE TRIGGER trigger_update_special_order_balance
 -- Auto-update installment plan when payment is made
 CREATE OR REPLACE FUNCTION update_installment_plan_balance()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_total_paid NUMERIC;
+    v_balance_due NUMERIC;
+    v_installments_paid INTEGER;
+    v_total_installments INTEGER;
+    v_all_paid BOOLEAN;
 BEGIN
+    -- Calculate totals
+    SELECT COALESCE(SUM(amount), 0) INTO v_total_paid
+    FROM installment_payments
+    WHERE installment_plan_id = NEW.installment_plan_id;
+    
+    -- Get plan details
+    SELECT amount_financed, number_of_installments INTO v_balance_due, v_total_installments
+    FROM customer_installment_plans
+    WHERE id = NEW.installment_plan_id;
+    
+    -- Calculate balance due
+    v_balance_due := v_balance_due - v_total_paid;
+    
+    -- Count unique paid installments (excluding down payment which is installment_number 0)
+    SELECT COUNT(DISTINCT installment_number) INTO v_installments_paid
+    FROM installment_payments
+    WHERE installment_plan_id = NEW.installment_plan_id
+    AND status = 'paid'
+    AND installment_number > 0;
+    
+    -- Check if all installments are paid (must have paid all required installments AND balance is zero/negative)
+    v_all_paid := (v_installments_paid >= v_total_installments) AND (v_balance_due <= 0);
+    
+    -- Update the plan
     UPDATE customer_installment_plans
     SET 
-        total_paid = (
-            SELECT COALESCE(SUM(amount), 0)
-            FROM installment_payments
-            WHERE installment_plan_id = NEW.installment_plan_id
-        ),
-        balance_due = amount_financed - (
-            SELECT COALESCE(SUM(amount), 0)
-            FROM installment_payments
-            WHERE installment_plan_id = NEW.installment_plan_id
-        ),
-        installments_paid = (
-            SELECT COUNT(*)
-            FROM installment_payments
-            WHERE installment_plan_id = NEW.installment_plan_id
-            AND status = 'paid'
-        ),
+        total_paid = v_total_paid,
+        balance_due = v_balance_due,
+        installments_paid = v_installments_paid,
         status = CASE
-            WHEN amount_financed - (
-                SELECT COALESCE(SUM(amount), 0)
-                FROM installment_payments
-                WHERE installment_plan_id = NEW.installment_plan_id
-            ) <= 0 THEN 'completed'
+            WHEN v_all_paid THEN 'completed'
+            WHEN status = 'completed' AND NOT v_all_paid THEN 'active'
             ELSE status
         END,
         completion_date = CASE
-            WHEN amount_financed - (
-                SELECT COALESCE(SUM(amount), 0)
-                FROM installment_payments
-                WHERE installment_plan_id = NEW.installment_plan_id
-            ) <= 0 THEN now()
-            ELSE completion_date
+            WHEN v_all_paid THEN now()
+            ELSE NULL
         END,
         updated_at = now()
     WHERE id = NEW.installment_plan_id;

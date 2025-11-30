@@ -31,6 +31,7 @@ import {
   PaymentFrequency,
   InstallmentSchedule
 } from '../../../../types/specialOrders';
+import CustomerTooltip from './CustomerTooltip';
 
 interface InstallmentManagementModalProps {
   isOpen: boolean;
@@ -2008,26 +2009,28 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
     const installmentsPaid = Number(plan.installments_paid || 0);
     const totalInstallments = Number(plan.number_of_installments || 0);
     const hasUnpaidInstallments = installmentsPaid < totalInstallments;
+    const balanceDue = Number(plan.balance_due || 0);
 
     // Validate plan status
-    // Allow payments if there are unpaid installments, even if status is 'completed'
-    // This fixes data inconsistency issues
+    // Allow payments if there are unpaid installments OR balance due, even if status is 'completed'
+    // This ensures users can always receive payments until everything is fully paid
     if (plan.status === 'cancelled') {
       toast.error('This installment plan has been cancelled. Payments cannot be recorded.');
       return;
     }
 
-    if (plan.status === 'completed' && !hasUnpaidInstallments) {
-      const balanceDue = Number(plan.balance_due || 0);
-      if (balanceDue <= 0) {
-        toast.error('This installment plan is already completed. No further payments can be recorded.');
-        return;
-      }
-      // If there's a balance but status is completed, allow payment (data inconsistency fix)
+    // Check if plan is truly completed (all installments paid AND balance is zero)
+    const isTrulyCompleted = !hasUnpaidInstallments && balanceDue <= 0;
+    
+    if (plan.status === 'completed' && isTrulyCompleted) {
+      toast.error('This installment plan is already completed. All payments have been received.');
+      return;
     }
+    
+    // Allow payment if there are unpaid installments or balance due, regardless of status
+    // This fixes data inconsistency issues where status was incorrectly set to completed
 
     // Validate payment amount
-    const balanceDue = Number(plan.balance_due || 0);
     const paymentAmount = Number(formData.amount || 0);
 
     if (paymentAmount <= 0) {
@@ -2035,8 +2038,8 @@ const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({
       return;
     }
 
-    // If there are unpaid installments, allow payment even if balance_due is 0
-    // This fixes data inconsistency issues where balance_due is incorrectly calculated
+    // Allow payment if there are unpaid installments, even if balance_due calculation seems wrong
+    // The database trigger will recalculate the balance correctly after payment
     if (!hasUnpaidInstallments && paymentAmount > balanceDue && balanceDue > 0) {
       toast.error(`Payment amount (${formatCurrency(paymentAmount)}) cannot exceed the remaining balance (${formatCurrency(balanceDue)}).`);
       return;
@@ -2419,27 +2422,104 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
 
   const generateInstallmentSchedule = () => {
     const schedule = [];
-    const startDate = new Date(currentPlan.start_date);
+    const planStartDate = currentPlan.down_payment > 0 
+      ? new Date(currentPlan.start_date) // If down payment exists, plan starts on start_date
+      : new Date(currentPlan.start_date);
     
-    for (let i = 0; i < currentPlan.number_of_installments; i++) {
-      const dueDate = new Date(startDate);
+    // Calculate balanced installment amounts
+    const calculateBalancedInstallments = (
+      totalAmount: number,
+      firstPayment: number,
+      numInstallments: number
+    ): number[] => {
+      const remaining = totalAmount - firstPayment;
+      const numRemainingPayments = firstPayment > 0 ? numInstallments - 1 : numInstallments;
       
-      if (currentPlan.payment_frequency === 'weekly') {
-        dueDate.setDate(startDate.getDate() + (i * 7));
-      } else if (currentPlan.payment_frequency === 'monthly') {
-        dueDate.setMonth(startDate.getMonth() + i);
-      } else if (currentPlan.payment_frequency === 'bi-weekly') {
-        dueDate.setDate(startDate.getDate() + (i * 14));
+      if (numRemainingPayments <= 0) return [];
+      
+      const amounts: number[] = [];
+      const baseAmount = remaining / numRemainingPayments;
+      
+      // Calculate all installments except the last one as rounded amounts
+      let totalCalculated = 0;
+      for (let i = 0; i < numRemainingPayments - 1; i++) {
+        const rounded = Math.round(baseAmount * 100) / 100;
+        amounts.push(rounded);
+        totalCalculated += rounded;
       }
       
-      const payment = payments.find(p => p.installment_number === i + 1);
-      const isPaid = payment && payment.status === 'paid';
+      // Last installment is the remainder to ensure perfect balance
+      const lastAmount = Math.round((remaining - totalCalculated) * 100) / 100;
+      amounts.push(lastAmount);
+      
+      return amounts;
+    };
+    
+    // Calculate balanced installment amounts
+    const balancedAmounts = calculateBalancedInstallments(
+      currentPlan.total_amount,
+      currentPlan.down_payment || 0,
+      currentPlan.number_of_installments
+    );
+    
+    // Add first payment (down payment) if it exists
+    if (currentPlan.down_payment > 0) {
+      // Check for payment with installment_number === 1 (new) or === 0 (legacy/backward compatibility)
+      const firstPayment = payments.find(p => 
+        (p.installment_number === 1 || p.installment_number === 0) && 
+        Math.abs(Number(p.amount) - currentPlan.down_payment) < 0.01
+      );
+      // Also check if total_paid indicates first payment was made (for backward compatibility)
+      const isPaidFromTotalPaid = (currentPlan.total_paid || 0) >= currentPlan.down_payment;
+      const isPaid = (firstPayment && firstPayment.status === 'paid') || isPaidFromTotalPaid;
+      const dueDate = new Date(planStartDate); // First payment is due on plan start date
       const isOverdue = !isPaid && new Date() > dueDate;
       
       schedule.push({
-        installmentNumber: i + 1,
+        installmentNumber: 1,
         dueDate: dueDate.toISOString(),
-        amount: currentPlan.installment_amount,
+        amount: currentPlan.down_payment,
+        status: isPaid ? 'paid' : isOverdue ? 'overdue' : 'pending',
+        payment: firstPayment,
+        daysOverdue: isOverdue ? Math.floor((new Date().getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
+      });
+    }
+    
+    // Calculate remaining installments
+    const numberOfRemainingPayments = currentPlan.down_payment > 0 
+      ? currentPlan.number_of_installments - 1 
+      : currentPlan.number_of_installments;
+    
+    // Start date for remaining installments (if down payment exists, start from next payment date)
+    const nextPaymentStartDate = currentPlan.down_payment > 0 
+      ? new Date(currentPlan.next_payment_date || currentPlan.start_date)
+      : new Date(currentPlan.start_date);
+    
+    // Add remaining installments with balanced amounts
+    for (let i = 0; i < numberOfRemainingPayments; i++) {
+      const dueDate = new Date(nextPaymentStartDate);
+      
+      // Calculate due date based on payment frequency
+      if (currentPlan.payment_frequency === 'weekly') {
+        dueDate.setDate(nextPaymentStartDate.getDate() + (i * 7));
+      } else if (currentPlan.payment_frequency === 'monthly') {
+        dueDate.setMonth(nextPaymentStartDate.getMonth() + i);
+      } else if (currentPlan.payment_frequency === 'bi_weekly' || currentPlan.payment_frequency === 'bi-weekly') {
+        dueDate.setDate(nextPaymentStartDate.getDate() + (i * 14));
+      }
+      
+      const installmentNumber = currentPlan.down_payment > 0 ? i + 2 : i + 1; // Number continues from first payment
+      const payment = payments.find(p => p.installment_number === installmentNumber);
+      const isPaid = payment && payment.status === 'paid';
+      const isOverdue = !isPaid && new Date() > dueDate;
+      
+      // Use balanced amount for this installment
+      const amount = balancedAmounts[i] || currentPlan.installment_amount;
+      
+      schedule.push({
+        installmentNumber: installmentNumber,
+        dueDate: dueDate.toISOString(),
+        amount: amount,
         status: isPaid ? 'paid' : isOverdue ? 'overdue' : 'pending',
         payment: payment,
         daysOverdue: isOverdue ? Math.floor((new Date().getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
@@ -2450,6 +2530,15 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
   };
 
   const installmentSchedule = generateInstallmentSchedule();
+  
+  // Sort schedule: unpaid/pending/overdue first, then paid at the end
+  const sortedInstallmentSchedule = [...installmentSchedule].sort((a, b) => {
+    // Paid items go to the end
+    if (a.status === 'paid' && b.status !== 'paid') return 1;
+    if (a.status !== 'paid' && b.status === 'paid') return -1;
+    // If both have same status, maintain original order (by installment number)
+    return a.installmentNumber - b.installmentNumber;
+  });
 
   return createPortal(
     <div 
@@ -2563,12 +2652,12 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                   </h4>
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-50 border border-purple-200 rounded-lg">
                     <span className="text-xs font-semibold text-purple-700">
-                      {payments.filter(p => p.status === 'paid').length} / {currentPlan.number_of_installments} Paid
+                      {payments.filter(p => p.status === 'paid' && p.installment_number > 0).length} / {currentPlan.number_of_installments} Paid
                     </span>
                   </div>
                 </div>
                 <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
-                  {installmentSchedule.map((installment, index) => {
+                  {sortedInstallmentSchedule.map((installment, index) => {
                     const isPaid = installment.status === 'paid';
                     const isOverdue = installment.status === 'overdue';
                     const isPending = installment.status === 'pending';
@@ -2664,7 +2753,7 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
                         </div>
                         
                         {/* Connecting Line */}
-                        {index < installmentSchedule.length - 1 && (
+                        {index < sortedInstallmentSchedule.length - 1 && (
                           <div className={`absolute left-7 top-full w-0.5 h-3 ${
                             isPaid ? 'bg-green-300' : isOverdue ? 'bg-red-300' : 'bg-gray-300'
                           }`} />
@@ -2964,7 +3053,7 @@ const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
                         <div className="flex items-start gap-3 flex-1 min-w-0">
                           {/* Payment Number Badge */}
                           <div className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center font-bold text-base shadow-sm bg-green-500 text-white">
-                            #{payment.installment_number}
+                            {payment.installment_number === 0 ? 'DP' : `#${payment.installment_number}`}
                           </div>
                           
                           {/* Date and Info */}
@@ -2972,7 +3061,9 @@ const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
                             <div className="flex items-center gap-2 mb-1">
                               <Calendar className="w-4 h-4 flex-shrink-0 text-green-600" />
                               <div className="text-sm font-bold text-gray-900">
-                                Installment Payment {payment.installment_number}
+                                {payment.installment_number === 0 
+                                  ? 'Down Payment' 
+                                  : `Installment Payment ${payment.installment_number}`}
                               </div>
                             </div>
                             
@@ -3103,6 +3194,15 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
   const [scheduleCollapsed, setScheduleCollapsed] = useState(true);
   const [payments, setPayments] = useState<any[]>([]);
   const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+  const [showCustomerTooltip, setShowCustomerTooltip] = useState(false);
+  const customerBadgeRef = useRef<HTMLDivElement>(null);
+
+  // Close tooltip when plan is collapsed
+  useEffect(() => {
+    if (!isExpanded && showCustomerTooltip) {
+      setShowCustomerTooltip(false);
+    }
+  }, [isExpanded, showCustomerTooltip]);
 
   useEffect(() => {
     if (isExpanded) {
@@ -3131,11 +3231,12 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
   const paymentProgress = ((plan.total_paid || 0) / plan.total_amount) * 100;
 
   // Calculate actual unique paid installments from payments array
+  // Exclude down payment (installment_number 0) to match database logic
   const uniquePaidInstallments = useMemo(() => {
     if (!payments || payments.length === 0) return 0;
     const paidInstallmentNumbers = new Set(
       payments
-        .filter(p => p.status === 'paid')
+        .filter(p => p.status === 'paid' && p.installment_number > 0)
         .map(p => p.installment_number)
     );
     return paidInstallmentNumbers.size;
@@ -3147,31 +3248,107 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
   // Generate installment schedule
   const generateSchedule = () => {
     const schedule = [];
-    const startDate = new Date(plan.start_date);
     
-    for (let i = 0; i < plan.number_of_installments; i++) {
-      const dueDate = new Date(startDate);
+    // Calculate balanced installment amounts
+    const calculateBalancedInstallments = (
+      totalAmount: number,
+      firstPayment: number,
+      numInstallments: number
+    ): number[] => {
+      const remaining = totalAmount - firstPayment;
+      const numRemainingPayments = firstPayment > 0 ? numInstallments - 1 : numInstallments;
       
-      if (plan.payment_frequency === 'weekly') {
-        dueDate.setDate(startDate.getDate() + (i * 7));
-      } else if (plan.payment_frequency === 'monthly') {
-        dueDate.setMonth(startDate.getMonth() + i);
-      } else if (plan.payment_frequency === 'bi_weekly') {
-        dueDate.setDate(startDate.getDate() + (i * 14));
+      if (numRemainingPayments <= 0) return [];
+      
+      const amounts: number[] = [];
+      const baseAmount = remaining / numRemainingPayments;
+      
+      // Calculate all installments except the last one as rounded amounts
+      let totalCalculated = 0;
+      for (let i = 0; i < numRemainingPayments - 1; i++) {
+        const rounded = Math.round(baseAmount * 100) / 100;
+        amounts.push(rounded);
+        totalCalculated += rounded;
       }
       
+      // Last installment is the remainder to ensure perfect balance
+      const lastAmount = Math.round((remaining - totalCalculated) * 100) / 100;
+      amounts.push(lastAmount);
+      
+      return amounts;
+    };
+    
+    const balancedAmounts = calculateBalancedInstallments(
+      plan.total_amount,
+      plan.down_payment || 0,
+      plan.number_of_installments
+    );
+    
+    const planStartDate = new Date(plan.start_date);
+    
+    // Add first payment (down payment) if it exists
+    if (plan.down_payment > 0) {
+      // Check for payment with installment_number === 1 (new) or === 0 (legacy/backward compatibility)
+      const installmentPayments = payments.filter(p => 
+        (p.installment_number === 1 || p.installment_number === 0) && 
+        Math.abs(Number(p.amount) - plan.down_payment) < 0.01
+      );
+      const payment = installmentPayments.length > 0
+        ? installmentPayments.sort((a, b) => new Date(b.payment_date || b.created_at || 0).getTime() - new Date(a.payment_date || a.created_at || 0).getTime())[0]
+        : null;
+      // Also check if total_paid indicates first payment was made (for backward compatibility)
+      const isPaidFromTotalPaid = (plan.total_paid || 0) >= plan.down_payment;
+      const isPaid = (payment && payment.status === 'paid') || isPaidFromTotalPaid;
+      const dueDate = new Date(planStartDate);
+      const isOverdue = !isPaid && new Date() > dueDate && plan.status === 'active';
+      
+      schedule.push({
+        installmentNumber: 1,
+        dueDate: dueDate.toISOString(),
+        amount: plan.down_payment,
+        status: isPaid ? 'paid' : isOverdue ? 'overdue' : 'pending',
+        payment: payment,
+        daysOverdue: isOverdue ? Math.floor((new Date().getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
+      });
+    }
+    
+    // Calculate remaining installments
+    const numberOfRemainingPayments = plan.down_payment > 0 
+      ? plan.number_of_installments - 1 
+      : plan.number_of_installments;
+    
+    const nextPaymentStartDate = plan.down_payment > 0 
+      ? new Date(plan.next_payment_date || plan.start_date)
+      : new Date(plan.start_date);
+    
+    for (let i = 0; i < numberOfRemainingPayments; i++) {
+      const dueDate = new Date(nextPaymentStartDate);
+      
+      if (plan.payment_frequency === 'weekly') {
+        dueDate.setDate(nextPaymentStartDate.getDate() + (i * 7));
+      } else if (plan.payment_frequency === 'monthly') {
+        dueDate.setMonth(nextPaymentStartDate.getMonth() + i);
+      } else if (plan.payment_frequency === 'bi_weekly' || plan.payment_frequency === 'bi-weekly') {
+        dueDate.setDate(nextPaymentStartDate.getDate() + (i * 14));
+      }
+      
+      const installmentNumber = plan.down_payment > 0 ? i + 2 : i + 1;
+      
       // Find the most recent payment for this installment number (in case of duplicates)
-      const installmentPayments = payments.filter(p => p.installment_number === i + 1);
+      const installmentPayments = payments.filter(p => p.installment_number === installmentNumber);
       const payment = installmentPayments.length > 0
         ? installmentPayments.sort((a, b) => new Date(b.payment_date || b.created_at || 0).getTime() - new Date(a.payment_date || a.created_at || 0).getTime())[0]
         : null;
       const isPaid = payment && payment.status === 'paid';
       const isOverdue = !isPaid && new Date() > dueDate && plan.status === 'active';
       
+      // Use balanced amount for this installment
+      const amount = balancedAmounts[i] || plan.installment_amount;
+      
       schedule.push({
-        installmentNumber: i + 1,
+        installmentNumber: installmentNumber,
         dueDate: dueDate.toISOString(),
-        amount: plan.installment_amount,
+        amount: amount,
         status: isPaid ? 'paid' : isOverdue ? 'overdue' : 'pending',
         payment: payment,
         daysOverdue: isOverdue ? Math.floor((new Date().getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
@@ -3182,11 +3359,21 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
   };
 
   const installmentSchedule = generateSchedule();
+  
+  // Sort schedule: unpaid/pending/overdue first, then paid at the end
+  const sortedSchedule = [...installmentSchedule].sort((a, b) => {
+    // Paid items go to the end
+    if (a.status === 'paid' && b.status !== 'paid') return 1;
+    if (a.status !== 'paid' && b.status === 'paid') return -1;
+    // If both have same status, maintain original order (by installment number)
+    return a.installmentNumber - b.installmentNumber;
+  });
+  
   const previewCount = 3;
-  const hasMoreSchedule = installmentSchedule.length > previewCount;
+  const hasMoreSchedule = sortedSchedule.length > previewCount;
   const displayedSchedule = scheduleCollapsed && hasMoreSchedule
-    ? installmentSchedule.slice(0, previewCount)
-    : installmentSchedule;
+    ? sortedSchedule.slice(0, previewCount)
+    : sortedSchedule;
 
   return (
     <div
@@ -3260,10 +3447,30 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
             {/* Info Badges Row */}
             <div className="flex items-center gap-3 flex-wrap">
               {/* Customer Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0">
+              <div 
+                ref={customerBadgeRef}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCustomerTooltip(!showCustomerTooltip);
+                }}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0 cursor-pointer hover:bg-blue-100 transition-colors"
+              >
                 <User className="w-5 h-5" />
                 <span className="text-base font-semibold truncate max-w-[140px]">{plan.customer?.name || 'Unknown Customer'}</span>
               </div>
+              
+              {/* Customer Tooltip */}
+              {plan.customer && (
+                <CustomerTooltip
+                  customer={plan.customer}
+                  plan={plan}
+                  anchorRef={customerBadgeRef}
+                  isOpen={showCustomerTooltip}
+                  onClose={() => setShowCustomerTooltip(false)}
+                  formatCurrency={formatCurrency}
+                  formatDate={formatDate}
+                />
+              )}
               
               {/* Installment Info Card */}
               <div className="inline-flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
@@ -3384,7 +3591,7 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                 </span>
               </div>
             </div>
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto pr-1 items-start">
               {displayedSchedule.map((installment, index) => {
                 const isPaid = installment.status === 'paid';
                 const isOverdue = installment.status === 'overdue';
@@ -3393,7 +3600,7 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                 return (
                   <div
                     key={installment.installmentNumber}
-                    className={`group relative p-5 rounded-2xl border-2 transition-all duration-200 ${
+                    className={`group relative p-5 rounded-2xl border-2 transition-all duration-200 flex flex-col ${
                       isPaid
                         ? 'bg-white border-green-300 shadow-md hover:shadow-lg'
                         : isOverdue
@@ -3401,56 +3608,22 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                         : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow-sm'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      {/* Left Section - Number and Date */}
-                      <div className="flex items-center gap-4 flex-1">
-                        {/* Installment Number Badge */}
-                        <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg shadow-lg ${
-                          isPaid
-                            ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
-                            : isOverdue
-                            ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
-                            : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'
-                        }`}>
-                          {installment.installmentNumber}
-                        </div>
-                        
-                        {/* Date and Status Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Calendar className={`w-4 h-4 flex-shrink-0 ${
-                              isPaid ? 'text-green-600' : isOverdue ? 'text-red-600' : 'text-gray-500'
-                            }`} />
-                            <div className="text-base font-bold text-gray-900">
-                              {formatDate(installment.dueDate)}
-                            </div>
-                          </div>
-                          
-                          {/* Status Badge */}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase ${
-                              isPaid
-                                ? 'bg-green-100 text-green-800 border border-green-200'
-                                : isOverdue
-                                ? 'bg-red-100 text-red-800 border border-red-200'
-                                : 'bg-gray-100 text-gray-700 border border-gray-200'
-                            }`}>
-                              {isPaid && <CheckCircle className="w-3.5 h-3.5" />}
-                              {isOverdue && <AlertTriangle className="w-3.5 h-3.5" />}
-                              {installment.status}
-                            </span>
-                            {isOverdue && installment.daysOverdue && (
-                              <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
-                                {installment.daysOverdue} days late
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                    {/* Top Section - Number and Amount */}
+                    <div className="flex items-start justify-between mb-4">
+                      {/* Installment Number Badge */}
+                      <div className={`relative flex-shrink-0 w-14 h-14 rounded-full flex items-center justify-center font-bold text-lg shadow-lg ${
+                        isPaid
+                          ? 'bg-gradient-to-br from-green-500 to-green-600 text-white'
+                          : isOverdue
+                          ? 'bg-gradient-to-br from-red-500 to-red-600 text-white'
+                          : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'
+                      }`}>
+                        {installment.installmentNumber}
                       </div>
                       
-                      {/* Right Section - Amount */}
-                      <div className="flex-shrink-0 text-right ml-4">
-                        <div className={`text-2xl font-bold mb-1 ${
+                      {/* Amount - Top Right */}
+                      <div className="flex-shrink-0 text-right">
+                        <div className={`text-xl font-bold ${
                           isPaid ? 'text-green-700' : isOverdue ? 'text-red-700' : 'text-gray-900'
                         }`}>
                           {formatCurrency(installment.amount)}
@@ -3458,12 +3631,39 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
                       </div>
                     </div>
                     
-                    {/* Progress Indicator Line */}
-                    {index < displayedSchedule.length - 1 && (
-                      <div className={`absolute left-7 top-full w-0.5 h-3 ${
-                        isPaid ? 'bg-green-300' : isOverdue ? 'bg-red-300' : 'bg-gray-300'
-                      }`} />
-                    )}
+                    {/* Date and Status Info - Bottom Section */}
+                    <div className="flex-1 flex flex-col justify-end">
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <Calendar className={`w-4 h-4 flex-shrink-0 ${
+                          isPaid ? 'text-green-600' : isOverdue ? 'text-red-600' : 'text-gray-500'
+                        }`} />
+                        <div className="text-base font-bold text-gray-900">
+                          {formatDate(installment.dueDate)}
+                        </div>
+                        
+                        {/* Status Badge - On same line as date */}
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase ${
+                          isPaid
+                            ? 'bg-green-100 text-green-800 border border-green-200'
+                            : isOverdue
+                            ? 'bg-red-100 text-red-800 border border-red-200'
+                            : 'bg-gray-100 text-gray-700 border border-gray-200'
+                        }`}>
+                          {isPaid && <CheckCircle className="w-3.5 h-3.5" />}
+                          {isOverdue && <AlertTriangle className="w-3.5 h-3.5" />}
+                          {installment.status}
+                        </span>
+                      </div>
+                      
+                      {/* Overdue Days - Below if present */}
+                      {isOverdue && installment.daysOverdue && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-semibold text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                            {installment.daysOverdue} days late
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -3531,52 +3731,64 @@ const InstallmentPlanCard: React.FC<InstallmentPlanCardProps> = ({
               });
 
               // Check if there are unpaid installments
-              const installmentsPaid = Number(plan.installments_paid || 0);
+              // Use actual installments paid from payments array if available, otherwise use plan.installments_paid
+              const actualInstallmentsPaidCount = payments.length > 0 
+                ? uniquePaidInstallments 
+                : Number(plan.installments_paid || 0);
               const totalInstallments = Number(plan.number_of_installments || 0);
-              const hasUnpaidInstallments = installmentsPaid < totalInstallments;
+              const hasUnpaidInstallments = actualInstallmentsPaidCount < totalInstallments;
+              const balanceDue = Number(plan.balance_due || 0);
               
-              // Show payment button if:
-              // 1. Plan is active and has balance OR unpaid installments
-              // 2. Plan is completed but has unpaid installments (data inconsistency fix)
-              const canRecordPayment = (plan.status === 'active' && (plan.balance_due > 0 || hasUnpaidInstallments)) ||
-                                      (plan.status === 'completed' && hasUnpaidInstallments);
+              // Show payment button if there are unpaid installments OR balance due
+              // NEVER mark as complete if installments are not all paid
+              // Keep showing "Receive Money" until ALL installments are fully paid
+              const canRecordPayment = hasUnpaidInstallments || balanceDue > 0;
+              const isTrulyCompleted = !hasUnpaidInstallments && balanceDue <= 0 && plan.status === 'completed';
 
-              // Status-based actions
-              if (plan.status === 'active' || (plan.status === 'completed' && hasUnpaidInstallments)) {
-                if (canRecordPayment) {
-                  actions.push({
-                    type: 'pay',
-                    label: 'Record Payment',
-                    icon: <DollarSign className="w-4 h-4" />,
-                    color: 'bg-green-600 hover:bg-green-700',
-                    onClick: () => handleRecordPayment(plan)
-                  });
-                }
-                
-                if (plan.status === 'active') {
-                  actions.push({
-                    type: 'edit',
-                    label: 'Edit Plan',
-                    icon: <Edit className="w-4 h-4" />,
-                    color: 'bg-purple-600 hover:bg-purple-700',
-                    onClick: () => handleEditPlan(plan)
-                  });
-                  actions.push({
-                    type: 'remind',
-                    label: 'Send Reminder',
-                    icon: <Bell className="w-4 h-4" />,
-                    color: 'bg-orange-600 hover:bg-orange-700',
-                    onClick: () => handleSendReminder(plan.id)
-                  });
-                  actions.push({
-                    type: 'cancel',
-                    label: 'Cancel Plan',
-                    icon: <Trash2 className="w-4 h-4" />,
-                    color: 'bg-red-600 hover:bg-red-700',
-                    onClick: () => handleCancelPlan(plan.id)
-                  });
-                }
+              // Show payment button if there are unpaid installments or balance, regardless of status
+              // This ensures users can always receive payments until everything is fully paid
+              if (canRecordPayment && !isTrulyCompleted) {
+                actions.push({
+                  type: 'pay',
+                  label: 'Record Payment',
+                  icon: <DollarSign className="w-4 h-4" />,
+                  color: 'bg-green-600 hover:bg-green-700',
+                  onClick: () => handleRecordPayment(plan)
+                });
               }
+                
+                // Allow editing, reminders, and cancellation only for active plans
+                // Even if status is incorrectly set to 'completed', allow these actions if not truly completed
+                if (plan.status === 'active' || (plan.status === 'completed' && !isTrulyCompleted)) {
+                  // Only show edit/cancel if plan is active (not if it was incorrectly marked completed)
+                  if (plan.status === 'active') {
+                    actions.push({
+                      type: 'edit',
+                      label: 'Edit Plan',
+                      icon: <Edit className="w-4 h-4" />,
+                      color: 'bg-purple-600 hover:bg-purple-700',
+                      onClick: () => handleEditPlan(plan)
+                    });
+                    actions.push({
+                      type: 'cancel',
+                      label: 'Cancel Plan',
+                      icon: <Trash2 className="w-4 h-4" />,
+                      color: 'bg-red-600 hover:bg-red-700',
+                      onClick: () => handleCancelPlan(plan.id)
+                    });
+                  }
+                  
+                  // Allow sending reminders if there are unpaid installments
+                  if (hasUnpaidInstallments && plan.customer?.phone) {
+                    actions.push({
+                      type: 'remind',
+                      label: 'Send Reminder',
+                      icon: <Bell className="w-4 h-4" />,
+                      color: 'bg-orange-600 hover:bg-orange-700',
+                      onClick: () => handleSendReminder(plan.id)
+                    });
+                  }
+                }
 
               // Always available actions
               actions.push({

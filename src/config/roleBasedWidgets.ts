@@ -17,7 +17,6 @@ export interface RoleWidgetPermissions {
   customerActivityChart: boolean;
   salesFunnelChart: boolean;
   purchaseOrderChart: boolean;
-  salesChart: boolean;
   paymentMethodsChart: boolean;
   salesByCategoryChart: boolean;
   profitMarginChart: boolean;
@@ -121,7 +120,6 @@ const adminWidgetPermissions: RoleWidgetPermissions = {
   customerActivityChart: true,
   salesFunnelChart: true,
   purchaseOrderChart: true,
-  salesChart: true,
   paymentMethodsChart: true,
   salesByCategoryChart: true,
   profitMarginChart: true,
@@ -175,7 +173,6 @@ const technicianWidgetPermissions: RoleWidgetPermissions = {
   customerActivityChart: false,
   salesFunnelChart: false,
   purchaseOrderChart: false,
-  salesChart: false,
   paymentMethodsChart: false,
   salesByCategoryChart: false,
   profitMarginChart: false,
@@ -229,7 +226,6 @@ const customerCareWidgetPermissions: RoleWidgetPermissions = {
   customerActivityChart: true,
   salesFunnelChart: false,
   purchaseOrderChart: false,
-  salesChart: true,
   paymentMethodsChart: true,
   salesByCategoryChart: false,
   profitMarginChart: false,
@@ -364,7 +360,6 @@ const storeKeeperWidgetPermissions: RoleWidgetPermissions = {
   customerActivityChart: false,
   salesFunnelChart: false,
   purchaseOrderChart: true, // Core feature
-  salesChart: false,
   paymentMethodsChart: false,
   salesByCategoryChart: false,
   profitMarginChart: false,

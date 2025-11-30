@@ -30,7 +30,6 @@ import CustomerForm from './forms/CustomerForm';
 import PointsManagementModal from './PointsManagementModal';
 import { fetchCustomerAppointments, createAppointment } from '../../../lib/customerApi/appointments';
 import { fetchCustomerReturns } from '../../../lib/customerApi/returns';
-import WhatsAppMessageModal from './WhatsAppMessageModal';
 import AppointmentModal from './forms/AppointmentModal';
 import CustomerJourneyTimeline from './CustomerJourneyTimeline';
 import CallAnalyticsCard from './CallAnalyticsCard';
@@ -104,7 +103,6 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
   const [showCheckinModal, setShowCheckinModal] = useState(false);
   const [checkinSuccess, setCheckinSuccess] = useState(false);
   const [checkinLoading, setCheckinLoading] = useState(false);
-  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showPreferencesModal, setShowPreferencesModal] = useState(false);
 
@@ -918,16 +916,6 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                         Send SMS
                       </button>
                       <button
-                        onClick={() => {
-                          setShowWhatsAppModal(true);
-                          trackActivity('whatsapp_opened');
-                        }}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
-                      >
-                        <MessageCircle className="w-4 h-4" />
-                        WhatsApp
-                      </button>
-                      <button
                         onClick={() => setShowPointsModal(true)}
                         className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
                       >
@@ -1318,16 +1306,6 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    setShowWhatsAppModal(true);
-                    trackActivity('whatsapp_opened');
-                  }}
-                  className="flex items-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  WhatsApp
-                </button>
-                <button
-                  onClick={() => {
                     setShowAppointmentModal(true);
                     trackActivity('appointment_modal_opened');
                   }}
@@ -1471,16 +1449,6 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
                 SMS
               </button>
               
-              <button
-                onClick={() => {
-                  setShowWhatsAppModal(true);
-                  trackActivity('whatsapp_opened');
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl transition-all shadow-md hover:shadow-lg font-medium text-sm"
-              >
-                <MessageCircle className="w-4 h-4" />
-                WhatsApp
-              </button>
 
               <button
                 onClick={() => setShowPointsModal(true)}
@@ -1820,16 +1788,6 @@ const CustomerDetailModal: React.FC<CustomerDetailModalProps> = ({
         </Modal>
       )}
 
-      {/* WhatsApp Modal */}
-      <WhatsAppMessageModal
-        isOpen={showWhatsAppModal}
-        onClose={() => setShowWhatsAppModal(false)}
-        customer={customer}
-        onMessageSent={() => {
-          // Refresh communication history
-          loadAdditionalCustomerData();
-        }}
-      />
 
       {/* Appointment Modal */}
       <AppointmentModal

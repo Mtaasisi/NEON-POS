@@ -2060,6 +2060,7 @@ const DatabaseSettings: React.FC = () => {
   const [restoreSelectedTables, setRestoreSelectedTables] = useState<string[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [showRestoreTableSelection, setShowRestoreTableSelection] = useState(false);
+  const [restoreType, setRestoreType] = useState<'full' | 'schema-only'>('full');
   
   // Offline Database Management state
   const [downloading, setDownloading] = useState(false);
@@ -2122,7 +2123,29 @@ const DatabaseSettings: React.FC = () => {
       const formats = await getRestoreFormats();
       setRestoreFormats(formats);
     } catch (error) {
-      console.error('Failed to load restore formats:', error);
+      // Silently handle errors - fallback formats are already returned by getRestoreFormats
+      // Only log if it's an unexpected error (not a connection error)
+      if (error instanceof Error && !error.message.includes('fetch') && !error.message.includes('Failed to fetch')) {
+        console.error('Failed to load restore formats:', error);
+      }
+      // Always set fallback formats even on error
+      setRestoreFormats({
+        formats: [
+          {
+            format: 'SQL',
+            extension: '.sql',
+            description: 'PostgreSQL SQL dump format',
+            advantages: ['Standard PostgreSQL format', 'Contains both schema and data', 'Requires backend server for restore']
+          },
+          {
+            format: 'JSON',
+            extension: '.json',
+            description: 'JSON backup format (RECOMMENDED for production)',
+            advantages: ['Works entirely client-side (no backend needed)', 'Human-readable', 'Easy to parse programmatically']
+          }
+        ],
+        recommended: 'JSON'
+      });
     }
   };
 
@@ -2794,28 +2817,44 @@ Generated: ${new Date().toLocaleString()}
       return;
     }
 
-    if (restoreSelectedTables.length === 0) {
-      toast.error('❌ Please select at least one table to restore');
-      return;
+    // Allow restoring all tables if none are selected (backend will restore all)
+    // But if preview data exists and user has explicitly deselected all, warn them
+    if (restoreSelectedTables.length === 0 && previewData && previewData.tables.length > 0) {
+      const restoreAll = confirm('⚠️ No tables selected. This will restore ALL tables from the backup.\n\nAre you sure you want to continue?');
+      if (!restoreAll) {
+        return;
+      }
     }
 
-    const tablesToRestore = restoreSelectedTables.length === previewData?.tables.length 
+    const tablesToRestore = restoreSelectedTables.length === 0 || restoreSelectedTables.length === previewData?.tables.length 
       ? 'all tables' 
       : `${restoreSelectedTables.length} selected table(s)`;
+    
+    const restoreTypeText = restoreType === 'schema-only' 
+      ? 'schema only (table structures, no data)' 
+      : 'full (schema + data)';
 
-    if (!confirm(`⚠️ WARNING: Restoring ${tablesToRestore} from "${restoreFile.name}" will overwrite current database data.\n\nAre you sure you want to continue?`)) {
+    const warningMessage = restoreType === 'schema-only'
+      ? `⚠️ WARNING: Restoring ${tablesToRestore} ${restoreTypeText} from "${restoreFile.name}" will create/update table structures.\n\nExisting data will NOT be affected, but table structures may be modified.\n\nAre you sure you want to continue?`
+      : `⚠️ WARNING: Restoring ${tablesToRestore} ${restoreTypeText} from "${restoreFile.name}" will overwrite current database data.\n\nAre you sure you want to continue?`;
+
+    if (!confirm(warningMessage)) {
       return;
     }
 
     try {
       setIsRestoring(true);
-      const result = await restoreFromBackup(restoreFile, restoreSelectedTables);
+      // Pass undefined or empty array to restore all tables if none selected
+      const tablesToRestore = restoreSelectedTables.length > 0 ? restoreSelectedTables : undefined;
+      const result = await restoreFromBackup(restoreFile, tablesToRestore, restoreType);
       
       if (result.success) {
         const data = result.data;
+        const restoreTypeText = restoreType === 'schema-only' ? 'Schema Only' : 'Full';
         const message = `✅ Restore completed successfully!\n\n` +
+          `Type: ${restoreTypeText}\n` +
           `Tables restored: ${data?.tablesRestored || 'N/A'}\n` +
-          `Records restored: ${data?.recordsRestored || 'N/A'}\n` +
+          (restoreType === 'full' ? `Records restored: ${data?.recordsRestored || 'N/A'}\n` : '') +
           `Format: ${data?.format || 'N/A'}`;
         
         if (data?.warnings && data.warnings.length > 0) {
@@ -2829,6 +2868,7 @@ Generated: ${new Date().toLocaleString()}
         setPreviewData(null);
         setRestoreSelectedTables([]);
         setShowRestoreTableSelection(false);
+        setRestoreType('full'); // Reset to full restore
       } else {
         const errorMsg = result.error || result.message || 'Unknown error';
         toast.error(`❌ Restore failed: ${errorMsg}`);
@@ -2879,6 +2919,7 @@ Generated: ${new Date().toLocaleString()}
             setPreviewData(null);
             setRestoreSelectedTables([]);
             setShowRestoreTableSelection(false);
+            setRestoreType('full');
             await handleRestorePreviewFile(decompressedFile);
             return;
           } else {
@@ -2904,6 +2945,7 @@ Generated: ${new Date().toLocaleString()}
       setPreviewData(null);
       setRestoreSelectedTables([]);
       setShowRestoreTableSelection(false);
+      setRestoreType('full');
       
       // Automatically preview the file
       await handleRestorePreviewFile(file);
@@ -3536,6 +3578,7 @@ Generated: ${new Date().toLocaleString()}
                   setPreviewData(null);
                   setRestoreSelectedTables([]);
                   setShowRestoreTableSelection(false);
+                  setRestoreType('full');
                 }}
                 className="text-red-600 hover:text-red-800 transition-colors"
                 disabled={isRestoring}
@@ -3554,6 +3597,45 @@ Generated: ${new Date().toLocaleString()}
               <RefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
               <p className="text-sm text-blue-900">Analyzing backup file...</p>
             </div>
+          </div>
+        )}
+
+        {/* Restore Type Selection */}
+        {previewData && showRestoreTableSelection && (
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 mb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Database className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-semibold text-gray-900">Restore Type:</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setRestoreType('full')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    restoreType === 'full'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  Full (Schema + Data)
+                </button>
+                <button
+                  onClick={() => setRestoreType('schema-only')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+                    restoreType === 'schema-only'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-blue-400'
+                  }`}
+                >
+                  Schema Only (No Data)
+                </button>
+              </div>
+            </div>
+            {restoreType === 'schema-only' && (
+              <p className="mt-2 text-xs text-blue-700">
+                ⓘ Only table structures (CREATE, ALTER statements) will be restored. No data will be inserted.
+              </p>
+            )}
           </div>
         )}
 
@@ -3625,12 +3707,17 @@ Generated: ${new Date().toLocaleString()}
             <div className="mt-4 pt-4 border-t border-gray-200">
               <p className="text-sm text-gray-600">
                 <strong>{restoreSelectedTables.length}</strong> of <strong>{previewData.tables.length}</strong> tables selected
-                {restoreSelectedTables.length > 0 && (
+                {restoreSelectedTables.length > 0 && restoreType === 'full' && (
                   <span className="ml-2 text-green-600 font-semibold">
                     ({previewData.tables
                       .filter((t: any) => restoreSelectedTables.includes(t.name))
                       .reduce((sum: number, t: any) => sum + t.recordCount, 0)
                       .toLocaleString()} records will be restored)
+                  </span>
+                )}
+                {restoreSelectedTables.length > 0 && restoreType === 'schema-only' && (
+                  <span className="ml-2 text-blue-600 font-semibold">
+                    (Only table structures will be restored - no data)
                   </span>
                 )}
               </p>
@@ -3657,7 +3744,7 @@ Generated: ${new Date().toLocaleString()}
           ) : (
             <>
               <Upload className="w-4 h-4" />
-              Restore {restoreSelectedTables.length} Selected Table{restoreSelectedTables.length !== 1 ? 's' : ''}
+              Restore {restoreSelectedTables.length} Table{restoreSelectedTables.length !== 1 ? 's' : ''} ({restoreType === 'schema-only' ? 'Schema Only' : 'Full'})
             </>
           )}
         </button>

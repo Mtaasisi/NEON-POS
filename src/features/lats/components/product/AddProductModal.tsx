@@ -369,7 +369,10 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
             specification: variant.specification || null
           },
           attributes: variant.attributes || {},  // ✅ Added separate 'attributes' column
-          is_active: true
+          is_active: true,
+          // Mark as parent if it has children variants
+          is_parent: variant.useChildrenVariants && variant.childrenVariants && variant.childrenVariants.filter(c => c.trim()).length > 0,
+          variant_type: variant.useChildrenVariants && variant.childrenVariants && variant.childrenVariants.filter(c => c.trim()).length > 0 ? 'parent' : null
         }));
 
         console.log('🔄 [AddProductModal] Variant data to insert:', variantsToInsert);
@@ -386,6 +389,72 @@ const AddProductModal: React.FC<AddProductModalProps> = ({
           toast.error('Product created but failed to create variants');
         } else {
           console.log('✅ [AddProductModal] Variants created successfully:', createdVariants);
+
+          // Create children variants (IMEI/Serial numbers) if any
+          if (createdVariants && createdVariants.length > 0) {
+            const { addIMEIToParentVariant, checkIMEIExists } = await import('../../lib/imeiVariantService');
+            
+            for (let i = 0; i < createdVariants.length; i++) {
+              const createdVariant = createdVariants[i];
+              const formVariant = variants[i];
+              
+              // Check if this variant has children variants to add
+              if (formVariant.useChildrenVariants && formVariant.childrenVariants && formVariant.childrenVariants.length > 0) {
+                const validChildren = formVariant.childrenVariants.filter(c => c.trim().length > 0);
+                
+                if (validChildren.length > 0) {
+                  console.log(`🔄 [AddProductModal] Creating ${validChildren.length} children variants for variant ${createdVariant.id}`);
+                  
+                  // Ensure parent is marked as parent
+                  if (!createdVariant.is_parent) {
+                    await supabase
+                      .from('lats_product_variants')
+                      .update({
+                        is_parent: true,
+                        variant_type: 'parent',
+                        updated_at: new Date().toISOString()
+                      })
+                      .eq('id', createdVariant.id);
+                  }
+                  
+                  // Add each child variant
+                  const childrenResults = [];
+                  for (const childValue of validChildren) {
+                    const trimmedValue = childValue.trim();
+                    
+                    // Check if IMEI/Serial already exists
+                    const exists = await checkIMEIExists(trimmedValue);
+                    if (exists) {
+                      console.warn(`⚠️ [AddProductModal] IMEI/Serial ${trimmedValue} already exists, skipping`);
+                      toast.error(`IMEI/Serial ${trimmedValue} already exists`);
+                      continue;
+                    }
+                    
+                    // Add child variant
+                    const result = await addIMEIToParentVariant(createdVariant.id, {
+                      imei: trimmedValue,
+                      serial_number: trimmedValue,
+                      cost_price: formVariant.costPrice || createdVariant.cost_price || 0,
+                      selling_price: formVariant.price || createdVariant.selling_price || 0,
+                      condition: 'new',
+                      source: 'purchase'
+                    });
+                    
+                    if (result.success) {
+                      childrenResults.push(trimmedValue);
+                    } else {
+                      console.error(`❌ [AddProductModal] Failed to add child variant ${trimmedValue}:`, result.error);
+                      toast.error(`Failed to add IMEI/Serial ${trimmedValue}: ${result.error}`);
+                    }
+                  }
+                  
+                  if (childrenResults.length > 0) {
+                    console.log(`✅ [AddProductModal] Created ${childrenResults.length} children variants for variant ${createdVariant.id}`);
+                  }
+                }
+              }
+            }
+          }
         }
       }
 

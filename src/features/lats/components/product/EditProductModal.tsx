@@ -38,6 +38,8 @@ interface ProductVariant {
   minStockLevel: number;
   specification?: string;
   attributes?: Record<string, any>;
+  childrenVariants?: string[]; // IMEI/Serial numbers for child variants (optional)
+  useChildrenVariants?: boolean; // Toggle to enable/disable children variants
 }
 
 // Validation schema for product form (same as AddProductModal)
@@ -233,17 +235,55 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
       // Load variants
       if (product.variants && product.variants.length > 0) {
-        const loadedVariants: ProductVariant[] = product.variants.map((v: any) => ({
-          id: v.id,
-          name: v.name || v.variant_name || 'Default',
-          sku: v.sku || '',
-          costPrice: v.costPrice || v.cost_price || 0,
-          price: v.price || v.sellingPrice || v.selling_price || 0,
-          stockQuantity: v.stockQuantity || v.quantity || 0,
-          minStockLevel: v.minStockLevel || v.minQuantity || 0,
-          specification: v.specification || '',
-          attributes: v.attributes || v.variant_attributes || {}
-        }));
+        // Load children variants for each parent variant
+        const loadedVariantsPromises = product.variants.map(async (v: any) => {
+          let childrenVariants: string[] = [];
+          let useChildrenVariants = false;
+          
+          // Check if this variant is a parent and has children
+          if (v.is_parent || v.variant_type === 'parent') {
+            try {
+              const { data: childrenData, error } = await supabase
+                .from('lats_product_variants')
+                .select('variant_attributes')
+                .eq('parent_variant_id', v.id)
+                .eq('is_active', true)
+                .eq('variant_type', 'imei_child');
+              
+              if (!error && childrenData && childrenData.length > 0) {
+                childrenVariants = childrenData
+                  .map((child: any) => {
+                    const imei = child.variant_attributes?.imei || 
+                                child.variant_attributes?.serial_number ||
+                                child.variant_attributes?.['imei'] ||
+                                child.variant_attributes?.['serial_number'];
+                    return imei || '';
+                  })
+                  .filter((imei: string) => imei.trim().length > 0);
+                
+                useChildrenVariants = childrenVariants.length > 0;
+              }
+            } catch (error) {
+              console.warn('Error loading children variants for variant', v.id, error);
+            }
+          }
+          
+          return {
+            id: v.id,
+            name: v.name || v.variant_name || 'Default',
+            sku: v.sku || '',
+            costPrice: v.costPrice || v.cost_price || 0,
+            price: v.price || v.sellingPrice || v.selling_price || 0,
+            stockQuantity: v.stockQuantity || v.quantity || 0,
+            minStockLevel: v.minStockLevel || v.minQuantity || 0,
+            specification: v.specification || '',
+            attributes: v.attributes || v.variant_attributes || {},
+            childrenVariants: useChildrenVariants ? childrenVariants : [],
+            useChildrenVariants: useChildrenVariants
+          };
+        });
+        
+        const loadedVariants = await Promise.all(loadedVariantsPromises);
         setVariants(loadedVariants);
         setUseVariants(true);
         setShowVariants(true);
@@ -292,6 +332,7 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
       setShowVariants(true);
       setOriginalProductName('');
       loadedProductIdRef.current = null; // Reset loaded product ID when modal closes
+      setIsLoadingProduct(false); // Ensure loading state is reset
     }
   }, [isOpen, loadProductData]);
 
@@ -415,7 +456,10 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
           stockQuantity: variant.stockQuantity || 0, // Alias
           minQuantity: variant.minStockLevel || 0,
           minStockLevel: variant.minStockLevel || 0, // Alias
-          attributes: variant.attributes || {}
+          attributes: variant.attributes || {},
+          // Mark as parent if it has children variants
+          is_parent: variant.useChildrenVariants && variant.childrenVariants && variant.childrenVariants.filter(c => c.trim()).length > 0,
+          variant_type: variant.useChildrenVariants && variant.childrenVariants && variant.childrenVariants.filter(c => c.trim()).length > 0 ? 'parent' : null
         }));
 
         productUpdateData.variants = variantsToUpdate;
@@ -425,7 +469,100 @@ const EditProductModal: React.FC<EditProductModalProps> = ({
 
       // Update product using latsProductApi (includes variants if any)
       const { updateProduct } = await import('../../../../lib/latsProductApi');
-      await updateProduct(productId, productUpdateData, currentUser?.id || '');
+      const updatedProduct = await updateProduct(productId, productUpdateData, currentUser?.id || '');
+
+      // Handle children variants (IMEI/Serial numbers) for updated variants
+      if (variants.length > 0 && updatedProduct) {
+        const { addIMEIToParentVariant, checkIMEIExists } = await import('../../lib/imeiVariantService');
+        
+        // Get updated variants from the product
+        const updatedProductData = await getProduct(productId, { forceRefresh: true });
+        
+        if (updatedProductData && updatedProductData.variants) {
+          for (let i = 0; i < variants.length; i++) {
+            const formVariant = variants[i];
+            const updatedVariant = updatedProductData.variants.find((v: any) => 
+              v.id === formVariant.id || 
+              (v.name === formVariant.name && v.sku === formVariant.sku)
+            );
+            
+            if (!updatedVariant) continue;
+            
+            // Check if this variant has new children variants to add
+            if (formVariant.useChildrenVariants && formVariant.childrenVariants && formVariant.childrenVariants.length > 0) {
+              const validChildren = formVariant.childrenVariants.filter(c => c.trim().length > 0);
+              
+              if (validChildren.length > 0) {
+                // Get existing children variants
+                const { data: existingChildren } = await supabase
+                  .from('lats_product_variants')
+                  .select('variant_attributes')
+                  .eq('parent_variant_id', updatedVariant.id)
+                  .eq('is_active', true)
+                  .eq('variant_type', 'imei_child');
+                
+                const existingImeis = (existingChildren || []).map((child: any) => 
+                  child.variant_attributes?.imei || 
+                  child.variant_attributes?.serial_number ||
+                  ''
+                ).filter((imei: string) => imei.trim().length > 0);
+                
+                // Find new IMEIs that don't exist yet
+                const newImeis = validChildren.filter(imei => !existingImeis.includes(imei.trim()));
+                
+                if (newImeis.length > 0) {
+                  console.log(`🔄 [EditProductModal] Adding ${newImeis.length} new children variants for variant ${updatedVariant.id}`);
+                  
+                  // Ensure parent is marked as parent
+                  if (!updatedVariant.is_parent) {
+                    await supabase
+                      .from('lats_product_variants')
+                      .update({
+                        is_parent: true,
+                        variant_type: 'parent',
+                        updated_at: new Date().toISOString()
+                      })
+                      .eq('id', updatedVariant.id);
+                  }
+                  
+                  // Add each new child variant
+                  const childrenResults = [];
+                  for (const childValue of newImeis) {
+                    const trimmedValue = childValue.trim();
+                    
+                    // Check if IMEI/Serial already exists
+                    const exists = await checkIMEIExists(trimmedValue);
+                    if (exists) {
+                      console.warn(`⚠️ [EditProductModal] IMEI/Serial ${trimmedValue} already exists, skipping`);
+                      continue;
+                    }
+                    
+                    // Add child variant
+                    const result = await addIMEIToParentVariant(updatedVariant.id, {
+                      imei: trimmedValue,
+                      serial_number: trimmedValue,
+                      cost_price: formVariant.costPrice || updatedVariant.cost_price || 0,
+                      selling_price: formVariant.price || updatedVariant.selling_price || 0,
+                      condition: 'new',
+                      source: 'purchase'
+                    });
+                    
+                    if (result.success) {
+                      childrenResults.push(trimmedValue);
+                    } else {
+                      console.error(`❌ [EditProductModal] Failed to add child variant ${trimmedValue}:`, result.error);
+                    }
+                  }
+                  
+                  if (childrenResults.length > 0) {
+                    console.log(`✅ [EditProductModal] Created ${childrenResults.length} new children variants for variant ${updatedVariant.id}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
 
       // Clear all caches
       console.log('🔄 [EditProductModal] Clearing product caches...');

@@ -9,6 +9,7 @@ import {
 } from '../config/roleBasedWidgets';
 
 export type WidgetSize = 'small' | 'medium' | 'large'; // 1, 2, or 3 columns
+export type WidgetRowSpan = 'single' | 'double'; // 1 or 2 rows in height
 
 export interface DashboardSettings {
   quickActions: {
@@ -86,13 +87,15 @@ export interface DashboardSettings {
     topProductsWidget: boolean;
     expensesWidget: boolean;
     staffPerformanceWidget: boolean;
-    salesChart: boolean;
     paymentMethodsChart: boolean;
     salesByCategoryChart: boolean;
     profitMarginChart: boolean;
   };
   widgetSizes?: {
     [key: string]: WidgetSize;
+  };
+  widgetRowSpans?: {
+    [key: string]: WidgetRowSpan;
   };
   autoArrange?: boolean;
 }
@@ -173,7 +176,6 @@ const defaultDashboardSettings: DashboardSettings = {
     topProductsWidget: true,
     expensesWidget: true,
     staffPerformanceWidget: true,
-    salesChart: true,
     paymentMethodsChart: true,
     salesByCategoryChart: true,
     profitMarginChart: true,
@@ -193,6 +195,11 @@ const defaultDashboardSettings: DashboardSettings = {
     predictiveAnalyticsWidget: true,
     alertSystemWidget: true
   },
+  widgetSizes: {
+    predictiveAnalyticsWidget: 'medium',
+    revenueTrendChart: 'medium'
+  },
+  widgetRowSpans: {},
   autoArrange: false
 };
 
@@ -246,8 +253,9 @@ export function useDashboardSettings() {
                             (userSettings.dashboard.widgets[widgetKey] ?? true);
             return acc;
           }, {} as DashboardSettings['widgets']),
-          // Include widget sizes from user settings
+          // Include widget sizes and row spans from user settings
           widgetSizes: userSettings.dashboard.widgetSizes || {},
+          widgetRowSpans: userSettings.dashboard.widgetRowSpans || {},
           // Include auto arrange setting from user settings
           autoArrange: userSettings.dashboard.autoArrange ?? false
         };
@@ -337,6 +345,10 @@ export function useDashboardSettings() {
   };
 
   const getWidgetSize = (widget: string): WidgetSize => {
+    // Default predictiveAnalyticsWidget and revenueTrendChart to medium size
+    if (widget === 'predictiveAnalyticsWidget' || widget === 'revenueTrendChart') {
+      return dashboardSettings.widgetSizes?.[widget] || 'medium';
+    }
     return dashboardSettings.widgetSizes?.[widget] || 'small';
   };
 
@@ -348,6 +360,15 @@ export function useDashboardSettings() {
       case 'large': return 3;
       default: return 2;
     }
+  };
+
+  const getWidgetRowSpan = (widget: string): WidgetRowSpan => {
+    return dashboardSettings.widgetRowSpans?.[widget] || 'single';
+  };
+
+  const getWidgetRowSpanClass = (widget: string): string => {
+    const rowSpan = getWidgetRowSpan(widget);
+    return rowSpan === 'double' ? 'md:row-span-2' : '';
   };
 
   const getAutoArrange = (): boolean => {
@@ -364,6 +385,8 @@ export function useDashboardSettings() {
     refreshSettings,
     getWidgetSize,
     getWidgetColumnSpan,
+    getWidgetRowSpan,
+    getWidgetRowSpanClass,
     getAutoArrange
   };
 }

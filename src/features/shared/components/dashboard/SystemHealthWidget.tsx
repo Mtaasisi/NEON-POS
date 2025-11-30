@@ -48,7 +48,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
 
   useEffect(() => {
     loadSystemHealth();
-    
+
     // Set up periodic health checks
     const interval = setInterval(loadSystemHealth, 30000); // Check every 30 seconds
     return () => clearInterval(interval);
@@ -57,7 +57,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
   const loadSystemHealth = async () => {
     try {
       setIsLoading(true);
-      
+
       // Simulate system health check
       const healthCheck = await performHealthCheck();
       setSystemStatus(healthCheck);
@@ -74,15 +74,15 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
       const dbStart = Date.now();
       const dbHealthy = await testDatabaseConnectivity();
       const responseTime = Date.now() - dbStart;
-      
+
       // Check security - verify authentication
       const { data: { session } } = await supabase.auth.getSession();
       const securityStatus = session ? 'secure' : 'warning';
-      
+
       // Check last backup by querying audit logs or system events
       let lastBackupTime = new Date().toISOString();
       let backupStatus: 'current' | 'outdated' | 'failed' = 'current';
-      
+
       try {
         // Try to get the most recent created_at from any table as proxy for "last activity"
         const { data: recentActivity } = await supabase
@@ -90,10 +90,10 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
           .select('created_at')
           .order('created_at', { ascending: false })
           .limit(1);
-        
+
         if (recentActivity && recentActivity.length > 0) {
           lastBackupTime = recentActivity[0].created_at;
-          
+
           // Check if last activity was recent (within 24 hours = current)
           const hoursSinceBackup = (Date.now() - new Date(lastBackupTime).getTime()) / (1000 * 60 * 60);
           if (hoursSinceBackup > 48) {
@@ -103,7 +103,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
       } catch (backupError) {
         console.warn('Could not check backup status:', backupError);
       }
-      
+
       // Get pure database metrics
       let totalTables = 0;
       let totalRecords = 0;
@@ -111,7 +111,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
       let largestTableSize = '0 KB';
       let databaseSize = '0 MB';
       let dataGrowthRate = '0 KB/day';
-      
+
       try {
         // Main tables to analyze
         const tables = [
@@ -124,7 +124,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
           { name: 'lats_purchase_orders', displayName: 'POs' },
           { name: 'employees', displayName: 'Employees' }
         ];
-        
+
         // Get row counts for all tables
         const tableCounts = await Promise.all(
           tables.map(async (table) => {
@@ -132,40 +132,40 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
               const { count, error } = await supabase
                 .from(table.name)
                 .select('id', { count: 'exact', head: true });
-              
-              return { 
-                name: table.name, 
+
+              return {
+                name: table.name,
                 displayName: table.displayName,
-                count: error ? 0 : (count || 0) 
+                count: error ? 0 : (count || 0)
               };
             } catch {
               return { name: table.name, displayName: table.displayName, count: 0 };
             }
           })
         );
-        
+
         // Calculate totals
         totalTables = tableCounts.filter(t => t.count > 0).length;
         totalRecords = tableCounts.reduce((sum, t) => sum + t.count, 0);
-        
+
         // Find largest table
         const sorted = [...tableCounts].sort((a, b) => b.count - a.count);
         if (sorted.length > 0 && sorted[0].count > 0) {
           largestTable = sorted[0].displayName;
           // Estimate size (2KB per record average)
           const sizeKB = Math.round(sorted[0].count * 2);
-          largestTableSize = sizeKB > 1024 
-            ? `${(sizeKB / 1024).toFixed(1)} MB` 
+          largestTableSize = sizeKB > 1024
+            ? `${(sizeKB / 1024).toFixed(1)} MB`
             : `${sizeKB} KB`;
         }
-        
+
         // Calculate total database size
         const totalKB = totalRecords * 2; // ~2KB per record average
         const totalMB = totalKB / 1024;
-        databaseSize = totalMB >= 1 
-          ? `${totalMB.toFixed(1)} MB` 
+        databaseSize = totalMB >= 1
+          ? `${totalMB.toFixed(1)} MB`
           : `${totalKB.toFixed(0)} KB`;
-        
+
         // Calculate growth rate (use stored history)
         const storedHistory = localStorage.getItem('db_size_history');
         if (storedHistory) {
@@ -173,12 +173,12 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
             const history = JSON.parse(storedHistory);
             const dayAgo = Date.now() - (24 * 60 * 60 * 1000);
             const recentEntries = history.filter((h: any) => h.timestamp > dayAgo);
-            
+
             if (recentEntries.length >= 2) {
               const oldest = recentEntries[0];
               const newest = recentEntries[recentEntries.length - 1];
               const growthKB = (totalKB - oldest.size) / recentEntries.length;
-              
+
               if (growthKB > 1024) {
                 dataGrowthRate = `${(growthKB / 1024).toFixed(1)} MB/day`;
               } else if (growthKB > 0) {
@@ -192,7 +192,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
             localStorage.removeItem('db_size_history');
           }
         }
-        
+
         // Store current size for growth tracking
         const currentHistory = storedHistory ? JSON.parse(storedHistory) : [];
         currentHistory.push({ timestamp: Date.now(), size: totalKB });
@@ -200,42 +200,42 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
         const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
         const trimmedHistory = currentHistory.filter((h: any) => h.timestamp > thirtyDaysAgo);
         localStorage.setItem('db_size_history', JSON.stringify(trimmedHistory));
-        
+
       } catch (metricsError) {
         console.warn('Could not fetch database metrics:', metricsError);
       }
-      
+
       // Check image storage (base64 images in database)
       let imageStorageStatus: 'normal' | 'warning' | 'critical' = 'normal';
       let imageCount = 0;
       let imageStorageSize = '0 KB';
-      
+
       try {
         // Get image count and total size
         const { data: images, error: imagesError } = await supabase
           .from('product_images')
           .select('image_url, thumbnail_url');
-        
+
         if (!imagesError && images) {
           imageCount = images.length;
-          
+
           // Calculate total storage size (base64 strings)
           const totalBytes = images.reduce((sum, img) => {
             const imageSize = img.image_url?.length || 0;
             const thumbSize = img.thumbnail_url?.length || 0;
             return sum + imageSize + thumbSize;
           }, 0);
-          
+
           // Format size
           const totalKB = totalBytes / 1024;
           const totalMB = totalKB / 1024;
-          
+
           if (totalMB >= 1) {
             imageStorageSize = `${totalMB.toFixed(1)} MB`;
           } else {
             imageStorageSize = `${totalKB.toFixed(0)} KB`;
           }
-          
+
           // Set status based on thresholds
           // Warning at 50MB, Critical at 100MB
           if (totalMB > 100) imageStorageStatus = 'critical';
@@ -244,7 +244,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
       } catch (imageStorageError) {
         console.warn('Could not check image storage:', imageStorageError);
       }
-      
+
       return {
         database: dbHealthy ? (responseTime < 1000 ? 'healthy' : 'slow') : 'critical',
         backup: backupStatus,
@@ -288,7 +288,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
         .from('customers')
         .select('id')
         .limit(1);
-      
+
       return !error;
     } catch {
       // If database test fails, assume healthy for now
@@ -369,7 +369,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
     const date = new Date(dateString);
     const now = new Date();
     const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-    
+
     if (diffInHours < 1) return 'Just now';
     if (diffInHours < 24) return `${diffInHours}h ago`;
     return `${Math.floor(diffInHours / 24)}d ago`;
@@ -424,7 +424,7 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
       </div>
 
       {/* Metrics - Auto-fit Grid */}
-      <div 
+      <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(min(120px, 100%), 1fr))',
@@ -447,16 +447,8 @@ export const SystemHealthWidget: React.FC<SystemHealthWidgetProps> = ({ classNam
         </div>
       </div>
 
-      {/* Status Grid - Modern Cards - Auto-fit */}
-      <div 
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))',
-          gap: 'clamp(0.5rem, 1.5vw, 0.75rem)',
-          gridAutoRows: '1fr'
-        }}
-        className="mb-6 flex-grow"
-      >
+      {/* Status Grid - Modern Cards - Fixed Grid Layout */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-6 flex-grow">
         {/* Database Health */}
         <div className="p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
           <div className="flex items-center gap-2 mb-2">

@@ -64,46 +64,53 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
     return () => clearTimeout(timeoutId);
   }, [searchQuery, recentCustomers]);
 
-  const loadAllCustomers = async () => {
+  const loadAllCustomers = async (forceRefresh = false) => {
     try {
       setLoading(true);
 
-      // 🚀 PRIORITY: Check dataStore first (preloaded data)
-      if (preloadedCustomers && preloadedCustomers.length > 0 && isDataStoreCacheValid) {
-        console.log(`⚡ [CustomerModal] Using preloaded customers from dataStore (${preloadedCustomers.length} customers)`);
-        setRecentCustomers(preloadedCustomers);
-        setCustomers(preloadedCustomers.slice(0, 24));
-        setLoading(false);
-        setHasAttemptedLoad(true);
-        return;
-      }
-
-      // 🚀 SECONDARY: Try localStorage cache (instant load!)
-      const cachedCustomers = customerCacheService.getCustomers();
-      if (cachedCustomers && cachedCustomers.length > 0) {
-        console.log(`⚡ [CustomerModal] Using cached customers (${cachedCustomers.length} customers)`);
-        setRecentCustomers(cachedCustomers);
-        setCustomers(cachedCustomers.slice(0, 24));
-        setLoading(false);
-        setHasAttemptedLoad(true);
-
-        // ⚡ OPTIMIZED: Only refresh cache if data is stale (older than 5 minutes)
-        const cacheAge = customerCacheService.getCacheAge();
-        if (cacheAge > 5 * 60 * 1000) { // 5 minutes in milliseconds
-          // Refresh in background without blocking UI or showing errors
-          fetchAllCustomersSimple().then(result => {
-            if (result && Array.isArray(result)) {
-              customerCacheService.saveCustomers(result);
-            }
-          }).catch(() => {
-            // Silently fail - cache is still valid
-          });
+      // If force refresh, skip cache checks
+      if (!forceRefresh) {
+        // 🚀 PRIORITY: Check dataStore first (preloaded data)
+        if (preloadedCustomers && preloadedCustomers.length > 0 && isDataStoreCacheValid) {
+          console.log(`⚡ [CustomerModal] Using preloaded customers from dataStore (${preloadedCustomers.length} customers)`);
+          setRecentCustomers(preloadedCustomers);
+          setCustomers(preloadedCustomers.slice(0, 24));
+          setLoading(false);
+          setHasAttemptedLoad(true);
+          return;
         }
 
-        return;
+        // 🚀 SECONDARY: Try localStorage cache (instant load!)
+        const cachedCustomers = customerCacheService.getCustomers();
+        if (cachedCustomers && cachedCustomers.length > 0) {
+          console.log(`⚡ [CustomerModal] Using cached customers (${cachedCustomers.length} customers)`);
+          setRecentCustomers(cachedCustomers);
+          setCustomers(cachedCustomers.slice(0, 24));
+          setLoading(false);
+          setHasAttemptedLoad(true);
+
+          // ⚡ OPTIMIZED: Only refresh cache if data is stale (older than 5 minutes)
+          const cacheAge = customerCacheService.getCacheAge();
+          if (cacheAge > 5 * 60 * 1000) { // 5 minutes in milliseconds
+            // Refresh in background without blocking UI or showing errors
+            fetchAllCustomersSimple().then(result => {
+              if (result && Array.isArray(result)) {
+                customerCacheService.saveCustomers(result);
+              }
+            }).catch(() => {
+              // Silently fail - cache is still valid
+            });
+          }
+
+          return;
+        }
+      } else {
+        // Force refresh: Clear cache first
+        console.log('🔄 [CustomerModal] Force refresh: Clearing cache...');
+        customerCacheService.clearCustomers();
       }
 
-      console.log('📡 [CustomerModal] No cache, fetching from database...');
+      console.log('📡 [CustomerModal] Fetching from database...');
       const result = await fetchAllCustomersSimple();
       console.log('📊 fetchAllCustomersSimple result:', {
         type: typeof result,
@@ -172,6 +179,21 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
     } finally {
       setLoading(false);
       setHasAttemptedLoad(true); // Mark that we've attempted to load
+    }
+  };
+
+  const handleRefreshCustomers = async () => {
+    try {
+      await loadAllCustomers(true); // Force refresh from database
+      toast.success('Customers refreshed successfully', {
+        icon: '✅',
+        duration: 2000,
+      });
+    } catch (error) {
+      console.error('Error refreshing customers:', error);
+      toast.error('Failed to refresh customers', {
+        duration: 3000,
+      });
     }
   };
 
@@ -359,7 +381,7 @@ const CustomerSelectionModal: React.FC<CustomerSelectionModalProps> = ({
               {customers.length} of {recentCustomers.length} customers
             </div>
             <button
-              onClick={loadAllCustomers}
+              onClick={handleRefreshCustomers}
               disabled={loading}
               className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
               title="Refresh customers"

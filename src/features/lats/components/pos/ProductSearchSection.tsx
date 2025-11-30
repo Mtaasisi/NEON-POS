@@ -9,6 +9,7 @@ import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
 import { RealTimeStockService } from '../../lib/realTimeStock';
 import { useGeneralSettingsContext } from '../../../../context/GeneralSettingsContext';
 import { useTranslation } from '../../lib/i18n/useTranslation';
+import { getProductTotalStock } from '../../lib/productUtils';
 
 interface Product {
   id: string;
@@ -500,13 +501,20 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
       if (!matchesSearch) return false;
     }
     
-    // Category filter
-    if (selectedCategory && product.category?.name !== selectedCategory) return false;
+    // Category filter - only filter if a specific category is selected (not "All Product" or empty)
+    // Handle both category.name and categoryName fields for backward compatibility
+    if (selectedCategory && selectedCategory !== 'All Product' && selectedCategory !== 'all' && selectedCategory !== '') {
+      const productCategoryName = product.category?.name || (product as any).categoryName || '';
+      if (productCategoryName !== selectedCategory) return false;
+    }
     
-    // Get product price and stock from variants or fallback to product level
+    // Get product price from variants or fallback to product level
     const primaryVariant = product.variants?.[0];
     const productPrice = primaryVariant?.sellingPrice || product.price || 0;
-    const productStock = primaryVariant?.quantity || product.stockQuantity || 0;
+    
+    // ✅ FIX: Use getProductTotalStock to calculate total stock across ALL variants
+    // This ensures products with multiple variants are correctly filtered
+    const productStock = getProductTotalStock(product as any);
     
     // Price range filter
     if (priceRange.min && productPrice < parseFloat(priceRange.min)) return false;
@@ -532,13 +540,16 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   const sortedProducts = [...filteredProducts].sort((a, b) => {
     let comparison = 0;
     
-    // Get product price and stock from variants or fallback to product level
+    // Get product price from variants or fallback to product level
     const aPrimaryVariant = a.variants?.[0];
     const bPrimaryVariant = b.variants?.[0];
     const aPrice = aPrimaryVariant?.sellingPrice || a.price || 0;
     const bPrice = bPrimaryVariant?.sellingPrice || b.price || 0;
-    const aStock = aPrimaryVariant?.quantity || a.stockQuantity || 0;
-    const bStock = bPrimaryVariant?.quantity || b.stockQuantity || 0;
+    
+    // ✅ FIX: Use getProductTotalStock to calculate total stock across ALL variants
+    // This ensures products with multiple variants are correctly sorted
+    const aStock = getProductTotalStock(a as any);
+    const bStock = getProductTotalStock(b as any);
     
     switch (sortBy) {
       case 'name':
@@ -568,6 +579,26 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   
   // No pagination - all products displayed with scrolling
   const calculatedTotalPages = 1;
+
+  // Debug logging to help diagnose product display issues
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('🔍 [ProductSearchSection] Debug Info:', {
+        productsCount: products.length,
+        filteredCount: filteredProducts.length,
+        sortedCount: sortedProducts.length,
+        displayCount: displayProducts.length,
+        searchQuery,
+        selectedCategory,
+        stockFilter,
+        priceRange,
+        sortBy,
+        sortOrder,
+        hasSearchQuery: !!searchQuery.trim(),
+        hasCategoryFilter: !!selectedCategory && selectedCategory !== 'All Product' && selectedCategory !== 'all'
+      });
+    }
+  }, [products.length, filteredProducts.length, sortedProducts.length, displayProducts.length, searchQuery, selectedCategory, stockFilter]);
 
 
   return (
@@ -1038,9 +1069,28 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
               <Package className="w-16 h-16 mb-4 opacity-50" />
               <p className="text-lg font-medium mb-2">No products found</p>
-              <p className="text-sm text-center">
-                Try adjusting your search or filters to find what you're looking for.
+              <p className="text-sm text-center mb-4">
+                {products.length === 0 
+                  ? 'No products available. Please check if products are loaded from the database.'
+                  : `Found ${products.length} products, but none match your current filters.`
+                }
               </p>
+              {products.length === 0 && (
+                <button
+                  onClick={() => {
+                    // Force reload products
+                    window.location.reload();
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                >
+                  Reload Page
+                </button>
+              )}
+              {products.length > 0 && (
+                <p className="text-sm text-center">
+                  Try adjusting your search or filters to find what you're looking for.
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -142,24 +142,6 @@ const AdminManagementPage: React.FC = () => {
     },
 
     // Communication & Integration
-    {
-      id: 'green-api-management',
-      title: 'Green API Management',
-      description: 'Manage WhatsApp integration and messaging',
-      icon: <MessageCircle size={24} />,
-      path: '/lats/whatsapp-connection-manager',
-      color: 'from-green-500 to-green-600',
-      category: 'communication'
-    },
-    {
-      id: 'whatsapp-chat',
-      title: 'WhatsApp Chat',
-      description: 'Send and receive WhatsApp messages',
-      icon: <MessageCircle size={24} />,
-      path: '/lats/whatsapp-chat',
-      color: 'from-green-500 to-green-600',
-      category: 'communication'
-    },
 
     // Security & Monitoring
     {

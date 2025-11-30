@@ -274,7 +274,6 @@ export function getWidgetPriority(widgetKey: string): number {
     
     // Charts (medium priority)
     'revenueTrendChart': 5,
-    'salesChart': 5,
     'deviceStatusChart': 4,
     'appointmentsTrendChart': 4,
     'purchaseOrderChart': 3,

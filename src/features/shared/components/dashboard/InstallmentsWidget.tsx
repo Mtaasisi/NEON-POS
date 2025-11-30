@@ -43,7 +43,7 @@ export const InstallmentsWidget: React.FC<InstallmentsWidgetProps> = ({ classNam
     try {
       setIsLoading(true);
       const currentBranchId = getCurrentBranchId();
-      
+
       // Query installment plans
       let query = supabase
         .from('customer_installment_plans')
@@ -74,18 +74,47 @@ export const InstallmentsWidget: React.FC<InstallmentsWidgetProps> = ({ classNam
         throw error;
       }
 
+      console.log('📊 [InstallmentsWidget] Raw installments data:', installments);
+
       const total = installments?.length || 0;
-      const active = installments?.filter(i => i.status === 'active' || i.status === 'pending').length || 0;
-      const overdue = installments?.filter(i => {
+      const active = installments?.filter((i: any) => i.status === 'active' || i.status === 'pending').length || 0;
+      const overdue = installments?.filter((i: any) => {
         if (i.status === 'completed' || i.status === 'cancelled') return false;
         if (!i.next_payment_date) return false;
         return new Date(i.next_payment_date) < new Date();
       }).length || 0;
-      
-      const totalAmount = installments?.reduce((sum, i) => sum + (i.total_amount || 0), 0) || 0;
-      const collectedAmount = installments?.reduce((sum, i) => sum + (i.total_paid || 0), 0) || 0;
+
+      console.log('📊 [InstallmentsWidget] Calculating amounts from installments...');
+      installments?.forEach((i: any, idx: number) => {
+        console.log(`  [${idx}] total_amount:`, i.total_amount, typeof i.total_amount);
+        console.log(`  [${idx}] total_paid:`, i.total_paid, typeof i.total_paid);
+      });
+
+      // CRITICAL FIX: Explicitly convert to numbers to prevent string concatenation
+      const totalAmount = installments?.reduce((sum: number, i: any) => {
+        const amount = Number(i.total_amount) || 0;
+        return sum + amount;
+      }, 0) || 0;
+
+      const collectedAmount = installments?.reduce((sum: number, i: any) => {
+        const paid = Number(i.total_paid) || 0;
+        return sum + paid;
+      }, 0) || 0;
+
       const pendingAmount = totalAmount - collectedAmount;
       const collectionRate = totalAmount > 0 ? (collectedAmount / totalAmount) * 100 : 0;
+
+      console.log('📊 [InstallmentsWidget] Calculated metrics:', {
+        totalAmount,
+        collectedAmount,
+        pendingAmount,
+        collectionRate,
+        types: {
+          totalAmount: typeof totalAmount,
+          collectedAmount: typeof collectedAmount,
+          pendingAmount: typeof pendingAmount
+        }
+      });
 
       setMetrics({
         totalInstallments: total,
@@ -172,15 +201,15 @@ export const InstallmentsWidget: React.FC<InstallmentsWidgetProps> = ({ classNam
       <div className="mb-6 space-y-2">
         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50">
           <span className="text-xs text-gray-500">Total Amount</span>
-          <span className="text-sm font-medium text-gray-900">{metrics.totalAmount.toLocaleString()} TZS</span>
+          <span className="text-sm font-medium text-gray-900">{metrics.totalAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} TZS</span>
         </div>
         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-emerald-50">
           <span className="text-xs text-gray-500">Collected</span>
-          <span className="text-sm font-medium text-emerald-700">{metrics.collectedAmount.toLocaleString()} TZS</span>
+          <span className="text-sm font-medium text-emerald-700">{metrics.collectedAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} TZS</span>
         </div>
         <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-amber-50">
           <span className="text-xs text-gray-500">Pending</span>
-          <span className="text-sm font-medium text-amber-700">{metrics.pendingAmount.toLocaleString()} TZS</span>
+          <span className="text-sm font-medium text-amber-700">{metrics.pendingAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} TZS</span>
         </div>
       </div>
 

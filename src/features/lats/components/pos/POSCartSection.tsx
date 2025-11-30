@@ -318,7 +318,7 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
         {/* Cart Summary - Compact Redesign with Larger Touch Targets */}
         {cartItems.length > 0 && (
           <div className="flex-shrink-0 border-t border-gray-200 pt-4">
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
               {/* Summary Row - Larger Text */}
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3 text-base">
@@ -543,11 +543,11 @@ const POSCartSection: React.FC<POSCartSectionProps> = ({
               )}
               
               {/* Total - Prominent & Larger */}
-              <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-4 py-3 mb-4">
+              <div className="flex justify-between items-center bg-green-50 border border-green-200 rounded-lg px-4 py-3">
                 <span className="text-lg font-bold text-gray-900">Total:</span>
                 <span className="text-2xl font-bold text-green-600">TZS {finalAmount.toLocaleString()}</span>
               </div>
-              </div>
+            </div>
 
             {/* Customer Warning - Larger */}
             {!selectedCustomer && (

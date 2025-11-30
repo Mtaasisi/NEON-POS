@@ -156,3 +156,20 @@ neon-branches.json
 
 # Local Netlify folder
 .netlify
+
+# Environment backups
+.env-backups/
+
+# Test artifacts
+test-artifacts/screenshots/
+test-artifacts/logs/
+
+# Archived documentation
+docs/archive/
+
+# SQL archives
+sql/archive/
+
+# Large files
+*.apk
+mobile-app-test-logs.txt

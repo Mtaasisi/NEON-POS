@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Package, Plus, Minus, Trash2, TrendingUp, TrendingDown, Settings, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Package, Plus, Minus, Trash2, TrendingUp, TrendingDown, Settings, CheckCircle2, AlertCircle, QrCode, Smartphone, Check, Info } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../../../../lib/supabaseClient';
 import { getCurrentBranchId } from '../../../../lib/branchAwareApi';
@@ -60,6 +60,7 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
   const [reason, setReason] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
   const [imeis, setImeis] = useState<string[]>(['']);
+  const [useChildrenVariants, setUseChildrenVariants] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form when modal opens/closes
@@ -71,21 +72,25 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
       setReason('');
       setNotes('');
       setImeis(['']);
+      setUseChildrenVariants(false);
     }
   }, [isOpen, product]);
 
-  // Sync IMEI fields with quantity when quantity changes and adjustment type is 'in'
+  // Sync IMEI fields with quantity when quantity changes, adjustment type is 'in', and toggle is enabled
   useEffect(() => {
-    if (adjustmentType === 'in' && quantity > 0) {
+    if (adjustmentType === 'in' && quantity > 0 && useChildrenVariants) {
       setImeis(prevImeis => {
         const newImeis = Array(quantity).fill('').map((_, index) => prevImeis[index] || '');
         return newImeis;
       });
-    } else if (adjustmentType !== 'in') {
-      // Clear IMEIs when not stock in
+    } else if (adjustmentType !== 'in' || !useChildrenVariants) {
+      // Clear IMEIs when not stock in or toggle is disabled
       setImeis(['']);
+      if (adjustmentType !== 'in') {
+        setUseChildrenVariants(false);
+      }
     }
-  }, [quantity, adjustmentType]);
+  }, [quantity, adjustmentType, useChildrenVariants]);
 
   // Calculate new stock level
   const getNewStockLevel = (): number => {
@@ -146,11 +151,12 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
       return;
     }
 
-    // Validate IMEIs if adding stock - must have one for each unit
+    // Validate IMEIs if adding stock - OPTIONAL: only validate if toggle is enabled and IMEIs are provided
     const validImeis = imeis.filter(imei => imei.trim().length > 0);
-    if (adjustmentType === 'in' && quantity > 0) {
+    if (adjustmentType === 'in' && quantity > 0 && useChildrenVariants && validImeis.length > 0) {
+      // If IMEIs are provided, they must match the quantity
       if (validImeis.length !== quantity) {
-        toast.error(`Please enter IMEI/Serial number for all ${quantity} unit(s)`);
+        toast.error(`If providing IMEI/Serial numbers, please enter one for each of the ${quantity} unit(s)`);
         return;
       }
       
@@ -169,8 +175,8 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
       const userId = user?.id;
       const currentBranchId = getCurrentBranchId();
 
-      // If adding IMEIs as child variants
-      if (adjustmentType === 'in' && validImeis.length > 0) {
+      // If adding IMEIs as child variants (only if toggle is enabled)
+      if (adjustmentType === 'in' && useChildrenVariants && validImeis.length > 0) {
         // Check if variant is a parent or needs to be converted
         let parentVariantId = selectedVariant.id;
         
@@ -545,34 +551,101 @@ const EnhancedStockAdjustModal: React.FC<EnhancedStockAdjustModalProps> = ({
                 />
               </div>
 
-                {/* IMEI/Serial Number Section - Only for Stock In */}
+                {/* IMEI/Serial Number Section - Only for Stock In (Optional with Toggle) */}
                 {adjustmentType === 'in' && quantity > 0 && (
-                  <div className="border-2 border-blue-300 rounded-xl p-4 bg-blue-50/50">
-                    <div className="mb-3">
-                      <label className="block text-sm font-medium text-gray-700">
-                        IMEI/Serial Numbers ({quantity} required)
-                      </label>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Enter one IMEI or Serial Number for each unit. Each will be created as a child variant.
-                      </p>
+                  <div className="border-2 border-indigo-200 rounded-2xl bg-gradient-to-br from-indigo-50/80 to-purple-50/50 overflow-hidden shadow-sm">
+                    {/* Header Toggle */}
+                    <div 
+                      className="p-4 cursor-pointer hover:bg-indigo-100/50 transition-colors"
+                      onClick={() => {
+                        const newValue = !useChildrenVariants;
+                        setUseChildrenVariants(newValue);
+                        if (newValue && imeis.length === 0) {
+                          setImeis(Array(quantity).fill(''));
+                        } else if (!newValue) {
+                          setImeis(['']);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                            useChildrenVariants 
+                              ? 'bg-indigo-600 shadow-lg shadow-indigo-200' 
+                              : 'bg-gray-200'
+                          }`}>
+                            <Smartphone className={`w-5 h-5 ${
+                              useChildrenVariants ? 'text-white' : 'text-gray-500'
+                            }`} />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900">
+                              Track Individual Items
+                            </h4>
+                            <p className="text-xs text-gray-600 mt-0.5">
+                              Add IMEI/Serial numbers for each unit
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {useChildrenVariants && imeis.filter(i => i.trim()).length > 0 && (
+                            <div className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-full shadow-md">
+                              {imeis.filter(i => i.trim()).length} item{imeis.filter(i => i.trim()).length !== 1 ? 's' : ''}
+                            </div>
+                          )}
+                          <div className={`w-12 h-6 rounded-full transition-all duration-300 ${
+                            useChildrenVariants ? 'bg-indigo-600' : 'bg-gray-300'
+                          }`}>
+                            <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-300 mt-0.5 ${
+                              useChildrenVariants ? 'translate-x-6' : 'translate-x-0.5'
+                            }`} />
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="space-y-3 max-h-64 overflow-y-auto">
-                      {imeis.map((imei, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <span className="w-8 text-sm font-semibold text-gray-600 text-right">
-                            #{index + 1}
-                          </span>
-                          <input
-                            type="text"
-                            value={imei}
-                            onChange={(e) => updateIMEI(index, e.target.value)}
-                            placeholder={`IMEI/Serial #${index + 1}`}
-                            className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium bg-white"
-                          />
+                    {/* Input Fields - Only show when toggle is enabled */}
+                    {useChildrenVariants && (
+                      <div className="px-4 pb-4 space-y-3">
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                          {imeis.map((imei, index) => (
+                            <div 
+                              key={index} 
+                              className="group relative flex items-center gap-2 p-2 bg-white rounded-xl border-2 border-gray-200 hover:border-indigo-300 transition-all shadow-sm hover:shadow-md"
+                            >
+                              <div className="w-8 h-8 flex items-center justify-center bg-indigo-100 rounded-lg text-xs font-bold text-indigo-700 flex-shrink-0">
+                                {index + 1}
+                              </div>
+                              <div className="flex-1 relative">
+                                <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                  type="text"
+                                  value={imei}
+                                  onChange={(e) => updateIMEI(index, e.target.value)}
+                                  placeholder={`Enter IMEI or Serial #${index + 1}`}
+                                  className="w-full pl-10 pr-10 py-2.5 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900 bg-transparent font-medium"
+                                />
+                                {imei.trim() && (
+                                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                    <Check className="w-4 h-4 text-green-500" />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                        
+                        {/* Info Box */}
+                        <div className="flex items-start gap-2 p-3 bg-indigo-100/50 rounded-xl border border-indigo-200">
+                          <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Info className="w-3 h-3 text-white" />
+                          </div>
+                          <p className="text-xs text-indigo-800 leading-relaxed">
+                            Each IMEI/Serial number will be created as a child variant. Stock quantity will be automatically calculated from the number of items added.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

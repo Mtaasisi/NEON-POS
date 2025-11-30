@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { ReceiptSettings } from '../../../../lib/posSettingsApi';
 import { ZoomIn, ZoomOut } from 'lucide-react';
 import { format } from '../../lib/format';
+import { parsePhoneEntries } from '../../../../lib/formatBusinessInfo';
 
 interface ReceiptPreviewProps {
   settings: ReceiptSettings;
@@ -178,9 +179,21 @@ const ReceiptPreview: React.FC<ReceiptPreviewProps> = ({ settings, businessInfo 
                 {settings.show_business_address && !isCompact && (
                   <div className="text-xs">{businessInfo?.address || '123 Business Street, City'}</div>
                 )}
-                {settings.show_business_phone && (
-                  <div className="text-xs">{businessInfo?.phone || '+255 123 456 789'}</div>
-                )}
+                {settings.show_business_phone && businessInfo?.phone && (() => {
+                  const entries = parsePhoneEntries(businessInfo.phone);
+                  return (
+                    <div className="text-xs">
+                      {entries.map((entry, idx) => (
+                        <div key={idx} className="flex items-center justify-center gap-1">
+                          {entry.whatsapp && (
+                            <span className="text-green-600" title="WhatsApp">📱</span>
+                          )}
+                          <span>{entry.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {settings.show_business_email && !isCompact && (isDetailed || settings.show_business_email) && (
                   <div className="text-xs">{businessInfo?.email || 'info@business.com'}</div>
                 )}

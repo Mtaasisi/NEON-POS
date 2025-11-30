@@ -62,7 +62,7 @@ const EmailReceiptTemplate: React.FC<EmailReceiptTemplateProps> = ({
               <h1 style="color: white; margin: 0; font-size: 24px;">${businessInfo.name}</h1>
               <p style="color: rgba(255,255,255,0.9); margin: 5px 0 0 0; font-size: 14px;">
                 ${businessInfo.address || ''}<br>
-                ${businessInfo.phone ? `Tel: ${businessInfo.phone}` : ''} ${businessInfo.email ? `| ${businessInfo.email}` : ''}
+                ${businessInfo.phone ? businessInfo.phone.split(',').map((p: string) => `Tel: ${p.trim()}`).join(' | ') : ''} ${businessInfo.email ? `| ${businessInfo.email}` : ''}
               </p>
             </td>
           </tr>

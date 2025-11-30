@@ -90,15 +90,6 @@ const QUICK_ACTIONS: QuickAction[] = [
     category: 'customers'
   },
   {
-    id: 'whatsapp-chat',
-    name: 'WhatsApp Chat',
-    description: 'Open WhatsApp chat interface',
-    icon: MessageSquare,
-    path: '/lats/whatsapp-chat',
-    color: 'from-green-500 to-green-600',
-    category: 'integration'
-  },
-  {
     id: 'sales-report',
     name: 'Sales Report',
     description: 'Generate sales reports',
@@ -124,24 +115,6 @@ const QUICK_ACTIONS: QuickAction[] = [
     path: '/lats/unified-inventory',
     color: 'from-emerald-500 to-emerald-600',
     category: 'inventory'
-  },
-  {
-    id: 'green-api-management',
-    name: 'Green API',
-    description: 'Manage WhatsApp integration',
-    icon: MessageSquare,
-    path: '/lats/whatsapp-connection-manager',
-    color: 'from-green-500 to-green-600',
-    category: 'integration'
-  },
-  {
-    id: 'whatsapp-chat',
-    name: 'WhatsApp Chat',
-    description: 'Send and receive WhatsApp messages',
-    icon: MessageSquare,
-    path: '/lats/whatsapp-chat',
-    color: 'from-green-500 to-green-600',
-    category: 'integration'
   },
   {
     id: 'export-data',

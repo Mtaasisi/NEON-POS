@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Plus, Trash2, Package, Move, Check, DollarSign, ChevronDown, ChevronUp, Minus } from 'lucide-react';
+import { Layers, Plus, Trash2, Package, Move, Check, DollarSign, ChevronDown, ChevronUp, Minus, QrCode, Smartphone, X } from 'lucide-react';
 import { specificationCategories, getSpecificationsByCategory } from '../../../../data/specificationCategories';
 
 interface ProductVariant {
@@ -10,6 +10,8 @@ interface ProductVariant {
   stockQuantity: number;
   minStockLevel: number;
   attributes?: Record<string, any>;
+  childrenVariants?: string[]; // IMEI/Serial numbers for child variants (optional)
+  useChildrenVariants?: boolean; // Toggle to enable/disable children variants
 }
 
 interface ProductVariantsSectionProps {
@@ -53,7 +55,9 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
       stockQuantity: 0,
       minStockLevel: 2,
       // Duplicate the previous variant's attributes/specifications
-      attributes: lastVariant?.attributes ? { ...lastVariant.attributes } : {}
+      attributes: lastVariant?.attributes ? { ...lastVariant.attributes } : {},
+      childrenVariants: [],
+      useChildrenVariants: false
     };
     setVariants(prev => [...prev, newVariant]);
   };
@@ -549,6 +553,139 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                               </button>
                             </div>
                           </div>
+                        </div>
+
+                        {/* Children Variants Section - Optional */}
+                        <div className="mt-4 border-2 border-indigo-200 rounded-2xl bg-gradient-to-br from-indigo-50/80 to-purple-50/50 overflow-hidden shadow-sm">
+                          {/* Header Toggle */}
+                          <div 
+                            className="p-4 cursor-pointer hover:bg-indigo-100/50 transition-colors"
+                            onClick={() => {
+                              const useChildren = !variant.useChildrenVariants;
+                              updateVariant(index, 'useChildrenVariants', useChildren);
+                              if (useChildren) {
+                                // Always initialize with at least one empty field when enabling
+                                const currentChildren = variant.childrenVariants || [];
+                                if (currentChildren.length === 0 || currentChildren.every(c => !c.trim())) {
+                                  updateVariant(index, 'childrenVariants', ['']);
+                                }
+                              } else {
+                                // Clear when disabling
+                                updateVariant(index, 'childrenVariants', []);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+                                  variant.useChildrenVariants 
+                                    ? 'bg-indigo-600 shadow-lg shadow-indigo-200' 
+                                    : 'bg-gray-200'
+                                }`}>
+                                  <Smartphone className={`w-5 h-5 ${
+                                    variant.useChildrenVariants ? 'text-white' : 'text-gray-500'
+                                  }`} />
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-bold text-gray-900">
+                                    Track Individual Items
+                                  </h4>
+                                  <p className="text-xs text-gray-600 mt-0.5">
+                                    Add IMEI/Serial numbers for each unit
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                {variant.useChildrenVariants && variant.childrenVariants && variant.childrenVariants.filter(c => c.trim()).length > 0 && (
+                                  <div className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-full shadow-md">
+                                    {variant.childrenVariants.filter(c => c.trim()).length} item{variant.childrenVariants.filter(c => c.trim()).length !== 1 ? 's' : ''}
+                                  </div>
+                                )}
+                                <div className={`w-12 h-6 rounded-full transition-all duration-300 ${
+                                  variant.useChildrenVariants ? 'bg-indigo-600' : 'bg-gray-300'
+                                }`}>
+                                  <div className={`w-5 h-5 bg-white rounded-full shadow-md transform transition-transform duration-300 mt-0.5 ${
+                                    variant.useChildrenVariants ? 'translate-x-6' : 'translate-x-0.5'
+                                  }`} />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {/* Children Input Section */}
+                          {variant.useChildrenVariants && (
+                            <div className="px-4 pb-4 space-y-3">
+                              <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                                {((variant.childrenVariants && variant.childrenVariants.length > 0) ? variant.childrenVariants : ['']).map((child, childIndex) => (
+                                  <div 
+                                    key={childIndex} 
+                                    className="group relative flex items-center gap-2 p-2 bg-white rounded-xl border-2 border-gray-200 hover:border-indigo-300 transition-all shadow-sm hover:shadow-md"
+                                  >
+                                    <div className="w-8 h-8 flex items-center justify-center bg-indigo-100 rounded-lg text-xs font-bold text-indigo-700 flex-shrink-0">
+                                      {childIndex + 1}
+                                    </div>
+                                    <div className="flex-1 relative">
+                                      <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                      <input
+                                        type="text"
+                                        value={child}
+                                        onChange={(e) => {
+                                          const newChildren = [...(variant.childrenVariants || [])];
+                                          newChildren[childIndex] = e.target.value;
+                                          updateVariant(index, 'childrenVariants', newChildren);
+                                        }}
+                                        placeholder={`Enter IMEI or Serial #${childIndex + 1}`}
+                                        className="w-full pl-10 pr-10 py-2.5 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900 bg-transparent font-medium"
+                                      />
+                                      {child.trim() && (
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                          <Check className="w-4 h-4 text-green-500" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    {(variant.childrenVariants?.length || 0) > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const newChildren = [...(variant.childrenVariants || [])];
+                                          newChildren.splice(childIndex, 1);
+                                          updateVariant(index, 'childrenVariants', newChildren.length > 0 ? newChildren : ['']);
+                                        }}
+                                        className="p-2 text-red-500 hover:text-white hover:bg-red-500 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                        title="Remove item"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newChildren = [...(variant.childrenVariants || ['']), ''];
+                                  updateVariant(index, 'childrenVariants', newChildren);
+                                }}
+                                className="w-full px-4 py-3 border-2 border-dashed border-indigo-300 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 text-indigo-600 text-sm font-bold shadow-sm hover:shadow-md"
+                              >
+                                <Plus size={18} className="text-indigo-600" />
+                                Add Another Item
+                              </button>
+                              
+                              <div className="flex items-start gap-2 p-3 bg-indigo-100/50 rounded-xl border border-indigo-200">
+                                <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </div>
+                                <p className="text-xs text-indigo-800 leading-relaxed">
+                                  Each IMEI/Serial number will be created as a child variant. Stock quantity will be automatically calculated from the number of items added.
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
                         {/* Specifications Button */}

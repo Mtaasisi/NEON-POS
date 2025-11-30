@@ -27,10 +27,20 @@ export function useBusinessInfo() {
         if (mounted) {
           setBusinessInfo(info);
           setError(null);
+          // Log logo status in development
+          if (process.env.NODE_ENV === 'development') {
+            console.log('📸 Business Info loaded:', {
+              name: info.name,
+              hasLogo: !!info.logo,
+              logoType: info.logo ? (info.logo.startsWith('data:') ? 'base64' : 'url') : 'none',
+              logoLength: info.logo ? info.logo.length : 0
+            });
+          }
         }
       } catch (err) {
         if (mounted) {
           setError(err instanceof Error ? err.message : 'Failed to load business info');
+          console.error('❌ Error loading business info:', err);
         }
       } finally {
         if (mounted) {

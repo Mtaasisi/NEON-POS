@@ -76,13 +76,29 @@ class ChildVariantsCacheService {
         return;
       }
 
-      console.log(`📊 [ChildVariantsCache] Found ${allVariantIds.length} variant IDs to check for children`);
+      // ✅ FIX: Filter out non-UUID strings (e.g., "sample-variant-1") before querying
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validVariantIds = allVariantIds.filter(id => UUID_REGEX.test(id));
+      const invalidIds = allVariantIds.filter(id => !UUID_REGEX.test(id));
+
+      if (invalidIds.length > 0) {
+        console.warn(`⚠️ [ChildVariantsCache] Filtered out ${invalidIds.length} non-UUID variant IDs:`, invalidIds.slice(0, 5));
+      }
+
+      if (validVariantIds.length === 0) {
+        console.log('ℹ️ [ChildVariantsCache] No valid UUID variant IDs found, skipping child preload');
+        this.lastPreloadTime = now;
+        this.isPreloading = false;
+        return;
+      }
+
+      console.log(`📊 [ChildVariantsCache] Found ${validVariantIds.length} valid UUID variant IDs to check for children`);
 
       // ⚡ SINGLE QUERY: Get ALL child variants for ALL parent variants at once!
       const { data: allChildren, error } = await supabase
         .from('lats_product_variants')
         .select('*')
-        .in('parent_variant_id', allVariantIds)
+        .in('parent_variant_id', validVariantIds)
         .eq('variant_type', 'imei_child')
         .eq('is_active', true)
         .gt('quantity', 0)
@@ -100,7 +116,7 @@ class ChildVariantsCacheService {
       const { data: parentVariantsWithProducts } = await supabase
         .from('lats_product_variants')
         .select('id, product_id')
-        .in('id', allVariantIds);
+        .in('id', validVariantIds);
 
       const productIds = [...new Set((parentVariantsWithProducts || []).map((p: any) => p.product_id).filter(Boolean))];
 

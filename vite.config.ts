@@ -33,6 +33,7 @@ export default defineConfig(({ command, mode }) => {
     port: devServerPort,
     host: devServerHost,
     strictPort: true, // Don't try other ports if 5173 is busy
+    open: true, // Automatically open browser when dev server starts
     hmr: hmrOptions,
     watch: {
       usePolling: true,

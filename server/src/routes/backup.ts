@@ -129,7 +129,11 @@ router.post(
             : req.body.selectedTables)
         : undefined;
 
+      // Get restore type (full or schema-only)
+      const restoreType: 'full' | 'schema-only' = req.body.restoreType || 'full';
+
       console.log(`🔄 Starting database restore from ${fileName} (${isSqlFile ? 'SQL' : 'JSON'} format)...`);
+      console.log(`📋 Restore type: ${restoreType === 'schema-only' ? 'Schema only (no data)' : 'Full (schema + data)'}`);
       if (selectedTables && selectedTables.length > 0) {
         console.log(`📋 Selected tables to restore: ${selectedTables.join(', ')}`);
       } else {
@@ -147,14 +151,14 @@ router.post(
       try {
         if (isSqlFile) {
           // Restore from SQL format
-          const result = await restoreFromSql(fileContent, selectedTables);
+          const result = await restoreFromSql(fileContent, selectedTables, restoreType);
           tablesRestored = result.tablesRestored;
           recordsRestored = result.recordsRestored;
           errors.push(...result.errors);
           warnings.push(...result.warnings);
         } else {
           // Restore from JSON format
-          const result = await restoreFromJson(fileContent, selectedTables);
+          const result = await restoreFromJson(fileContent, selectedTables, restoreType);
           tablesRestored = result.tablesRestored;
           recordsRestored = result.recordsRestored;
           errors.push(...result.errors);
@@ -176,6 +180,7 @@ router.post(
             recordsRestored,
             fileName,
             format: isSqlFile ? 'SQL' : 'JSON',
+            restoreType: restoreType,
             selectedTables: selectedTables || 'all',
             warnings: warnings.length > 0 ? warnings : undefined,
             errors: errors.length > 0 ? errors : undefined,
@@ -323,8 +328,9 @@ async function previewJsonBackup(jsonContent: string): Promise<{
 /**
  * Restore from SQL format
  * SQL format is the easiest to restore - standard PostgreSQL format
+ * @param restoreType - 'full' to restore schema + data, 'schema-only' to restore only table structures
  */
-async function restoreFromSql(sqlContent: string, selectedTables?: string[]): Promise<{
+async function restoreFromSql(sqlContent: string, selectedTables?: string[], restoreType: 'full' | 'schema-only' = 'full'): Promise<{
   tablesRestored: number;
   recordsRestored: number;
   errors: string[];
@@ -347,18 +353,47 @@ async function restoreFromSql(sqlContent: string, selectedTables?: string[]): Pr
       // So we'll parse and execute statements individually
       
       // First, try to parse SQL into statements
+      // Handle COPY statements specially as they span multiple lines
       const statements: string[] = [];
       let currentStatement = '';
+      let inCopyMode = false;
       const lines = sqlContent.split('\n');
       
-      for (const line of lines) {
+      for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+        const line = lines[lineIdx];
         const trimmed = line.trim();
         
-        // Skip comments and empty lines
-        if (!trimmed || trimmed.startsWith('--') || trimmed.startsWith('/*')) {
+        // Skip comments (but keep them in COPY data)
+        if (!inCopyMode && (trimmed.startsWith('--') || trimmed.startsWith('/*'))) {
           continue;
         }
         
+        // Check if we're starting a COPY statement
+        if (trimmed.match(/^COPY\s+/i) && !inCopyMode) {
+          inCopyMode = true;
+          currentStatement = line + '\n';
+          continue;
+        }
+        
+        // Check if we're ending a COPY statement (ends with \.)
+        if (inCopyMode && trimmed === '\\.') {
+          currentStatement += line + '\n';
+          const stmt = currentStatement.trim();
+          if (stmt) {
+            statements.push(stmt);
+          }
+          currentStatement = '';
+          inCopyMode = false;
+          continue;
+        }
+        
+        // If in COPY mode, add all lines until we see \.
+        if (inCopyMode) {
+          currentStatement += line + '\n';
+          continue;
+        }
+        
+        // Regular statement handling
         currentStatement += line + '\n';
         
         // If line ends with semicolon, finalize statement
@@ -371,9 +406,14 @@ async function restoreFromSql(sqlContent: string, selectedTables?: string[]): Pr
         }
       }
       
-      // Add remaining statement if any
+      // Add remaining statement if any (shouldn't happen in valid SQL, but handle it)
       if (currentStatement.trim()) {
         statements.push(currentStatement.trim());
+      }
+      
+      // Warn if we're still in COPY mode (malformed SQL)
+      if (inCopyMode) {
+        warnings.push('Warning: COPY statement was not properly terminated (missing \\.)');
       }
       
       console.log(`📝 Parsed ${statements.length} SQL statements`);
@@ -384,76 +424,131 @@ async function restoreFromSql(sqlContent: string, selectedTables?: string[]): Pr
         if (!statement) continue;
         
         try {
-          // Skip schema-only statements
-          if (statement.match(/^(SET|CREATE|ALTER|DROP|GRANT|REVOKE|COMMENT)/i)) {
-            continue;
+          // Extract table name from statement if applicable
+          let tableName: string | null = null;
+          if (statement.match(/^(INSERT\s+INTO|COPY|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)/i)) {
+            const tableMatch = statement.match(/(?:INSERT\s+INTO|COPY|CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)\s+["']?(\w+)["']?/i);
+            if (tableMatch) {
+              tableName = tableMatch[1];
+            }
           }
           
           // Check if we should skip this statement based on table selection
-          if (selectedTables && selectedTables.length > 0) {
-            let shouldSkip = true;
-            
-            if (statement.match(/^INSERT\s+INTO/i)) {
-              const tableMatch = statement.match(/INSERT\s+INTO\s+["']?(\w+)["']?/i);
-              if (tableMatch && selectedTables.includes(tableMatch[1])) {
-                shouldSkip = false;
+          if (selectedTables && selectedTables.length > 0 && tableName) {
+            // For data statements (INSERT/COPY), only execute if table is selected
+            if (statement.match(/^(INSERT\s+INTO|COPY)/i)) {
+              if (!selectedTables.includes(tableName)) {
+                continue; // Skip data for unselected tables
               }
-            } else if (statement.match(/^COPY/i)) {
-              const tableMatch = statement.match(/COPY\s+["']?(\w+)["']?/i);
-              if (tableMatch && selectedTables.includes(tableMatch[1])) {
-                shouldSkip = false;
-              }
-            } else {
-              // For other statements, skip them if we're filtering tables
-              shouldSkip = true;
             }
-            
-            if (shouldSkip) {
-              continue;
+            // For schema statements (CREATE/ALTER/DROP), execute if table is selected OR if it's a general schema statement
+            // This ensures tables exist before we insert data
+            if (statement.match(/^(CREATE\s+TABLE|ALTER\s+TABLE|DROP\s+TABLE)/i)) {
+              if (!selectedTables.includes(tableName)) {
+                continue; // Skip schema for unselected tables
+              }
             }
           }
           
-          // Execute the statement
+          // Execute SET statements (needed for proper restore)
+          if (statement.match(/^SET\s+/i)) {
+            await sql.unsafe(statement);
+            continue;
+          }
+          
+          // Execute schema statements (CREATE, ALTER, DROP) - these are needed for restore to work
+          // But skip if we're filtering and this table isn't selected
+          if (statement.match(/^(CREATE|ALTER|DROP|GRANT|REVOKE|COMMENT)/i)) {
+            // If filtering by tables and this is a table-specific statement, check if table is selected
+            if (selectedTables && selectedTables.length > 0 && tableName) {
+              if (!selectedTables.includes(tableName)) {
+                continue; // Skip schema for unselected tables
+              }
+            }
+            // Execute schema statements - they're needed for the restore
+            await sql.unsafe(statement);
+            continue;
+          }
+          
+          // Execute data statements (INSERT, COPY) - only if restoreType is 'full'
+          if (statement.match(/^(INSERT\s+INTO|COPY)/i)) {
+            // Skip data statements if schema-only restore
+            if (restoreType === 'schema-only') {
+              continue; // Skip all data statements for schema-only restore
+            }
+            
+            // If filtering by tables, only execute if table is selected
+            if (selectedTables && selectedTables.length > 0 && tableName) {
+              if (!selectedTables.includes(tableName)) {
+                continue; // Skip data for unselected tables
+              }
+            }
+            
+            // Execute the statement
+            await sql.unsafe(statement);
+            
+            // Track tables and records
+            if (tableName) {
+              tablesSeen.add(tableName);
+              if (statement.match(/^INSERT\s+INTO/i)) {
+                // Count rows in INSERT statement (approximate - one INSERT might have multiple rows)
+                const rowCount = (statement.match(/VALUES\s*\(/gi) || []).length || 1;
+                recordsRestored += rowCount;
+              } else if (statement.match(/^COPY/i)) {
+                // For COPY, we'll count later from the data
+                recordsRestored += 1; // Placeholder, will be updated
+              }
+            }
+            continue;
+          }
+          
+          // Execute any other statements (functions, triggers, etc.)
           await sql.unsafe(statement);
-          
-          // Track tables and records
-          if (statement.match(/^INSERT\s+INTO/i)) {
-            const tableMatch = statement.match(/INSERT\s+INTO\s+["']?(\w+)["']?/i);
-            if (tableMatch) {
-              tablesSeen.add(tableMatch[1]);
-              recordsRestored++;
-            }
-          } else if (statement.match(/^COPY/i)) {
-            const tableMatch = statement.match(/COPY\s+["']?(\w+)["']?/i);
-            if (tableMatch) {
-              tablesSeen.add(tableMatch[1]);
-            }
-          }
         } catch (stmtError: any) {
-          const errorMsg = `Statement ${i + 1}: ${stmtError.message}`;
-          console.warn(`⚠️  ${errorMsg}`);
-          warnings.push(errorMsg);
+          // Some errors are expected (e.g., table already exists, constraint violations)
+          // Only log as warning and continue
+          const errorMsg = stmtError.message || 'Unknown error';
+          const isExpectedError = 
+            errorMsg.includes('already exists') ||
+            errorMsg.includes('does not exist') ||
+            errorMsg.includes('duplicate key') ||
+            errorMsg.includes('constraint');
+          
+          if (!isExpectedError) {
+            console.warn(`⚠️  Statement ${i + 1} warning: ${errorMsg}`);
+            warnings.push(`Statement ${i + 1}: ${errorMsg}`);
+          }
           // Continue with next statement instead of failing completely
         }
       }
       
-      // Count INSERT statements to estimate records restored
-      const insertMatches = sqlContent.match(/INSERT\s+INTO\s+["']?(\w+)["']?/gi);
-      if (insertMatches) {
-        recordsRestored = insertMatches.length;
-        
-        // Extract unique table names
-        insertMatches.forEach(match => {
-          const tableMatch = match.match(/INSERT\s+INTO\s+["']?(\w+)["']?/i);
-          if (tableMatch) {
-            tablesSeen.add(tableMatch[1]);
+      // Recalculate records restored from actual execution (only for full restore)
+      if (restoreType === 'full') {
+        // Count INSERT statements more accurately
+        const insertMatches = sqlContent.match(/INSERT\s+INTO\s+["']?(\w+)["']?/gi);
+        if (insertMatches) {
+          // Count VALUES clauses to get more accurate row count
+          let insertCount = 0;
+          insertMatches.forEach(() => {
+            insertCount++;
+          });
+          
+          // If we didn't track during execution, use the count from regex
+          if (recordsRestored === 0) {
+            recordsRestored = insertCount;
           }
-        });
-      }
-      
-      // If no INSERTs found, try to count COPY statements (pg_dump format)
-      if (recordsRestored === 0) {
-        const copyMatches = sqlContent.match(/COPY\s+["']?(\w+)["']?\s+\(/gi);
+          
+          // Extract unique table names
+          insertMatches.forEach(match => {
+            const tableMatch = match.match(/INSERT\s+INTO\s+["']?(\w+)["']?/i);
+            if (tableMatch) {
+              tablesSeen.add(tableMatch[1]);
+            }
+          });
+        }
+        
+        // Count COPY statements and their data lines
+        const copyMatches = sqlContent.match(/COPY\s+["']?(\w+)["']?/gi);
         if (copyMatches) {
           copyMatches.forEach(match => {
             const tableMatch = match.match(/COPY\s+["']?(\w+)["']?/i);
@@ -462,12 +557,43 @@ async function restoreFromSql(sqlContent: string, selectedTables?: string[]): Pr
             }
           });
           
-          // Estimate records from COPY data lines
-          const dataLines = sqlContent.match(/^\d+/gm);
-          if (dataLines) {
-            recordsRestored = dataLines.length;
+          // Count data lines in COPY statements (lines between COPY and \.)
+          // This is a more accurate count for COPY format
+          const copyDataPattern = /COPY\s+["']?\w+["']?[\s\S]*?\\\./g;
+          const copyBlocks = sqlContent.match(copyDataPattern);
+          if (copyBlocks) {
+            let copyRecordCount = 0;
+            copyBlocks.forEach(block => {
+              // Count non-empty lines that aren't COPY, \., or column definitions
+              const lines = block.split('\n');
+              lines.forEach(line => {
+                const trimmed = line.trim();
+                if (trimmed && 
+                    !trimmed.match(/^COPY\s+/i) && 
+                    !trimmed.match(/^\\\.$/) &&
+                    !trimmed.match(/^\(/) && // Column list
+                    !trimmed.startsWith('--')) {
+                  copyRecordCount++;
+                }
+              });
+            });
+            if (copyRecordCount > 0) {
+              recordsRestored += copyRecordCount;
+            }
           }
         }
+      } else {
+        // For schema-only, count tables from CREATE TABLE statements
+        const createTableMatches = sqlContent.match(/CREATE\s+TABLE\s+["']?(\w+)["']?/gi);
+        if (createTableMatches) {
+          createTableMatches.forEach(match => {
+            const tableMatch = match.match(/CREATE\s+TABLE\s+["']?(\w+)["']?/i);
+            if (tableMatch) {
+              tablesSeen.add(tableMatch[1]);
+            }
+          });
+        }
+        recordsRestored = 0; // No records restored in schema-only mode
       }
       
       console.log(`✅ SQL restore executed successfully`);
@@ -492,8 +618,9 @@ async function restoreFromSql(sqlContent: string, selectedTables?: string[]): Pr
 
 /**
  * Restore from JSON format
+ * @param restoreType - 'full' to restore schema + data, 'schema-only' to restore only table structures
  */
-async function restoreFromJson(jsonContent: string, selectedTables?: string[]): Promise<{
+async function restoreFromJson(jsonContent: string, selectedTables?: string[], restoreType: 'full' | 'schema-only' = 'full'): Promise<{
   tablesRestored: number;
   recordsRestored: number;
   errors: string[];
@@ -527,6 +654,13 @@ async function restoreFromJson(jsonContent: string, selectedTables?: string[]): 
     for (const tableName of tableNames) {
       try {
         const tableData = tables[tableName];
+        
+        // For schema-only restore, skip data insertion
+        if (restoreType === 'schema-only') {
+          console.log(`🔄 Skipping data for table ${tableName} (schema-only restore)`);
+          tablesRestored++; // Count table as processed (schema only)
+          continue;
+        }
         
         if (!tableData || !tableData.data || !Array.isArray(tableData.data)) {
           warnings.push(`Table ${tableName}: No data to restore`);

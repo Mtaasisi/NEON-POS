@@ -1778,8 +1778,9 @@ class SaleProcessingService {
       }
 
       // Batch insert all stock movements (if table exists)
-      // ✅ FIX: Stock movements trigger database trigger to deduct stock
-      // But we ALWAYS verify and update stock directly to ensure it's reduced
+      // ✅ FIX: Stock movements trigger database trigger to deduct stock automatically
+      // The trigger `trigger_update_stock_on_movement` runs BEFORE INSERT and updates variant quantity
+      // DO NOT directly update stock here to prevent double deduction
       let stockMovementsSucceeded = false;
       try {
         const { error: movementError } = await supabase
@@ -1789,74 +1790,129 @@ class SaleProcessingService {
         if (movementError) {
           console.warn('⚠️ Stock movements insert failed:', movementError.message);
           stockMovementsSucceeded = false;
+          
+          // ✅ FALLBACK: If stock movement insert fails, directly update stock as backup
+          // This ensures stock is still reduced even if stock movements table has issues
+          console.log('🔄 Stock movement insert failed, falling back to direct stock update...');
+          const directStockUpdates = items
+            .filter(item => {
+              const variantData = currentStockMap.get(item.variantId);
+              return variantData !== undefined && 
+                     variantData?.variant_type !== 'imei_child' && 
+                     !item.is_legacy && 
+                     !item.is_imei_child;
+            })
+            .map(async item => {
+              const { data: currentVariant, error: fetchError } = await supabase
+                .from('lats_product_variants')
+                .select('quantity')
+                .eq('id', item.variantId)
+                .single();
+
+              if (fetchError) {
+                console.error('❌ Failed to fetch current stock for variant:', item.variantId, fetchError);
+                return { success: false, error: fetchError.message };
+              }
+
+              const currentQuantity = currentVariant?.quantity || 0;
+              const newQuantity = Math.max(0, currentQuantity - item.quantity);
+              
+              console.log(`📦 [Sale] Fallback: Reducing stock for variant ${item.variantId}: ${currentQuantity} → ${newQuantity} (sold ${item.quantity})`);
+              
+              const { error: updateError } = await supabase
+                .from('lats_product_variants')
+                .update({ 
+                  quantity: newQuantity,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', item.variantId);
+
+              if (updateError) {
+                console.error('❌ Failed to reduce stock for variant:', item.variantId, updateError);
+                return { success: false, error: updateError.message };
+              }
+
+              return { success: true };
+            });
+
+          const stockUpdateResults = await Promise.allSettled(directStockUpdates);
+          for (let i = 0; i < stockUpdateResults.length; i++) {
+            const result = stockUpdateResults[i];
+            if (result.status === 'rejected') {
+              console.error('❌ Stock update failed:', result.reason);
+              return { success: false, error: `Failed to reduce stock for ${items[i].productName}` };
+            } else if (result.status === 'fulfilled' && result.value.error) {
+              console.error('❌ Stock update error:', result.value.error);
+              return { success: false, error: result.value.error };
+            }
+          }
+          console.log('✅ Stock successfully reduced via fallback method');
         } else {
-          console.log('✅ Stock movements logged successfully');
+          console.log('✅ Stock movements logged successfully - stock reduced by database trigger');
           stockMovementsSucceeded = true;
+          // ✅ FIX: Stock is automatically reduced by the database trigger
+          // No need to directly update stock here - this prevents double deduction
         }
       } catch (err) {
         console.warn('⚠️ Stock movements tracking not enabled (table not found):', err);
         stockMovementsSucceeded = false;
-      }
+        
+        // ✅ FALLBACK: If stock movements table doesn't exist, directly update stock
+        console.log('🔄 Stock movements table not found, using direct stock update...');
+        const directStockUpdates = items
+          .filter(item => {
+            const variantData = currentStockMap.get(item.variantId);
+            return variantData !== undefined && 
+                   variantData?.variant_type !== 'imei_child' && 
+                   !item.is_legacy && 
+                   !item.is_imei_child;
+          })
+          .map(async item => {
+            const { data: currentVariant, error: fetchError } = await supabase
+              .from('lats_product_variants')
+              .select('quantity')
+              .eq('id', item.variantId)
+              .single();
 
-      // ✅ CRITICAL FIX: ALWAYS directly update stock to ensure it's reduced
-      // Even if trigger works, we verify and update to prevent race conditions
-      // This ensures stock is ALWAYS correctly reduced during sales
-      console.log('🔄 Ensuring stock is reduced for all sold items...');
-      const directStockUpdates = items
-        .filter(item => {
-          const variantData = currentStockMap.get(item.variantId);
-          // Only update regular variants (not IMEI children or legacy items)
-          return variantData !== undefined && 
-                 variantData?.variant_type !== 'imei_child' && 
-                 !item.is_legacy && 
-                 !item.is_imei_child;
-        })
-        .map(async item => {
-          // ✅ FIX: Fetch CURRENT quantity right before updating (prevents race conditions)
-          const { data: currentVariant, error: fetchError } = await supabase
-            .from('lats_product_variants')
-            .select('quantity')
-            .eq('id', item.variantId)
-            .single();
+            if (fetchError) {
+              console.error('❌ Failed to fetch current stock for variant:', item.variantId, fetchError);
+              return { success: false, error: fetchError.message };
+            }
 
-          if (fetchError) {
-            console.error('❌ Failed to fetch current stock for variant:', item.variantId, fetchError);
-            return { success: false, error: fetchError.message };
+            const currentQuantity = currentVariant?.quantity || 0;
+            const newQuantity = Math.max(0, currentQuantity - item.quantity);
+            
+            console.log(`📦 [Sale] Direct update: Reducing stock for variant ${item.variantId}: ${currentQuantity} → ${newQuantity} (sold ${item.quantity})`);
+            
+            const { error: updateError } = await supabase
+              .from('lats_product_variants')
+              .update({ 
+                quantity: newQuantity,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.variantId);
+
+            if (updateError) {
+              console.error('❌ Failed to reduce stock for variant:', item.variantId, updateError);
+              return { success: false, error: updateError.message };
+            }
+
+            return { success: true };
+          });
+
+        const stockUpdateResults = await Promise.allSettled(directStockUpdates);
+        for (let i = 0; i < stockUpdateResults.length; i++) {
+          const result = stockUpdateResults[i];
+          if (result.status === 'rejected') {
+            console.error('❌ Stock update failed:', result.reason);
+            return { success: false, error: `Failed to reduce stock for ${items[i].productName}` };
+          } else if (result.status === 'fulfilled' && result.value.error) {
+            console.error('❌ Stock update error:', result.value.error);
+            return { success: false, error: result.value.error };
           }
-
-          const currentQuantity = currentVariant?.quantity || 0;
-          const newQuantity = Math.max(0, currentQuantity - item.quantity);
-          
-          console.log(`📦 [Sale] Reducing stock for variant ${item.variantId}: ${currentQuantity} → ${newQuantity} (sold ${item.quantity})`);
-          
-          const { error: updateError } = await supabase
-            .from('lats_product_variants')
-            .update({ 
-              quantity: newQuantity,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', item.variantId);
-
-          if (updateError) {
-            console.error('❌ Failed to reduce stock for variant:', item.variantId, updateError);
-            return { success: false, error: updateError.message };
-          }
-
-          return { success: true };
-        });
-
-      const stockUpdateResults = await Promise.allSettled(directStockUpdates);
-      for (let i = 0; i < stockUpdateResults.length; i++) {
-        const result = stockUpdateResults[i];
-        if (result.status === 'rejected') {
-          console.error('❌ Stock update failed:', result.reason);
-          return { success: false, error: `Failed to reduce stock for ${items[i].productName}` };
-        } else if (result.status === 'fulfilled' && result.value.error) {
-          console.error('❌ Stock update error:', result.value.error);
-          return { success: false, error: result.value.error };
         }
+        console.log('✅ Stock successfully reduced via direct update');
       }
-      console.log('✅ Stock successfully reduced for all sold items');
 
       console.log('✅ Inventory updated successfully');
       
@@ -2109,6 +2165,16 @@ class SaleProcessingService {
     const items = sale.items.map(item => `${item.productName} x${item.quantity}`).join(', ');
     const discountText = sale.discount > 0 ? `\nDiscount: ${this.formatMoney(sale.discount)}` : '';
     
+    // Get business info
+    let businessName = 'inauzwa';
+    try {
+      const { businessInfoService } = await import('./businessInfoService');
+      const businessInfo = await businessInfoService.getBusinessInfo();
+      businessName = businessInfo.name || 'inauzwa';
+    } catch (error) {
+      console.warn('⚠️ Could not load business info, using default');
+    }
+    
     // Load SMS message settings from POS settings
     let headerMessage = 'Thank you for your purchase!';
     let footerMessage = 'Thank you for choosing us!';
@@ -2127,7 +2193,9 @@ class SaleProcessingService {
       console.warn('⚠️ Could not load SMS message settings, using defaults');
     }
     
-    return `${headerMessage}
+    return `${businessName.toUpperCase()}
+${'═'.repeat(businessName.length)}
+${headerMessage}
 Sale #${sale.saleNumber}
 Items: ${items}
 Total: ${this.formatMoney(sale.total)}${discountText}

@@ -58,6 +58,8 @@ import {
   Maximize2,
   Minimize2,
   Square,
+  Rows,
+  ArrowUpDown,
   RefreshCw,
   CreditCard,
   ShoppingBag,
@@ -65,6 +67,7 @@ import {
 } from 'lucide-react';
 
 type WidgetSize = 'small' | 'medium' | 'large';
+type WidgetRowSpan = 'single' | 'double';
 
 interface DashboardSettings {
   quickActions: {
@@ -142,13 +145,15 @@ interface DashboardSettings {
     topProductsWidget: boolean;
     expensesWidget: boolean;
     staffPerformanceWidget: boolean;
-    salesChart: boolean;
     paymentMethodsChart: boolean;
     salesByCategoryChart: boolean;
     profitMarginChart: boolean;
   };
   widgetSizes?: {
     [key: string]: WidgetSize;
+  };
+  widgetRowSpans?: {
+    [key: string]: WidgetRowSpan;
   };
 }
 
@@ -238,7 +243,6 @@ const DashboardCustomizationSettings: React.FC = () => {
       topProductsWidget: true,
       expensesWidget: true,
       staffPerformanceWidget: true,
-      salesChart: true,
       paymentMethodsChart: true,
       salesByCategoryChart: true,
       profitMarginChart: true
@@ -409,6 +413,20 @@ const DashboardCustomizationSettings: React.FC = () => {
     return dashboardSettings.widgetSizes?.[widgetKey] || 'medium';
   };
 
+  const setWidgetRowSpan = (widgetKey: string, rowSpan: WidgetRowSpan) => {
+    setDashboardSettings(prev => ({
+      ...prev,
+      widgetRowSpans: {
+        ...prev.widgetRowSpans,
+        [widgetKey]: rowSpan
+      }
+    }));
+  };
+
+  const getWidgetRowSpan = (widgetKey: string): WidgetRowSpan => {
+    return dashboardSettings.widgetRowSpans?.[widgetKey] || 'single';
+  };
+
   const quickActionItems = [
     // Core Business Features
     { key: 'devices' as const, label: 'Devices', icon: Smartphone, description: 'Manage devices' },
@@ -469,7 +487,6 @@ const DashboardCustomizationSettings: React.FC = () => {
     { key: 'customerActivityChart' as const, label: 'Customer Activity Chart', icon: Users, category: 'Charts' },
     { key: 'salesFunnelChart' as const, label: 'Sales Funnel Chart', icon: PieChart, category: 'Charts' },
     { key: 'purchaseOrderChart' as const, label: 'Purchase Order Chart', icon: Box, category: 'Charts' },
-    { key: 'salesChart' as const, label: 'Sales Chart', icon: DollarSign, category: 'Charts' },
     { key: 'paymentMethodsChart' as const, label: 'Payment Methods Chart', icon: Briefcase, category: 'Charts' },
     { key: 'salesByCategoryChart' as const, label: 'Sales by Category Chart', icon: Tag, category: 'Charts' },
     { key: 'profitMarginChart' as const, label: 'Profit Margin Chart', icon: TrendingUp, category: 'Charts' },
@@ -546,7 +563,7 @@ const DashboardCustomizationSettings: React.FC = () => {
     }
     // Default order if no saved order exists
     return [
-      'revenueTrendChart', 'salesChart', 'deviceStatusChart', 'appointmentsTrendChart',
+      'revenueTrendChart', 'deviceStatusChart', 'appointmentsTrendChart',
       'purchaseOrderChart', 'paymentMethodsChart', 'analyticsWidget', 'salesByCategoryChart', 'profitMarginChart',
       'stockLevelChart', 'performanceMetricsChart', 'customerActivityChart',
       'appointmentWidget', 'employeeWidget', 'notificationWidget',
@@ -756,28 +773,54 @@ const DashboardCustomizationSettings: React.FC = () => {
                 </div>
               </div>
 
-          {/* Show widgets with REAL gaps by simulating row-by-row placement */}
+          {/* Show widgets using the SAME autoArrangeWidgets logic as the actual dashboard */}
           {(() => {
-            const enabledWidgets = orderedWidgets.filter(w => dashboardSettings.widgets[w.key]);
-            
-            // Calculate column spans for each widget
-            const getColumnSpan = (key: string) => {
-              const size = getWidgetSize(key);
-              if (size === 'small') return 1;
-              if (size === 'large') return 3;
-              return 2; // medium
+            // Get widget order from localStorage (same as dashboard)
+            const getSavedWidgetOrder = (): string[] | null => {
+              try {
+                const savedOrder = localStorage.getItem('dashboard_widget_order');
+                if (savedOrder) {
+                  return JSON.parse(savedOrder);
+                }
+              } catch (error) {
+                console.error('Error loading widget order:', error);
+              }
+              // Return null if no saved order
+              return null;
             };
-            
-            // Group widgets into rows of 3 columns, tracking empty spaces
-            const rows: Array<Array<{type: 'widget' | 'empty', item?: typeof enabledWidgets[0], span: number}>> = [];
-            let currentRow: Array<{type: 'widget' | 'empty', item?: typeof enabledWidgets[0], span: number}> = [];
+
+            // Get enabled widgets in the same order as dashboard
+            const savedOrder = getSavedWidgetOrder();
+            const enabledWidgetKeys = savedOrder 
+              ? savedOrder.filter(key => dashboardSettings.widgets[key as keyof DashboardSettings['widgets']])
+              : orderedWidgets.filter(w => dashboardSettings.widgets[w.key]).map(w => w.key);
+
+            // Use autoArrangeWidgets to get the EXACT same layout as dashboard
+            const smartLayout = autoArrangeWidgets(enabledWidgetKeys);
+
+            // Create a map of widget keys to widget items for easy lookup
+            const widgetMap = new Map(orderedWidgets.map(w => [w.key, w]));
+
+            // Place widgets row by row (3 columns per row) to show real gaps
+            const rows: Array<Array<{
+              type: 'widget' | 'empty';
+              item?: typeof orderedWidgets[0];
+              gridColumn?: string;
+              span?: number;
+            }>> = [];
+            let currentRow: Array<{
+              type: 'widget' | 'empty';
+              item?: typeof orderedWidgets[0];
+              gridColumn?: string;
+              span?: number;
+            }> = [];
             let currentRowCols = 0;
-            
-            enabledWidgets.forEach(item => {
-              const span = getColumnSpan(item.key);
+
+            smartLayout.widgets.forEach((widget) => {
+              const colSpan = parseInt(widget.gridColumn.split(' ')[1]);
               
               // If adding this widget exceeds 3 columns, start a new row
-              if (currentRowCols + span > 3) {
+              if (currentRowCols + colSpan > 3) {
                 // Fill remaining columns with empty spaces
                 const remainingCols = 3 - currentRowCols;
                 if (remainingCols > 0) {
@@ -789,8 +832,13 @@ const DashboardCustomizationSettings: React.FC = () => {
               }
               
               // Add widget to current row
-              currentRow.push({ type: 'widget', item, span });
-              currentRowCols += span;
+              currentRow.push({
+                type: 'widget',
+                item: widgetMap.get(widget.key),
+                gridColumn: widget.gridColumn,
+                span: colSpan
+              });
+              currentRowCols += colSpan;
               
               // If row is complete (3 columns), start new row
               if (currentRowCols >= 3) {
@@ -808,8 +856,8 @@ const DashboardCustomizationSettings: React.FC = () => {
               }
               rows.push(currentRow);
             }
-            
-            // Render rows
+
+            // Render rows with gaps (same structure as dashboard)
             return rows.map((row, rowIndex) => (
               <div key={`row-${rowIndex}`} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
                 {row.map((cell, cellIndex) => {
@@ -842,17 +890,20 @@ const DashboardCustomizationSettings: React.FC = () => {
                   
                   // Render widget
                   const item = cell.item!;
+                  if (!item) return null;
+                  
                   const Icon = item.icon;
                   const isEnabled = dashboardSettings.widgets[item.key];
                   const currentSize = getWidgetSize(item.key);
+                  const currentRowSpan = getWidgetRowSpan(item.key);
                   const isChart = item.category === 'Charts';
 
-                  // Get responsive class based on widget size (same as dashboard)
+                  // Get responsive class based on gridColumn from autoArrangeWidgets (same as dashboard)
                   const getResponsiveClass = () => {
-                    if (currentSize === 'small') return 'md:col-span-1';
-                    if (currentSize === 'large') return 'md:col-span-2 lg:col-span-3';
-                    // medium (default)
-                    return 'md:col-span-2 lg:col-span-2';
+                    const colSpan = cell.span || 1;
+                    if (colSpan === 3) return 'md:col-span-2 lg:col-span-3';
+                    if (colSpan === 2) return 'md:col-span-2 lg:col-span-2';
+                    return 'md:col-span-1'; // colSpan === 1
                   };
 
                   // Color scheme based on category
@@ -980,6 +1031,40 @@ const DashboardCustomizationSettings: React.FC = () => {
                                 title="Large (3 columns)"
                               >
                                 <Maximize2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          {/* Row Span Controls */}
+                          <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                            <span className={`text-xs font-medium ${colorScheme.sizeLabel}`}>Height:</span>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWidgetRowSpan(item.key, 'single');
+                                }}
+                                className={`p-1.5 rounded ${
+                                  currentRowSpan === 'single'
+                                    ? colorScheme.sizeActive
+                                    : colorScheme.sizeButtons
+                                } transition-colors`}
+                                title="Single Row Height"
+                              >
+                                <Rows size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setWidgetRowSpan(item.key, 'double');
+                                }}
+                                className={`p-1.5 rounded ${
+                                  currentRowSpan === 'double'
+                                    ? colorScheme.sizeActive
+                                    : colorScheme.sizeButtons
+                                } transition-colors`}
+                                title="Double Row Height (2x height)"
+                              >
+                                <ArrowUpDown size={14} />
                               </button>
                             </div>
                           </div>

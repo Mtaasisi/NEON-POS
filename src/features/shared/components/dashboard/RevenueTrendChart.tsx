@@ -152,8 +152,8 @@ export const RevenueTrendChart: React.FC<RevenueTrendChartProps> = ({ className 
       <div className="flex items-start justify-between mb-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <DollarSign className="w-5 h-5 text-gray-700" />
-            <h3 className="text-sm font-medium text-gray-900">Revenue This Week</h3>
+            <DollarSign className="w-5 h-5 text-emerald-600" />
+            <h3 className="text-sm font-medium text-gray-900">Sales & Revenue This Week</h3>
           </div>
           <p className="text-3xl font-bold text-gray-900">
             TSh {formatCurrency(totalRevenue)}

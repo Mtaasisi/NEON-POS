@@ -423,18 +423,32 @@ const InstallmentsPage: React.FC = () => {
                       <Eye size={14} />
                       Details
                     </button>
+                    {/* Show payment button if there are unpaid installments or balance due, regardless of status */}
+                    {(() => {
+                      const installmentsPaid = Number(plan.installments_paid || 0);
+                      const totalInstallments = Number(plan.number_of_installments || 0);
+                      const hasUnpaidInstallments = installmentsPaid < totalInstallments;
+                      const balanceDue = Number(plan.balance_due || 0);
+                      const isTrulyCompleted = !hasUnpaidInstallments && balanceDue <= 0 && plan.status === 'completed';
+                      const canRecordPayment = (hasUnpaidInstallments || balanceDue > 0) && !isTrulyCompleted && plan.status !== 'cancelled';
+                      
+                      return canRecordPayment ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setSelectedPlan(plan);
+                              setShowPaymentModal(true);
+                            }}
+                            className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium flex items-center gap-1"
+                          >
+                            <DollarSign size={14} />
+                            Pay
+                          </button>
+                        </>
+                      ) : null;
+                    })()}
                     {plan.status === 'active' && (
                       <>
-                        <button
-                          onClick={() => {
-                            setSelectedPlan(plan);
-                            setShowPaymentModal(true);
-                          }}
-                          className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-medium flex items-center gap-1"
-                        >
-                          <DollarSign size={14} />
-                          Pay
-                        </button>
                         <button
                           onClick={() => {
                             setSelectedPlan(plan);
@@ -1713,30 +1727,103 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
   // Generate installment schedule
   const generateInstallmentSchedule = () => {
     const schedule = [];
-    const startDate = new Date(currentPlan.start_date);
     
-    for (let i = 0; i < currentPlan.number_of_installments; i++) {
-      const dueDate = new Date(startDate);
+    // Calculate balanced installment amounts
+    const calculateBalancedInstallments = (
+      totalAmount: number,
+      firstPayment: number,
+      numInstallments: number
+    ): number[] => {
+      const remaining = totalAmount - firstPayment;
+      const numRemainingPayments = firstPayment > 0 ? numInstallments - 1 : numInstallments;
+      
+      if (numRemainingPayments <= 0) return [];
+      
+      const amounts: number[] = [];
+      const baseAmount = remaining / numRemainingPayments;
+      
+      // Calculate all installments except the last one as rounded amounts
+      let totalCalculated = 0;
+      for (let i = 0; i < numRemainingPayments - 1; i++) {
+        const rounded = Math.round(baseAmount * 100) / 100;
+        amounts.push(rounded);
+        totalCalculated += rounded;
+      }
+      
+      // Last installment is the remainder to ensure perfect balance
+      const lastAmount = Math.round((remaining - totalCalculated) * 100) / 100;
+      amounts.push(lastAmount);
+      
+      return amounts;
+    };
+    
+    const balancedAmounts = calculateBalancedInstallments(
+      currentPlan.total_amount,
+      currentPlan.down_payment || 0,
+      currentPlan.number_of_installments
+    );
+    
+    const planStartDate = new Date(currentPlan.start_date);
+    
+    // Add first payment (down payment) if it exists
+    if (currentPlan.down_payment > 0) {
+      // Check for payment with installment_number === 1 (new) or === 0 (legacy/backward compatibility)
+      const payment = payments.find(p => 
+        (p.installment_number === 1 || p.installment_number === 0) && 
+        Math.abs(Number(p.amount) - currentPlan.down_payment) < 0.01
+      );
+      // Also check if total_paid indicates first payment was made (for backward compatibility)
+      const isPaidFromTotalPaid = (currentPlan.total_paid || 0) >= currentPlan.down_payment;
+      const isPaid = (payment && payment.status === 'paid') || isPaidFromTotalPaid;
+      const dueDate = new Date(planStartDate);
+      const isOverdue = !isPaid && new Date() > dueDate;
+      
+      schedule.push({
+        installmentNumber: 1,
+        dueDate: dueDate.toISOString(),
+        amount: currentPlan.down_payment,
+        status: isPaid ? 'paid' : isOverdue ? 'overdue' : 'pending',
+        payment: payment,
+        daysOverdue: isOverdue ? Math.floor((new Date().getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
+      });
+    }
+    
+    // Calculate remaining installments
+    const numberOfRemainingPayments = currentPlan.down_payment > 0 
+      ? currentPlan.number_of_installments - 1 
+      : currentPlan.number_of_installments;
+    
+    const nextPaymentStartDate = currentPlan.down_payment > 0 
+      ? new Date(currentPlan.next_payment_date || currentPlan.start_date)
+      : new Date(currentPlan.start_date);
+    
+    for (let i = 0; i < numberOfRemainingPayments; i++) {
+      const dueDate = new Date(nextPaymentStartDate);
       
       // Calculate due date based on payment frequency
       if (currentPlan.payment_frequency === 'weekly') {
-        dueDate.setDate(startDate.getDate() + (i * 7));
+        dueDate.setDate(nextPaymentStartDate.getDate() + (i * 7));
       } else if (currentPlan.payment_frequency === 'monthly') {
-        dueDate.setMonth(startDate.getMonth() + i);
-      } else if (currentPlan.payment_frequency === 'bi-weekly') {
-        dueDate.setDate(startDate.getDate() + (i * 14));
+        dueDate.setMonth(nextPaymentStartDate.getMonth() + i);
+      } else if (currentPlan.payment_frequency === 'bi_weekly' || currentPlan.payment_frequency === 'bi-weekly') {
+        dueDate.setDate(nextPaymentStartDate.getDate() + (i * 14));
       }
       
+      const installmentNumber = currentPlan.down_payment > 0 ? i + 2 : i + 1;
+      
       // Find matching payment
-      const payment = payments.find(p => p.installment_number === i + 1);
+      const payment = payments.find(p => p.installment_number === installmentNumber);
       
       const isPaid = payment && payment.status === 'paid';
       const isOverdue = !isPaid && new Date() > dueDate;
       
+      // Use balanced amount for this installment
+      const amount = balancedAmounts[i] || currentPlan.installment_amount;
+      
       schedule.push({
-        installmentNumber: i + 1,
+        installmentNumber: installmentNumber,
         dueDate: dueDate.toISOString(),
-        amount: currentPlan.installment_amount,
+        amount: amount,
         status: isPaid ? 'paid' : isOverdue ? 'overdue' : 'pending',
         payment: payment,
         daysOverdue: isOverdue ? Math.floor((new Date().getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24)) : 0
@@ -2195,19 +2282,28 @@ const ViewPlanDetailsModal: React.FC<ViewPlanDetailsModalProps> = ({
         {/* Footer */}
         <div className="p-6 border-t border-gray-200 bg-gray-50">
           <div className="flex flex-wrap gap-3">
-            {/* Record Payment Button */}
-            {currentPlan.status === 'active' && currentPlan.balance_due > 0 && (
-              <button
-                onClick={() => {
-                  // This will be handled by parent component
-                  onClose();
-                }}
-                className="flex-1 min-w-[200px] px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <DollarSign size={18} />
-                Record Payment
-              </button>
-            )}
+            {/* Record Payment Button - Show if there are unpaid installments or balance due */}
+            {(() => {
+              const installmentsPaid = Number(currentPlan.installments_paid || 0);
+              const totalInstallments = Number(currentPlan.number_of_installments || 0);
+              const hasUnpaidInstallments = installmentsPaid < totalInstallments;
+              const balanceDue = Number(currentPlan.balance_due || 0);
+              const isTrulyCompleted = !hasUnpaidInstallments && balanceDue <= 0 && currentPlan.status === 'completed';
+              const canRecordPayment = (hasUnpaidInstallments || balanceDue > 0) && !isTrulyCompleted && currentPlan.status !== 'cancelled';
+              
+              return canRecordPayment ? (
+                <button
+                  onClick={() => {
+                    // This will be handled by parent component
+                    onClose();
+                  }}
+                  className="flex-1 min-w-[200px] px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <DollarSign size={18} />
+                  Record Payment
+                </button>
+              ) : null;
+            })()}
             
             {/* Send Reminder Button */}
             {currentPlan.status === 'active' && currentPlan.customer?.phone && (
@@ -2537,11 +2633,15 @@ const PaymentHistoryModal: React.FC<PaymentHistoryModalProps> = ({
                   <div className="flex justify-between items-start mb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                        <span className="text-green-700 font-bold">#{payment.installment_number}</span>
+                        <span className="text-green-700 font-bold">
+                          {payment.installment_number === 0 ? 'DP' : `#${payment.installment_number}`}
+                        </span>
                       </div>
                       <div>
                         <p className="font-semibold text-gray-900">
-                          Installment Payment {payment.installment_number}
+                          {payment.installment_number === 0 
+                            ? 'Down Payment' 
+                            : `Installment Payment ${payment.installment_number}`}
                         </p>
                         <p className="text-xs text-gray-600">{formatDate(payment.payment_date)}</p>
                       </div>
