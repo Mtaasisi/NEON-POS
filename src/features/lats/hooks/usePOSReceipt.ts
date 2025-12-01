@@ -450,8 +450,14 @@ export const usePOSReceipt = () => {
           estimatedHeight += item.selectedSerialNumbers.length * 5;
         }
         if (item.attributes && Object.keys(item.attributes).length > 0) {
+          const excludedFields = [
+            'id', 'created_at', 'updated_at', 'added_at', 
+            'variant_id', 'product_id', 'imei', 'serial_number',
+            'is_legacy', 'is_imei_child', 'notes', 
+            'parent_variant_name', 'data_source', 'created_without_po'
+          ];
           const attrCount = Object.keys(item.attributes).filter(key => 
-            !['id', 'created_at', 'updated_at', 'variant_id', 'product_id'].includes(key)
+            !excludedFields.includes(key)
           ).length;
           estimatedHeight += attrCount * 4;
         }
@@ -521,8 +527,14 @@ export const usePOSReceipt = () => {
         
         // Attributes (specifications) - Clean formatting
         if (item.attributes && Object.keys(item.attributes).length > 0) {
+          const excludedFields = [
+            'id', 'created_at', 'updated_at', 'added_at', 
+            'variant_id', 'product_id', 'imei', 'serial_number',
+            'is_legacy', 'is_imei_child', 'notes', 
+            'parent_variant_name', 'data_source', 'created_without_po'
+          ];
           Object.entries(item.attributes).forEach(([key, value]) => {
-            if (!['id', 'created_at', 'updated_at', 'variant_id', 'product_id'].includes(key) && value) {
+            if (!excludedFields.includes(key) && value) {
               const keyLabel = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
               doc.text(`${keyLabel}: ${value}`, specX, specY);
               specY += 4;
@@ -578,8 +590,8 @@ export const usePOSReceipt = () => {
         totalsLineY += 7;
       }
       
-      // Total (Prominent)
-      doc.setFontSize(14);
+      // Total (Prominent - Large and Bold)
+      doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
       const totalText = `TOTAL: ${formatMoney(receipt.total)}`;
       const totalWidth = doc.getTextWidth(totalText);

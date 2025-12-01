@@ -10,6 +10,8 @@ import { RealTimeStockService } from '../../lib/realTimeStock';
 import { useGeneralSettingsContext } from '../../../../context/GeneralSettingsContext';
 import { useTranslation } from '../../lib/i18n/useTranslation';
 import { getProductTotalStock } from '../../lib/productUtils';
+import { searchIMEIVariants } from '../../lib/imeiVariantService';
+import { useBranch } from '../../../../context/BranchContext';
 
 interface Product {
   id: string;
@@ -122,6 +124,10 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
   
   // View mode state (grid or list)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // State to track product IDs that match via children variants (IMEI/serial numbers)
+  const [productsWithMatchingChildrenVariants, setProductsWithMatchingChildrenVariants] = useState<Set<string>>(new Set());
+  const { currentBranch } = useBranch();
 
   // Category colors mapping - Comprehensive color scheme for all categories
   const getCategoryColor = (category: string, isSelected: boolean) => {
@@ -447,6 +453,94 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
     fetchAllStockData();
   }, [products]);
 
+  // Search for children variants (IMEI/serial numbers) when search query changes
+  useEffect(() => {
+    const searchChildrenVariants = async () => {
+      if (!searchQuery.trim() || searchQuery.trim().length < 2) {
+        setProductsWithMatchingChildrenVariants(new Set());
+        if (import.meta.env.DEV && searchQuery.trim().length > 0) {
+          console.log(`ℹ️ [ProductSearchSection] Search query too short (${searchQuery.trim().length} chars), minimum 2 required`);
+        }
+        return;
+      }
+
+      if (import.meta.env.DEV) {
+        console.log(`🔍 [ProductSearchSection] Searching for children variants: "${searchQuery}"`);
+      }
+
+      try {
+        const matchingVariants = await searchIMEIVariants(
+          searchQuery.trim(),
+          currentBranch?.id
+        );
+
+        // Extract unique product IDs from matching variants
+        const productIds = new Set<string>();
+        matchingVariants.forEach((variant: any) => {
+          // The variant should have product_id directly, or via the product relation
+          const productId = variant.product_id || variant.product?.id;
+          if (productId) {
+            productIds.add(productId);
+          } else if (import.meta.env.DEV) {
+            console.warn('⚠️ [ProductSearchSection] Variant missing product_id:', {
+              variantId: variant.id,
+              variantType: variant.variant_type,
+              hasProductRelation: !!variant.product,
+              variantAttributes: variant.variant_attributes
+            });
+          }
+        });
+
+        if (import.meta.env.DEV) {
+          if (productIds.size > 0) {
+            console.log(`✅ [ProductSearchSection] Found ${productIds.size} products with matching children variants for "${searchQuery}"`);
+            console.log('📋 Product IDs:', Array.from(productIds));
+            
+            // Check if these products are in the products array
+            const productIdsArray = Array.from(productIds);
+            const productsInList = productIdsArray.filter(id => products.some(p => p.id === id));
+            const productsNotInList = productIdsArray.filter(id => !products.some(p => p.id === id));
+            
+            if (productsNotInList.length > 0) {
+              console.warn(`⚠️ [ProductSearchSection] ${productsNotInList.length} products with matching variants are NOT in the products list:`, productsNotInList);
+              console.warn('💡 This might be because:');
+              console.warn('   - Products are not loaded yet');
+              console.warn('   - Products are filtered by branch settings');
+              console.warn('   - Products are paginated and not in current page');
+            }
+            if (productsInList.length > 0) {
+              console.log(`✅ [ProductSearchSection] ${productsInList.length} products with matching variants ARE in the products list and should appear in search results`);
+            }
+          } else {
+            console.log(`⚠️ [ProductSearchSection] No products found for "${searchQuery}" - found ${matchingVariants.length} matching variants`);
+            if (matchingVariants.length > 0) {
+              console.log('🔍 Matching variants (but missing product_id):', matchingVariants.map((v: any) => ({
+                id: v.id,
+                product_id: v.product_id,
+                product: v.product?.id,
+                variant_attributes: v.variant_attributes
+              })));
+            } else {
+              console.log(`ℹ️ [ProductSearchSection] No variants found matching "${searchQuery}" in database`);
+            }
+          }
+        }
+
+        setProductsWithMatchingChildrenVariants(productIds);
+      } catch (error) {
+        console.error('❌ [ProductSearchSection] Error searching children variants:', error);
+        setProductsWithMatchingChildrenVariants(new Set());
+      }
+    };
+
+    // Debounce the search
+    const timeoutId = setTimeout(() => {
+      searchChildrenVariants();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, currentBranch?.id, products]);
+
   // Handle search input change
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -484,21 +578,34 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
 
   // Filter products based on current filters
   const filteredProducts = products.filter(product => {
-    // Search query filter
+    // Search query filter - check children variants FIRST before other filters
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = 
-        product.name?.toLowerCase().includes(query) ||
-        product.sku?.toLowerCase().includes(query) ||
-        (product.category?.name && product.category.name.toLowerCase().includes(query)) ||
-        // Enhanced variant search - search through variant names and SKUs
-        (product.variants && product.variants.some(variant => 
-          variant.name?.toLowerCase().includes(query) ||
-          variant.sku?.toLowerCase().includes(query) ||
-          variant.barcode?.toLowerCase().includes(query)
-        ));
+      // First check if this product has matching children variants (IMEI/serial numbers)
+      // This takes priority over other search criteria
+      const matchesViaChildrenVariants = productsWithMatchingChildrenVariants.has(product.id);
       
-      if (!matchesSearch) return false;
+      if (matchesViaChildrenVariants) {
+        // Product matches via children variant - continue to other filters (category, stock, etc.)
+        // Don't return false here, let it pass through to other filters
+        if (import.meta.env.DEV) {
+          console.log(`✅ [ProductSearchSection] Product "${product.name}" (${product.id}) matches via children variant`);
+        }
+      } else {
+        // Check other search criteria
+        const query = searchQuery.toLowerCase();
+        const matchesSearch = 
+          product.name?.toLowerCase().includes(query) ||
+          product.sku?.toLowerCase().includes(query) ||
+          (product.category?.name && product.category.name.toLowerCase().includes(query)) ||
+          // Enhanced variant search - search through variant names and SKUs
+          (product.variants && product.variants.some(variant => 
+            variant.name?.toLowerCase().includes(query) ||
+            variant.sku?.toLowerCase().includes(query) ||
+            variant.barcode?.toLowerCase().includes(query)
+          ));
+        
+        if (!matchesSearch) return false;
+      }
     }
     
     // Category filter - only filter if a specific category is selected (not "All Product" or empty)
@@ -538,8 +645,6 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
 
   // Sort products
   const sortedProducts = [...filteredProducts].sort((a, b) => {
-    let comparison = 0;
-    
     // Get product price from variants or fallback to product level
     const aPrimaryVariant = a.variants?.[0];
     const bPrimaryVariant = b.variants?.[0];
@@ -550,6 +655,17 @@ const ProductSearchSection: React.FC<ProductSearchSectionProps> = ({
     // This ensures products with multiple variants are correctly sorted
     const aStock = getProductTotalStock(a as any);
     const bStock = getProductTotalStock(b as any);
+    
+    // ✅ PRIORITY: Products with stock always appear above products without stock
+    const aHasStock = aStock > 0;
+    const bHasStock = bStock > 0;
+    
+    // If one has stock and the other doesn't, prioritize the one with stock
+    if (aHasStock && !bHasStock) return -1;
+    if (!aHasStock && bHasStock) return 1;
+    
+    // If both have stock or both don't have stock, apply normal sorting
+    let comparison = 0;
     
     switch (sortBy) {
       case 'name':

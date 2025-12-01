@@ -5117,11 +5117,14 @@ const POSPageOptimized: React.FC = () => {
           setShowShareReceipt(false);
         }}
         receiptData={{
+          id: currentReceipt?.id || currentReceipt?.saleId,
           receiptNumber: currentReceipt?.receiptNumber || 'N/A',
           amount: currentReceipt?.total || 0,
           customerName: currentReceipt?.customer?.name || selectedCustomer?.name,
           customerPhone: currentReceipt?.customer?.phone || selectedCustomer?.phone,
           customerEmail: currentReceipt?.customer?.email || selectedCustomer?.email,
+          customerCity: currentReceipt?.customer?.city || selectedCustomer?.city,
+          customerTag: currentReceipt?.customer?.colorTag || currentReceipt?.customer?.customerTag || selectedCustomer?.colorTag || selectedCustomer?.customerTag,
           items: currentReceipt?.items || [],
         }}
       />

@@ -41,15 +41,43 @@ const UnifiedBrandingSettings: React.FC = () => {
     try {
       setLoading(true);
       
-      // First, fetch basic fields without social media columns
+      // Fetch all fields including social media columns
       // @ts-ignore - Neon query builder implements thenable interface
       const { data: baseData, error: baseError } = await supabase
         .from('lats_pos_general_settings')
-        .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
+        .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo, business_instagram, business_tiktok, business_whatsapp')
         .limit(1)
         .single();
 
       if (baseError) {
+        // If error is about missing columns, try without them
+        if (baseError.code === '42703') {
+          console.warn('⚠️ Social media columns may not exist, fetching without them');
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('lats_pos_general_settings')
+            .select('id, business_name, business_phone, business_email, business_website, business_address, business_logo')
+            .limit(1)
+            .single();
+          
+          if (fallbackError) throw fallbackError;
+          
+          if (fallbackData) {
+            setSettingsId(fallbackData.id);
+            setFormData({
+              businessName: fallbackData.business_name || '',
+              businessPhone: fallbackData.business_phone || '',
+              businessEmail: fallbackData.business_email || '',
+              businessWebsite: fallbackData.business_website || '',
+              businessAddress: fallbackData.business_address || '',
+              businessLogo: fallbackData.business_logo || null,
+              businessInstagram: '',
+              businessTiktok: '',
+              businessWhatsapp: ''
+            });
+            setLogoPreview(fallbackData.business_logo || null);
+            return;
+          }
+        }
         throw baseError;
       }
 
@@ -57,24 +85,26 @@ const UnifiedBrandingSettings: React.FC = () => {
         throw new Error('No settings record found');
       }
 
-      // Set basic data first
+      // Set all data including social media fields
       setSettingsId(baseData.id);
-      let formDataToSet = {
+      const formDataToSet = {
         businessName: baseData.business_name || '',
         businessPhone: baseData.business_phone || '',
         businessEmail: baseData.business_email || '',
         businessWebsite: baseData.business_website || '',
         businessAddress: baseData.business_address || '',
         businessLogo: baseData.business_logo || null,
-        businessInstagram: '',
-        businessTiktok: '',
-        businessWhatsapp: ''
+        businessInstagram: baseData.business_instagram || '',
+        businessTiktok: baseData.business_tiktok || '',
+        businessWhatsapp: baseData.business_whatsapp || ''
       };
       setLogoPreview(baseData.business_logo || null);
-
-      // Note: Social media columns may not exist in the database
-      // We'll just use empty strings as defaults
-      // They'll be saved if columns exist, ignored if they don't
+      
+      console.log('✅ Loaded business info with social media:', {
+        instagram: formDataToSet.businessInstagram,
+        tiktok: formDataToSet.businessTiktok,
+        whatsapp: formDataToSet.businessWhatsapp
+      });
       
       setFormData(formDataToSet);
     } catch (error: any) {

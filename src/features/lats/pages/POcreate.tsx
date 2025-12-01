@@ -398,6 +398,23 @@ const POcreate: React.FC = () => {
     
     // Sorting
     filtered.sort((a, b) => {
+      // Calculate total stock across all variants for each product
+      const aTotalStock = a.variants?.reduce((sum, variant) => {
+        return sum + (variant?.stockQuantity || variant?.quantity || 0);
+      }, 0) || 0;
+      const bTotalStock = b.variants?.reduce((sum, variant) => {
+        return sum + (variant?.stockQuantity || variant?.quantity || 0);
+      }, 0) || 0;
+      
+      // ✅ PRIORITY: Products with stock always appear above products without stock
+      const aHasStock = aTotalStock > 0;
+      const bHasStock = bTotalStock > 0;
+      
+      // If one has stock and the other doesn't, prioritize the one with stock
+      if (aHasStock && !bHasStock) return -1;
+      if (!aHasStock && bHasStock) return 1;
+      
+      // If both have stock or both don't have stock, apply normal sorting
       let aValue: any, bValue: any;
       
       switch (sortBy) {
@@ -410,8 +427,8 @@ const POcreate: React.FC = () => {
           bValue = b.variants?.[0]?.costPrice || b.price || 0;
           break;
         case 'stock':
-          aValue = a.variants?.[0]?.stockQuantity || 0;
-          bValue = b.variants?.[0]?.stockQuantity || 0;
+          aValue = aTotalStock;
+          bValue = bTotalStock;
           break;
         case 'recent':
           aValue = new Date(a.createdAt || '').getTime();

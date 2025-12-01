@@ -449,7 +449,7 @@ class InstallmentService {
   async recordPayment(
     input: RecordInstallmentPaymentInput,
     userId: string
-  ): Promise<{ success: boolean; payment?: InstallmentPayment; error?: string }> {
+  ): Promise<{ success: boolean; payment?: InstallmentPayment; error?: string; planCompleted?: boolean }> {
     try {
       console.log('💳 [Installment Payment] Starting payment recording...', { input, userId });
       
@@ -711,7 +711,16 @@ class InstallmentService {
       );
 
       console.log('🎉 [Installment Payment] Payment process completed successfully!');
-      return { success: true, payment: payment as InstallmentPayment };
+      
+      // Get updated plan to check if it was completed
+      const finalPlan = await this.getInstallmentPlanById(input.installment_plan_id);
+      const wasCompleted = finalPlan?.status === 'completed';
+      
+      return { 
+        success: true, 
+        payment: payment as InstallmentPayment,
+        planCompleted: wasCompleted || false
+      };
     } catch (error: any) {
       console.error('❌ [Installment Payment] Error recording installment payment:', error);
       console.error('❌ [Installment Payment] Error details:', error.message);

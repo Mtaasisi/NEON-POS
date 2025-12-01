@@ -45,7 +45,7 @@ export const usePOSSearch = (productsPerPageSetting: number = 20) => {
       brandName: product.brand?.name || undefined,
       images: product.images || []
     }));
-  }, [dbProducts, categories, brands]);
+  }, [dbProducts, categories]);
 
   // Filtered and sorted products
   const filteredProducts = useMemo(() => {
@@ -105,6 +105,23 @@ export const usePOSSearch = (productsPerPageSetting: number = 20) => {
     
     // Sorting
     filtered.sort((a, b) => {
+      // Calculate total stock across all variants for each product
+      const aTotalStock = a.variants?.reduce((sum, variant) => {
+        return sum + (variant?.quantity || 0);
+      }, 0) || 0;
+      const bTotalStock = b.variants?.reduce((sum, variant) => {
+        return sum + (variant?.quantity || 0);
+      }, 0) || 0;
+      
+      // ✅ PRIORITY: Products with stock always appear above products without stock
+      const aHasStock = aTotalStock > 0;
+      const bHasStock = bTotalStock > 0;
+      
+      // If one has stock and the other doesn't, prioritize the one with stock
+      if (aHasStock && !bHasStock) return -1;
+      if (!aHasStock && bHasStock) return 1;
+      
+      // If both have stock or both don't have stock, apply normal sorting
       let aValue: any, bValue: any;
       
       switch (sortBy) {
@@ -117,8 +134,8 @@ export const usePOSSearch = (productsPerPageSetting: number = 20) => {
           bValue = b.variants?.[0]?.sellingPrice || 0;
           break;
         case 'stock':
-          aValue = a.variants?.[0]?.quantity || 0;
-          bValue = b.variants?.[0]?.quantity || 0;
+          aValue = aTotalStock;
+          bValue = bTotalStock;
           break;
         case 'recent':
           aValue = new Date(a.createdAt || '').getTime();
@@ -147,7 +164,7 @@ export const usePOSSearch = (productsPerPageSetting: number = 20) => {
     });
     
     return filtered;
-  }, [products, categories, brands, debouncedSearchQuery, selectedCategory, selectedBrand, priceRange, stockFilter, sortBy, sortOrder, getSoldQuantity]);
+  }, [products, categories, debouncedSearchQuery, selectedCategory, selectedBrand, priceRange, stockFilter, sortBy, sortOrder, getSoldQuantity]);
 
   // Paginated products
   const paginatedProducts = useMemo(() => {

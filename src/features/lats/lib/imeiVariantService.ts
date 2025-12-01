@@ -740,11 +740,19 @@ export const searchIMEIVariants = async (
   searchTerm: string,
   branch_id?: string
 ): Promise<any[]> => {
+  console.warn(`🔍 [searchIMEIVariants] FUNCTION CALLED - searchTerm: "${searchTerm}", branch_id: ${branch_id || 'none'}`);
   try {
+    const searchLower = searchTerm.toLowerCase().trim();
+    const matchingVariants: any[] = [];
+
+    // Search in lats_product_variants (IMEI children)
+    // For IMEI/serial number searches, we search across all branches to ensure we find the item
+    // Note: We don't filter by quantity > 0 to allow searching for sold/out-of-stock items
     let query = supabase
       .from('lats_product_variants')
       .select(`
         *,
+        product_id,
         parent:lats_product_variants!parent_variant_id(
           id,
           variant_name,
@@ -756,20 +764,154 @@ export const searchIMEIVariants = async (
         )
       `)
       .eq('variant_type', 'imei_child')
-      .or(
-        `variant_attributes->>'imei'.ilike.%${searchTerm}%,variant_attributes->>'serial_number'.ilike.%${searchTerm}%`
-      );
+      .eq('is_active', true);
+      // Removed .gt('quantity', 0) to allow searching for all variants, even if sold out
+    
+    // Note: Not filtering by branch_id for IMEI searches to ensure we find items across branches
+    // The branch filter can be applied at the product level if needed
 
-    if (branch_id) {
-      query = query.eq('branch_id', branch_id);
+    const { data: variantData, error: variantError } = await query
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    console.warn(`🔍 [searchIMEIVariants] Query result: variantData=${variantData?.length || 0} variants, error=${variantError ? 'yes' : 'no'}`);
+
+    if (variantError) {
+      console.error('❌ [searchIMEIVariants] Error fetching IMEI variants:', variantError);
+    } else if (variantData) {
+      console.warn(`🔍 [searchIMEIVariants] Fetched ${variantData.length} IMEI child variants from database`);
+      console.warn(`🔍 [searchIMEIVariants] Searching for: "${searchTerm}"`);
+      
+      // Debug: Show first few variants' structure
+      if (variantData.length > 0 && import.meta.env.DEV) {
+        console.warn(`📋 [searchIMEIVariants] Sample variant structure:`, {
+          firstVariant: {
+            id: variantData[0].id,
+            product_id: variantData[0].product_id,
+            variant_attributes: variantData[0].variant_attributes,
+            variant_type: variantData[0].variant_type,
+            is_active: variantData[0].is_active,
+            quantity: variantData[0].quantity
+          }
+        });
+      }
+      
+      // Filter client-side by IMEI or serial number
+      variantData.forEach((variant: any) => {
+        // Handle variant_attributes that might be a string (JSON) or object
+        let variantAttrs = variant.variant_attributes;
+        if (typeof variantAttrs === 'string') {
+          try {
+            variantAttrs = JSON.parse(variantAttrs);
+          } catch (e) {
+            variantAttrs = {};
+          }
+        }
+        
+        const imei = variantAttrs?.imei || variantAttrs?.IMEI || '';
+        const serialNumber = variantAttrs?.serial_number || variantAttrs?.serialNumber || variantAttrs?.serial || '';
+        const sku = variant.sku || '';
+        
+        // Debug: Log variants that might match
+        if (import.meta.env.DEV && (imei || serialNumber || sku)) {
+          const imeiMatch = String(imei).toLowerCase().includes(searchLower);
+          const serialMatch = String(serialNumber).toLowerCase().includes(searchLower);
+          const skuMatch = String(sku).toLowerCase().includes(searchLower);
+          
+          if (imeiMatch || serialMatch || skuMatch || 
+              String(imei).toLowerCase() === searchLower ||
+              String(serialNumber).toLowerCase() === searchLower) {
+            console.warn(`✅ [searchIMEIVariants] Found matching variant:`, {
+              product_id: variant.product_id,
+              imei,
+              serial_number: serialNumber,
+              sku,
+              quantity: variant.quantity,
+              is_active: variant.is_active
+            });
+          }
+        }
+        
+        // Check if search term matches IMEI, serial number, or SKU
+        if (
+          String(imei).toLowerCase().includes(searchLower) ||
+          String(serialNumber).toLowerCase().includes(searchLower) ||
+          String(sku).toLowerCase().includes(searchLower) ||
+          String(imei).toLowerCase() === searchLower ||
+          String(serialNumber).toLowerCase() === searchLower
+        ) {
+          matchingVariants.push(variant);
+        }
+      });
+      
+      if (import.meta.env.DEV) {
+        console.warn(`📊 [searchIMEIVariants] Total matching variants found: ${matchingVariants.length}`);
+      }
     }
 
-    const { data, error } = await query
-      .order('created_at', { ascending: false })
-      .limit(50);
+    // Also search in legacy inventory_items table
+    let inventoryQuery = supabase
+      .from('inventory_items')
+      .select(`
+        *,
+        product:lats_products(
+          id,
+          name
+        ),
+        variant:lats_product_variants(
+          id,
+          product_id
+        )
+      `)
+      .eq('status', 'available')
+      .not('serial_number', 'is', null);
 
-    if (error) throw error;
-    return data || [];
+    if (branch_id) {
+      // Note: inventory_items might not have branch_id, so we'll filter client-side if needed
+    }
+
+    const { data: inventoryData, error: inventoryError } = await inventoryQuery
+      .limit(500);
+
+    if (inventoryError) {
+      console.error('Error fetching inventory items:', inventoryError);
+    } else if (inventoryData) {
+      // Filter client-side by serial number or IMEI
+      inventoryData.forEach((item: any) => {
+        const serialNumber = item.serial_number || '';
+        const imei = item.imei || '';
+        
+        if (
+          String(serialNumber).toLowerCase().includes(searchLower) ||
+          String(imei).toLowerCase().includes(searchLower) ||
+          String(serialNumber).toLowerCase() === searchLower ||
+          String(imei).toLowerCase() === searchLower
+        ) {
+          // Convert inventory_item to variant-like format
+          const productId = item.product_id || item.variant?.product_id || item.product?.id;
+          if (productId) {
+            matchingVariants.push({
+              id: item.id,
+              product_id: productId,
+              variant_attributes: {
+                imei: imei || serialNumber,
+                serial_number: serialNumber || imei
+              },
+              product: item.product,
+              variant_type: 'imei_child',
+              // Mark as from inventory_items
+              _from_inventory_items: true
+            });
+          }
+        }
+      });
+    }
+
+    if (import.meta.env.DEV && matchingVariants.length > 0) {
+      console.warn(`✅ [searchIMEIVariants] Found ${matchingVariants.length} matching variants for "${searchTerm}"`);
+    }
+
+    return matchingVariants.slice(0, 50); // Limit to 50 results
   } catch (error) {
     console.error('Error searching IMEI variants:', error);
     return [];

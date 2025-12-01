@@ -707,24 +707,38 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         const columnsStr = workingFields.substring(openParenIdx + 1, closeParenIdx);
         
         // Infer foreign key
-        let foreignKey = `${alias}_id`;
+        // Special mappings for known foreign key exceptions
+        const foreignKeyMappings: Record<string, string> = {
+          'lats_categories': 'category_id',
+          'lats_category': 'category_id',
+          'categories': 'category_id',
+          'category': 'category_id',
+          'lats_product_variants': 'product_id',
+          'product_variants': 'product_id',
+          'variants': 'product_id',
+        };
         
-        // Special handling for known child tables (variants, items, etc.)
-        const knownChildPatterns = ['variants', 'items', 'details', 'lines'];
-        const isChildTable = knownChildPatterns.some(pattern => 
-          alias.includes(pattern) || table.includes(`_${pattern}`)
-        );
-        
-        if (isChildTable) {
-          const tablePattern = /^(.+)_(variants|items|details|lines)$/;
-          const tableMatch = table.match(tablePattern);
+        let foreignKey = foreignKeyMappings[alias] || foreignKeyMappings[table];
+        if (!foreignKey) {
+          foreignKey = `${alias}_id`;
           
-          if (tableMatch) {
-            const parentTable = tableMatch[1];
-            const parentParts = parentTable.split('_');
-            const parentEntity = parentParts[parentParts.length - 1];
-            foreignKey = `${parentEntity}_id`;
-            console.log(`🔑 [FK Inference] Child table: ${table}, Alias: ${alias}, Inferred FK: ${foreignKey}`);
+          // Special handling for known child tables (variants, items, etc.)
+          const knownChildPatterns = ['variants', 'items', 'details', 'lines'];
+          const isChildTable = knownChildPatterns.some(pattern => 
+            alias.includes(pattern) || table.includes(`_${pattern}`)
+          );
+          
+          if (isChildTable) {
+            const tablePattern = /^(.+)_(variants|items|details|lines)$/;
+            const tableMatch = table.match(tablePattern);
+            
+            if (tableMatch) {
+              const parentTable = tableMatch[1];
+              const parentParts = parentTable.split('_');
+              const parentEntity = parentParts[parentParts.length - 1];
+              foreignKey = `${parentEntity}_id`;
+              console.log(`🔑 [FK Inference] Child table: ${table}, Alias: ${alias}, Inferred FK: ${foreignKey}`);
+            }
           }
         }
         
@@ -769,10 +783,24 @@ class NeonQueryBuilder implements PromiseLike<{ data: any; error: any; count?: n
         const table = tableName;
         
         // Infer foreign key (handle plural table names)
-        let foreignKey = `${tableName}_id`;
-        if (tableName.endsWith('s') && tableName.length > 1) {
-          const singularName = tableName.slice(0, -1);
-          foreignKey = `${singularName}_id`;
+        // Special mappings for known foreign key exceptions
+        const foreignKeyMappings: Record<string, string> = {
+          'lats_categories': 'category_id',
+          'lats_category': 'category_id',
+          'categories': 'category_id',
+          'category': 'category_id',
+          'lats_product_variants': 'product_id',
+          'product_variants': 'product_id',
+          'variants': 'product_id',
+        };
+        
+        let foreignKey = foreignKeyMappings[tableName];
+        if (!foreignKey) {
+          foreignKey = `${tableName}_id`;
+          if (tableName.endsWith('s') && tableName.length > 1) {
+            const singularName = tableName.slice(0, -1);
+            foreignKey = `${singularName}_id`;
+          }
         }
         
         // Extract columns

@@ -43,7 +43,8 @@ import {
   Building,
   AlertCircle,
   User,
-  Link
+  Link,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { financeAccountService } from '../../../lib/financeAccountService';
@@ -76,7 +77,7 @@ const InstallmentsPage: React.FC = () => {
   const [showInstallmentManagementModal, setShowInstallmentManagementModal] = useState(false);
 
   // Fetch plans and stats
-  const fetchPlans = useCallback(async () => {
+  const fetchPlans = useCallback(async (forceRefresh = false) => {
     if (!currentBranch?.id) {
       setIsLoading(false);
       return;
@@ -85,8 +86,14 @@ const InstallmentsPage: React.FC = () => {
     const jobId = startLoading('Loading installment plans...');
     setIsLoading(true);
     try {
+      // If force refresh, clear cache first
+      if (forceRefresh) {
+        console.log('🔄 [InstallmentsPage] Force refresh - clearing cache');
+        installmentCacheService.clearInstallments(currentBranch.id);
+      }
+      
       // Check if we have cached installment plans (from InstallmentPreloader)
-      const cachedPlans = installmentCacheService.getInstallments(currentBranch.id);
+      const cachedPlans = forceRefresh ? null : installmentCacheService.getInstallments(currentBranch.id);
       let fetchedPlans: any[] = [];
       
       if (cachedPlans && cachedPlans.length > 0) {
@@ -231,6 +238,23 @@ const InstallmentsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={async () => {
+              const toastId = toast.loading('Refreshing installment plans...');
+              try {
+                await fetchPlans(true);
+                toast.success('Installment plans refreshed!', { id: toastId });
+              } catch (error) {
+                toast.error('Failed to refresh plans', { id: toastId });
+              }
+            }}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Refresh installment plans"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
           <button
             type="button"
             onClick={() => setShowInstallmentManagementModal(true)}
@@ -540,7 +564,8 @@ const InstallmentsPage: React.FC = () => {
           onSuccess={() => {
             setShowEditModal(false);
             setSelectedPlan(null);
-            fetchPlans();
+            // Force refresh to get latest statuses after status change
+            fetchPlans(true);
           }}
           plan={selectedPlan}
         />
@@ -556,7 +581,8 @@ const InstallmentsPage: React.FC = () => {
           onSuccess={() => {
             setShowPaymentModal(false);
             setSelectedPlan(null);
-            fetchPlans();
+            // Force refresh to get latest statuses after payment
+            fetchPlans(true);
           }}
           plan={selectedPlan}
           paymentAccounts={paymentAccounts}
@@ -1292,7 +1318,18 @@ const RecordInstallmentPaymentModal: React.FC<RecordInstallmentPaymentModalProps
 
       if (result.success) {
         toast.success('Payment recorded successfully!');
-        onSuccess();
+        
+        // If the plan was completed, wait a moment for database triggers to update all statuses
+        // then refresh to ensure all installment statuses are up-to-date
+        if (result.planCompleted) {
+          // Wait 500ms for database triggers to complete status updates
+          // The onSuccess callback will handle cache clearing via fetchPlans(true)
+          setTimeout(() => {
+            onSuccess();
+          }, 500);
+        } else {
+          onSuccess();
+        }
       } else {
         toast.error(result.error || 'Failed to record payment');
       }
@@ -2404,7 +2441,21 @@ const EditInstallmentPlanModal: React.FC<EditInstallmentPlanModalProps> = ({
 
       if (result.success) {
         toast.success('Installment plan updated successfully!');
-        onSuccess();
+        
+        // If status was changed to completed, wait a moment for database triggers to update all statuses
+        // then refresh to ensure all installment statuses are up-to-date
+        const statusChanged = formData.status !== plan.status;
+        const statusCompleted = formData.status === 'completed';
+        
+        if (statusChanged && statusCompleted) {
+          // Wait 500ms for database triggers to complete status updates
+          // The onSuccess callback will handle cache clearing via fetchPlans(true)
+          setTimeout(() => {
+            onSuccess();
+          }, 500);
+        } else {
+          onSuccess();
+        }
       } else {
         toast.error(result.error || 'Failed to update installment plan');
       }

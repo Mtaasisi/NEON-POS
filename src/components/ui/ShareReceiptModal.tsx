@@ -3,7 +3,7 @@
  * Beautiful modal for sharing receipts via WhatsApp, SMS, Email, etc.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MessageCircle, Mail, Send, Copy, Download, Share2, Loader2, Printer } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -13,6 +13,7 @@ import { useSuccessModal } from '../../hooks/useSuccessModal';
 import { SuccessIcons } from './SuccessModalIcons';
 import { useBusinessInfo } from '../../hooks/useBusinessInfo';
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface ShareReceiptModalProps {
   isOpen: boolean;
@@ -25,6 +26,9 @@ interface ShareReceiptModalProps {
     customerName?: string;
     customerPhone?: string;
     customerEmail?: string;
+    customerCity?: string;
+    customerTag?: string;
+    sellerName?: string;
     items?: Array<{ 
       productName: string; 
       variantName?: string;
@@ -76,6 +80,19 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const successModal = useSuccessModal();
   const { businessInfo } = useBusinessInfo();
+
+  // Debug: Log receipt data to help troubleshoot QR code
+  useEffect(() => {
+    if (isOpen && receiptData) {
+      console.log('📋 Receipt Data:', {
+        id: receiptData.id,
+        receiptNumber: receiptData.receiptNumber,
+        hasId: !!receiptData.id,
+        idType: typeof receiptData.id,
+        idValue: receiptData.id,
+      });
+    }
+  }, [isOpen, receiptData]);
 
   if (!isOpen) return null;
 
@@ -171,6 +188,50 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
     }).format(amount);
   };
 
+  const handlePrint = () => {
+    // Add print styles to hide everything except receipt preview
+    const printStyle = document.createElement('style');
+    printStyle.id = 'receipt-print-styles';
+    printStyle.textContent = `
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        [data-receipt-preview],
+        [data-receipt-preview] * {
+          visibility: visible;
+        }
+        [data-receipt-preview] {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          background: white;
+          padding: 0;
+          margin: 0;
+          border: none;
+          box-shadow: none;
+        }
+        @page {
+          size: ${pageSize} ${orientation};
+          margin: 0;
+        }
+      }
+    `;
+    document.head.appendChild(printStyle);
+
+    // Trigger print
+    window.print();
+
+    // Remove print styles after printing
+    setTimeout(() => {
+      const style = document.getElementById('receipt-print-styles');
+      if (style) {
+        style.remove();
+      }
+    }, 1000);
+  };
+
   const generateReceiptText = () => {
     const lines = [
       // Business Name Header
@@ -216,8 +277,14 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
         
         // Add Attributes
         if (item.attributes && Object.keys(item.attributes).length > 0) {
+          const excludedFields = [
+            'id', 'created_at', 'updated_at', 'added_at', 
+            'variant_id', 'product_id', 'imei', 'serial_number',
+            'is_legacy', 'is_imei_child', 'notes', 
+            'parent_variant_name', 'data_source', 'created_without_po'
+          ];
           Object.entries(item.attributes).forEach(([key, value]) => {
-            if (!['id', 'created_at', 'updated_at', 'variant_id', 'product_id'].includes(key) && value) {
+            if (!excludedFields.includes(key) && value) {
               const keyLabel = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
               lines.push(`   ${keyLabel}: ${value}`);
             }
@@ -293,8 +360,14 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       }
       
       if (item.attributes && Object.keys(item.attributes).length > 0) {
+        const excludedFields = [
+          'id', 'created_at', 'updated_at', 'added_at', 
+          'variant_id', 'product_id', 'imei', 'serial_number',
+          'is_legacy', 'is_imei_child', 'notes', 
+          'parent_variant_name', 'data_source', 'created_without_po'
+        ];
         Object.entries(item.attributes).forEach(([key, value]) => {
-          if (!['id', 'created_at', 'updated_at', 'variant_id', 'product_id'].includes(key) && value) {
+          if (!excludedFields.includes(key) && value) {
             const keyLabel = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
             itemHtml += `<div style="font-size: 0.9em; color: #666; margin-top: 2px;">${keyLabel}: ${value}</div>`;
           }
@@ -395,12 +468,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
       icon: Printer,
       color: '#F59E0B',
       onClick: () => {
-        if (onPrintReceipt) {
-          onPrintReceipt();
-          setTimeout(() => onClose(), 300);
-        } else {
-          toast.error('Print function not available');
-        }
+        handlePrint();
       },
     },
     {
@@ -412,588 +480,165 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
           setIsSending(true);
           setSendingMethod('Download');
           
+          // Get the receipt preview element
+          const receiptPreview = document.querySelector('[data-receipt-preview]') as HTMLElement;
+          if (!receiptPreview) {
+            toast.error('Receipt preview not found');
+            setIsSending(false);
+            setSendingMethod('');
+            return;
+          }
+
+          // Wait for all images to load before capturing
+          const images = receiptPreview.querySelectorAll('img');
+          console.log(`📸 Found ${images.length} images to load for PDF`);
+          
+          const imagePromises = Array.from(images).map((img, index) => {
+            if (img.complete && img.naturalWidth > 0) {
+              console.log(`✅ Image ${index + 1} already loaded:`, img.src.substring(0, 50));
+              return Promise.resolve();
+            }
+            return new Promise<void>((resolve) => {
+              const timeout = setTimeout(() => {
+                console.warn(`⏱️ Image ${index + 1} load timeout:`, img.src.substring(0, 50));
+                resolve(); // Continue even if timeout
+              }, 5000);
+              
+              img.onload = () => {
+                clearTimeout(timeout);
+                console.log(`✅ Image ${index + 1} loaded:`, img.src.substring(0, 50));
+                resolve();
+              };
+              img.onerror = () => {
+                clearTimeout(timeout);
+                console.warn(`❌ Image ${index + 1} failed to load:`, img.src.substring(0, 50));
+                resolve(); // Continue even if image fails
+              };
+            });
+          });
+
+          // Wait for all images to load
+          await Promise.all(imagePromises);
+          console.log('✅ All images loaded, capturing preview...');
+          
+          // Small delay to ensure rendering is complete
+          await new Promise(resolve => setTimeout(resolve, 200));
+
           // Get layout configuration for selected page size and orientation
           const layout = getLayoutConfig(pageSize, orientation);
           
-          // Generate PDF with selected page size, orientation, and layout
+          // Capture the preview as canvas with exact dimensions
+          console.log('📷 Capturing preview with html2canvas...');
+          console.log('Preview dimensions:', {
+            width: receiptPreview.scrollWidth,
+            height: receiptPreview.scrollHeight,
+            offsetWidth: receiptPreview.offsetWidth,
+            offsetHeight: receiptPreview.offsetHeight
+          });
+          
+          const canvas = await html2canvas(receiptPreview, {
+            scale: 2, // Higher quality
+            useCORS: true,
+            allowTaint: true, // Allow cross-origin images
+            logging: false,
+            backgroundColor: '#ffffff',
+            width: receiptPreview.scrollWidth,
+            height: receiptPreview.scrollHeight,
+            windowWidth: receiptPreview.scrollWidth,
+            windowHeight: receiptPreview.scrollHeight,
+          });
+
+          console.log('✅ Canvas captured:', {
+            width: canvas.width,
+            height: canvas.height,
+            scale: 2
+          });
+
+          // Convert canvas to image
+          const imgData = canvas.toDataURL('image/png', 1.0);
+          console.log('✅ Image data generated, size:', (imgData.length / 1024).toFixed(2), 'KB');
+          
+          // Create PDF with exact dimensions
           const doc = new jsPDF(layout.orientation, 'mm', layout.pageSize);
           const pageWidth = doc.internal.pageSize.getWidth();
           const pageHeight = doc.internal.pageSize.getHeight();
-          const margin = layout.margin;
-          const contentWidth = pageWidth - (margin * 2);
-          let yPos = margin;
-
-          // Helper function to add new page if needed
-          const checkPageBreak = (requiredHeight: number) => {
-            if (yPos + requiredHeight > pageHeight - margin) {
-              doc.addPage();
-              yPos = margin;
-            }
-          };
-
-
-          // Helper to draw a simple box
-          const drawBox = (x: number, y: number, width: number, height: number, fill: boolean = false, borderColor?: number[]) => {
-            if (fill) {
-              doc.setFillColor(249, 250, 251); // Light gray background
-              doc.rect(x, y, width, height, 'F');
-            }
-            if (borderColor) {
-              doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
-            } else {
-              doc.setDrawColor(229, 231, 235); // Gray border
-            }
-            doc.setLineWidth(0.5);
-            doc.rect(x, y, width, height);
-          };
-
-          // Logo and Business Info Section - Logo on Left
-          const sectionY = yPos + 2;
           
-          // Logo - Left Side (No Container)
-          let logoY = sectionY;
-          let logoHeight = 0;
-          if (businessInfo.logo) {
-            try {
-              const img = new Image();
-              img.crossOrigin = 'anonymous';
-              
-              await new Promise<void>((resolve) => {
-                img.onload = () => {
-                  try {
-                    // Determine image format from base64 or URL
-                    let imageFormat = 'PNG';
-                    if (businessInfo.logo!.startsWith('data:image/')) {
-                      const formatMatch = businessInfo.logo!.match(/data:image\/(\w+);base64/);
-                      if (formatMatch) {
-                        const format = formatMatch[1].toUpperCase();
-                        imageFormat = format === 'JPEG' ? 'JPEG' : format === 'JPG' ? 'JPEG' : 'PNG';
-                      }
-                    }
-                    
-                    // Larger logo size
-                    const logoWidth = layout.logoSize;
-                    logoHeight = (img.height / img.width) * logoWidth;
-                    // Position logo on the left side
-                    const logoX = margin + 2; // Left side
-                    doc.addImage(businessInfo.logo!, imageFormat, logoX, logoY, logoWidth, logoHeight);
-                  } catch (error) {
-                    console.warn('Could not add logo to PDF:', error);
-                  }
-                  resolve();
-                };
-                img.onerror = () => {
-                  console.warn('Could not load logo image for PDF');
-                  resolve();
-                };
-                img.src = businessInfo.logo!;
-              });
-            } catch (error) {
-              console.warn('Could not add logo to PDF:', error);
-            }
+          // Calculate image dimensions to fit page while maintaining aspect ratio
+          // html2canvas creates canvas at scale 2, so actual preview size is canvas/2
+          // Convert canvas pixels to mm (96 DPI: 1px = 25.4/96 mm)
+          const scaleFactor = 2; // html2canvas scale
+          const pxToMm = 25.4 / 96;
+          
+          // Actual preview dimensions in mm (accounting for scale factor)
+          const previewWidthMm = (canvas.width / scaleFactor) * pxToMm;
+          const previewHeightMm = (canvas.height / scaleFactor) * pxToMm;
+          
+          console.log('📐 Dimension calculations:', {
+            pageWidth,
+            pageHeight,
+            previewWidthMm: previewWidthMm.toFixed(2),
+            previewHeightMm: previewHeightMm.toFixed(2)
+          });
+          
+          // Scale to fit page width while maintaining aspect ratio
+          const widthScale = pageWidth / previewWidthMm;
+          const heightScale = pageHeight / previewHeightMm;
+          const scale = Math.min(widthScale, heightScale, 1); // Don't scale up, only down if needed
+          
+          let finalWidth = previewWidthMm * scale;
+          let finalHeight = previewHeightMm * scale;
+          
+          // Center on page if smaller than page
+          const xOffset = (pageWidth - finalWidth) / 2;
+          const yOffset = 0; // Start at top
+          
+          console.log('📏 Final PDF dimensions:', {
+            finalWidth: finalWidth.toFixed(2),
+            finalHeight: finalHeight.toFixed(2),
+            scale: scale.toFixed(3),
+            xOffset: xOffset.toFixed(2),
+            pages: Math.ceil(finalHeight / pageHeight)
+          });
+          
+          // Add image to PDF - handle multi-page if needed
+          if (finalHeight <= pageHeight) {
+            // Single page - add image with calculated offset
+            doc.addImage(imgData, 'PNG', xOffset, yOffset, finalWidth, finalHeight, undefined, 'FAST');
           } else {
-            // Business Name - Left side if no logo
-            doc.setFontSize(layout.fontSize.header);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(17, 24, 39); // Gray-900
-            const businessNameX = margin + 2;
-            doc.text(businessInfo.name, businessNameX, logoY + layout.spacing.line);
-          }
-
-          // Business Information Section - No Container (Right Side)
-          const infoBoxHeight = Math.max(25, logoHeight || 25); // Match logo height or minimum
-          const infoBoxX = margin + layout.logoSize + 5; // Right of logo, with gap
-          const infoBoxWidth = contentWidth - (layout.logoSize + 7); // Remaining width
-          
-          // Business Name - Bold
-          let currentY = sectionY + 2;
-          doc.setFontSize(layout.fontSize.header);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(17, 24, 39); // Gray-900
-          doc.text(businessInfo.name, infoBoxX, currentY);
-          currentY += layout.spacing.line + 1;
-          
-          doc.setFontSize(layout.fontSize.small);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(75, 85, 99); // Gray-600
-          
-          const infoStartX = infoBoxX;
-          let infoLineY = currentY;
-          
-          // Address
-          if (businessInfo.address) {
-            doc.setFont('helvetica', 'normal');
-            doc.text(businessInfo.address, infoStartX, infoLineY);
-            infoLineY += layout.spacing.item;
-          }
-          
-          // Phone - Parse JSON array or string
-          if (businessInfo.phone) {
-            let phoneNumbers: string[] = [];
-            try {
-              const parsed = typeof businessInfo.phone === 'string' ? JSON.parse(businessInfo.phone) : businessInfo.phone;
-              if (Array.isArray(parsed)) {
-                phoneNumbers = parsed.map((item: any) => 
-                  typeof item === 'object' && item.phone ? item.phone : String(item)
-                ).filter(Boolean);
-              } else if (typeof parsed === 'string') {
-                phoneNumbers = [parsed];
-              } else {
-                phoneNumbers = [String(businessInfo.phone)];
-              }
-            } catch {
-              phoneNumbers = [String(businessInfo.phone)];
-            }
+            // Multi-page - split image across pages
+            let currentY = 0;
+            let sourceY = 0;
             
-            if (phoneNumbers.length > 0) {
-              doc.text(`Phone: ${phoneNumbers.join(', ')}`, infoStartX, infoLineY);
-              infoLineY += layout.spacing.item;
-            }
-          }
-          
-          // Email
-          if (businessInfo.email) {
-            doc.text(`Email: ${businessInfo.email}`, infoStartX, infoLineY);
-            infoLineY += layout.spacing.item;
-          }
-          
-          // Website
-          if (businessInfo.website) {
-            doc.text(`Website: ${businessInfo.website}`, infoStartX, infoLineY);
-            infoLineY += layout.spacing.item;
-          }
-          
-          // Social Media - if any
-          const socialMedia: string[] = [];
-          if (businessInfo.instagram) {
-            const instaHandle = businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '');
-            socialMedia.push(`Instagram: @${instaHandle}`);
-          }
-          if (businessInfo.tiktok) {
-            const tiktokHandle = businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '');
-            socialMedia.push(`TikTok: @${tiktokHandle}`);
-          }
-          if (businessInfo.whatsapp) {
-            const whatsappNum = businessInfo.whatsapp.replace(/[^0-9+]/g, '');
-            socialMedia.push(`WhatsApp: ${whatsappNum}`);
-          }
-          
-          if (socialMedia.length > 0) {
-            doc.setFont('helvetica', 'bold');
-            doc.text('Follow Us:', infoStartX, infoLineY);
-            infoLineY += layout.spacing.item;
-            doc.setFont('helvetica', 'normal');
-            socialMedia.forEach((social) => {
-              doc.text(social, infoStartX + 2, infoLineY);
-              infoLineY += layout.spacing.item;
-            });
-          }
-          
-          // Reset text color
-          doc.setTextColor(0, 0, 0);
-          yPos = sectionY + Math.max(infoBoxHeight, logoHeight || 0) + layout.spacing.section;
-
-          // Receipt Info Section - Dynamic Two Column Layout
-          const receiptInfoHeight = receiptData.customerName ? layout.spacing.line * 6 : layout.spacing.line * 4;
-          drawBox(margin, yPos, contentWidth, receiptInfoHeight, true, [229, 231, 235]);
-          
-          // Section divider line
-          doc.setDrawColor(229, 231, 235);
-          doc.setLineWidth(0.5);
-          doc.line(pageWidth / 2, yPos + 2, pageWidth / 2, yPos + receiptInfoHeight - 2);
-          
-          const leftColX = margin + 3;
-          const rightColX = pageWidth / 2 + 3;
-          let leftY = yPos + layout.spacing.line;
-          let rightY = yPos + layout.spacing.line;
-
-          // Left Column - Receipt Details
-          doc.setFontSize(layout.fontSize.body);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(34, 197, 94); // Green-500
-          doc.text('RECEIPT DETAILS', leftColX, leftY);
-          leftY += layout.spacing.line;
-          
-          doc.setFontSize(layout.fontSize.small);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(17, 24, 39); // Gray-900
-          doc.text(`#: ${receiptData.receiptNumber}`, leftColX, leftY);
-          leftY += layout.spacing.item;
-          doc.text(`Date: ${new Date().toLocaleDateString()}`, leftColX, leftY);
-          leftY += layout.spacing.item;
-          doc.text(`Time: ${new Date().toLocaleTimeString()}`, leftColX, leftY);
-
-          // Right Column - Customer Info
-          if (receiptData.customerName) {
-            doc.setFontSize(layout.fontSize.body);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(34, 197, 94); // Green-500
-            doc.text('CUSTOMER', rightColX, rightY);
-            rightY += layout.spacing.line;
-            
-            doc.setFontSize(layout.fontSize.small);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(17, 24, 39); // Gray-900
-            doc.text(`Name: ${receiptData.customerName}`, rightColX, rightY);
-            rightY += layout.spacing.item;
-            if (receiptData.customerPhone) {
-              doc.text(`Phone: ${receiptData.customerPhone}`, rightColX, rightY);
-              rightY += layout.spacing.item;
-            }
-            if (receiptData.customerEmail) {
-              doc.text(`Email: ${receiptData.customerEmail}`, rightColX, rightY);
-            }
-          }
-
-          // Reset text color
-          doc.setTextColor(0, 0, 0);
-          yPos += receiptInfoHeight + layout.spacing.section;
-          checkPageBreak(20);
-
-          // Items Section Header - Dynamic size
-          doc.setFontSize(layout.fontSize.title);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(17, 24, 39); // Gray-900
-          doc.text('ITEMS PURCHASED', margin, yPos);
-          yPos += layout.spacing.line;
-          
-          // Draw line under header
-          doc.setDrawColor(229, 231, 235);
-          doc.setLineWidth(0.5);
-          doc.line(margin, yPos, pageWidth - margin, yPos);
-          yPos += 3;
-
-          // Items - Dynamic Design
-          if (receiptData.items && receiptData.items.length > 0) {
-            receiptData.items.forEach((item, index) => {
-            // Calculate dynamic height based on content and layout
-            let estimatedHeight = layout.spacing.line * 4;
-            if (item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0) {
-                estimatedHeight += item.selectedSerialNumbers.length * layout.spacing.item;
-              }
-              if (item.attributes && Object.keys(item.attributes).length > 0) {
-                const attrCount = Object.keys(item.attributes).filter(key => 
-                  !['id', 'created_at', 'updated_at', 'variant_id', 'product_id', 'imei', 'is_legacy', 'is_imei_child'].includes(key) && item.attributes[key]
-                ).length;
-                // Use 2-column layout, so divide by 2 and add some height
-                estimatedHeight += Math.ceil(attrCount / 2) * layout.spacing.item;
-              }
-              estimatedHeight = Math.max(estimatedHeight, layout.spacing.line * 5);
+            while (currentY < finalHeight) {
+              const remainingHeight = finalHeight - currentY;
+              const pageImgHeight = Math.min(pageHeight, remainingHeight);
+              const sourceHeight = (pageImgHeight / finalHeight) * canvas.height;
               
-              checkPageBreak(estimatedHeight + 2);
+              // Create a canvas for this page section
+              const pageCanvas = document.createElement('canvas');
+              pageCanvas.width = canvas.width;
+              pageCanvas.height = sourceHeight;
+              const ctx = pageCanvas.getContext('2d');
               
-              // Item Card with gray border (matching summary section)
-              const cardBorderColor = [229, 231, 235]; // Gray-200
-              drawBox(margin, yPos, contentWidth, estimatedHeight, true, cardBorderColor);
-              
-              const itemMargin = margin + 2;
-              let itemY = yPos + layout.spacing.line;
-              
-              // Product Name with Variant - Dynamic size
-              doc.setFontSize(layout.fontSize.body);
-              doc.setFont('helvetica', 'bold');
-              doc.setTextColor(17, 24, 39); // Gray-900
-              const productName = item.variantName && item.variantName !== 'Default' 
-                ? `${item.productName} - ${item.variantName}`
-                : item.productName;
-              const itemText = `${item.quantity}x ${productName}`;
-              const itemLines = doc.splitTextToSize(itemText, contentWidth - layout.imageSize - 5);
-              doc.text(itemLines, itemMargin, itemY);
-              itemY += itemLines.length * layout.spacing.line + 0.5;
-              
-              // Unit Price
-              doc.setFontSize(layout.fontSize.small);
-              doc.setFont('helvetica', 'normal');
-              doc.setTextColor(107, 114, 128);
-              doc.text(`Unit Price: ${item.unitPrice.toLocaleString()} TZS`, itemMargin, itemY);
-              itemY += layout.spacing.item;
-              
-              // Specifications Section - Dynamic size
-              const specX = itemMargin + 0.5;
-              let specY = itemY + 1;
-              doc.setFontSize(layout.fontSize.small);
-              doc.setFont('helvetica', 'normal');
-              doc.setTextColor(107, 114, 128); // Gray-500
-              
-              // Serial Numbers/IMEI
-              if (item.selectedSerialNumbers && item.selectedSerialNumbers.length > 0) {
-                item.selectedSerialNumbers.forEach((serial: any) => {
-                  const serialInfo: string[] = [];
-                  if (serial.serial_number) serialInfo.push(`S/N: ${serial.serial_number}`);
-                  if (serial.imei) serialInfo.push(`IMEI: ${serial.imei}`);
-                  if (serial.mac_address) serialInfo.push(`MAC: ${serial.mac_address}`);
-                  if (serialInfo.length > 0) {
-                    doc.setFont('helvetica', 'normal');
-                    doc.text(serialInfo.join(' | '), specX, specY);
-                    specY += 3;
-                  }
-                });
-              }
-              
-              // Attributes (specifications) - Grid Layout in PDF
-              if (item.attributes && Object.keys(item.attributes).length > 0) {
-                // Collect all valid specifications first
-                const specs: Array<{ label: string; value: string }> = [];
+              if (ctx) {
+                // Draw the section of the original canvas
+                ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
+                const pageImgData = pageCanvas.toDataURL('image/png', 1.0);
                 
-                Object.entries(item.attributes).forEach(([key, value]) => {
-                  if (['id', 'created_at', 'updated_at', 'variant_id', 'product_id', 'imei', 'is_legacy', 'is_imei_child'].includes(key)) return;
-                  if (!value || value === '' || value === null || value === undefined) return;
-                  
-                  if (key === 'specification') {
-                    try {
-                      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
-                      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-                        Object.entries(parsed).forEach(([specKey, specValue]) => {
-                          if (specValue && specValue !== '' && specValue !== null) {
-                            const keyLabel = specKey.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-                            specs.push({ label: keyLabel, value: String(specValue) });
-                          }
-                        });
-                        return;
-                      }
-                    } catch {}
-                  }
-                  
-                  if (typeof value !== 'object' || value === null) {
-                    const keyLabel = key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-                    specs.push({ label: keyLabel, value: String(value) });
-                  }
-                });
-                
-                // Display specs in compact inline layout (like tags)
-                if (specs.length > 0) {
-                  doc.setFontSize(3.5);
-                  doc.setFont('helvetica', 'normal');
-                  doc.setTextColor(75, 85, 99); // Gray-600
-                  
-                  let currentX = specX;
-                  let currentY = specY;
-                  const lineHeight = 4;
-                  const maxWidth = contentWidth - 6;
-                  
-                  specs.forEach((spec, index) => {
-                    const labelText = `${spec.label}:`;
-                    const valueText = spec.value;
-                    const fullText = `${labelText} ${valueText}`;
-                    
-                    // Calculate text width
-                    doc.setFont('helvetica', 'semibold');
-                    const labelWidth = doc.getTextWidth(labelText);
-                    doc.setFont('helvetica', 'normal');
-                    const valueWidth = doc.getTextWidth(valueText);
-                    const totalWidth = labelWidth + valueWidth + 2; // +2 for spacing
-                    
-                    // Check if we need a new line
-                    if (currentX + totalWidth > margin + maxWidth && currentX > specX) {
-                      currentX = specX;
-                      currentY += lineHeight;
-                    }
-                    
-                    // Draw compact badge
-                    const badgeHeight = 3.5;
-                    const badgePadding = 1;
-                    const badgeWidth = totalWidth + badgePadding * 2;
-                    
-                    // Background
-                    doc.setFillColor(249, 250, 251); // Gray-50
-                    doc.setDrawColor(229, 231, 235); // Gray-200
-                    doc.setLineWidth(0.1);
-                    doc.rect(currentX, currentY - 2.5, badgeWidth, badgeHeight, 'FD');
-                    
-                    // Label (bold)
-                    doc.setFontSize(3.2);
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(75, 85, 99); // Gray-600
-                    doc.text(labelText, currentX + badgePadding, currentY);
-                    
-                    // Value (normal)
-                    doc.setFontSize(3.5);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(17, 24, 39); // Gray-900
-                    doc.text(valueText, currentX + badgePadding + labelWidth + 0.5, currentY);
-                    
-                    // Move to next position
-                    currentX += badgeWidth + 1;
-                    
-                    // If we're at the end of the line, move to next line
-                    if (currentX + 10 > margin + maxWidth) {
-                      currentX = specX;
-                      currentY += lineHeight;
-                    }
-                  });
-                  
-                  specY = currentY + lineHeight;
-                }
+                // Add to PDF with x offset for centering
+                doc.addImage(pageImgData, 'PNG', xOffset, 0, finalWidth, pageImgHeight, undefined, 'FAST');
               }
               
-              // Reset text color
-              doc.setTextColor(0, 0, 0);
-              yPos += estimatedHeight + layout.spacing.section;
-            });
-          }
-
-          yPos += layout.spacing.section;
-          checkPageBreak(15);
-
-          // Totals Section - Dynamic size
-          const totalsBoxHeight = layout.spacing.line * 5;
-          // Green accent bar at top
-          doc.setFillColor(34, 197, 94); // Green-500
-          doc.rect(margin, yPos, contentWidth, 0.5, 'F'); // Thin bar
-          // Main totals box
-          drawBox(margin, yPos + 0.5, contentWidth, totalsBoxHeight - 0.5, true, [255, 255, 255]);
-          
-          const totalsY = yPos + 0.5 + layout.spacing.line;
-          let totalsLineY = totalsY;
-          
-          // Subtotal (if we have item details)
-          if (receiptData.items && receiptData.items.length > 0) {
-            const subtotal = receiptData.items.reduce((sum, item) => sum + item.totalPrice, 0);
-            doc.setFontSize(layout.fontSize.small);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128); // Gray-500
-            doc.text('Subtotal:', margin + 3, totalsLineY);
-            doc.setTextColor(17, 24, 39); // Gray-900
-            doc.text(`${subtotal.toLocaleString()} TZS`, pageWidth - margin - 3 - doc.getTextWidth(`${subtotal.toLocaleString()} TZS`), totalsLineY);
-            totalsLineY += layout.spacing.item;
-          }
-          
-          // Divider line
-          doc.setDrawColor(229, 231, 235);
-          doc.setLineWidth(0.3);
-          doc.line(margin + 3, totalsLineY, pageWidth - margin - 3, totalsLineY);
-          totalsLineY += layout.spacing.item;
-          
-          // Total - Dynamic but prominent
-          doc.setFontSize(layout.fontSize.title);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(34, 197, 94); // Green-500
-          const totalText = `TOTAL: ${receiptData.amount.toLocaleString()} TZS`;
-          const totalWidth = doc.getTextWidth(totalText);
-          doc.text(totalText, pageWidth - margin - 3 - totalWidth, totalsLineY);
-          
-          // Reset text color
-          doc.setTextColor(0, 0, 0);
-          yPos += totalsBoxHeight + layout.spacing.section;
-
-          // QR Code Section - Using Sale ID for Tracking - Dynamic size
-          if (receiptData.id) {
-            checkPageBreak(25);
-            
-            // QR Code Box - Dynamic height
-            const qrBoxHeight = layout.spacing.line * 8;
-            drawBox(margin, yPos, contentWidth, qrBoxHeight, true, [229, 231, 235]);
-            
-            doc.setFontSize(layout.fontSize.body);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(17, 24, 39); // Gray-900
-            doc.text('Track Your Purchase', margin + 3, yPos + layout.spacing.line);
-            
-            // Generate QR Code URL
-            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(receiptData.id)}`;
-            
-            // Add QR Code Image to PDF - Dynamic size
-            try {
-              const img = new Image();
-              img.crossOrigin = 'anonymous';
+              sourceY += sourceHeight;
+              currentY += pageImgHeight;
               
-              await new Promise<void>((resolve) => {
-                img.onload = () => {
-                  try {
-                    const qrSize = layout.imageSize * 0.75; // Size in mm
-                    const qrX = margin + 3;
-                    const qrY = yPos + layout.spacing.line * 2;
-                    doc.addImage(img, 'PNG', qrX, qrY, qrSize, qrSize);
-                    
-                    // Sale ID text below QR code - Dynamic size
-                    doc.setFontSize(layout.fontSize.small);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(107, 114, 128); // Gray-500
-                    const saleIdText = `Sale ID: ${receiptData.id}`;
-                    const saleIdWidth = doc.getTextWidth(saleIdText);
-                    doc.text(saleIdText, qrX + (qrSize / 2) - (saleIdWidth / 2), qrY + qrSize + layout.spacing.item);
-                    
-                    doc.setFontSize(layout.fontSize.small * 0.9);
-                    doc.text('Scan to track this sale', qrX + (qrSize / 2) - (doc.getTextWidth('Scan to track this sale') / 2), qrY + qrSize + layout.spacing.item * 2);
-                  } catch (error) {
-                    console.warn('Could not add QR code to PDF:', error);
-                  }
-                  resolve();
-                };
-                img.onerror = () => {
-                  console.warn('Could not load QR code image');
-                  resolve();
-                };
-                img.src = qrCodeUrl;
-              });
-            } catch (error) {
-              console.warn('Error generating QR code for PDF:', error);
+              // Add new page if there's more content
+              if (currentY < finalHeight) {
+                doc.addPage();
+              }
             }
-            
-            yPos += 22 + 3;
           }
-
-          // Social Media Section - Before Footer
-          if (businessInfo.instagram || businessInfo.tiktok || businessInfo.whatsapp) {
-            checkPageBreak(12);
-            
-            // Social Media Box
-            drawBox(margin, yPos, contentWidth, 10, true, [229, 231, 235]);
-            
-            doc.setFontSize(7);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(17, 24, 39); // Gray-900
-            doc.text('Follow Us:', margin + 3, yPos + 4);
-            
-            doc.setFontSize(6);
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(107, 114, 128); // Gray-500
-            const socialHandles: string[] = [];
-            
-            if (businessInfo.instagram) {
-              const instaHandle = businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '');
-              socialHandles.push(`Instagram: @${instaHandle}`);
-            }
-            if (businessInfo.tiktok) {
-              const tiktokHandle = businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '');
-              socialHandles.push(`TikTok: @${tiktokHandle}`);
-            }
-            if (businessInfo.whatsapp) {
-              const whatsappNum = businessInfo.whatsapp.replace(/[^0-9+]/g, '');
-              socialHandles.push(`WhatsApp: ${whatsappNum}`);
-            }
-            
-            if (socialHandles.length > 0) {
-              doc.text(socialHandles.join(' • '), margin + 3, yPos + 7);
-            }
-            
-            yPos += 10 + 3;
-          }
-
-          // Footer Section - Compact
-          doc.setDrawColor(229, 231, 235);
-          doc.setLineWidth(0.5);
-          doc.line(margin, yPos, pageWidth - margin, yPos);
-          yPos += layout.spacing.item;
           
-          doc.setFontSize(layout.fontSize.small);
-          doc.setFont('helvetica', 'bold');
-          doc.setTextColor(34, 197, 94); // Green-500
-          const footerText = 'Thank you for your business!';
-          const footerWidth = doc.getTextWidth(footerText);
-          doc.text(footerText, pageWidth / 2 - footerWidth / 2, yPos);
-          
-          yPos += layout.spacing.item;
-          doc.setFontSize(layout.fontSize.small * 0.85);
-          doc.setFont('helvetica', 'normal');
-          doc.setTextColor(107, 114, 128); // Gray-500
-          const returnPolicy = 'Please keep this receipt for your records';
-          const returnPolicyWidth = doc.getTextWidth(returnPolicy);
-          doc.text(returnPolicy, pageWidth / 2 - returnPolicyWidth / 2, yPos);
-          
-          // Reset text color
-          doc.setTextColor(0, 0, 0);
-
           // Save PDF
           doc.save(`receipt-${receiptData.receiptNumber}.pdf`);
           toast.success('Receipt downloaded as PDF');
@@ -1135,6 +780,7 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
         {/* Receipt Preview Section - Matching Existing UI Design */}
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
           <div 
+            data-receipt-preview
             className={`bg-white rounded-2xl border-2 border-gray-200 shadow-sm mx-auto p-6 transition-all duration-300 ${
               pageSize === 'a5' ? 'max-w-md' : 
               pageSize === 'legal' ? 'max-w-3xl' : 
@@ -1173,25 +819,39 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                   }}
                 />
               ) : (
-                <div className={`font-bold text-gray-900 uppercase tracking-wide flex-shrink-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-3xl' : 'text-4xl'}`}>
+                <div className={`font-bold text-gray-900 uppercase tracking-wide flex-shrink-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-5xl' : 'text-6xl'}`}>
                   {businessInfo.name}
                 </div>
               )}
 
               {/* Business Information Section - No Container */}
               <div className="flex-1">
-                {/* Business Name - Bold */}
-                <h2 className={`font-bold text-gray-900 mb-3 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-lg' : 'text-xl'}`}>
-                  {businessInfo.name}
-                </h2>
-                
-                <div className={`grid gap-3 ${
-                  pageSize === 'a4' && orientation === 'landscape' 
-                    ? 'grid-cols-2' 
-                    : 'grid-cols-1'
-                }`}>
-                  {/* Contact Information */}
-                  <div className="space-y-2">
+                {(() => {
+                  // Use sale ID if available, otherwise use receipt number as fallback for QR code
+                  const qrData = (receiptData.id && receiptData.id.trim() !== '') 
+                    ? receiptData.id 
+                    : receiptData.receiptNumber;
+                  const hasQrData = qrData && qrData.trim() !== '';
+                  const hasCustomerInfo = receiptData.customerName || receiptData.customerPhone || receiptData.customerEmail || receiptData.customerCity || receiptData.customerTag || receiptData.id;
+                  
+                  // Determine grid columns: QR code + business info (customer info will be below)
+                  // In both landscape and portrait, use grid layout to keep QR code on right
+                  let gridCols = 'grid-cols-1';
+                  if (hasQrData) {
+                    gridCols = 'grid-cols-2';
+                  }
+                  
+                  return (
+                    <>
+                      <div className={`grid gap-4 ${gridCols}`}>
+                      {/* Business Information */}
+                      <div>
+                    {/* Business Name - Bold */}
+                    <h2 className={`font-bold text-gray-900 uppercase mb-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-2xl' : 'text-3xl'}`}>
+                      {businessInfo.name}
+                    </h2>
+                    
+                    <div className="space-y-2 mt-2">
                     {businessInfo.address && (
                       <div className="flex items-start gap-2">
                         <svg className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1247,99 +907,158 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                         <span className={`text-gray-700 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>{businessInfo.website}</span>
                       </div>
                     )}
+                    </div>
+
+                    {/* Social Media Handles */}
+                    {(businessInfo.instagram || businessInfo.tiktok || businessInfo.whatsapp) && (
+                      <div className="space-y-2 mt-2">
+                        <div className={`font-semibold text-gray-600 mb-1 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>Follow Us</div>
+                        <div className="flex flex-wrap gap-2">
+                          {businessInfo.instagram && (
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-xs font-medium">
+                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                              </svg>
+                              <span>@{businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '')}</span>
+                            </div>
+                          )}
+                          {businessInfo.tiktok && (
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900 text-white rounded-lg text-xs font-medium">
+                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
+                              </svg>
+                              <span>@{businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '')}</span>
+                            </div>
+                          )}
+                          {businessInfo.whatsapp && (
+                            <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg text-xs font-medium">
+                              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
+                              </svg>
+                              <span>{businessInfo.whatsapp.replace(/[^0-9+]/g, '')}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Social Media Handles */}
-                  {(businessInfo.instagram || businessInfo.tiktok || businessInfo.whatsapp) && (
-                    <div className="space-y-2">
-                      <div className={`font-semibold text-gray-600 mb-1 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xs' : 'text-sm'}`}>Follow Us</div>
-                      <div className="flex flex-wrap gap-2">
-                        {businessInfo.instagram && (
-                          <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-lg text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
-                            </svg>
-                            <span>@{businessInfo.instagram.replace('@', '').replace('https://instagram.com/', '').replace('https://www.instagram.com/', '')}</span>
-                          </div>
-                        )}
-                        {businessInfo.tiktok && (
-                          <div className="flex items-center gap-1.5 px-2 py-1 bg-gray-900 text-white rounded-lg text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/>
-                            </svg>
-                            <span>@{businessInfo.tiktok.replace('@', '').replace('https://tiktok.com/@', '').replace('https://www.tiktok.com/@', '')}</span>
-                          </div>
-                        )}
-                        {businessInfo.whatsapp && (
-                          <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg text-xs font-medium">
-                            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/>
-                            </svg>
-                            <span>{businessInfo.whatsapp.replace(/[^0-9+]/g, '')}</span>
-                          </div>
-                        )}
-                      </div>
+                  {/* QR Code - Right Side of Business Info (Generated from Sale ID or Receipt Number) */}
+                  {hasQrData && (
+                    <div className="flex flex-col items-center justify-center">
+                      <img 
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`}
+                        alt="Sale Tracking QR Code"
+                        className={`border-2 border-gray-300 rounded-lg bg-white p-2 ${
+                          pageSize === 'a4' && orientation === 'landscape' ? 'w-24 h-24' : 'w-28 h-28'
+                        }`}
+                        onError={(e) => {
+                          console.error('❌ QR code failed to load for:', qrData);
+                          e.currentTarget.style.display = 'none';
+                        }}
+                        onLoad={() => {
+                          if (process.env.NODE_ENV === 'development') {
+                            console.log('✅ QR code loaded successfully for:', qrData);
+                          }
+                        }}
+                      />
                     </div>
                   )}
-                </div>
-              </div>
-            </div>
+                    </div>
 
-            {/* Receipt & Customer Info - Combined Card */}
-            <div className={`${pageSize === 'a4' && orientation === 'landscape' ? 'mb-3' : 'mb-4'}`}>
-              <div className="bg-white rounded-lg p-3 border border-gray-300 shadow-sm hover:shadow-md transition-shadow">
-                <div className={`grid gap-4 ${
-                  pageSize === 'a4' && orientation === 'landscape' 
-                    ? 'grid-cols-2' 
-                    : 'grid-cols-1'
-                }`}>
-                  {/* Receipt Details - Left Side */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Receipt</h3>
-                        <p className="text-sm font-bold text-gray-900 mt-0.5">{receiptData.receiptNumber}</p>
-                      </div>
-                    </div>
-                    <div className="text-sm space-y-1">
-                      <p className="text-xs text-gray-500">{new Date().toLocaleDateString()}</p>
-                      <p className="text-xs text-gray-500">{new Date().toLocaleTimeString()}</p>
-                    </div>
-                  </div>
-                  
-                  {/* Customer Info - Right Side */}
-                  {(receiptData.customerName || receiptData.customerPhone || receiptData.customerEmail) && (
-                    <div className={`${pageSize === 'a4' && orientation === 'landscape' ? 'border-l border-gray-200 pl-4' : 'border-t border-gray-200 pt-4 mt-4'}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                        </div>
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Customer</h3>
-                      </div>
-                      <div className="space-y-1.5 text-sm">
-                        {receiptData.customerName && (
-                          <p className="font-medium text-gray-900">{receiptData.customerName}</p>
-                        )}
+                  {/* Customer Info - Below Business Information */}
+                  {(receiptData.customerName || receiptData.customerPhone || receiptData.customerEmail || receiptData.customerCity || receiptData.customerTag || receiptData.id) && (
+                    <div className={`border-t border-gray-200 ${pageSize === 'a4' && orientation === 'landscape' ? 'mt-4 pt-4' : 'mt-2 pt-2'}`}>
+                      {/* Customer Name - Minimal in Portrait */}
+                      {receiptData.customerName && (
+                        <h3 className={`font-semibold text-gray-700 uppercase mb-0 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-2xl mb-2' : 'text-sm mb-1'}`}>
+                          {receiptData.customerName}
+                        </h3>
+                      )}
+                      
+                      <div className={`grid ${pageSize === 'a4' && orientation === 'landscape' ? 'grid-cols-2 gap-2 mt-2' : 'grid-cols-2 gap-x-3 gap-y-1 mt-1'}`}>
                         {receiptData.customerPhone && (
-                          <p className="text-gray-600 font-mono text-xs">{receiptData.customerPhone}</p>
+                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-end' : 'gap-1.5 justify-start'}`}>
+                            {pageSize === 'a4' && orientation === 'landscape' ? (
+                              <>
+                                <span className={`text-gray-700 font-medium text-xs`}>{receiptData.customerPhone}</span>
+                                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                </svg>
+                                <span className={`text-gray-600 text-xs`}>{receiptData.customerPhone}</span>
+                              </>
+                            )}
+                          </div>
                         )}
                         {receiptData.customerEmail && (
-                          <p className="text-gray-600 text-xs break-all">{receiptData.customerEmail}</p>
+                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-end' : 'gap-1.5 justify-start'}`}>
+                            {pageSize === 'a4' && orientation === 'landscape' ? (
+                              <>
+                                <span className={`text-gray-700 text-xs`}>{receiptData.customerEmail}</span>
+                                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <span className={`text-gray-600 text-xs`}>{receiptData.customerEmail}</span>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {receiptData.customerCity && (
+                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-end' : 'gap-1.5 justify-start'}`}>
+                            {pageSize === 'a4' && orientation === 'landscape' ? (
+                              <>
+                                <span className={`text-gray-700 text-xs`}>{receiptData.customerCity}</span>
+                                <svg className="w-4 h-4 text-gray-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3 h-3 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <span className={`text-gray-600 text-xs`}>{receiptData.customerCity}</span>
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {receiptData.customerTag && (
+                          <div className={`flex items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2 justify-end' : 'gap-1.5 justify-start'}`}>
+                            <span className={`inline-flex items-center rounded text-xs font-medium ${
+                              receiptData.customerTag.toLowerCase() === 'vip' 
+                                ? 'bg-purple-100 text-purple-700' 
+                                : receiptData.customerTag.toLowerCase() === 'new'
+                                ? 'bg-blue-100 text-blue-700'
+                                : receiptData.customerTag.toLowerCase() === 'complainer'
+                                ? 'bg-red-100 text-red-700'
+                                : 'bg-gray-100 text-gray-700'
+                            } ${pageSize === 'a4' && orientation === 'landscape' ? 'text-[10px] px-1.5 py-0.5' : 'text-[10px] px-1.5 py-0.5'}`}>
+                              {receiptData.customerTag.toUpperCase()}
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>
                   )}
-                </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
-
 
             {/* Dashed Separator */}
             <div className={`border-t border-dashed border-gray-300 ${pageSize === 'a4' && orientation === 'landscape' ? 'my-3' : 'my-6'}`}></div>
@@ -1425,7 +1144,14 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                               const specs: Array<{ key: string; label: string; value: string }> = [];
                               
                               Object.entries(item.attributes).forEach(([key, value]) => {
-                                if (['id', 'created_at', 'updated_at', 'variant_id', 'product_id', 'imei', 'is_legacy', 'is_imei_child'].includes(key)) return;
+                                // Exclude internal/system fields
+                                const excludedFields = [
+                                  'id', 'created_at', 'updated_at', 'added_at', 
+                                  'variant_id', 'product_id', 'imei', 'serial_number',
+                                  'is_legacy', 'is_imei_child', 'notes', 
+                                  'parent_variant_name', 'data_source', 'created_without_po'
+                                ];
+                                if (excludedFields.includes(key)) return;
                                 if (!value || value === '' || value === null || value === undefined) return;
                                 
                                 if (key === 'specification') {
@@ -1433,6 +1159,8 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                                     const parsed = typeof value === 'string' ? JSON.parse(value) : value;
                                     if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
                                       Object.entries(parsed).forEach(([specKey, specValue]) => {
+                                        // Also exclude these fields from nested specification object
+                                        if (excludedFields.includes(specKey)) return;
                                         if (!specValue || specValue === '' || specValue === null) return;
                                         const keyLabel = specKey.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
                                         specs.push({ key: `${key}-${specKey}`, label: keyLabel, value: String(specValue) });
@@ -1504,47 +1232,50 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
             {/* Separator Above Summary */}
             <div className={`border-t border-dashed border-gray-300 ${pageSize === 'a4' && orientation === 'landscape' ? 'my-3' : 'my-6'}`}></div>
 
-            {/* Pricing Breakdown - Below Items, Right Side in Landscape */}
-            <div className={pageSize === 'a4' && orientation === 'landscape' ? 'grid grid-cols-3 gap-4' : ''}>
-              {pageSize === 'a4' && orientation === 'landscape' && <div className="col-span-2"></div>}
-              <div className={`bg-gray-50 rounded-xl border-2 border-gray-200 ${
-                pageSize === 'a4' && orientation === 'landscape' 
-                  ? 'col-span-1 p-3 mb-2' 
-                  : 'p-6 mb-6 w-full'
-              }`}>
-                <h3 className={`font-bold text-gray-900 mb-2 ${
+            {/* Summary Section - Below Items, Left Side */}
+            <div className="w-full">
+              <div className="w-full">
+                <h3 className={`font-bold text-gray-900 mb-3 ${
                   pageSize === 'a4' && orientation === 'landscape' ? 'text-sm' : 'text-base'
                 }`}>SUMMARY</h3>
-                <div className={pageSize === 'a4' && orientation === 'landscape' ? 'space-y-1.5' : 'space-y-3'}>
-                {receiptData.items && receiptData.items.length > 0 && (
-                  <div className={`flex justify-between items-center text-gray-700 ${
-                    pageSize === 'a4' && orientation === 'landscape' ? 'text-sm' : 'text-base'
-                  }`}>
-                    <span>Price</span>
-                    <span className="font-semibold">{formatMoney(receiptData.items.reduce((sum, item) => sum + item.totalPrice, 0))}</span>
-                  </div>
-                )}
-                
-                {/* Delivery - if applicable */}
-                <div className={`flex justify-between items-center text-gray-700 ${
-                  pageSize === 'a4' && orientation === 'landscape' ? 'text-sm' : 'text-base'
-                }`}>
-                  <span>Delivery</span>
-                  <span className="font-semibold">TSh 0</span>
-                </div>
-                
-                {/* Separator Line */}
-                <div className={`border-t border-gray-300 ${pageSize === 'a4' && orientation === 'landscape' ? 'my-1.5' : 'my-3'}`}></div>
-                
-                {/* Total Amount - Bold */}
-                <div className="flex justify-between items-center">
-                  <span className={`font-bold text-gray-900 ${
-                    pageSize === 'a4' && orientation === 'landscape' ? 'text-base' : 'text-lg'
-                  }`}>Total Amount</span>
-                  <span className={`font-bold text-gray-900 ${
-                    pageSize === 'a4' && orientation === 'landscape' ? 'text-base' : 'text-lg'
-                  }`}>{formatMoney(receiptData.amount)}</span>
-                </div>
+                <div className={`space-y-2 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-sm' : 'text-base'}`}>
+                        {/* Receipt Information */}
+                        <div className="space-y-1">
+                          <div className="grid grid-cols-2 gap-2 text-gray-600 text-xs">
+                            <p>{new Date().toLocaleDateString()}</p>
+                            <p>{new Date().toLocaleTimeString()}</p>
+                          </div>
+                          {receiptData.sellerName && (
+                            <div className="text-gray-600 text-xs">
+                              <p><span className="font-semibold">Seller:</span> {receiptData.sellerName}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Separator */}
+                        <div className="border-t border-gray-300 my-2"></div>
+
+                        {/* Pricing Details */}
+                        {receiptData.items && receiptData.items.length > 0 && (
+                          <div className="flex justify-between items-center text-gray-700">
+                            <span>Price</span>
+                            <span className="font-semibold">{formatMoney(receiptData.items.reduce((sum, item) => sum + item.totalPrice, 0))}</span>
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-center text-gray-700">
+                          <span>Delivery</span>
+                          <span className="font-semibold">TSh 0</span>
+                        </div>
+                        
+                        {/* Separator Line */}
+                        <div className="border-t border-gray-300 my-2"></div>
+                        
+                        {/* Total Amount - Bold and Large */}
+                        <div className="flex justify-between items-center">
+                          <span className={`font-extrabold text-gray-900 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xl' : 'text-2xl'}`}>Total Amount</span>
+                          <span className={`font-extrabold text-gray-900 ${pageSize === 'a4' && orientation === 'landscape' ? 'text-xl' : 'text-2xl'}`}>{formatMoney(receiptData.amount)}</span>
+                        </div>
                 </div>
               </div>
             </div>
@@ -1604,35 +1335,6 @@ const ShareReceiptModal: React.FC<ShareReceiptModalProps> = ({
                       {businessInfo.whatsapp.replace(/[^0-9+]/g, '')}
                     </a>
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* QR Code for Tracking - Compact for Landscape */}
-            {receiptData.id && (
-              <div className={`bg-gray-50 rounded-xl border-2 border-gray-200 ${pageSize === 'a4' && orientation === 'landscape' ? 'p-3 mb-2' : 'p-6 mb-6'}`}>
-                <h4 className={`font-bold text-gray-900 flex items-center gap-2 ${
-                  pageSize === 'a4' && orientation === 'landscape' ? 'text-xs mb-2' : 'text-sm mb-3'
-                }`}>
-                  <div className="w-6 h-6 bg-blue-500 rounded-lg flex items-center justify-center shadow-sm">
-                    <Share2 className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  Track Your Purchase
-                </h4>
-                <div className={`flex flex-col items-center ${pageSize === 'a4' && orientation === 'landscape' ? 'gap-2' : 'gap-3'}`}>
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(receiptData.id)}`}
-                    alt="Sale Tracking QR Code"
-                    className={`border-2 border-gray-300 rounded-lg bg-white p-2 ${
-                      pageSize === 'a4' && orientation === 'landscape' ? 'w-24 h-24' : 'w-32 h-32'
-                    }`}
-                  />
-                  <p className={`text-gray-600 text-center ${
-                    pageSize === 'a4' && orientation === 'landscape' ? 'text-[10px]' : 'text-xs'
-                  }`}>
-                    Scan to track this sale<br />
-                    <span className="font-mono text-gray-900">Sale ID: {receiptData.id}</span>
-                  </p>
                 </div>
               </div>
             )}

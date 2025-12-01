@@ -35,9 +35,9 @@ const SearchHome: React.FC<SearchHomeProps> = ({
 
     // Common items for all roles
     items.push(
-      { label: 'Active Devices', icon: <Smartphone size={20} />, query: 'status:active', color: 'blue' },
-      { label: 'New Customers', icon: <Users size={20} />, query: 'isRead:false', color: 'green' },
-      { label: 'Overdue Devices', icon: <Clock size={20} />, query: 'overdue:true', color: 'red' }
+      { label: 'Active Devices', icon: <Smartphone size={20} />, query: 'status:active type:device', color: 'blue' },
+      { label: 'New Customers', icon: <Users size={20} />, query: 'type:customer', color: 'green' },
+      { label: 'Overdue Devices', icon: <Clock size={20} />, query: 'status:pending type:device', color: 'red' }
     );
 
     // Role-specific items
@@ -52,7 +52,7 @@ const SearchHome: React.FC<SearchHomeProps> = ({
       items.push(
         { label: 'Payment Reports', icon: <CreditCard size={20} />, query: 'type:payment', color: 'emerald' },
         { label: 'Loyalty Members', icon: <Crown size={20} />, query: 'type:loyalty', color: 'yellow' },
-        { label: 'Inventory Alerts', icon: <Warehouse size={20} />, query: 'low:stock', color: 'orange' },
+        { label: 'Inventory Alerts', icon: <Warehouse size={20} />, query: 'type:product', color: 'orange' },
         { label: 'Sales Reports', icon: <BarChart3 size={20} />, query: 'type:report', color: 'indigo' }
       );
     }

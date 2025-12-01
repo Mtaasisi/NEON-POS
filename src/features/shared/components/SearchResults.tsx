@@ -23,6 +23,18 @@ import {
   MessageSquare,
   Award,
   Calendar,
+  ChevronDown,
+  Edit,
+  Trash2,
+  Eye,
+  ShoppingCart,
+  CheckCircle2,
+  DollarSign,
+  Copy,
+  Share2,
+  Printer,
+  Minimize2,
+  Maximize2,
 } from 'lucide-react';
 
 interface SearchResult extends ServiceSearchResult {
@@ -55,6 +67,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   const resultRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null);
   const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
+  const [expandedVariants, setExpandedVariants] = useState<Set<string>>(new Set());
+  const [minimizedVariantsSections, setMinimizedVariantsSections] = useState<Set<string>>(new Set());
 
   // Initialize search service
   const searchService = useMemo(() => new SearchService(userRole), [userRole]);
@@ -93,6 +107,22 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     const timeoutId = setTimeout(performSearch, 300);
     return () => clearTimeout(timeoutId);
   }, [query, searchService]);
+
+  // Auto-minimize all variants sections when search results change
+  useEffect(() => {
+    const productResults = searchResults.filter(result => 
+      result.type === 'product' && result.metadata?.variants && result.metadata.variants.length > 0
+    );
+    if (productResults.length > 0) {
+      setMinimizedVariantsSections(prev => {
+        const newSet = new Set(prev);
+        productResults.forEach(result => {
+          newSet.add(result.id);
+        });
+        return newSet;
+      });
+    }
+  }, [searchResults]);
 
   // Get icon for result type
   const getIconForType = (type: string): React.ReactNode => {
@@ -418,6 +448,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [filteredResults, selectedIndex, expandedResultId]);
 
+
   // Scroll selected item into view
   useEffect(() => {
     if (resultRefs.current[selectedIndex]) {
@@ -487,204 +518,546 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       )}
 
       <div className="space-y-3">
-      {/* Results Header - macOS style */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700">
-            Results for <span className="text-gray-900">"{query}"</span>
-          </h2>
-          <p className="text-gray-500 mt-0.5 text-xs">
-            {filteredResults.length} result{filteredResults.length !== 1 ? 's' : ''}
-          </p>
+      {/* Sticky Header and Filters */}
+      <div className="sticky top-0 z-10 bg-white pb-3 pt-2 -mx-6 px-6 border-b border-gray-100 shadow-sm">
+        {/* Results Header - macOS style */}
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">
+              Results for <span className="text-gray-900">"{query}"</span>
+            </h2>
+            <p className="text-gray-500 mt-0.5 text-xs">
+              {filteredResults.length} result{filteredResults.length !== 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
+
+        {/* Filters - macOS segmented control style */}
+        {availableFilters.length > 1 && (
+          <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 overflow-x-auto scrollbar-hide">
+            {availableFilters.map((filterOption) => (
+              <button
+                key={filterOption.key}
+                onClick={() => onFilterChange(filterOption.key)}
+                className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-150 ${
+                  filter === filterOption.key
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {filterOption.label}
+                <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-xs ${
+                  filter === filterOption.key ? 'bg-gray-100 text-gray-600' : 'bg-gray-200/60 text-gray-500'
+                }`}>
+                  {filterOption.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Filters - macOS segmented control style */}
-      {availableFilters.length > 1 && (
-        <div className="inline-flex items-center bg-gray-100 rounded-lg p-1 overflow-x-auto scrollbar-hide">
-          {availableFilters.map((filterOption) => (
-            <button
-              key={filterOption.key}
-              onClick={() => onFilterChange(filterOption.key)}
-              className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-150 ${
-                filter === filterOption.key
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {filterOption.label}
-              <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-xs ${
-                filter === filterOption.key ? 'bg-gray-100 text-gray-600' : 'bg-gray-200/60 text-gray-500'
-              }`}>
-                {filterOption.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Results - Simplified minimal design */}
+      {/* Results - Inspired by provided design */}
       {filteredResults.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {filteredResults.map((result, index) => {
+            const isExpanded = expandedResultId === result.id;
             const isSelected = index === selectedIndex;
             const colors = getColorScheme(result.type);
+            
+            // Get border color based on type and status
+            const getBorderColor = () => {
+              if (result.metadata?.status === 'complete' || result.metadata?.status === 'completed' || result.metadata?.status === 'paid') {
+                return 'border-green-200 hover:border-green-300/30';
+              }
+              if (result.type === 'product') {
+                return 'border-purple-200 hover:border-purple-300/30';
+              }
+              if (result.type === 'device') {
+                return 'border-blue-200 hover:border-blue-300/30';
+              }
+              if (result.type === 'sale') {
+                return 'border-amber-200 hover:border-amber-300/30';
+              }
+              return 'border-gray-200 hover:border-gray-300/30';
+            };
+
+            // Get status badge
+            const getStatusBadge = () => {
+              const status = result.metadata?.status?.toLowerCase();
+              if (status === 'complete' || status === 'completed') {
+                return (
+                  <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold bg-green-500 text-white shadow-sm flex-shrink-0">
+                    <CheckCircle2 className="w-5 h-5" />
+                    Complete
+                  </span>
+                );
+              }
+              if (status === 'active' || status === 'in-progress' || status === 'pending') {
+                return (
+                  <span className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-base font-bold text-green-600 bg-green-100 flex items-center gap-2 flex-shrink-0">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>ACTIVE</span>
+                  </span>
+                );
+              }
+              if (status === 'paid') {
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-5 py-3 rounded-xl text-base font-bold shadow-sm bg-green-500 text-white">
+                    <CheckCircle2 className="w-5 h-5" />
+                    Paid
+                  </span>
+                );
+              }
+              if (status === 'partial') {
+                return (
+                  <span className="inline-flex items-center gap-1.5 px-5 py-3 rounded-xl text-base font-bold shadow-sm bg-yellow-500 text-white">
+                    <Clock className="w-5 h-5" />
+                    Partial
+                  </span>
+                );
+              }
+              return null;
+            };
+
+            // Format date
+            const formatDate = (date: string | Date | undefined) => {
+              if (!date) return null;
+              const d = date instanceof Date ? date : new Date(date);
+              return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            };
+
             return (
               <div
-                key={`${result.type}-${result.id}`}
+                key={`${result.type}-${result.id}-${index}`}
                 ref={(el) => (resultRefs.current[index] = el)}
-                onClick={() => handleResultClick(result, index)}
                 onMouseEnter={() => setSelectedIndex(index)}
                 className={`
-                  rounded-lg p-3 transition-all duration-200 cursor-pointer group border
-                  ${isSelected 
-                    ? `${colors.selectedBg} border-2 ${colors.selectedBorder} shadow-sm`
-                    : `bg-white border ${colors.border} hover:border-2 ${colors.hoverBorder} hover:shadow-sm`
-                  }
+                  border-2 rounded-2xl bg-white shadow-sm transition-all duration-300 cursor-pointer
+                  ${getBorderColor()}
+                  ${isSelected ? 'ring-2 ring-blue-400' : ''}
                 `}
               >
-                <div className="flex items-center gap-3">
-                  {/* Icon */}
-                  <div
-                    className={`p-2 rounded-lg flex-shrink-0 ${
-                      isSelected ? colors.selectedIconBg : colors.iconBg
-                    }`}
-                  >
-                    {result.icon}
+                <div 
+                  className="flex items-start justify-between p-6 cursor-pointer"
+                  onClick={() => handleResultClick(result, index)}
+                >
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    {/* Chevron Icon */}
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 bg-gray-200 hover:bg-gray-300 text-gray-600">
+                      <ChevronDown 
+                        className={`w-5 h-5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}
+                      />
                   </div>
                   
                   {/* Content */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h3 className="font-medium text-sm truncate text-gray-900">
+                      {/* Title and Status */}
+                      <div className="flex items-center gap-3 mb-4 flex-wrap">
+                        <h3 className="text-2xl font-bold text-gray-900 truncate">
                         {highlightText(result.title, query)}
                       </h3>
-                      
-                      {/* Type Badge */}
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-xs font-medium flex-shrink-0 ${
-                          isSelected
-                            ? `${colors.selectedBadgeBg} ${colors.selectedBadgeText}`
-                            : `${colors.badgeBg} ${colors.badgeText}`
-                        }`}
-                      >
-                        {result.type}
-                      </span>
+                        {/* Stock Quantity Badge - After Product Name */}
+                        {result.type === 'product' && result.metadata?.stock !== undefined && (
+                          <div className={`p-2 rounded-full border-2 border-white shadow-lg flex items-center justify-center w-10 h-10 flex-shrink-0 ${
+                            result.metadata.stock <= 0 
+                              ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                              : result.metadata.stock <= 5
+                              ? 'bg-gradient-to-r from-red-500 to-red-600'
+                              : result.metadata.stock <= 10
+                              ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                              : 'bg-gradient-to-r from-green-500 to-emerald-500'
+                          }`}>
+                            <span className="text-sm font-bold text-white">
+                              {result.metadata.stock >= 1000 ? `${(result.metadata.stock / 1000).toFixed(1)}K` : result.metadata.stock}
+                            </span>
+                          </div>
+                        )}
+                        {getStatusBadge()}
                     </div>
                     
-                    {/* Subtitle */}
-                    {result.subtitle && (
-                      <p className="text-xs truncate text-gray-500">
-                        {highlightText(result.subtitle, query)}
-                      </p>
-                    )}
-                    
-                    {/* Description */}
-                    {result.description && (
-                      <p className="text-xs line-clamp-1 mt-1 text-gray-500">
-                        {highlightText(result.description, query)}
-                      </p>
-                    )}
-                    
-                    {/* Metadata */}
-                    {result.metadata && Object.keys(result.metadata).length > 0 && (
-                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                        {result.metadata.status && (
-                          <span className="text-xs px-2 py-0.5 rounded-md bg-gray-50 text-gray-600">
-                            {result.metadata.status}
-                          </span>
+                      {/* Metadata Row */}
+                      <div className="flex items-center gap-3 flex-wrap">
+                        {/* Customer/Subtitle Badge */}
+                        {result.subtitle && (
+                          <div 
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0 cursor-pointer hover:bg-blue-100 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {result.type === 'customer' ? (
+                              <Users className="w-5 h-5" />
+                            ) : result.type === 'sale' ? (
+                              <Users className="w-5 h-5" />
+                            ) : (
+                              <Package className="w-5 h-5" />
+                            )}
+                            <span className="text-base font-semibold truncate max-w-[140px]">
+                              {highlightText(result.subtitle, query)}
+                            </span>
+                          </div>
                         )}
-                        {result.metadata.price && (
-                          <span className="text-xs px-2 py-0.5 rounded-md bg-gray-50 text-gray-600">
-                            TZS {result.metadata.price.toLocaleString()}
+                        
+                        {/* Date Info */}
+                                {(result.createdAt || result.metadata?.date) && (
+                          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-50 border border-gray-200">
+                                <Calendar className="w-5 h-5 text-gray-600" />
+                                <span className="text-base font-medium text-gray-600">
+                                  {formatDate(result.createdAt || result.metadata?.date) || 'N/A'}
                           </span>
-                        )}
-                        {result.metadata.stock && (
-                          <span className="text-xs px-2 py-0.5 rounded-md bg-gray-50 text-gray-600">
-                            {result.metadata.stock} in stock
-                          </span>
-                        )}
-                        {result.metadata.date && (
-                          <span className="text-xs px-2 py-0.5 rounded-md bg-gray-50 text-gray-600">
-                            {result.metadata.date instanceof Date 
-                              ? result.metadata.date.toLocaleDateString() 
-                              : result.metadata.date}
-                          </span>
-                        )}
-                        {result.score !== undefined && (
-                          <span className="text-xs px-2 py-0.5 rounded-md text-gray-500 bg-gray-50">
-                            {Math.round((1 - result.score) * 100)}% match
-                          </span>
-                        )}
                       </div>
                     )}
+                      </div>
+                    </div>
                   </div>
                   
-                  {/* Arrow Icon */}
-                  <div className="flex-shrink-0">
-                    <ArrowRight
-                      size={16}
-                      className={`transition-all duration-200 ${
-                        isSelected ? colors.selectedBadgeText : 'text-gray-300 group-hover:text-gray-400'
-                      }`}
-                    />
+                  {/* Right Side - Total Amount (only for product and sale) */}
+                  {(result.type === 'product' || result.type === 'sale') && (
+                  <div className="ml-4 flex-shrink-0">
+                    <div className="flex flex-col items-end">
+                      <div className="flex items-center gap-2 mb-1">
+                        <DollarSign className="w-5 h-5 text-gray-400" />
+                        <span className="text-sm text-gray-500 font-medium uppercase tracking-wide">
+                            {result.type === 'product' ? 'Price' : 'Total Amount'}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-4xl font-bold text-gray-900 leading-tight">
+                            {result.metadata?.hasPrice && result.metadata.price != null
+                              ? `TSh ${result.metadata.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                              : result.metadata?.amount != null
+                              ? `TSh ${result.metadata.amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                              : <span className="text-gray-400 text-2xl font-normal">No price set</span>
+                            }
+                        </span>
+                      </div>
+                    </div>
                   </div>
+                  )}
                 </div>
 
                 {/* Expanded Detail Section */}
-                {expandedResultId === result.id && (
-                  <div className="mt-3 pt-3 border-t border-gray-100">
-                    <div className="space-y-3 text-gray-700">
-                      {/* Full Description */}
-                      {result.description && (
-                        <div>
-                          <h4 className="text-xs font-medium mb-1 text-gray-700">
-                            Description
-                          </h4>
-                          <p className="text-xs leading-relaxed">
-                            {result.description}
-                          </p>
-                        </div>
-                      )}
+                {expandedResultId === result.id ? (
+                  <div className="px-6 pb-6 pt-0">
+                    <div className="space-y-6">
 
-                      {/* Metadata Details */}
-                      {result.metadata && Object.keys(result.metadata).length > 0 && (
-                        <div>
-                          <h4 className="text-xs font-medium mb-2 text-gray-700">
-                            Details
+                      {/* Product/Variant Information */}
+                      {result.type === 'product' && result.metadata && (
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                            • PRODUCT DETAILS
                           </h4>
-                          <div className="grid grid-cols-2 gap-2">
-                            {result.metadata.status && (
-                              <div className="p-2 rounded-lg bg-gray-50">
-                                <div className="text-xs opacity-60 mb-0.5">Status</div>
-                                <div className="text-sm font-medium">
-                                  {result.metadata.status}
+
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                              {/* Basic Information - Left Side */}
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <div className="p-5">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-200/50 flex items-center justify-center">
+                                  <Package size={16} className="text-purple-600" />
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-900">Basic Information</h5>
+                                  <p className="text-xs text-gray-500">Product details and identifiers</p>
+                                </div>
+                              </div>
+
+                                  <div className="space-y-4">
+                                {result.metadata.barcode && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Barcode</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900">{result.metadata.barcode}</p>
+                                  </div>
+                                )}
+                                    {result.metadata.categoryName && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Category</span>
+                                    </div>
+                                        <p className="text-sm font-semibold text-gray-900">{result.metadata.categoryName}</p>
+                                  </div>
+                                )}
+                                    </div>
+                              </div>
+                            </div>
+
+                              {/* Pricing & Inventory - Right Side */}
+                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                            <div className="p-5">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 rounded-xl bg-green-500/10 border border-green-200/50 flex items-center justify-center">
+                                  <TrendingUp size={16} className="text-green-600" />
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-900">Pricing & Inventory</h5>
+                                  <p className="text-xs text-gray-500">Financial and stock information</p>
+                                </div>
+                              </div>
+
+                                  <div className="space-y-4">
+                                {result.metadata.hasPrice && result.metadata.price != null ? (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Selling Price</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-green-600">
+                                      TZS {result.metadata.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Selling Price</span>
+                                    </div>
+                                    <p className="text-sm font-medium text-gray-400 italic">
+                                      No price set
+                                    </p>
+                                  </div>
+                                )}
+                                {result.metadata.variantId && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Variant ID</span>
+                                    </div>
+                                    <p className="text-xs font-mono text-gray-600 break-all">{result.metadata.variantId}</p>
+                                  </div>
+                                )}
+                                    </div>
+                                  </div>
+                              </div>
+                            </div>
+
+                            {/* Variants Section */}
+                            {result.metadata.variants && result.metadata.variants.length > 0 && (
+                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <div className="p-5">
+                                  <div 
+                                    className="flex items-center justify-between mb-4 cursor-pointer"
+                                    onClick={() => {
+                                      setMinimizedVariantsSections(prev => {
+                                        const newSet = new Set(prev);
+                                        if (newSet.has(result.id)) {
+                                          newSet.delete(result.id);
+                                        } else {
+                                          newSet.add(result.id);
+                                        }
+                                        return newSet;
+                                      });
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-200/50 flex items-center justify-center">
+                                      <Package size={16} className="text-blue-600" />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-gray-900">Product Variants</h5>
+                                      <p className="text-xs text-gray-500">
+                                        {result.metadata.variantCount} variant{result.metadata.variantCount !== 1 ? 's' : ''} with children
+                                      </p>
+                                    </div>
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setMinimizedVariantsSections(prev => {
+                                          const newSet = new Set(prev);
+                                          if (newSet.has(result.id)) {
+                                            newSet.delete(result.id);
+                                          } else {
+                                            newSet.add(result.id);
+                                          }
+                                          return newSet;
+                                        });
+                                      }}
+                                      className="flex items-center justify-center w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors text-gray-600 hover:text-gray-900"
+                                      title={minimizedVariantsSections.has(result.id) ? 'Maximize' : 'Minimize'}
+                                    >
+                                      {minimizedVariantsSections.has(result.id) ? (
+                                        <Maximize2 size={16} />
+                                      ) : (
+                                        <Minimize2 size={16} />
+                                      )}
+                                    </button>
+                                  </div>
+
+                                  {!minimizedVariantsSections.has(result.id) && (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {result.metadata.variants.map((variant: any) => {
+                                      const variantKey = `${result.id}-${variant.id}`;
+                                      const isVariantExpanded = expandedVariants.has(variantKey);
+                                      const hasChildren = variant.children && variant.children.length > 0;
+
+                                      return (
+                                        <div
+                                          key={variant.id}
+                                          className={`border rounded-lg overflow-hidden relative cursor-pointer ${
+                                            hasChildren 
+                                              ? 'border-purple-300 bg-purple-50/30' 
+                                              : 'border-gray-200'
+                                          }`}
+                                          onClick={() => {
+                                            // Open Product Variants section if minimized
+                                            if (minimizedVariantsSections.has(result.id)) {
+                                              setMinimizedVariantsSections(prev => {
+                                                const newSet = new Set(prev);
+                                                newSet.delete(result.id);
+                                                return newSet;
+                                              });
+                                            }
+                                          }}
+                                        >
+                                          {/* Stock Quantity Badge - Top Right Corner */}
+                                          {variant.quantity !== null && variant.quantity !== undefined && (
+                                            <div className={`absolute top-1 right-1 p-1 rounded-full border-2 border-white shadow-lg flex items-center justify-center z-20 w-7 h-7 ${
+                                              variant.quantity <= 0 
+                                                ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                                                : variant.quantity <= 5
+                                                ? 'bg-gradient-to-r from-red-500 to-red-600'
+                                                : variant.quantity <= 10
+                                                ? 'bg-gradient-to-r from-orange-500 to-orange-600'
+                                                : 'bg-gradient-to-r from-green-500 to-emerald-500'
+                                            }`}>
+                                              <span className="text-[10px] font-bold text-white">
+                                                {variant.quantity >= 1000 ? `${(variant.quantity / 1000).toFixed(1)}K` : variant.quantity}
+                                              </span>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Variant Header - Clickable to expand/collapse */}
+                                          <div
+                                            className={`p-3 transition-colors cursor-pointer ${
+                                              hasChildren 
+                                                ? 'bg-purple-50/50 hover:bg-purple-100/50' 
+                                                : 'bg-gray-50 hover:bg-gray-100 cursor-default'
+                                            }`}
+                                            onClick={(e) => {
+                                              e.stopPropagation(); // Prevent opening Product Variants section
+                                              if (hasChildren) {
+                                                setExpandedVariants(prev => {
+                                                  const newSet = new Set(prev);
+                                                  if (newSet.has(variantKey)) {
+                                                    newSet.delete(variantKey);
+                                                  } else {
+                                                    newSet.add(variantKey);
+                                                  }
+                                                  return newSet;
+                                                });
+                                              }
+                                            }}
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                {hasChildren && (
+                                                  <ChevronDown
+                                                    className={`w-4 h-4 text-gray-500 transition-transform flex-shrink-0 ${
+                                                      isVariantExpanded ? 'rotate-180' : ''
+                                                    }`}
+                                                  />
+                                                )}
+                                                {!hasChildren && <div className="w-4 h-4 flex-shrink-0" />}
+                                                <div className="flex-1 min-w-0">
+                                                  <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-sm font-semibold text-gray-900 truncate">
+                                                      {variant.variant_name || variant.name || 'Unnamed Variant'}
+                                                    </span>
+                                                  </div>
+                                                  <div className="flex items-center gap-4 text-xs text-gray-600">
+                                                    {variant.selling_price !== null && variant.selling_price !== undefined && (
+                                                      <span>
+                                                        Price: TZS {Number(variant.selling_price).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Children Variants - Collapsible */}
+                                          {hasChildren && isVariantExpanded && (
+                                            <div className="border-t border-gray-200 bg-gray-50/50">
+                                              <div className="p-3 pl-4">
+                                                <ul className="space-y-2">
+                                                  {variant.children.map((child: any, childIndex: number) => {
+                                                    // Extract IMEI or serial number from various possible locations
+                                                    const imei = child.variant_attributes?.imei || child.attributes?.imei || child.imei;
+                                                    const serialNumber = child.variant_attributes?.serial_number || child.attributes?.serial_number || child.serial_number || child.serialNumber;
+                                                    const displayValue = imei || serialNumber || child.name || child.variant_name;
+                                                    
+                                                    return (
+                                                      <li
+                                                        key={child.id}
+                                                        className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                                                      >
+                                                        {child.variant_type === 'imei_child' && (
+                                                          <span className="px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-700 rounded flex-shrink-0">
+                                                            IMEI
+                                                          </span>
+                                                        )}
+                                                        {!child.variant_type || child.variant_type !== 'imei_child' ? (
+                                                          <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 rounded flex-shrink-0">
+                                                            Serial
+                                                          </span>
+                                                        ) : null}
+                                                        {displayValue && (
+                                                          <span className="font-mono text-sm text-gray-900">
+                                                            {displayValue}
+                                                          </span>
+                                                        )}
+                                                      </li>
+                                                    );
+                                                  })}
+                                                </ul>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  )}
                                 </div>
                               </div>
                             )}
-                            {result.metadata.price && (
-                              <div className="p-2 rounded-lg bg-gray-50">
-                                <div className="text-xs opacity-60 mb-0.5">Price</div>
-                                <div className="text-sm font-medium">
-                                  TZS {result.metadata.price.toLocaleString()}
-                                </div>
-                              </div>
-                            )}
-                            {result.metadata.stock && (
-                              <div className="p-2 rounded-lg bg-gray-50">
-                                <div className="text-xs opacity-60 mb-0.5">Stock</div>
-                                <div className="text-sm font-medium">
-                                  {result.metadata.stock} units
-                                </div>
-                              </div>
-                            )}
-                            {result.metadata.date && (
-                              <div className="p-2 rounded-lg bg-gray-50">
-                                <div className="text-xs opacity-60 mb-0.5">Date</div>
-                                <div className="text-sm font-medium">
-                                  {result.metadata.date instanceof Date 
-                                    ? result.metadata.date.toLocaleDateString() 
-                                    : result.metadata.date}
+
+                            {/* Timestamps Card */}
+                            {(result.createdAt || result.updatedAt) && (
+                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <div className="p-5">
+                                  <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-200/50 flex items-center justify-center">
+                                      <Clock size={16} className="text-orange-600" />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-gray-900">Timestamps</h5>
+                                      <p className="text-xs text-gray-500">Creation and update dates</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    {result.createdAt && (
+                                      <div>
+                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                          Created
+                                        </div>
+                                        <div className="text-sm font-semibold text-gray-900">
+                                          {new Date(result.createdAt).toLocaleString()}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {result.updatedAt && (
+                                      <div>
+                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                          Last Updated
+                                        </div>
+                                        <div className="text-sm font-semibold text-gray-900">
+                                          {new Date(result.updatedAt).toLocaleString()}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             )}
@@ -692,8 +1065,258 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                         </div>
                       )}
 
-                      {/* Customer Information - Redesigned */}
-                      {result.type === 'customer' && result.metadata && (
+                      {/* Device Information */}
+                      {result.type === 'device' && result.metadata && (
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                            • DEVICE DETAILS
+                          </h4>
+
+                          <div className="space-y-4">
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                            {/* Device Information */}
+                            <div className="p-5 border-b border-gray-100/60">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-200/50 flex items-center justify-center">
+                                  <Smartphone size={16} className="text-blue-600" />
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-900">Device Information</h5>
+                                  <p className="text-xs text-gray-500">Device model and identifiers</p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                {result.metadata.serialNumber && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Serial Number</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900">{result.metadata.serialNumber}</p>
+                              </div>
+                            )}
+                                {result.id && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Device ID</span>
+                                    </div>
+                                    <p className="text-xs font-mono text-gray-600 break-all">{result.id}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Issue Information */}
+                            {result.metadata.issue && (
+                              <div className="p-5 border-b border-gray-100/60">
+                                <div className="flex items-center gap-3 mb-4">
+                                  <div className="w-8 h-8 rounded-xl bg-red-500/10 border border-red-200/50 flex items-center justify-center">
+                                    <AlertCircle size={16} className="text-red-600" />
+                                  </div>
+                                  <div>
+                                    <h5 className="text-sm font-semibold text-gray-900">Problem Description</h5>
+                                    <p className="text-xs text-gray-500">Reported issue details</p>
+                                  </div>
+                                </div>
+
+                                <div className="p-4 bg-white/60 rounded-xl border border-gray-100/50">
+                                  <p className="text-sm text-gray-900 leading-relaxed">{result.metadata.issue}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Dates & Timeline */}
+                            <div className="p-5">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-200/50 flex items-center justify-center">
+                                  <Clock size={16} className="text-orange-600" />
+                                </div>
+                                <div>
+                                  <h5 className="text-sm font-semibold text-gray-900">Timeline</h5>
+                                  <p className="text-xs text-gray-500">Important dates</p>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                {result.createdAt && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="text-xs opacity-60 mb-0.5">Created</div>
+                                <div className="text-sm font-medium">
+                                      {new Date(result.createdAt).toLocaleString()}
+                                </div>
+                              </div>
+                            )}
+                                {result.updatedAt && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="text-xs opacity-60 mb-0.5">Last Updated</div>
+                                <div className="text-sm font-medium">
+                                      {new Date(result.updatedAt).toLocaleString()}
+                                </div>
+                              </div>
+                            )}
+                                {result.metadata.expectedReturnDate && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="text-xs opacity-60 mb-0.5">Expected Return</div>
+                                    <div className="text-sm font-medium">
+                                      {new Date(result.metadata.expectedReturnDate).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sale Information */}
+                      {result.type === 'sale' && result.metadata && (
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                            • SALE DETAILS
+                          </h4>
+
+                          <div className="space-y-4">
+                            {/* Sale Information Card */}
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                              <div className="p-5 border-b border-gray-100">
+                                <div className="flex items-center gap-3 mb-4">
+                                  <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-200/50 flex items-center justify-center">
+                                    <TrendingUp size={16} className="text-amber-600" />
+                                  </div>
+                                  <div>
+                                    <h5 className="text-sm font-semibold text-gray-900">Sale Information</h5>
+                                    <p className="text-xs text-gray-500">Transaction details</p>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                  {result.metadata.amount !== undefined && (
+                                    <div>
+                                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                        TOTAL AMOUNT
+                                      </div>
+                                      <p className="text-3xl font-bold text-green-600">
+                                        TZS {result.metadata.amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                      </p>
+                                    </div>
+                                  )}
+                                  <div className="grid grid-cols-2 gap-4">
+                                    {result.metadata.customer && (
+                                      <div>
+                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                          CUSTOMER
+                                        </div>
+                                        <p className="text-sm font-semibold text-gray-900">{result.metadata.customer}</p>
+                                      </div>
+                                    )}
+                                    {result.id && (
+                                      <div>
+                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                          SALE ID
+                                        </div>
+                                        <p className="text-xs font-mono text-gray-600 break-all">{result.id}</p>
+                                      </div>
+                                    )}
+                                        </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Timestamps Card */}
+                            {(result.createdAt || result.updatedAt) && (
+                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <div className="p-5">
+                                  <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-200/50 flex items-center justify-center">
+                                      <Clock size={16} className="text-orange-600" />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-gray-900">Timestamps</h5>
+                                      <p className="text-xs text-gray-500">Creation and update dates</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-4">
+                                    {result.createdAt && (
+                                      <div>
+                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                          Created
+                                        </div>
+                                        <div className="text-sm font-semibold text-gray-900">
+                                          {new Date(result.createdAt).toLocaleString()}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {result.updatedAt && (
+                                      <div>
+                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                          Last Updated
+                                        </div>
+                                        <div className="text-sm font-semibold text-gray-900">
+                                          {new Date(result.updatedAt).toLocaleString()}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Generic Metadata Details for other types */}
+                      {result.type !== 'customer' && result.type !== 'product' && result.type !== 'device' && result.type !== 'sale' && result.metadata && Object.keys(result.metadata).length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-medium mb-2 text-gray-700">
+                            All Details
+                          </h4>
+                          <div className="grid grid-cols-2 gap-2">
+                            {Object.entries(result.metadata).map(([key, value]) => {
+                              if (value === null || value === undefined || value === '') return null;
+                              // Filter out price/amount fields for non-product/non-sale types
+                              if ((key.toLowerCase() === 'price' || key.toLowerCase() === 'amount') && 
+                                  result.type !== 'product' && result.type !== 'sale') {
+                                return null;
+                              }
+                              return (
+                                <div key={key} className="p-2 rounded-lg bg-gray-50">
+                                  <div className="text-xs opacity-60 mb-0.5 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</div>
+                                  <div className="text-sm font-medium">
+                                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {result.id && (
+                              <div className="p-2 rounded-lg bg-gray-50">
+                                <div className="text-xs opacity-60 mb-0.5">ID</div>
+                                <div className="text-xs font-mono text-gray-600 break-all">{result.id}</div>
+                              </div>
+                            )}
+                            {result.createdAt && (
+                              <div className="p-2 rounded-lg bg-gray-50">
+                                <div className="text-xs opacity-60 mb-0.5">Created</div>
+                                <div className="text-sm font-medium">
+                                  {new Date(result.createdAt).toLocaleString()}
+                                </div>
+                              </div>
+                            )}
+                            {result.updatedAt && (
+                              <div className="p-2 rounded-lg bg-gray-50">
+                                <div className="text-xs opacity-60 mb-0.5">Last Updated</div>
+                                <div className="text-sm font-medium">
+                                  {new Date(result.updatedAt).toLocaleString()}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Customer Information - Redesigned with Grid Layout */}
+                      {result.type === 'customer' && (
                         <div className="space-y-4">
                           {/* Customer Header */}
                           <div className="flex items-center justify-between">
@@ -701,7 +1324,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                               <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                               Customer Profile
                             </h4>
-                            {result.metadata.isActive !== undefined && (
+                            {result.metadata?.isActive !== undefined && (
                               <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
                                 result.metadata.isActive
                                   ? 'bg-green-100 text-green-800'
@@ -715,10 +1338,35 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                             )}
                           </div>
 
-                          {/* Main Customer Card */}
-                          <div className="bg-gradient-to-br from-white to-gray-50/50 rounded-2xl border border-gray-200/60 overflow-hidden shadow-sm">
-                            {/* Contact Section */}
-                            <div className="p-5 border-b border-gray-100/60">
+                          {/* Basic Info Fallback - Show if metadata is missing */}
+                          {!result.metadata && (
+                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm p-5">
+                              <div className="space-y-2">
+                                <div>
+                                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Name</div>
+                                  <p className="text-sm font-semibold text-gray-900">{result.title || 'Unknown Customer'}</p>
+                                </div>
+                                {result.subtitle && (
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Phone</div>
+                                    <p className="text-sm font-semibold text-gray-900">{result.subtitle}</p>
+                                  </div>
+                                )}
+                                {result.id && (
+                                  <div>
+                                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">ID</div>
+                                    <p className="text-xs font-mono text-gray-600 break-all">{result.id}</p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Main Customer Card - Only show if metadata exists */}
+                          {result.metadata && (
+                          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                            {/* Contact Details */}
+                            <div className="p-5 border-b border-gray-100">
                               <div className="flex items-center gap-3 mb-4">
                                 <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-200/50 flex items-center justify-center">
                                   <MessageSquare size={16} className="text-blue-600" />
@@ -729,376 +1377,351 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                                 </div>
                               </div>
 
-                              <div className="grid grid-cols-1 gap-3">
-                                {/* Primary Contact Row */}
-                                <div className="flex items-center justify-between p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-6 h-6 rounded-lg bg-blue-100 flex items-center justify-center">
-                                      <svg className="w-3.5 h-3.5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                                      </svg>
+                              <div className="grid grid-cols-2 gap-4">
+                                {(result.metadata?.phone || result.subtitle) && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Phone</span>
                                     </div>
-                                    <div>
-                                      <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Phone</p>
-                                      <p className="text-sm font-semibold text-gray-900">{result.metadata.phone || 'Not provided'}</p>
-                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900">{result.metadata?.phone || result.subtitle || 'No phone'}</p>
                                   </div>
-                                </div>
-
-                                {/* Contact Grid */}
-                                <div className="grid grid-cols-2 gap-3">
-                                  {result.metadata.email && (
-                                    <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                        </svg>
-                                        <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Email</span>
-                                      </div>
-                                      <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.email}</p>
+                                )}
+                                {result.metadata?.email && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Email</span>
                                     </div>
-                                  )}
-
-                                  {result.metadata.whatsapp && (
-                                    <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                      <div className="flex items-center gap-2 mb-2">
-                                        <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 24 24">
-                                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893A11.821 11.821 0 0020.885 3.488"/>
-                                        </svg>
-                                        <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">WhatsApp</span>
-                                      </div>
-                                      <p className="text-sm font-semibold text-gray-900">{result.metadata.whatsapp}</p>
+                                    <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.email || 'No email'}</p>
+                                  </div>
+                                )}
+                                {result.metadata?.city && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">City</span>
                                     </div>
-                                  )}
-                                </div>
-
-                                {/* Location & Personal Info */}
-                                {(result.metadata.city || result.metadata.location || result.metadata.gender || result.metadata.birthday) && (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    {result.metadata.city && (
-                                      <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                          </svg>
-                                          <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">City</span>
-                                        </div>
-                                        <p className="text-sm font-semibold text-gray-900">{result.metadata.city}</p>
-                                      </div>
-                                    )}
-
-                                    {result.metadata.gender && (
-                                      <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <svg className="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-                                          </svg>
-                                          <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Gender</span>
-                                        </div>
-                                        <p className="text-sm font-semibold text-gray-900 capitalize">{result.metadata.gender}</p>
-                                      </div>
-                                    )}
-
-                                    {result.metadata.birthday && (
-                                      <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <svg className="w-4 h-4 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                          </svg>
-                                          <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Birthday</span>
-                                        </div>
-                                        <p className="text-sm font-semibold text-gray-900">
-                                          {new Date(result.metadata.birthday).toLocaleDateString('en-US', {
-                                            month: 'short',
-                                            day: 'numeric'
-                                          })}
-                                        </p>
-                                      </div>
-                                    )}
-
-                                    {result.metadata.location && (
-                                      <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                        <div className="flex items-center gap-2 mb-2">
-                                          <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
-                                          </svg>
-                                          <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Address</span>
-                                        </div>
-                                        <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.location}</p>
-                                      </div>
-                                    )}
+                                    <p className="text-sm font-semibold text-gray-900">{result.metadata.city}</p>
+                                  </div>
+                                )}
+                                {result.metadata?.location && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Address</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.location}</p>
+                                  </div>
+                                )}
+                                {result.metadata?.whatsapp && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">WhatsApp</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900">{result.metadata.whatsapp}</p>
+                                  </div>
+                                )}
+                                {result.id && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">ID</span>
+                                    </div>
+                                    <p className="text-xs font-mono text-gray-600 break-all">{result.id}</p>
                                   </div>
                                 )}
                               </div>
                             </div>
 
-                            {/* Value Metrics Section */}
-                            {(result.metadata.points || result.metadata.totalSpent || result.metadata.totalPurchases || result.metadata.loyaltyLevel) && (
-                              <div className="p-5 border-b border-gray-100/60">
-                                <div className="flex items-center gap-3 mb-4">
-                                  <div className="w-8 h-8 rounded-xl bg-green-500/10 border border-green-200/50 flex items-center justify-center">
-                                    <Award size={16} className="text-green-600" />
-                                  </div>
-                                  <div>
-                                    <h5 className="text-sm font-semibold text-gray-900">Value Metrics</h5>
-                                    <p className="text-xs text-gray-500">Customer lifetime value</p>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                  {result.metadata.totalSpent !== undefined && (
-                                    <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl border border-green-200/50">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-green-700 uppercase tracking-wide">Total Spent</span>
-                                        <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
-                                        </svg>
-                                      </div>
-                                      <p className="text-xl font-bold text-green-900">
-                                        TZS {result.metadata.totalSpent.toLocaleString()}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {result.metadata.points !== undefined && (
-                                    <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-200/50">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-blue-700 uppercase tracking-wide">Loyalty Points</span>
-                                        <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
-                                        </svg>
-                                      </div>
-                                      <p className="text-xl font-bold text-blue-900">
-                                        {result.metadata.points.toLocaleString()}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {result.metadata.totalPurchases !== undefined && (
-                                    <div className="p-4 bg-gradient-to-br from-purple-50 to-violet-50 rounded-xl border border-purple-200/50">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-purple-700 uppercase tracking-wide">Total Orders</span>
-                                        <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-                                        </svg>
-                                      </div>
-                                      <p className="text-xl font-bold text-purple-900">
-                                        {result.metadata.totalPurchases}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {result.metadata.loyaltyLevel && (
-                                    <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200/50">
-                                      <div className="flex items-center justify-between mb-2">
-                                        <span className="text-xs font-medium text-amber-700 uppercase tracking-wide">Loyalty Level</span>
-                                        <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
-                                        </svg>
-                                      </div>
-                                      <p className="text-lg font-bold text-amber-900 capitalize">
-                                        {result.metadata.loyaltyLevel}
-                                      </p>
-                                      {result.metadata.loyaltyTier && (
-                                        <p className="text-xs text-amber-700 mt-1 capitalize">
-                                          {result.metadata.loyaltyTier} Tier
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Activity Timeline Section */}
+                            {/* Value Metrics & Activity */}
                             <div className="p-5">
                               <div className="flex items-center gap-3 mb-4">
-                                <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-200/50 flex items-center justify-center">
-                                  <Clock size={16} className="text-orange-600" />
+                                <div className="w-8 h-8 rounded-xl bg-green-500/10 border border-green-200/50 flex items-center justify-center">
+                                  <TrendingUp size={16} className="text-green-600" />
                                 </div>
                                 <div>
-                                  <h5 className="text-sm font-semibold text-gray-900">Activity Timeline</h5>
-                                  <p className="text-xs text-gray-500">Recent engagement & status</p>
+                                  <h5 className="text-sm font-semibold text-gray-900">Value Metrics & Activity</h5>
+                                  <p className="text-xs text-gray-500">Customer lifetime value and engagement</p>
                                 </div>
                               </div>
 
-                              <div className="space-y-3">
-                                {/* Activity Items */}
-                                <div className="flex items-center gap-4 p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/>
-                                    </svg>
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-gray-900">Last Visit</p>
-                                    <p className="text-xs text-gray-500">
-                                      {result.metadata.lastVisit
-                                        ? new Date(result.metadata.lastVisit).toLocaleDateString('en-US', {
-                                            weekday: 'long',
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                          })
-                                        : 'No recent activity'
-                                      }
+                              <div className="grid grid-cols-2 gap-4">
+                                {result.metadata?.totalSpent !== undefined && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Total Spent</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-green-600">
+                                      TZS {result.metadata.totalSpent.toLocaleString('en-US', { maximumFractionDigits: 2 })}
                                     </p>
                                   </div>
-                                </div>
-
-                                <div className="flex items-center gap-4 p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                  <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-                                    </svg>
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-gray-900">Member Since</p>
-                                    <p className="text-xs text-gray-500">
-                                      {result.metadata.joinedDate
-                                        ? new Date(result.metadata.joinedDate).toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'long'
-                                          })
-                                        : 'Join date not available'
-                                      }
+                                )}
+                                {result.metadata?.points !== undefined && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Loyalty Points</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-blue-600">
+                                      {result.metadata.points.toLocaleString()}
                                     </p>
                                   </div>
-                                </div>
-
-                                {/* Tags and Status */}
-                                {(result.metadata.colorTag || result.metadata.callLoyaltyLevel || result.metadata.totalCalls) && (
-                                  <div className="flex flex-wrap gap-2 pt-2">
-                                    {result.metadata.colorTag && (
-                                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                                        result.metadata.colorTag === 'vip' ? 'bg-purple-100 text-purple-800' :
-                                        result.metadata.colorTag === 'complainer' ? 'bg-red-100 text-red-800' :
-                                        result.metadata.colorTag === 'purchased' ? 'bg-green-100 text-green-800' :
-                                        'bg-gray-100 text-gray-800'
-                                      }`}>
-                                        <div className={`w-1.5 h-1.5 rounded-full ${
-                                          result.metadata.colorTag === 'vip' ? 'bg-purple-500' :
-                                          result.metadata.colorTag === 'complainer' ? 'bg-red-500' :
-                                          result.metadata.colorTag === 'purchased' ? 'bg-green-500' :
-                                          'bg-gray-500'
-                                        }`}></div>
-                                        {result.metadata.colorTag}
-                                      </span>
-                                    )}
-
-                                    {result.metadata.callLoyaltyLevel && (
-                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-                                        </svg>
-                                        {result.metadata.callLoyaltyLevel}
-                                      </span>
-                                    )}
-
-                                    {result.metadata.totalCalls !== undefined && (
-                                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                                        </svg>
-                                        {result.metadata.totalCalls} calls
-                                      </span>
-                                    )}
+                                )}
+                                {result.metadata.totalPurchases !== undefined && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Total Orders</span>
+                                    </div>
+                                    <p className="text-lg font-bold text-purple-600">
+                                      {result.metadata.totalPurchases}
+                                    </p>
+                                  </div>
+                                )}
+                                {result.metadata.loyaltyLevel && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Loyalty Level</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900 capitalize">
+                                      {result.metadata.loyaltyLevel}
+                                    </p>
+                                  </div>
+                                )}
+                                {result.metadata.lastVisit && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Last Visit</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900">
+                                      {new Date(result.metadata.lastVisit).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                      })}
+                                    </p>
+                                  </div>
+                                )}
+                                {result.metadata.joinedDate && (
+                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Member Since</span>
+                                    </div>
+                                    <p className="text-sm font-semibold text-gray-900">
+                                      {new Date(result.metadata.joinedDate).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        year: 'numeric'
+                                      })}
+                                    </p>
                                   </div>
                                 )}
                               </div>
+
+                              {/* Tags */}
+                              {(result.metadata.colorTag || result.metadata.callLoyaltyLevel || result.metadata.totalCalls) && (
+                                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
+                                  {result.metadata.colorTag && (
+                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+                                      result.metadata.colorTag === 'vip' ? 'bg-purple-100 text-purple-800' :
+                                      result.metadata.colorTag === 'complainer' ? 'bg-red-100 text-red-800' :
+                                      result.metadata.colorTag === 'purchased' ? 'bg-green-100 text-green-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {result.metadata.colorTag}
+                                    </span>
+                                  )}
+                                  {result.metadata.callLoyaltyLevel && (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                                      {result.metadata.callLoyaltyLevel}
+                                    </span>
+                                  )}
+                                  {result.metadata.totalCalls !== undefined && (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">
+                                      {result.metadata.totalCalls} calls
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
+                          )}
                         </div>
                       )}
 
-                      {/* Customer Quick Actions */}
-                      {result.type === 'customer' && (
-                        <div>
-                          <h4 className="text-xs font-medium mb-3 text-gray-700">
-                            Quick Actions
-                          </h4>
-                          <div className="grid grid-cols-2 gap-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Open SMS modal for this customer
-                                const smsUrl = `/sms?customer=${result.id}&phone=${result.metadata?.phone || ''}&name=${encodeURIComponent(result.title)}`;
-                                navigate(smsUrl);
-                              }}
-                              className="flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors text-xs font-medium"
-                            >
-                              <MessageSquare size={14} />
-                              Send SMS
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Navigate to points management for this customer
-                                const pointsUrl = `/lats/loyalty?customer=${result.id}`;
-                                navigate(pointsUrl);
-                              }}
-                              className="flex items-center justify-center gap-2 px-3 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors text-xs font-medium"
-                            >
-                              <Award size={14} />
-                              Add Points
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Navigate to appointments for this customer
-                                const appointmentUrl = `/appointments?customer=${result.id}`;
-                                navigate(appointmentUrl);
-                              }}
-                              className="flex items-center justify-center gap-2 px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded-lg transition-colors text-xs font-medium"
-                            >
-                              <Calendar size={14} />
-                              Book Appointment
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Navigate to customer profile
-                                navigate(`/customers/${result.id}`);
-                              }}
-                              className="flex items-center justify-center gap-2 px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors text-xs font-medium"
-                            >
-                              <Users size={14} />
-                              View Profile
-                            </button>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Action Buttons */}
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleNavigate(result);
-                          }}
-                          className="flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors bg-gray-100 hover:bg-gray-150 text-gray-700"
-                        >
-                          <div className="flex items-center justify-center gap-1.5">
-                            <ExternalLink size={13} />
-                            View Details
-                          </div>
-                        </button>
-                        {result.type === 'sale' && (
+                      {/* Action Buttons - Comprehensive for all types */}
+                      <div className="pt-6 border-t border-gray-200">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-4">Actions</h4>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          {/* View Button - All Types */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              window.open(`/sales/${result.id}/receipt`, '_blank');
+                              handleNavigate(result);
                             }}
-                            className="px-3 py-2 rounded-lg text-xs font-medium transition-colors bg-gray-100 hover:bg-gray-150 text-gray-700"
+                            className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
                           >
-                            <FileText size={13} />
+                            <Eye className="w-4 h-4" />
+                            View
                           </button>
-                        )}
+
+                          {/* Edit Button - Customers, Devices (Products use dropdown menu) */}
+                          {(result.type === 'customer' || result.type === 'device') && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (result.type === 'customer') {
+                                  navigate(`/customers/${result.id}/edit`);
+                                } else if (result.type === 'device') {
+                                  navigate(`/devices/${result.id}/edit`);
+                                }
+                              }}
+                              className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                            >
+                              <Edit className="w-4 h-4" />
+                              Edit
+                            </button>
+                          )}
+
+                          {/* Delete Button - Customers, Devices (Products use dropdown menu) */}
+                          {(result.type === 'customer' || result.type === 'device') && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Are you sure you want to delete this ${result.type}?`)) {
+                                  // Handle delete - navigate to delete endpoint or show delete modal
+                                  console.log('Delete', result.type, result.id);
+                                }
+                              }}
+                              className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              Delete
+                            </button>
+                          )}
+
+                          {/* Product-specific actions */}
+                          {result.type === 'product' && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/lats/unified-inventory?edit=${result.id}`);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <Edit className="w-4 h-4" />
+                                Edit
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/pos?product=${result.id}`);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <ShoppingCart className="w-4 h-4" />
+                                Add to POS
+                              </button>
+                            </>
+                          )}
+
+                          {/* Customer-specific actions */}
+                          {result.type === 'customer' && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const smsUrl = `/sms?customer=${result.id}&phone=${result.metadata?.phone || ''}&name=${encodeURIComponent(result.title)}`;
+                                  navigate(smsUrl);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <MessageSquare className="w-4 h-4" />
+                                Send SMS
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/lats/loyalty?customer=${result.id}`);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <Award className="w-4 h-4" />
+                                Points
+                              </button>
+                            </>
+                          )}
+
+                          {/* Sale-specific actions */}
+                          {result.type === 'sale' && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(`/lats/sales-reports/${result.id}/receipt`, '_blank');
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <Printer className="w-4 h-4" />
+                                Print Receipt
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(result.id);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <Copy className="w-4 h-4" />
+                                Copy ID
+                              </button>
+                            </>
+                          )}
+
+                          {/* Device-specific actions */}
+                          {result.type === 'device' && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/devices/${result.id}`);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <CheckCircle2 className="w-4 h-4" />
+                                Update Status
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(result.id);
+                                }}
+                                className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                              >
+                                <Copy className="w-4 h-4" />
+                                Copy ID
+                              </button>
+                            </>
+                          )}
+
+                          {/* Share Button - All Types */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (navigator.share) {
+                                  navigator.share({
+                                    title: result.title,
+                                    text: result.description || result.subtitle || '',
+                                    url: window.location.origin + result.url,
+                                  });
+                                } else {
+                                  navigator.clipboard.writeText(window.location.origin + result.url);
+                                }
+                              }}
+                            className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all shadow-sm hover:shadow-md font-medium text-sm"
+                            >
+                              <Share2 className="w-4 h-4" />
+                              Share
+                            </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             );
           })}
@@ -1122,3 +1745,5 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 };
 
 export default SearchResults;
+
+
