@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { matchesPhoneSearch } from './phoneUtils';
 import Fuse from 'fuse.js';
+import { APP_ROUTES, getRoutesForRole, type RouteDefinition } from './routeRegistry';
 
 export interface SearchResult {
   id: string;
@@ -341,9 +342,10 @@ export class SearchService {
 
       // Apply filters
       let filteredCustomers = customerList;
-      if (filters.name) {
+      if (filters.name || filters.customer) {
+        const customerFilter = filters.customer || filters.name;
         filteredCustomers = filteredCustomers.filter(customer =>
-          customer.name.toLowerCase().includes(filters.name!.toLowerCase())
+          customer.name.toLowerCase().includes(customerFilter!.toLowerCase())
         );
       }
       if (filters.phone) {
@@ -775,13 +777,15 @@ export class SearchService {
         console.log(`[SearchProducts] Variants: ${totalVariants} total, ${productsWithVariants} products have variants, max ${maxVariants} variants per product`);
       }
 
-      // Apply price filter
+      // Apply filters
       let filteredProducts = productList;
+      
+      // Price filter
       if (filters.price) {
         const priceRange = filters.price.split('-');
         if (priceRange.length === 2) {
           const minPrice = parseFloat(priceRange[0]);
-          const maxPrice = parseFloat(priceRange[1]);
+          const maxPrice = priceRange[1] ? parseFloat(priceRange[1]) : Infinity;
           filteredProducts = filteredProducts.filter(product =>
             product.price != null && product.price >= minPrice && product.price <= maxPrice
           );
@@ -794,6 +798,32 @@ export class SearchService {
         if (import.meta.env.DEV) {
           console.log(`[SearchProducts] After price filter: ${filteredProducts.length} products (from ${productList.length})`);
         }
+      }
+      
+      // Stock level filter
+      if (filters.stock) {
+        filteredProducts = filteredProducts.filter(product => {
+          const stock = product.stockQuantity || 0;
+          switch (filters.stock) {
+            case 'in-stock':
+              return stock > 0;
+            case 'low-stock':
+              const minStock = product.minStockLevel || 10;
+              return stock > 0 && stock <= minStock;
+            case 'out-of-stock':
+              return stock === 0;
+            default:
+              return true;
+          }
+        });
+      }
+      
+      // Category filter (already applied in query, but also filter by category name)
+      if (filters.category && !filters.category.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+        // If category is not a UUID, filter by category name
+        filteredProducts = filteredProducts.filter(product =>
+          product.categoryName?.toLowerCase().includes(filters.category!.toLowerCase())
+        );
       }
 
       // If search terms provided, use fuzzy search
@@ -1292,7 +1322,7 @@ export class SearchService {
         const amountRange = filters.amount.split('-');
         if (amountRange.length === 2) {
           const minAmount = parseFloat(amountRange[0]);
-          const maxAmount = parseFloat(amountRange[1]);
+          const maxAmount = amountRange[1] ? parseFloat(amountRange[1]) : Infinity;
           filteredSales = filteredSales.filter(sale =>
             sale.totalAmount >= minAmount && sale.totalAmount <= maxAmount
           );
@@ -1306,6 +1336,9 @@ export class SearchService {
           sale.customerName.toLowerCase().includes(filters.customer!.toLowerCase())
         );
       }
+      // Payment method filter - need to fetch payment method from sales_items or payments table
+      // For now, we'll skip this as it requires additional query
+      // TODO: Add payment method to sales query if needed
 
       // If search terms provided, use fuzzy search
       if (terms.length > 0) {
@@ -1368,33 +1401,15 @@ export class SearchService {
   }
 
   // Search pages and actions (quick navigation)
+  // Uses centralized route registry - automatically includes all registered routes
   searchPagesAndActions(terms: string[]): SearchResult[] {
-    const pages = [
-      { id: 'dashboard', title: 'Dashboard', description: 'View overview and analytics', url: '/dashboard', icon: '📊' },
-      { id: 'devices', title: 'Devices', description: 'Manage repair devices', url: '/devices', icon: '📱' },
-      { id: 'customers', title: 'Customers', description: 'Manage customer information', url: '/customers', icon: '👥' },
-      { id: 'pos', title: 'Point of Sale', description: 'New sale transaction', url: '/pos', icon: '💰' },
-      { id: 'inventory', title: 'Inventory', description: 'Manage product inventory', url: '/lats/unified-inventory', icon: '📦' },
-      { id: 'sales', title: 'Sales Reports', description: 'View sales history and reports', url: '/lats/sales-reports', icon: '📈' },
-      { id: 'purchase-orders', title: 'Purchase Orders', description: 'Manage supplier orders', url: '/lats/purchase-orders', icon: '🛒' },
-      { id: 'payments', title: 'Payments', description: 'Track payment transactions', url: '/payments', icon: '💳' },
-      { id: 'analytics', title: 'Analytics', description: 'Business insights and reports', url: '/analytics', icon: '📊' },
-      { id: 'settings', title: 'Settings', description: 'Application settings', url: '/settings', icon: '⚙️' },
-    ];
-
-    // Filter by role
-    const roleFilteredPages = pages.filter(page => {
-      if (this.userRole === 'admin') return true;
-      if (this.userRole === 'customer-care') {
-        return !['analytics', 'purchase-orders'].includes(page.id);
-      }
-      return ['dashboard', 'devices', 'customers'].includes(page.id);
-    });
+    // Get routes filtered by user role from the centralized registry
+    const roleFilteredPages = getRoutesForRole(this.userRole);
 
     // Use fuzzy search if terms provided
     if (terms.length > 0) {
       const fuse = new Fuse(roleFilteredPages, {
-        keys: ['title', 'description'],
+        keys: ['title', 'description', 'path'],
         threshold: 0.4,
         includeScore: true,
         includeMatches: true,
@@ -1404,17 +1419,17 @@ export class SearchService {
       const fuseResults = fuse.search(searchQuery);
 
       return fuseResults.map(result => {
-        const page = result.item;
+        const route = result.item;
         const matches = result.matches?.map(m => m.key || '') || [];
 
         return {
-          id: page.id,
+          id: route.id,
           type: 'page' as const,
-          title: page.title,
+          title: route.title,
           subtitle: 'Navigate to page',
-          description: page.description,
-          url: page.url,
-          metadata: { icon: page.icon },
+          description: route.description,
+          url: route.path,
+          metadata: { icon: route.icon, category: route.category },
           priority: 0, // Highest priority for quick actions
           score: result.score,
           matches,
@@ -1422,7 +1437,17 @@ export class SearchService {
       });
     }
 
-    return [];
+    // Return all pages when no search terms (for browsing)
+    return roleFilteredPages.map(route => ({
+      id: route.id,
+      type: 'page' as const,
+      title: route.title,
+      subtitle: 'Navigate to page',
+      description: route.description,
+      url: route.path,
+      metadata: { icon: route.icon, category: route.category },
+      priority: 0,
+    }));
   }
 
   // Check if a string is a valid UUID

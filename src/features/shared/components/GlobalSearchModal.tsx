@@ -184,10 +184,10 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 className={`
                   w-full pl-12 pr-32 py-3.5 rounded-xl
                   ${isDark 
-                    ? 'bg-transparent text-white placeholder-gray-400' 
-                    : 'bg-transparent text-gray-900 placeholder-gray-400'
+                    ? 'bg-transparent text-white placeholder-gray-400 border border-slate-600/50 focus:border-blue-500' 
+                    : 'bg-transparent text-gray-900 placeholder-gray-400 border border-gray-300 focus:border-blue-500'
                   }
-                  border-0 focus:outline-none
+                  focus:outline-none
                   transition-all duration-200
                   text-base
                 `}
@@ -285,13 +285,27 @@ const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 onClose={() => setShowFilters(false)}
                 onApply={(filters) => {
                   setAdvancedFilters(filters);
-                  // Convert filters to query string format
+                  // Convert filters to query string format and trigger search
                   const filterQuery = Object.entries(filters)
                     .filter(([_, value]) => value)
-                    .map(([key, value]) => `${key}:${value}`)
+                    .map(([key, value]) => {
+                      // Handle values with spaces or special characters
+                      const stringValue = String(value);
+                      // If value contains spaces or special chars, keep as-is (will be parsed correctly)
+                      return `${key}:${stringValue}`;
+                    })
                     .join(' ');
-                  if (filterQuery) {
-                    setSearchQuery(prev => `${prev} ${filterQuery}`.trim());
+                  
+                  // If there's a search query, append filters; otherwise use filters as query
+                  if (searchQuery.trim()) {
+                    setSearchQuery(prev => {
+                      // Remove old filter patterns and add new ones
+                      const withoutFilters = prev.replace(/\w+:[^\s]+/g, '').trim();
+                      return filterQuery ? `${withoutFilters} ${filterQuery}`.trim() : withoutFilters;
+                    });
+                  } else if (filterQuery) {
+                    // If no search query, use filters as the query to trigger search
+                    setSearchQuery(filterQuery);
                   }
                 }}
                 currentFilters={advancedFilters}

@@ -673,6 +673,19 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                             </span>
                           </div>
                         )}
+                        {/* Status Badge - After Customer Name */}
+                        {result.type === 'customer' && result.metadata?.isActive !== undefined && (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                            result.metadata.isActive
+                              ? 'bg-green-100 text-green-800 border border-green-200'
+                              : 'bg-red-100 text-red-800 border border-red-200'
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full ${
+                              result.metadata.isActive ? 'bg-green-500' : 'bg-red-500'
+                            }`}></div>
+                            {result.metadata.isActive ? 'Active' : 'Inactive'}
+                          </div>
+                        )}
                         {getStatusBadge()}
                     </div>
                     
@@ -723,9 +736,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                       <div className="flex flex-col items-end">
                         <span className="text-4xl font-bold text-gray-900 leading-tight">
                             {result.metadata?.hasPrice && result.metadata.price != null
-                              ? `TSh ${result.metadata.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                              ? `TSh ${result.metadata.price.toLocaleString('en-US', { useGrouping: true, maximumFractionDigits: 2 })}`
                               : result.metadata?.amount != null
-                              ? `TSh ${result.metadata.amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`
+                              ? `TSh ${result.metadata.amount.toLocaleString('en-US', { useGrouping: true, maximumFractionDigits: 2 })}`
                               : <span className="text-gray-400 text-2xl font-normal">No price set</span>
                             }
                         </span>
@@ -803,7 +816,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                                       <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Selling Price</span>
                                     </div>
                                     <p className="text-lg font-bold text-green-600">
-                                      TZS {result.metadata.price.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                      TZS {result.metadata.price.toLocaleString('en-US', { useGrouping: true, maximumFractionDigits: 2 })}
                                     </p>
                                   </div>
                                 ) : (
@@ -966,7 +979,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                                                   <div className="flex items-center gap-4 text-xs text-gray-600">
                                                     {variant.selling_price !== null && variant.selling_price !== undefined && (
                                                       <span>
-                                                        Price: TZS {Number(variant.selling_price).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                                        Price: TZS {Number(variant.selling_price).toLocaleString('en-US', { useGrouping: true, maximumFractionDigits: 2 })}
                                                       </span>
                                                     )}
                                                   </div>
@@ -1197,7 +1210,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                                         TOTAL AMOUNT
                                       </div>
                                       <p className="text-3xl font-bold text-green-600">
-                                        TZS {result.metadata.amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                                        TZS {result.metadata.amount.toLocaleString('en-US', { useGrouping: true, maximumFractionDigits: 2 })}
                                       </p>
                                     </div>
                                   )}
@@ -1315,237 +1328,208 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                         </div>
                       )}
 
-                      {/* Customer Information - Redesigned with Grid Layout */}
+                      {/* Customer Information - Redesigned to match Product Layout */}
                       {result.type === 'customer' && (
                         <div className="space-y-4">
-                          {/* Customer Header */}
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                              Customer Profile
-                            </h4>
-                            {result.metadata?.isActive !== undefined && (
-                              <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                                result.metadata.isActive
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                <div className={`w-1.5 h-1.5 rounded-full ${
-                                  result.metadata.isActive ? 'bg-green-500' : 'bg-red-500'
-                                }`}></div>
-                                {result.metadata.isActive ? 'Active' : 'Inactive'}
+                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                            • CUSTOMER DETAILS
+                          </h4>
+
+                          <div className="space-y-4">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                              {/* Contact Information - Left Side */}
+                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <div className="p-5">
+                                  <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-200/50 flex items-center justify-center">
+                                      <MessageSquare size={16} className="text-blue-600" />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-gray-900">Contact Information</h5>
+                                      <p className="text-xs text-gray-500">Primary contact details</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    {(result.metadata?.phone || result.subtitle) && (
+                                      <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Phone</span>
+                                        </div>
+                                        <p className="text-sm font-semibold text-gray-900">{result.metadata?.phone || result.subtitle || 'No phone'}</p>
+                                      </div>
+                                    )}
+                                    {result.metadata?.email && (
+                                      <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Email</span>
+                                        </div>
+                                        <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.email || 'No email'}</p>
+                                      </div>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-4">
+                                      {result.metadata?.city && (
+                                        <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">City</span>
+                                          </div>
+                                          <p className="text-sm font-semibold text-gray-900">{result.metadata.city}</p>
+                                        </div>
+                                      )}
+                                      {result.metadata?.whatsapp && (
+                                        <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">WhatsApp</span>
+                                          </div>
+                                          <p className="text-sm font-semibold text-gray-900">{result.metadata.whatsapp}</p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {result.metadata?.location && (
+                                      <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Address</span>
+                                        </div>
+                                        <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.location}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Customer Metrics - Right Side */}
+                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <div className="p-5">
+                                  <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-xl bg-green-500/10 border border-green-200/50 flex items-center justify-center">
+                                      <TrendingUp size={16} className="text-green-600" />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-gray-900">Customer Metrics</h5>
+                                      <p className="text-xs text-gray-500">Lifetime value and engagement</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                    <div className="flex gap-4 items-stretch">
+                                      {result.metadata?.loyaltyLevel && (
+                                        <div className="flex-1 p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Loyalty Level</span>
+                                          </div>
+                                          <p className="text-sm font-semibold text-gray-900 capitalize">
+                                            {result.metadata.loyaltyLevel}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {result.metadata?.totalSpent !== undefined && (
+                                        <div className="ml-auto p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Total Spent</span>
+                                          </div>
+                                          <p className="text-lg font-bold text-green-600">
+                                            TZS {Number(result.metadata.totalSpent).toLocaleString('en-US', { useGrouping: true, maximumFractionDigits: 2 })}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      {result.metadata?.points !== undefined && (
+                                        <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Loyalty Points</span>
+                                          </div>
+                                          <p className="text-lg font-bold text-blue-600">
+                                            {result.metadata.points.toLocaleString()}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {result.metadata?.totalPurchases !== undefined && (
+                                        <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Total Orders</span>
+                                          </div>
+                                          <p className="text-lg font-bold text-purple-600">
+                                            {result.metadata.totalPurchases}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Additional Information */}
+                            {(result.metadata?.lastVisit || result.metadata?.joinedDate || result.metadata?.colorTag) && (
+                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                <div className="p-5">
+                                  <div className="flex items-center gap-3 mb-4">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-500/10 border border-orange-200/50 flex items-center justify-center">
+                                      <Clock size={16} className="text-orange-600" />
+                                    </div>
+                                    <div>
+                                      <h5 className="text-sm font-semibold text-gray-900">Additional Information</h5>
+                                      <p className="text-xs text-gray-500">Activity and tags</p>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex gap-4 items-stretch">
+                                    <div className="grid grid-cols-2 gap-4 flex-1">
+                                      {result.metadata?.lastVisit && (
+                                        <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Last Visit</span>
+                                          </div>
+                                          <p className="text-sm font-semibold text-gray-900">
+                                            {new Date(result.metadata.lastVisit).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric',
+                                              year: 'numeric'
+                                            })}
+                                          </p>
+                                        </div>
+                                      )}
+                                      {result.metadata?.joinedDate && (
+                                        <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Member Since</span>
+                                          </div>
+                                          <p className="text-sm font-semibold text-gray-900">
+                                            {new Date(result.metadata.joinedDate).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              year: 'numeric'
+                                            })}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Tags - Right Side */}
+                                    {result.metadata?.colorTag && result.metadata.colorTag !== 'basic' && (
+                                      <div className="flex flex-col gap-2">
+                                        <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
+                                          result.metadata.colorTag === 'vip' ? 'bg-purple-100 text-purple-800' :
+                                          result.metadata.colorTag === 'complainer' ? 'bg-red-100 text-red-800' :
+                                          result.metadata.colorTag === 'purchased' ? 'bg-green-100 text-green-800' :
+                                          'bg-gray-100 text-gray-800'
+                                        }`}>
+                                          {result.metadata.colorTag}
+                                        </span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             )}
                           </div>
-
-                          {/* Basic Info Fallback - Show if metadata is missing */}
-                          {!result.metadata && (
-                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm p-5">
-                              <div className="space-y-2">
-                                <div>
-                                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Name</div>
-                                  <p className="text-sm font-semibold text-gray-900">{result.title || 'Unknown Customer'}</p>
-                                </div>
-                                {result.subtitle && (
-                                  <div>
-                                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Phone</div>
-                                    <p className="text-sm font-semibold text-gray-900">{result.subtitle}</p>
-                                  </div>
-                                )}
-                                {result.id && (
-                                  <div>
-                                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">ID</div>
-                                    <p className="text-xs font-mono text-gray-600 break-all">{result.id}</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Main Customer Card - Only show if metadata exists */}
-                          {result.metadata && (
-                          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                            {/* Contact Details */}
-                            <div className="p-5 border-b border-gray-100">
-                              <div className="flex items-center gap-3 mb-4">
-                                <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-200/50 flex items-center justify-center">
-                                  <MessageSquare size={16} className="text-blue-600" />
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-semibold text-gray-900">Contact Details</h5>
-                                  <p className="text-xs text-gray-500">Primary contact information</p>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                {(result.metadata?.phone || result.subtitle) && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Phone</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900">{result.metadata?.phone || result.subtitle || 'No phone'}</p>
-                                  </div>
-                                )}
-                                {result.metadata?.email && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Email</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.email || 'No email'}</p>
-                                  </div>
-                                )}
-                                {result.metadata?.city && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">City</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900">{result.metadata.city}</p>
-                                  </div>
-                                )}
-                                {result.metadata?.location && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Address</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900 truncate">{result.metadata.location}</p>
-                                  </div>
-                                )}
-                                {result.metadata?.whatsapp && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">WhatsApp</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900">{result.metadata.whatsapp}</p>
-                                  </div>
-                                )}
-                                {result.id && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">ID</span>
-                                    </div>
-                                    <p className="text-xs font-mono text-gray-600 break-all">{result.id}</p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Value Metrics & Activity */}
-                            <div className="p-5">
-                              <div className="flex items-center gap-3 mb-4">
-                                <div className="w-8 h-8 rounded-xl bg-green-500/10 border border-green-200/50 flex items-center justify-center">
-                                  <TrendingUp size={16} className="text-green-600" />
-                                </div>
-                                <div>
-                                  <h5 className="text-sm font-semibold text-gray-900">Value Metrics & Activity</h5>
-                                  <p className="text-xs text-gray-500">Customer lifetime value and engagement</p>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-4">
-                                {result.metadata?.totalSpent !== undefined && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Total Spent</span>
-                                    </div>
-                                    <p className="text-lg font-bold text-green-600">
-                                      TZS {result.metadata.totalSpent.toLocaleString('en-US', { maximumFractionDigits: 2 })}
-                                    </p>
-                                  </div>
-                                )}
-                                {result.metadata?.points !== undefined && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Loyalty Points</span>
-                                    </div>
-                                    <p className="text-lg font-bold text-blue-600">
-                                      {result.metadata.points.toLocaleString()}
-                                    </p>
-                                  </div>
-                                )}
-                                {result.metadata.totalPurchases !== undefined && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Total Orders</span>
-                                    </div>
-                                    <p className="text-lg font-bold text-purple-600">
-                                      {result.metadata.totalPurchases}
-                                    </p>
-                                  </div>
-                                )}
-                                {result.metadata.loyaltyLevel && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Loyalty Level</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900 capitalize">
-                                      {result.metadata.loyaltyLevel}
-                                    </p>
-                                  </div>
-                                )}
-                                {result.metadata.lastVisit && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Last Visit</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900">
-                                      {new Date(result.metadata.lastVisit).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                      })}
-                                    </p>
-                                  </div>
-                                )}
-                                {result.metadata.joinedDate && (
-                                  <div className="p-3 bg-white/60 rounded-xl border border-gray-100/50">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-xs font-medium text-gray-700 uppercase tracking-wide">Member Since</span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-gray-900">
-                                      {new Date(result.metadata.joinedDate).toLocaleDateString('en-US', {
-                                        month: 'short',
-                                        year: 'numeric'
-                                      })}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Tags */}
-                              {(result.metadata.colorTag || result.metadata.callLoyaltyLevel || result.metadata.totalCalls) && (
-                                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-100">
-                                  {result.metadata.colorTag && (
-                                    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium ${
-                                      result.metadata.colorTag === 'vip' ? 'bg-purple-100 text-purple-800' :
-                                      result.metadata.colorTag === 'complainer' ? 'bg-red-100 text-red-800' :
-                                      result.metadata.colorTag === 'purchased' ? 'bg-green-100 text-green-800' :
-                                      'bg-gray-100 text-gray-800'
-                                    }`}>
-                                      {result.metadata.colorTag}
-                                    </span>
-                                  )}
-                                  {result.metadata.callLoyaltyLevel && (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
-                                      {result.metadata.callLoyaltyLevel}
-                                    </span>
-                                  )}
-                                  {result.metadata.totalCalls !== undefined && (
-                                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-800">
-                                      {result.metadata.totalCalls} calls
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                          )}
                         </div>
                       )}
 
                       {/* Action Buttons - Comprehensive for all types */}
                       <div className="pt-6 border-t border-gray-200">
                         <h4 className="text-sm font-semibold text-gray-900 mb-4">Actions</h4>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           {/* View Button - All Types */}
                           <button
                             onClick={(e) => {
