@@ -170,9 +170,16 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
   const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('inventory-visible-columns');
-      return saved ? JSON.parse(saved) : availableColumns.map(col => col.id);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Filter out 'sku' from saved columns
+        return parsed.filter((col: string) => col !== 'sku');
+      }
+      // Default: all columns except 'sku'
+      return availableColumns.map(col => col.id).filter(id => id !== 'sku');
     } catch {
-      return availableColumns.map(col => col.id);
+      // Default: all columns except 'sku'
+      return availableColumns.map(col => col.id).filter(id => id !== 'sku');
     }
   });
 
@@ -925,9 +932,6 @@ const EnhancedInventoryTab: React.FC<EnhancedInventoryTabProps> = ({
                               <p className="font-medium text-gray-900 truncate max-w-[250px]" title={product.name}>{product.name}</p>
                               {product.description && (
                                 <p className="text-sm text-gray-500 truncate max-w-[300px]">{product.description}</p>
-                              )}
-                              {mainVariant?.sku && (
-                                <p className="text-xs text-gray-400 mt-0.5">SKU: {mainVariant.sku}</p>
                               )}
                             </div>
                           </div>

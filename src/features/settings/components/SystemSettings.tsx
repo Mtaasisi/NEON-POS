@@ -3,6 +3,7 @@ import GlassCard from '../../../features/shared/components/ui/GlassCard';
 import GlassButton from '../../../features/shared/components/ui/GlassButton';
 import { Database, Save, HardDrive, Cloud, RefreshCw, Download } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { createFullDatabaseBackup } from '../../../lib/backupApi';
 
 interface SystemSettingsProps {
   isActive?: boolean;
@@ -24,15 +25,22 @@ const SystemSettings: React.FC<SystemSettingsProps> = ({ isActive }) => {
   const handleBackup = async () => {
     setIsBackingUp(true);
     try {
-      // Simulate backup process
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      toast.success('Database backup completed successfully');
-      setSystemInfo(prev => ({
-        ...prev,
-        lastBackup: new Date().toISOString().slice(0, 16).replace('T', ' ')
-      }));
-    } catch (error) {
-      toast.error('Backup failed');
+      const result = await createFullDatabaseBackup((progress, status) => {
+        // Progress callback - could show progress if needed
+        console.log(`Backup progress: ${progress}% - ${status}`);
+      });
+      
+      if (result.success) {
+        toast.success(result.message || 'Database backup completed successfully', { duration: 5000 });
+        setSystemInfo(prev => ({
+          ...prev,
+          lastBackup: new Date().toISOString().slice(0, 16).replace('T', ' ')
+        }));
+      } else {
+        toast.error(result.error || 'Backup failed');
+      }
+    } catch (error: any) {
+      toast.error(`Backup failed: ${error.message}`);
     } finally {
       setIsBackingUp(false);
     }

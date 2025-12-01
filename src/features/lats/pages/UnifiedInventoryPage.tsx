@@ -7,7 +7,7 @@ import { useErrorHandler } from '../../../hooks/useErrorHandler';
 import ErrorState from '../components/ui/ErrorState';
 import { 
   Package, Plus, Download, Upload,
-  Trash2, Star, BarChart3, Settings, RefreshCw, AlertTriangle, ShoppingCart, MoreHorizontal, Tag, Truck,
+  Trash2, Star, Settings, RefreshCw, AlertTriangle, ShoppingCart, MoreHorizontal, Tag, Truck,
   FileText, ArrowUp, ArrowDown, X
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -25,8 +25,7 @@ import EditProductModal from '../components/product/EditProductModal';
 
 // Import tab components
 import EnhancedInventoryTab from '../components/inventory/EnhancedInventoryTab';
-import PurchaseOrdersTab from '../components/inventory/PurchaseOrdersTab';
-import AnalyticsTab from '../components/inventory/AnalyticsTab';
+import OrderManagementModal from '../components/purchase-order/OrderManagementModal';
 
 // Import database functionality
 import { useInventoryStore } from '../stores/useInventoryStore';
@@ -38,7 +37,7 @@ import { useLoadingJob } from '../../../hooks/useLoadingJob';
 import { DashboardSkeleton } from '../../../components/ui/SkeletonLoaders';
 
 // Tab types
-type TabType = 'inventory' | 'purchase-orders' | 'analytics';
+type TabType = 'inventory';
 
 const UnifiedInventoryPage: React.FC = () => {
   const navigate = useNavigate();
@@ -142,6 +141,7 @@ const UnifiedInventoryPage: React.FC = () => {
   const [selectedProductForHistory, setSelectedProductForHistory] = useState<string | null>(null);
   const [showMoreActions, setShowMoreActions] = useState(false);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showOrderManagementModal, setShowOrderManagementModal] = useState(false);
 
 
   // Close dropdown when clicking outside
@@ -429,16 +429,12 @@ const UnifiedInventoryPage: React.FC = () => {
         searchInputRef.current?.blur();
       }
       
-      // Number keys 1-3: Switch tabs
-      if (e.key >= '1' && e.key <= '3' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // Number key 1: Switch to inventory tab (only tab now)
+      if (e.key === '1' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         const target = e.target as HTMLElement;
         // Only trigger if not in an input field
         if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
-          const tabs: TabType[] = ['inventory', 'purchase-orders', 'analytics'];
-          const tabIndex = parseInt(e.key) - 1;
-          if (tabs[tabIndex]) {
-            setActiveTab(tabs[tabIndex]);
-          }
+          setActiveTab('inventory');
         }
       }
     };
@@ -887,8 +883,8 @@ const UnifiedInventoryPage: React.FC = () => {
               <kbd className="px-2 py-0.5 bg-gray-100 rounded border border-gray-300">ESC</kbd>
             </div>
             <div className="flex justify-between">
-              <span>Switch Tabs</span>
-              <kbd className="px-2 py-0.5 bg-gray-100 rounded border border-gray-300">1-3</kbd>
+              <span>Manage Orders</span>
+              <kbd className="px-2 py-0.5 bg-gray-100 rounded border border-gray-300">Click Button</kbd>
             </div>
           </div>
         </div>
@@ -921,6 +917,14 @@ const UnifiedInventoryPage: React.FC = () => {
               title="Create Purchase Order (⌘⇧O)"
             >
               Create PO
+            </GlassButton>
+            <GlassButton
+              onClick={() => setShowOrderManagementModal(true)}
+              icon={<ShoppingCart size={18} />}
+              className="bg-gradient-to-r from-purple-500 to-indigo-600 text-white"
+              title="Manage Purchase Orders"
+            >
+              Manage Orders
             </GlassButton>
             <GlassButton
               onClick={handleImport}
@@ -1136,94 +1140,48 @@ const UnifiedInventoryPage: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Navigation */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-xl border border-gray-200/50 p-1">
-          <div className="flex space-x-1">
-            {[
-              { id: 'inventory', label: 'Inventory Management', icon: Package, activeClass: 'bg-blue-500 text-white shadow-lg', hoverClass: 'text-blue-600 hover:bg-blue-50' },
-              { id: 'purchase-orders', label: 'Purchase Orders', icon: ShoppingCart, activeClass: 'bg-purple-500 text-white shadow-lg', hoverClass: 'text-purple-600 hover:bg-purple-50' },
-              { id: 'analytics', label: 'Analytics', icon: BarChart3, activeClass: 'bg-green-500 text-white shadow-lg', hoverClass: 'text-green-600 hover:bg-green-50' }
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-                    isActive
-                      ? tab.activeClass
-                      : `text-gray-600 ${tab.hoverClass}`
-                  }`}
-                >
-                  <Icon size={18} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* Tab Navigation - Removed, only inventory tab now */}
 
-        {/* Content based on active tab */}
-        {activeTab === 'inventory' && (
-          <EnhancedInventoryTab 
-            products={filteredProducts}
-            metrics={metrics}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            selectedCategory={selectedCategory}
-            setSelectedCategory={setSelectedCategory}
-            selectedBrand={selectedBrand}
-            setSelectedBrand={setSelectedBrand}
-            selectedStatus={selectedStatus}
-            setSelectedStatus={setSelectedStatus}
-            showLowStockOnly={showLowStockOnly}
-            setShowLowStockOnly={setShowLowStockOnly}
-            showFeaturedOnly={showFeaturedOnly}
-            setShowFeaturedOnly={setShowFeaturedOnly}
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            sortBy={sortBy}
-            setSortBy={setSortBy}
-            selectedProducts={selectedProducts}
-            setSelectedProducts={setSelectedProducts}
-            categories={categories}
-            suppliers={suppliers}
-            brands={[]}
-            formatMoney={formatMoney}
-            getStatusColor={getStatusColor}
-            handleStockAdjustment={handleStockAdjustment}
-            handleBulkAction={handleBulkAction}
-            setShowStockAdjustModal={setShowStockAdjustModal}
-            setSelectedProductForHistory={setSelectedProductForHistory}
-            setShowDeleteConfirmation={setShowDeleteConfirmation}
-            toggleProductSelection={toggleProductSelection}
-            toggleSelectAll={toggleSelectAll}
-            navigate={navigate}
-            productModals={productModals}
-            deleteProduct={deleteProduct}
-            onAddProduct={() => setShowAddProductModal(true)}
-          />
-        )}
+        {/* Content - Only inventory tab now */}
+        <EnhancedInventoryTab 
+          products={filteredProducts}
+          metrics={metrics}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          selectedBrand={selectedBrand}
+          setSelectedBrand={setSelectedBrand}
+          selectedStatus={selectedStatus}
+          setSelectedStatus={setSelectedStatus}
+          showLowStockOnly={showLowStockOnly}
+          setShowLowStockOnly={setShowLowStockOnly}
+          showFeaturedOnly={showFeaturedOnly}
+          setShowFeaturedOnly={setShowFeaturedOnly}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          selectedProducts={selectedProducts}
+          setSelectedProducts={setSelectedProducts}
+          categories={categories}
+          suppliers={suppliers}
+          brands={[]}
+          formatMoney={formatMoney}
+          getStatusColor={getStatusColor}
+          handleStockAdjustment={handleStockAdjustment}
+          handleBulkAction={handleBulkAction}
+          setShowStockAdjustModal={setShowStockAdjustModal}
+          setSelectedProductForHistory={setSelectedProductForHistory}
+          setShowDeleteConfirmation={setShowDeleteConfirmation}
+          toggleProductSelection={toggleProductSelection}
+          toggleSelectAll={toggleSelectAll}
+          navigate={navigate}
+          productModals={productModals}
+          deleteProduct={deleteProduct}
+          onAddProduct={() => setShowAddProductModal(true)}
+        />
 
-        {activeTab === 'purchase-orders' && (
-          <PurchaseOrdersTab 
-            navigate={navigate}
-            useInventoryStore={useInventoryStore}
-          />
-        )}
-
-        {activeTab === 'analytics' && (
-          <AnalyticsTab 
-            products={products}
-            metrics={metrics}
-            categories={categories}
-            formatMoney={formatMoney}
-            liveMetrics={liveMetrics}
-            isLoadingLiveMetrics={isLoadingLiveMetrics}
-            onRefreshLiveMetrics={loadLiveMetrics}
-          />
-        )}
 
         {/* Product Modals */}
 
@@ -1394,6 +1352,12 @@ const UnifiedInventoryPage: React.FC = () => {
         onSuccess={() => {
           productModals.closeEditModal();
         }}
+      />
+
+      {/* Order Management Modal */}
+      <OrderManagementModal
+        isOpen={showOrderManagementModal}
+        onClose={() => setShowOrderManagementModal(false)}
       />
     </PageErrorBoundary>
   );

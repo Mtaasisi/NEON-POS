@@ -1037,12 +1037,20 @@ const AttendanceSettings: React.FC<{
 }> = ({ settings, onSave, getStatusIcon, getStatusColor }) => {
   const [localSettings, setLocalSettings] = useState(settings);
   const [saving, setSaving] = useState(false);
-  const [expandedSection, setExpandedSection] = useState<string>('general');
+  const [expandedSection, setExpandedSection] = useState<string>('security-mode');
+  const [securityModeTab, setSecurityModeTab] = useState<string>('mode-type');
 
   // Update local settings when settings prop changes
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
+
+  // Switch tab if user changes mode type and is on unavailable tab
+  useEffect(() => {
+    if (!localSettings.allowEmployeeChoice && securityModeTab === 'available-modes') {
+      setSecurityModeTab('default-mode');
+    }
+  }, [localSettings.allowEmployeeChoice, securityModeTab]);
   const [editingOffice, setEditingOffice] = useState<number | null>(null);
   const [selectedOffice, setSelectedOffice] = useState<any>(null);
   const [newOffice, setNewOffice] = useState({
@@ -1333,259 +1341,276 @@ const AttendanceSettings: React.FC<{
                 </label>
               </div>
 
-              {/* Security Mode Configuration - REDESIGNED */}
-              <div className="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 rounded-xl p-6 border-2 border-indigo-200 shadow-md">
+              {/* Security Mode Configuration */}
+              <div className="bg-white rounded-xl border-2 border-gray-200 shadow-sm">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-6">
+                <div className="p-6 border-b border-gray-200">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-sm">
-                      <Shield className="w-6 h-6 text-white" />
+                    <div className="p-2 bg-red-100 rounded-xl">
+                      <Shield className="w-6 h-6 text-red-600" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900">Security Mode Configuration</h3>
-                      <p className="text-xs text-gray-600">Control how employees verify their attendance</p>
+                      <h3 className="text-lg font-semibold text-gray-900">Security Mode Configuration</h3>
+                      <p className="text-sm text-gray-600">Control how employees verify their attendance</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Mode Selector: Employee Choice vs Enforced */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  {/* Option 1: Allow Choice */}
-                  <button
-                    onClick={() => setLocalSettings({ ...localSettings, allowEmployeeChoice: true })}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      localSettings.allowEmployeeChoice
-                        ? 'border-green-500 bg-gradient-to-br from-green-50 to-emerald-50 shadow-lg scale-105'
-                        : 'border-gray-200 bg-white hover:border-green-300 hover:shadow-md'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-xl shadow-sm ${localSettings.allowEmployeeChoice ? 'bg-green-500' : 'bg-gray-300'}`}>
-                        <Users className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-gray-900">Employee Choice</span>
-                          {localSettings.allowEmployeeChoice && (
-                            <CheckCircle className="w-5 h-5 text-green-600" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-600 leading-relaxed">
-                          Let employees pick their preferred security method from your approved list. Flexible & convenient!
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-
-                  {/* Option 2: Enforced Mode */}
-                  <button
-                    onClick={() => setLocalSettings({ ...localSettings, allowEmployeeChoice: false })}
-                    className={`p-4 rounded-xl border-2 transition-all text-left ${
-                      !localSettings.allowEmployeeChoice
-                        ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-amber-50 shadow-lg scale-105'
-                        : 'border-gray-200 bg-white hover:border-orange-300 hover:shadow-md'
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-xl shadow-sm ${!localSettings.allowEmployeeChoice ? 'bg-orange-500' : 'bg-gray-300'}`}>
-                        <Lock className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-gray-900">Enforced Mode</span>
-                          {!localSettings.allowEmployeeChoice && (
-                            <CheckCircle className="w-5 h-5 text-orange-600" />
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-600 leading-relaxed">
-                          Require all employees to use one specific security method. Consistent & simple!
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                </div>
-
-                {/* Available Security Modes (Card Grid) */}
-                {localSettings.allowEmployeeChoice && (
-                  <div className="mb-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <CheckSquare className="w-5 h-5 text-blue-600" />
-                      <label className="text-sm font-bold text-gray-900">Select Available Security Modes</label>
-                      <span className="text-xs text-gray-500 ml-auto">
-                        {localSettings.availableSecurityModes?.length || 0} selected
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {[
-                        { 
-                          value: 'auto-location', 
-                          icon: Target, 
-                          label: 'Auto-Location', 
-                          desc: 'GPS auto-detection with fallback',
-                          color: 'blue',
-                          iconColor: 'text-blue-600',
-                          badge: 'Recommended'
-                        },
-                        { 
-                          value: 'manual-location', 
-                          icon: MapPin, 
-                          label: 'Manual Location', 
-                          desc: 'Select office + GPS verify',
-                          color: 'indigo',
-                          iconColor: 'text-indigo-600',
-                          badge: null
-                        },
-                        { 
-                          value: 'wifi-only', 
-                          icon: Wifi, 
-                          label: 'WiFi Only', 
-                          desc: 'Network verification only',
-                          color: 'purple',
-                          iconColor: 'text-purple-600',
-                          badge: null
-                        },
-                        { 
-                          value: 'location-and-wifi', 
-                          icon: Lock, 
-                          label: 'Location + WiFi', 
-                          desc: 'Both GPS and network',
-                          color: 'orange',
-                          iconColor: 'text-orange-600',
-                          badge: 'High Security'
-                        },
-                        { 
-                          value: 'photo-only', 
-                          icon: Camera, 
-                          label: 'Photo Only', 
-                          desc: 'Photo verification only',
-                          color: 'pink',
-                          iconColor: 'text-pink-600',
-                          badge: 'Least Secure'
-                        },
-                        { 
-                          value: 'all-security', 
-                          icon: Shield, 
-                          label: 'Maximum Security', 
-                          desc: 'GPS + WiFi + Photo',
-                          color: 'red',
-                          iconColor: 'text-red-600',
-                          badge: 'Max Security'
-                        },
-                      ].map((mode) => {
-                        const isSelected = localSettings.availableSecurityModes?.includes(mode.value as any) || false;
-                        
-                        // Color classes for each mode
-                        const colorClasses = {
-                          blue: 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100',
-                          indigo: 'border-indigo-500 bg-gradient-to-br from-indigo-50 to-indigo-100',
-                          purple: 'border-purple-500 bg-gradient-to-br from-purple-50 to-purple-100',
-                          orange: 'border-orange-500 bg-gradient-to-br from-orange-50 to-orange-100',
-                          pink: 'border-pink-500 bg-gradient-to-br from-pink-50 to-pink-100',
-                          red: 'border-red-500 bg-gradient-to-br from-red-50 to-red-100',
-                        };
-                        
-                        return (
-                          <label 
-                            key={mode.value} 
-                            className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                              isSelected 
-                                ? `${colorClasses[mode.color as keyof typeof colorClasses]} shadow-md` 
-                                : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-                            }`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={(e) => {
-                                const modes = localSettings.availableSecurityModes || [];
-                                if (e.target.checked) {
-                                  setLocalSettings({
-                                    ...localSettings,
-                                    availableSecurityModes: [...modes, mode.value as any]
-                                  });
-                                } else {
-                                  setLocalSettings({
-                                    ...localSettings,
-                                    availableSecurityModes: modes.filter(m => m !== mode.value)
-                                  });
-                                }
-                              }}
-                              className="sr-only"
-                            />
-                            {/* Badge */}
-                            {mode.badge && (
-                              <div className="absolute top-2 right-2">
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                  mode.badge === 'Recommended' ? 'bg-green-500 text-white' :
-                                  mode.badge === 'High Security' ? 'bg-orange-500 text-white' :
-                                  mode.badge === 'Max Security' ? 'bg-red-500 text-white' :
-                                  'bg-yellow-500 text-white'
-                                }`}>
-                                  {mode.badge}
-                                </span>
-                              </div>
-                            )}
-                            
-                            {/* Content */}
-                            <div className="flex items-start gap-3">
-                              <div className={`p-2 rounded-xl border-2 ${isSelected ? 'bg-white border-blue-500 shadow-sm' : 'bg-gray-100 border-gray-200'}`}>
-                                <mode.icon className={`w-6 h-6 ${isSelected ? mode.iconColor : 'text-gray-400'}`} />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-sm font-bold text-gray-900 truncate">{mode.label}</span>
-                                  {isSelected && (
-                                    <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                                  )}
-                                </div>
-                                <p className="text-xs text-gray-600 leading-snug">{mode.desc}</p>
-                              </div>
-                            </div>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    {(!localSettings.availableSecurityModes || localSettings.availableSecurityModes.length === 0) && (
-                      <div className="mt-3 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl shadow-sm flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-yellow-600" />
-                        <p className="text-xs text-yellow-800">Please select at least one security mode for employees</p>
-                      </div>
+                {/* Tabs */}
+                <div className="px-6 pt-6 pb-0 border-b border-gray-200 bg-white flex-shrink-0">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSecurityModeTab('mode-type')}
+                      className={`px-6 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                        securityModeTab === 'mode-type'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Mode Type
+                    </button>
+                    {localSettings.allowEmployeeChoice && (
+                      <button
+                        type="button"
+                        onClick={() => setSecurityModeTab('available-modes')}
+                        className={`px-6 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                          securityModeTab === 'available-modes'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        Available Modes
+                      </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setSecurityModeTab('default-mode')}
+                      className={`px-6 py-3 text-sm font-semibold border-b-2 transition-colors ${
+                        securityModeTab === 'default-mode'
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      Default Mode
+                    </button>
                   </div>
-                )}
+                </div>
 
-                {/* Default/Required Security Mode */}
-                <div className="p-4 bg-white rounded-xl border-2 border-gray-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-1.5 bg-blue-100 rounded">
-                      <Star className="w-4 h-4 text-blue-600" />
+                {/* Tab Content */}
+                <div className="p-6">
+                  {securityModeTab === 'mode-type' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-3">Security Mode Type</label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Option 1: Allow Choice */}
+                        <button
+                          onClick={() => setLocalSettings({ ...localSettings, allowEmployeeChoice: true })}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            localSettings.allowEmployeeChoice
+                              ? 'border-green-500 bg-green-50 shadow-md'
+                              : 'border-gray-200 bg-white hover:border-green-300 hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`p-2 rounded-xl ${localSettings.allowEmployeeChoice ? 'bg-green-500' : 'bg-gray-200'}`}>
+                              <Users className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">Employee Choice</span>
+                                {localSettings.allowEmployeeChoice && (
+                                  <CheckCircle className="w-4 h-4 text-green-600" />
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 leading-relaxed">
+                                Let employees pick their preferred security method from your approved list
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+
+                        {/* Option 2: Enforced Mode */}
+                        <button
+                          onClick={() => setLocalSettings({ ...localSettings, allowEmployeeChoice: false })}
+                          className={`p-4 rounded-xl border-2 transition-all text-left ${
+                            !localSettings.allowEmployeeChoice
+                              ? 'border-orange-500 bg-orange-50 shadow-md'
+                              : 'border-gray-200 bg-white hover:border-orange-300 hover:shadow-sm'
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`p-2 rounded-xl ${!localSettings.allowEmployeeChoice ? 'bg-orange-500' : 'bg-gray-200'}`}>
+                              <Lock className="w-5 h-5 text-white" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">Enforced Mode</span>
+                                {!localSettings.allowEmployeeChoice && (
+                                  <CheckCircle className="w-4 h-4 text-orange-600" />
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 leading-relaxed">
+                                Require all employees to use one specific security method
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      </div>
                     </div>
-                    <label className="text-sm font-bold text-gray-900">
-                      {localSettings.allowEmployeeChoice ? 'Default Security Mode' : 'Required Security Mode'}
-                    </label>
-                  </div>
-                  
-                  <select
-                    value={localSettings.defaultSecurityMode || 'auto-location'}
-                    onChange={(e) => setLocalSettings({ ...localSettings, defaultSecurityMode: e.target.value as any })}
-                    className="w-full px-4 py-3 bg-white border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
-                  >
-                    <option value="auto-location">Auto-Location (GPS Auto-Detect)</option>
-                    <option value="manual-location">Manual Location Selection</option>
-                    <option value="wifi-only">WiFi Only</option>
-                    <option value="location-and-wifi">Location + WiFi (High Security)</option>
-                    <option value="photo-only">Photo Only</option>
-                    <option value="all-security">Maximum Security (All Methods)</option>
-                  </select>
-                  
-                  <div className="mt-3 p-4 bg-blue-50 rounded-xl border-2 border-blue-200 shadow-sm flex items-start gap-2">
-                    <Lightbulb className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-800 leading-relaxed">
-                      {localSettings.allowEmployeeChoice 
-                        ? 'This mode will be pre-selected for employees. They can change it to any available mode you selected above.' 
-                        : 'All employees will be required to use this security mode. No other options will be available.'}
-                    </p>
-                  </div>
+                  )}
+
+                  {securityModeTab === 'available-modes' && localSettings.allowEmployeeChoice && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-4">
+                        <CheckSquare className="w-5 h-5 text-blue-600" />
+                        <label className="text-xs font-medium text-gray-700">Select Available Security Modes</label>
+                        <span className="text-xs text-gray-500 ml-auto">
+                          {localSettings.availableSecurityModes?.length || 0} selected
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {[
+                          { 
+                            value: 'auto-location', 
+                            icon: Target, 
+                            label: 'Auto-Location', 
+                            desc: 'GPS auto-detection with fallback',
+                            iconColor: 'text-blue-600',
+                            badge: 'Recommended'
+                          },
+                          { 
+                            value: 'manual-location', 
+                            icon: MapPin, 
+                            label: 'Manual Location', 
+                            desc: 'Select office + GPS verify',
+                            iconColor: 'text-indigo-600',
+                            badge: null
+                          },
+                          { 
+                            value: 'wifi-only', 
+                            icon: Wifi, 
+                            label: 'WiFi Only', 
+                            desc: 'Network verification only',
+                            iconColor: 'text-purple-600',
+                            badge: null
+                          },
+                          { 
+                            value: 'location-and-wifi', 
+                            icon: Lock, 
+                            label: 'Location + WiFi', 
+                            desc: 'Both GPS and network',
+                            iconColor: 'text-orange-600',
+                            badge: 'High Security'
+                          },
+                          { 
+                            value: 'photo-only', 
+                            icon: Camera, 
+                            label: 'Photo Only', 
+                            desc: 'Photo verification only',
+                            iconColor: 'text-pink-600',
+                            badge: 'Least Secure'
+                          },
+                          { 
+                            value: 'all-security', 
+                            icon: Shield, 
+                            label: 'Maximum Security', 
+                            desc: 'GPS + WiFi + Photo',
+                            iconColor: 'text-red-600',
+                            badge: 'Max Security'
+                          },
+                        ].map((mode) => {
+                          const isSelected = localSettings.availableSecurityModes?.includes(mode.value as any) || false;
+                          
+                          return (
+                            <label 
+                              key={mode.value} 
+                              className={`relative p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                isSelected 
+                                  ? 'border-blue-500 bg-blue-50 shadow-sm' 
+                                  : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  const modes = localSettings.availableSecurityModes || [];
+                                  if (e.target.checked) {
+                                    setLocalSettings({
+                                      ...localSettings,
+                                      availableSecurityModes: [...modes, mode.value as any]
+                                    });
+                                  } else {
+                                    setLocalSettings({
+                                      ...localSettings,
+                                      availableSecurityModes: modes.filter(m => m !== mode.value)
+                                    });
+                                  }
+                                }}
+                                className="sr-only"
+                              />
+                              {/* Badge */}
+                              {mode.badge && (
+                                <div className="absolute top-2 right-2">
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                    mode.badge === 'Recommended' ? 'bg-green-500 text-white' :
+                                    mode.badge === 'High Security' ? 'bg-orange-500 text-white' :
+                                    mode.badge === 'Max Security' ? 'bg-red-500 text-white' :
+                                    'bg-yellow-500 text-white'
+                                  }`}>
+                                    {mode.badge}
+                                  </span>
+                                </div>
+                              )}
+                              
+                              {/* Content */}
+                              <div className="flex items-start gap-3">
+                                <div className={`p-2 rounded-xl border-2 ${isSelected ? 'bg-white border-blue-500' : 'bg-gray-100 border-gray-200'}`}>
+                                  <mode.icon className={`w-5 h-5 ${isSelected ? mode.iconColor : 'text-gray-400'}`} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-xs font-semibold text-gray-900 truncate">{mode.label}</span>
+                                    {isSelected && (
+                                      <CheckCircle className="w-3 h-3 text-green-600 flex-shrink-0" />
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-gray-600 leading-snug">{mode.desc}</p>
+                                </div>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      {(!localSettings.availableSecurityModes || localSettings.availableSecurityModes.length === 0) && (
+                        <div className="mt-3 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                          <p className="text-xs text-yellow-800">Please select at least one security mode for employees</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {securityModeTab === 'default-mode' && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-2">
+                        {localSettings.allowEmployeeChoice ? 'Default Security Mode' : 'Required Security Mode'}
+                      </label>
+                      <select
+                        value={localSettings.defaultSecurityMode || 'auto-location'}
+                        onChange={(e) => setLocalSettings({ ...localSettings, defaultSecurityMode: e.target.value as any })}
+                        className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 text-gray-900 font-medium transition-colors"
+                      >
+                        <option value="auto-location">Auto-Location (GPS Auto-Detect)</option>
+                        <option value="manual-location">Manual Location Selection</option>
+                        <option value="wifi-only">WiFi Only</option>
+                        <option value="location-and-wifi">Location + WiFi (High Security)</option>
+                        <option value="photo-only">Photo Only</option>
+                        <option value="all-security">Maximum Security (All Methods)</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

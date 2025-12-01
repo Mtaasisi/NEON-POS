@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../../context/AuthContext';
 import { rbacManager, type UserRole } from '../../lib/rbac';
 import { usePOSClickSounds } from '../../hooks/usePOSClickSounds';
+import { useGlobalSearchModal } from '../../../../context/GlobalSearchContext';
 import {
   ShoppingCart,
   CreditCard,
@@ -21,6 +22,7 @@ import {
   Monitor,
   Smartphone,
   Calendar,
+  Search,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -50,6 +52,7 @@ interface POSTopBarProps {
   onRefreshData?: () => void;
   onSettings?: () => void;
   onOpenInstallments?: () => void;
+  onOpenExpense?: () => void;
 }
 
 const POSTopBar: React.FC<POSTopBarProps> = ({
@@ -78,9 +81,11 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
   onRefreshData,
   onSettings,
   onOpenInstallments,
+  onOpenExpense,
 }) => {
   const { currentUser, logout } = useAuth();
   const { playPaymentSound, playDeleteSound, playClickSound } = usePOSClickSounds();
+  const { openSearch } = useGlobalSearchModal();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Update time every minute
@@ -230,7 +235,7 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
             </div>
           </div>
 
-          {/* Center: Time + Sales */}
+          {/* Center: Time + Sales + Search */}
           <div className="hidden lg:flex items-center gap-3">
             <div className="px-3 py-2 bg-gray-50 rounded-lg border border-gray-200 min-h-[44px] flex items-center">
               <div className="text-center">
@@ -260,6 +265,34 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
               <DollarSign size={18} />
               <span className="text-sm font-medium">{formatMoney(todaysSales)}</span>
             </button>
+
+            {/* Global Search Button */}
+            <button
+              onClick={() => {
+                playClickSound();
+                openSearch();
+              }}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 transition-all duration-200 shadow-sm hover:shadow-md min-h-[44px]"
+              title="Global Search (⌘K)"
+            >
+              <Search size={18} />
+              <span className="text-sm font-medium hidden xl:inline">Search</span>
+            </button>
+
+            {/* Quick Expense Button - Admins only */}
+            {onOpenExpense && currentUser?.role === 'admin' && (
+              <button
+                onClick={() => {
+                  playClickSound();
+                  onOpenExpense();
+                }}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white transition-all duration-200 shadow-sm hover:shadow-md min-h-[44px]"
+                title="Quick Expense (⚡ Fast Entry)"
+              >
+                <DollarSign size={18} />
+                <span className="text-sm font-medium hidden xl:inline">Expense</span>
+              </button>
+            )}
           </div>
 
           {/* Right: Action Buttons + System Controls */}
@@ -332,6 +365,18 @@ const POSTopBar: React.FC<POSTopBarProps> = ({
                 </button>
               )}
             </div>
+
+            {/* Global Search Button - Mobile/Tablet */}
+            <button
+              onClick={() => {
+                playClickSound();
+                openSearch();
+              }}
+              className="lg:hidden flex items-center justify-center p-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all duration-200 shadow-sm min-h-[40px] min-w-[40px]"
+              title="Global Search"
+            >
+              <Search size={18} />
+            </button>
 
             {/* Divider */}
             <div className="hidden md:block h-8 w-px bg-gray-300 mx-1"></div>

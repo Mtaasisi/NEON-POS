@@ -263,6 +263,53 @@ export const addIMEIToParentVariant = async (
   });
 
   try {
+    // Check for duplicate IMEI/Serial number in the same product
+    if (imeiData.imei && imeiData.imei.trim()) {
+      // Get the parent variant to find the product_id
+      const { data: parentVariant, error: parentError } = await supabase
+        .from('lats_product_variants')
+        .select('product_id')
+        .eq('id', parent_variant_id)
+        .single();
+
+      if (parentError || !parentVariant) {
+        throw new Error('Parent variant not found');
+      }
+
+      // Check if IMEI/Serial already exists in any variant of the same product
+      const trimmedImei = imeiData.imei.trim();
+      const { data: existingChildren, error: checkError } = await supabase
+        .from('lats_product_variants')
+        .select('id, name, variant_name, variant_attributes, attributes')
+        .eq('product_id', parentVariant.product_id)
+        .eq('variant_type', 'imei_child');
+
+      if (checkError) {
+        console.warn('⚠️ Error checking for duplicate IMEI:', checkError);
+      } else if (existingChildren && existingChildren.length > 0) {
+        // Check if any existing child has the same IMEI (case-insensitive)
+        const duplicate = existingChildren.find(child => {
+          const childImei = (
+            child.variant_attributes?.imei || 
+            child.attributes?.imei || 
+            child.name || 
+            child.variant_name || 
+            ''
+          ).toString().trim();
+          return childImei.toLowerCase() === trimmedImei.toLowerCase();
+        });
+
+        if (duplicate) {
+          const errorMsg = `IMEI/Serial number "${trimmedImei}" already exists in this product. Each item must be unique.`;
+          console.error('❌ Duplicate IMEI detected:', errorMsg);
+          return {
+            success: false,
+            error: errorMsg,
+          };
+        }
+      }
+    }
+
     // 🔧 DEBUG: Prepare RPC call
     console.log('⏳ [DEBUG] Step 1: Preparing Supabase RPC call...');
     
@@ -384,6 +431,31 @@ export const addIMEIsToParentVariant = async (
   console.log('📥 [DEBUG] Total IMEIs to process:', imeis.length);
   console.log('📥 [DEBUG] IMEI list:', imeis.map(i => i.imei).join(', '));
   console.log('');
+
+  // Check for duplicates within the batch itself
+  const imeiSet = new Set<string>();
+  const duplicatesInBatch: string[] = [];
+  for (const imeiData of imeis) {
+    if (imeiData.imei && imeiData.imei.trim()) {
+      const trimmedImei = imeiData.imei.trim().toLowerCase();
+      if (imeiSet.has(trimmedImei)) {
+        duplicatesInBatch.push(imeiData.imei);
+      } else {
+        imeiSet.add(trimmedImei);
+      }
+    }
+  }
+
+  if (duplicatesInBatch.length > 0) {
+    const errorMsg = `Duplicate IMEI/Serial numbers found in the batch: ${duplicatesInBatch.join(', ')}. Each item must be unique.`;
+    console.error('❌ Duplicate IMEIs in batch:', errorMsg);
+    return {
+      success: false,
+      created: 0,
+      failed: imeis.length,
+      errors: [errorMsg],
+    };
+  }
 
   const results = [];
   const errors = [];

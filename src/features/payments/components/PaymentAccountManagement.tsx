@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import GlassCard from '../../shared/components/ui/GlassCard';
 import GlassButton from '../../shared/components/ui/GlassButton';
@@ -10,6 +10,7 @@ import TransferModal from './TransferModal';
 import TransactionReversalModal from './TransactionReversalModal';
 import TransactionDetailsModal from './TransactionDetailsModal';
 import ScheduledTransfersView from './ScheduledTransfersView';
+import CustomerTooltip from '../../lats/components/pos/CustomerTooltip';
 import { 
   Settings, Plus, Edit3, Trash2, Save, X, 
   CheckCircle, XCircle, AlertTriangle, RefreshCw,
@@ -18,7 +19,7 @@ import {
   History, Filter, Calendar, ArrowUpRight, ArrowDownRight, ArrowRightLeft,
   RepeatIcon, Download, FileText, Search, ChevronDown, ChevronUp,
   Copy, ExternalLink, Info, ArrowRight, User, Phone, Mail, MapPin,
-  List, LayoutGrid
+  List, LayoutGrid, Package
 } from 'lucide-react';
 
 // Alias for FileText to avoid conflicts
@@ -79,6 +80,8 @@ const PaymentAccountManagement: React.FC = () => {
   const [saleDetails, setSaleDetails] = useState<Record<string, any>>({});
   const [loadingSaleDetails, setLoadingSaleDetails] = useState<Record<string, boolean>>({});
   const [transactionViewMode, setTransactionViewMode] = useState<'timeline' | 'table'>('timeline');
+  const [showCustomerTooltips, setShowCustomerTooltips] = useState<Record<string, boolean>>({});
+  const customerBadgeRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Manual transaction modal state
   const [showManualTransactionModal, setShowManualTransactionModal] = useState(false);
@@ -1728,7 +1731,7 @@ const PaymentAccountManagement: React.FC = () => {
                               >
                                 {/* Header - Clickable */}
                                 <div 
-                                  className="flex items-center justify-between cursor-pointer"
+                                  className="flex items-center justify-between cursor-pointer px-4 py-3"
                                   onClick={() => setExpandedTransaction(isExpanded ? null : transaction.id)}
                                 >
                                   {/* Left Section */}
@@ -1844,6 +1847,61 @@ const PaymentAccountManagement: React.FC = () => {
                                           }`}>
                                             {formatTransactionType(transaction.transaction_type)}
                                           </span>
+                                        )}
+                                        
+                                        {/* Customer Badge - Clickable */}
+                                        {saleDetails[transaction.id]?.customer && (
+                                          <>
+                                            <div 
+                                              ref={(el) => { customerBadgeRefs.current[transaction.id] = el; }}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setShowCustomerTooltips(prev => ({
+                                                  ...prev,
+                                                  [transaction.id]: !prev[transaction.id]
+                                                }));
+                                              }}
+                                              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-200 flex-shrink-0 cursor-pointer hover:bg-blue-100 transition-colors"
+                                            >
+                                              <User className="w-5 h-5" />
+                                              <span className="text-base font-semibold truncate max-w-[200px]">
+                                                {saleDetails[transaction.id].customer.name || 'Unknown Customer'}
+                                              </span>
+                                            </div>
+                                            
+                                            {/* Customer Tooltip */}
+                                            <CustomerTooltip
+                                              customer={{
+                                                id: saleDetails[transaction.id].customer.id || '',
+                                                name: saleDetails[transaction.id].customer.name || 'Unknown Customer',
+                                                phone: saleDetails[transaction.id].customer.phone,
+                                                email: saleDetails[transaction.id].customer.email,
+                                                city: saleDetails[transaction.id].customer.city,
+                                                loyaltyLevel: saleDetails[transaction.id].customer.loyalty_level,
+                                                points: saleDetails[transaction.id].customer.points,
+                                                totalSpent: saleDetails[transaction.id].customer.total_spent
+                                              }}
+                                              anchorRef={{ current: customerBadgeRefs.current[transaction.id] }}
+                                              isOpen={showCustomerTooltips[transaction.id] || false}
+                                              onClose={() => setShowCustomerTooltips(prev => ({
+                                                ...prev,
+                                                [transaction.id]: false
+                                              }))}
+                                              formatCurrency={(amount) => formatMoney(amount, selectedAccount?.currency)}
+                                              formatDate={(dateString) => {
+                                                if (!dateString) return 'N/A';
+                                                try {
+                                                  return new Date(dateString).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'short',
+                                                    day: 'numeric'
+                                                  });
+                                                } catch {
+                                                  return 'Invalid Date';
+                                                }
+                                              }}
+                                            />
+                                          </>
                                         )}
                                       </div>
                                     </div>
@@ -2153,31 +2211,40 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
   return (
     <div className="px-5 pb-5 pt-2 space-y-4">
                                     {/* Balance Impact Section */}
-                                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border-2 border-purple-200">
-                                      <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-3">
-                                        <TrendingUp className="w-5 h-5 text-purple-600" />
-                                        Balance Impact
-                                      </h4>
-                                      <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                          <div className="text-center">
-                                            <div className="text-xs text-gray-600 mb-1">Before</div>
-                                            <div className="text-lg font-bold text-purple-700">{formatMoney(transaction.balance_before, selectedAccount?.currency)}</div>
+                                    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                      <div className="p-5">
+                                        <div className="flex items-center gap-3 mb-4">
+                                          <div className="w-8 h-8 rounded-xl bg-purple-500/10 border border-purple-200/50 flex items-center justify-center">
+                                            <TrendingUp size={16} className="text-purple-600" />
                                           </div>
-                                          <ArrowRight className="w-6 h-6 text-gray-400" />
-                                          <div className={`text-center ${isIncoming ? 'text-yellow-700' : isOutgoing ? 'text-red-700' : 'text-gray-700'}`}>
-                                            <div className="text-xs text-gray-600 mb-1">Change</div>
-                                            <div className="text-lg font-bold">
+                                          <div>
+                                            <h5 className="text-sm font-semibold text-gray-900">Balance Impact</h5>
+                                            <p className="text-xs text-gray-500">Account balance changes</p>
+                                          </div>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-4">
+                                          <div>
+                                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                              BEFORE
+                                            </div>
+                                            <p className="text-lg font-semibold text-gray-900">{formatMoney(transaction.balance_before, selectedAccount?.currency)}</p>
+                                          </div>
+                                          <div>
+                                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                              CHANGE
+                                            </div>
+                                            <p className={`text-lg font-semibold ${isIncoming ? 'text-green-600' : isOutgoing ? 'text-red-600' : 'text-gray-900'}`}>
                                               {isIncoming && !isReversed && !isPartial && '+'}
                                               {isOutgoing && !isReversed && !isPartial && '-'}
                                               {isPartial && !isReversed && '~'}
                                               {formatMoney(transaction.amount, selectedAccount?.currency)}
-                                            </div>
+                                            </p>
                                           </div>
-                                          <ArrowRight className="w-6 h-6 text-gray-400" />
-                                          <div className="text-center">
-                                            <div className="text-xs text-gray-600 mb-1">After</div>
-                                            <div className="text-lg font-bold text-indigo-700">{formatMoney(transaction.balance_after, selectedAccount?.currency)}</div>
+                                          <div>
+                                            <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                              AFTER
+                                            </div>
+                                            <p className="text-lg font-semibold text-gray-900">{formatMoney(transaction.balance_after, selectedAccount?.currency)}</p>
                                           </div>
                                         </div>
                                       </div>
@@ -2187,244 +2254,195 @@ const TransactionExpandedContent: React.FC<TransactionExpandedContentProps> = ({
                                     {transaction.description?.toLowerCase().includes('installment') || 
                                      transaction.metadata?.is_installment ||
                                      transaction.reference_number?.includes('INS-') ? (
-                                      <div className="bg-white rounded-lg p-4 border border-gray-200">
-                                        <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                                          <CreditCard className="w-5 h-5 text-purple-600" />
-                                          Installment Payment Details
-                                        </h4>
-                                        <div className="space-y-3">
-                                          {transaction.metadata?.payment_method && (
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-xs text-gray-600 font-medium min-w-[80px]">Method:</span>
-                                              <span className="text-sm font-semibold text-gray-900 capitalize">{transaction.metadata.payment_method}</span>
+                                      <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                        <div className="p-5">
+                                          <div className="flex items-center gap-3 mb-4">
+                                            <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-200/50 flex items-center justify-center">
+                                              <CreditCard size={16} className="text-blue-600" />
                                             </div>
-                                          )}
-                                          {transaction.reference_number && (
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-xs text-gray-600 font-medium min-w-[80px]">Reference:</span>
-                                              <span className="text-sm font-semibold text-gray-900 font-mono">{transaction.reference_number}</span>
+                                            <div>
+                                              <h5 className="text-sm font-semibold text-gray-900">Installment Payment</h5>
+                                              <p className="text-xs text-gray-500">Payment details</p>
                                             </div>
-                                          )}
-                                          {transaction.metadata?.notes && (
-                                            <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                                              <div className="text-xs text-gray-600 font-medium mb-1">Notes:</div>
-                                              <div className="text-sm text-gray-700">{transaction.metadata.notes}</div>
-                                            </div>
-                                          )}
+                                          </div>
+                                          <div className="space-y-4">
+                                            {transaction.metadata?.payment_method && (
+                                              <div>
+                                                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                  PAYMENT METHOD
+                                                </div>
+                                                <p className="text-sm font-semibold text-gray-900 capitalize">{transaction.metadata.payment_method}</p>
+                                              </div>
+                                            )}
+                                            {transaction.reference_number && (
+                                              <div>
+                                                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                  REFERENCE NUMBER
+                                                </div>
+                                                <p className="text-xs font-mono text-gray-600 break-all">{transaction.reference_number}</p>
+                                              </div>
+                                            )}
+                                            {transaction.metadata?.notes && (
+                                              <div>
+                                                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                  NOTES
+                                                </div>
+                                                <p className="text-sm text-gray-700">{transaction.metadata.notes}</p>
+                                              </div>
+                                            )}
+                                          </div>
                                         </div>
                                       </div>
                                     ) : null}
 
                                     {/* Sale Details Section */}
                                     {saleId && (
-                                      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl border-2 border-blue-200">
+                                      <div className="space-y-4">
                                         {loadingSaleDetails ? (
-                                          <div className="flex items-center justify-center py-8">
-                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                                            <span className="ml-3 text-gray-600">Loading sale details...</span>
+                                          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm p-8">
+                                            <div className="flex items-center justify-center">
+                                              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                                              <span className="ml-3 text-gray-600">Loading sale details...</span>
+                                            </div>
                                           </div>
                                         ) : saleDetails ? (
-                                          <div className="space-y-5">
+                                          <>
                                             {/* Sale Information */}
-                                            <div className="bg-white rounded-lg p-4 border border-gray-200">
-                                              <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                                                <FileTextIcon className="w-5 h-5 text-blue-600" />
-                                                Sale Information
-                                              </h4>
-                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                  <div className="text-xs text-gray-500 font-medium mb-1">Sale Number</div>
-                                                  <div className="text-sm font-semibold text-gray-900 font-mono">{saleDetails.sale_number}</div>
-                                                </div>
-                                                <div>
-                                                  <div className="text-xs text-gray-500 font-medium mb-1">Status</div>
-                                                  <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
-                                                    saleDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
-                                                    saleDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                    'bg-red-100 text-red-800'
-                                                  }`}>
-                                                    {saleDetails.status}
-                                                  </span>
-                                                </div>
-                                                <div>
-                                                  <div className="text-xs text-gray-500 font-medium mb-1">Cashier</div>
-                                                  <div className="text-sm font-semibold text-gray-900">{saleDetails.cashierName || 'Unknown'}</div>
-                                                </div>
-                                                <div>
-                                                  <div className="text-xs text-gray-500 font-medium mb-1">Date & Time</div>
-                                                  <div className="text-sm font-semibold text-gray-900">
-                                                    {new Date(saleDetails.created_at).toLocaleString('en-TZ', {
-                                                      year: 'numeric',
-                                                      month: 'short',
-                                                      day: 'numeric',
-                                                      hour: '2-digit',
-                                                      minute: '2-digit'
-                                                    })}
+                                            <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                              <div className="p-5">
+                                                <div className="flex items-center gap-3 mb-4">
+                                                  <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-200/50 flex items-center justify-center">
+                                                    <FileTextIcon size={16} className="text-blue-600" />
+                                                  </div>
+                                                  <div>
+                                                    <h5 className="text-sm font-semibold text-gray-900">Sale Information</h5>
+                                                    <p className="text-xs text-gray-500">Transaction details</p>
                                                   </div>
                                                 </div>
-                                              </div>
-                                            </div>
-                                  
-                                            {/* Customer Information */}
-                                            {saleDetails.customer && (
-                                              <div className="bg-white rounded-lg p-4 border border-gray-200">
-                                                <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                                                  <User className="w-5 h-5 text-blue-600" />
-                                                  Customer Information
-                                                </h4>
                                                 <div className="space-y-4">
-                                                  <div className="flex justify-between items-center">
-                                                    <span className="text-sm font-medium text-gray-600">Name:</span>
-                                                    <span className="text-base font-bold text-gray-900">{saleDetails.customer.name}</span>
+                                                  {saleDetails.total_amount !== undefined && (
+                                                    <div>
+                                                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                        TOTAL AMOUNT
+                                                      </div>
+                                                      <p className="text-3xl font-bold text-green-600">
+                                                        {formatMoney(saleDetails.total_amount || 0, selectedAccount?.currency)}
+                                                      </p>
+                                                    </div>
+                                                  )}
+                                                  <div className="grid grid-cols-2 gap-4">
+                                                    {saleDetails.sale_number && (
+                                                      <div>
+                                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                          SALE NUMBER
+                                                        </div>
+                                                        <p className="text-sm font-semibold text-gray-900 font-mono">{saleDetails.sale_number}</p>
+                                                      </div>
+                                                    )}
+                                                    {saleDetails.status && (
+                                                      <div>
+                                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                          STATUS
+                                                        </div>
+                                                        <span className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full ${
+                                                          saleDetails.status === 'completed' ? 'bg-green-100 text-green-800' :
+                                                          saleDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                                          'bg-red-100 text-red-800'
+                                                        }`}>
+                                                          {saleDetails.status}
+                                                        </span>
+                                                      </div>
+                                                    )}
+                                                    {saleDetails.payment_method && (
+                                                      <div>
+                                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                          PAYMENT METHOD
+                                                        </div>
+                                                        <p className="text-sm font-semibold text-gray-900">
+                                                          {typeof saleDetails.payment_method === 'string' ? (
+                                                            saleDetails.payment_method
+                                                          ) : (
+                                                            saleDetails.payment_method.method || saleDetails.payment_method.type || 'Unknown'
+                                                          )}
+                                                        </p>
+                                                      </div>
+                                                    )}
+                                                    {saleDetails.cashierName && (
+                                                      <div>
+                                                        <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                                                          CASHIER
+                                                        </div>
+                                                        <p className="text-sm font-semibold text-gray-900">{saleDetails.cashierName}</p>
+                                                      </div>
+                                                    )}
                                                   </div>
-                                                  {saleDetails.customer.phone && (
-                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                                      <span className="text-sm font-medium text-gray-600">Phone:</span>
-                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.phone}</span>
-                                                    </div>
-                                                  )}
-                                                  {saleDetails.customer.city && (
-                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                                      <span className="text-sm font-medium text-gray-600">Location:</span>
-                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.city}</span>
-                                                    </div>
-                                                  )}
-                                                  {saleDetails.customer.loyalty_level && (
-                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                                      <span className="text-sm font-medium text-gray-600">Loyalty Level:</span>
-                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.loyalty_level}</span>
-                                                    </div>
-                                                  )}
-                                                  {saleDetails.customer.total_spent !== undefined && (
-                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                                      <span className="text-sm font-medium text-gray-600">Total Spent:</span>
-                                                      <span className="text-base font-bold text-gray-900">{formatMoney(saleDetails.customer.total_spent || 0, selectedAccount?.currency)}</span>
-                                                    </div>
-                                                  )}
-                                                  {saleDetails.customer.points !== undefined && (
-                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                                      <span className="text-sm font-medium text-gray-600">Points:</span>
-                                                      <span className="text-base font-bold text-gray-900">{saleDetails.customer.points || 0}</span>
-                                                    </div>
-                                                  )}
-                                                  {saleDetails.customer.last_visit && (
-                                                    <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                                      <span className="text-sm font-medium text-gray-600">Last Visit:</span>
-                                                      <span className="text-base font-bold text-gray-900">
-                                                        {new Date(saleDetails.customer.last_visit).toLocaleString('en-TZ', {
-                                                          year: 'numeric',
-                                                          month: 'short',
-                                                          day: 'numeric',
-                                                          hour: '2-digit',
-                                                          minute: '2-digit'
-                                                        })}
-                                                      </span>
-                                                    </div>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            )}
-
-                                            {/* Payment Information */}
-                                            <div className="bg-white rounded-lg p-4 border border-gray-200">
-                                              <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                                                <CreditCard className="w-5 h-5 text-blue-600" />
-                                                Payment Information
-                                              </h4>
-                                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                  <div className="text-xs text-gray-500 font-medium mb-1">Payment Method(s)</div>
-                                                  <div className="text-sm font-semibold text-gray-900">
-                                                    {saleDetails.payment_method ? (
-                                                      typeof saleDetails.payment_method === 'string' ? (
-                                                        saleDetails.payment_method
-                                                      ) : (
-                                                        saleDetails.payment_method.method || saleDetails.payment_method.type || 'Unknown'
-                                                      )
-                                                    ) : 'Cash'}
-                                                  </div>
-                                                </div>
-                                                <div>
-                                                  <div className="text-xs text-gray-500 font-medium mb-1">Total Amount</div>
-                                                  <div className="text-sm font-semibold text-gray-900">{formatMoney(saleDetails.total_amount || 0, selectedAccount?.currency)}</div>
-                                                </div>
-                                              </div>
-                                            </div>
-
-                                            {/* Financial Summary */}
-                                            <div className="bg-white rounded-lg p-4 border border-gray-200">
-                                              <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                                                <DollarSign className="w-5 h-5 text-green-600" />
-                                                Financial Summary
-                                              </h4>
-                                              <div className="space-y-2">
-                                                <div className="flex justify-between items-center">
-                                                  <span className="text-sm text-gray-600">Subtotal:</span>
-                                                  <span className="text-sm font-semibold text-gray-900">{formatMoney(saleDetails.subtotal || saleDetails.total_amount || 0, selectedAccount?.currency)}</span>
-                                                </div>
-                                                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                                  <span className="text-sm font-semibold text-gray-900">Total:</span>
-                                                  <span className="text-sm font-bold text-gray-900">{formatMoney(saleDetails.total_amount || 0, selectedAccount?.currency)}</span>
                                                 </div>
                                               </div>
                                             </div>
 
                                             {/* Sale Items */}
                                             {saleDetails.items && saleDetails.items.length > 0 && (
-                                              <div className="bg-white rounded-lg p-4 border border-gray-200">
-                                                <h4 className="text-base font-bold text-gray-900 flex items-center gap-2 mb-4">
-                                                  <FileTextIcon className="w-5 h-5 text-blue-600" />
-                                                  Sale Items ({saleDetails.items.length})
-                                                </h4>
-                                                <div className="overflow-x-auto">
-                                                  <table className="w-full text-sm">
-                                                    <thead>
-                                                      <tr className="border-b border-gray-200">
-                                                        <th className="text-left py-2 px-3 font-semibold text-gray-700">Product</th>
-                                                        <th className="text-left py-2 px-3 font-semibold text-gray-700">SKU</th>
-                                                        <th className="text-center py-2 px-3 font-semibold text-gray-700">Qty</th>
-                                                        <th className="text-right py-2 px-3 font-semibold text-gray-700">Unit Price</th>
-                                                        <th className="text-right py-2 px-3 font-semibold text-gray-700">Total</th>
-                                                        <th className="text-right py-2 px-3 font-semibold text-gray-700">Profit</th>
-                                                      </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                      {saleDetails.items.map((item: any, idx: number) => (
-                                                        <tr key={idx} className="border-b border-gray-100">
-                                                          <td className="py-3 px-3">
-                                                            <div className="font-semibold text-gray-900">{item.product?.name || 'Unknown Product'}</div>
-                                                            {item.variant && (
-                                                              <div className="text-xs text-gray-500 mt-1">
-                                                                Variant: {item.variant.variant_name || item.variant.name || item.variant.sku || 'N/A'}
-                                                              </div>
-                                                            )}
-                                                            {item.product?.category_id && (
-                                                              <div className="text-xs text-gray-400 mt-0.5">
-                                                                {item.product.category_name || 'Accessories'}
-                                                              </div>
-                                                            )}
-                                                          </td>
-                                                          <td className="py-3 px-3 text-gray-600 font-mono text-xs">
-                                                            {item.variant?.sku || item.product?.sku || item.sku || 'N/A'}
-                                                          </td>
-                                                          <td className="py-3 px-3 text-center text-gray-900 font-semibold">{item.quantity || 1}</td>
-                                                          <td className="py-3 px-3 text-right text-gray-900 font-semibold">
-                                                            {formatMoney(item.unit_price || (item.total_price / (item.quantity || 1)), selectedAccount?.currency)}
-                                                          </td>
-                                                          <td className="py-3 px-3 text-right text-gray-900 font-semibold">
-                                                            {formatMoney(item.total_price || 0, selectedAccount?.currency)}
-                                                          </td>
-                                                          <td className="py-3 px-3 text-right text-green-700 font-semibold">
-                                                            {formatMoney(item.profit || 0, selectedAccount?.currency)}
-                                                          </td>
+                                              <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                                                <div className="p-5">
+                                                  <div className="flex items-center gap-3 mb-4">
+                                                    <div className="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-200/50 flex items-center justify-center">
+                                                      <Package size={16} className="text-indigo-600" />
+                                                    </div>
+                                                    <div>
+                                                      <h5 className="text-sm font-semibold text-gray-900">Sale Items</h5>
+                                                      <p className="text-xs text-gray-500">{saleDetails.items.length} item(s)</p>
+                                                    </div>
+                                                  </div>
+                                                  <div className="overflow-x-auto">
+                                                    <table className="w-full text-sm">
+                                                      <thead>
+                                                        <tr className="border-b border-gray-200">
+                                                          <th className="text-left py-2 px-3 font-semibold text-gray-700">Product</th>
+                                                          <th className="text-left py-2 px-3 font-semibold text-gray-700">SKU</th>
+                                                          <th className="text-center py-2 px-3 font-semibold text-gray-700">Qty</th>
+                                                          <th className="text-right py-2 px-3 font-semibold text-gray-700">Unit Price</th>
+                                                          <th className="text-right py-2 px-3 font-semibold text-gray-700">Total</th>
+                                                          <th className="text-right py-2 px-3 font-semibold text-gray-700">Profit</th>
                                                         </tr>
-                                                      ))}
-                                                    </tbody>
-                                                  </table>
+                                                      </thead>
+                                                      <tbody>
+                                                        {saleDetails.items.map((item: any, idx: number) => (
+                                                          <tr key={idx} className="border-b border-gray-100">
+                                                            <td className="py-3 px-3">
+                                                              <div className="font-semibold text-gray-900">{item.product?.name || 'Unknown Product'}</div>
+                                                              {item.variant && (
+                                                                <div className="text-xs text-gray-500 mt-1">
+                                                                  Variant: {item.variant.variant_name || item.variant.name || item.variant.sku || 'N/A'}
+                                                                </div>
+                                                              )}
+                                                              {item.product?.category_id && (
+                                                                <div className="text-xs text-gray-400 mt-0.5">
+                                                                  {item.product.category_name || 'Accessories'}
+                                                                </div>
+                                                              )}
+                                                            </td>
+                                                            <td className="py-3 px-3 text-gray-600 font-mono text-xs">
+                                                              {item.variant?.sku || item.product?.sku || item.sku || 'N/A'}
+                                                            </td>
+                                                            <td className="py-3 px-3 text-center text-gray-900 font-semibold">{item.quantity || 1}</td>
+                                                            <td className="py-3 px-3 text-right text-gray-900 font-semibold">
+                                                              {formatMoney(item.unit_price || (item.total_price / (item.quantity || 1)), selectedAccount?.currency)}
+                                                            </td>
+                                                            <td className="py-3 px-3 text-right text-gray-900 font-semibold">
+                                                              {formatMoney(item.total_price || 0, selectedAccount?.currency)}
+                                                            </td>
+                                                            <td className="py-3 px-3 text-right text-green-700 font-semibold">
+                                                              {formatMoney(item.profit || 0, selectedAccount?.currency)}
+                                                            </td>
+                                                          </tr>
+                                                        ))}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
                                                 </div>
                                               </div>
                                             )}
-                                          </div>
+                                          </>
                                         ) : null}
                                       </div>
                                     )}

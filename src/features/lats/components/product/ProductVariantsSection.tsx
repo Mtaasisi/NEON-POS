@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Layers, Plus, Trash2, Package, Move, Check, DollarSign, ChevronDown, ChevronUp, Minus, QrCode, Smartphone, X } from 'lucide-react';
+import { Layers, Plus, Trash2, Package, Move, Check, DollarSign, ChevronDown, ChevronUp, Minus, QrCode, Smartphone, X, HelpCircle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { specificationCategories, getSpecificationsByCategory } from '../../../../data/specificationCategories';
 
 interface ProductVariant {
@@ -47,8 +48,18 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
     // Get the last variant to duplicate its specifications
     const lastVariant = variants.length > 0 ? variants[variants.length - 1] : null;
 
+    // Generate a unique variant name
+    let variantNumber = variants.length + 1;
+    let variantName = `Variant ${variantNumber}`;
+    
+    // Check for duplicate names (case-insensitive)
+    while (variants.some(v => v.name?.toLowerCase().trim() === variantName.toLowerCase().trim())) {
+      variantNumber++;
+      variantName = `Variant ${variantNumber}`;
+    }
+
     const newVariant: ProductVariant = {
-      name: `Variant ${variants.length + 1}`,
+      name: variantName,
       sku: generateVariantSKU(variants.length + 1),
       costPrice: lastVariant?.costPrice || 0,
       price: lastVariant?.price || 0,
@@ -67,6 +78,103 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
   };
 
   const updateVariant = (index: number, field: keyof ProductVariant, value: any) => {
+    // When stockQuantity changes, update childrenVariants to match
+    if (field === 'stockQuantity') {
+      const currentVariant = variants[index];
+      const newStockQuantity = value || 0;
+      const currentChildren = currentVariant.childrenVariants || [];
+      
+      // If stock is set to 0, disable children variants
+      if (newStockQuantity === 0 && currentVariant.useChildrenVariants) {
+        setVariants(prev => prev.map((variant, i) => 
+          i === index 
+            ? { ...variant, [field]: value, childrenVariants: [], useChildrenVariants: false }
+            : variant
+        ));
+        return;
+      }
+      
+      // If tracking is enabled and stock is reduced, trim excess fields
+      if (currentVariant.useChildrenVariants && newStockQuantity > 0) {
+        if (currentChildren.length > newStockQuantity) {
+          // Trim excess fields
+          const updatedChildren = currentChildren.slice(0, newStockQuantity);
+          setVariants(prev => prev.map((variant, i) => 
+            i === index 
+              ? { ...variant, [field]: value, childrenVariants: updatedChildren }
+              : variant
+          ));
+          toast.info(`Reduced IMEI/Serial number fields to ${newStockQuantity} to match stock quantity.`);
+          return;
+        }
+        // If stock increased, don't auto-add fields - let user add them manually
+      }
+    }
+    
+    // Check for duplicate variant names when updating the name field
+    if (field === 'name' && value) {
+      const trimmedValue = value.trim();
+      if (trimmedValue) {
+        // Check if another variant (excluding current) has the same name (case-insensitive)
+        const isDuplicate = variants.some((variant, i) => 
+          i !== index && variant.name?.toLowerCase().trim() === trimmedValue.toLowerCase()
+        );
+        
+        if (isDuplicate) {
+          toast.error(`A variant with the name "${trimmedValue}" already exists in this product`);
+          return;
+        }
+      }
+    }
+    
+    // Check for duplicate children variants (IMEI/Serial numbers) when updating childrenVariants
+    if (field === 'childrenVariants' && Array.isArray(value)) {
+      const currentVariant = variants[index];
+      const stockQuantity = currentVariant.stockQuantity || 0;
+      const trimmedChildren = value.map(c => c.trim()).filter(Boolean);
+      
+      // Check if total number of fields (including empty) exceeds stock quantity
+      if (value.length > stockQuantity) {
+        toast.error(`Cannot have more than ${stockQuantity} IMEI/Serial number fields. Stock quantity is ${stockQuantity}.`);
+        // Limit to stock quantity
+        const limitedValue = value.slice(0, stockQuantity);
+        setVariants(prev => prev.map((variant, i) => 
+          i === index ? { ...variant, [field]: limitedValue } : variant
+        ));
+        return;
+      }
+      
+      // Check if number of filled IMEI/Serial numbers exceeds stock quantity
+      if (trimmedChildren.length > stockQuantity) {
+        toast.error(`Cannot add more than ${stockQuantity} filled IMEI/Serial numbers. Stock quantity is ${stockQuantity}.`);
+        return;
+      }
+      
+      // Check for duplicates within the same variant
+      const uniqueChildren = new Set(trimmedChildren.map(c => c.toLowerCase()));
+      if (trimmedChildren.length !== uniqueChildren.size) {
+        const duplicate = trimmedChildren.find((child, i) => 
+          trimmedChildren.findIndex(c => c.toLowerCase() === child.toLowerCase()) !== i
+        );
+        toast.error(`Duplicate IMEI/Serial number "${duplicate}" found in this variant. Each item must be unique.`);
+        return;
+      }
+      
+      // Check for duplicates across ALL variants in the product (case-insensitive)
+      for (const child of trimmedChildren) {
+        const isDuplicateInOtherVariants = variants.some((variant, i) => {
+          if (i === index) return false; // Skip current variant
+          const otherChildren = variant.childrenVariants || [];
+          return otherChildren.some(c => c.trim().toLowerCase() === child.toLowerCase());
+        });
+        
+        if (isDuplicateInOtherVariants) {
+          toast.error(`IMEI/Serial number "${child}" already exists in another variant of this product. Each item must be unique across all variants.`);
+          return;
+        }
+      }
+    }
+    
     setVariants(prev => prev.map((variant, i) => 
       i === index ? { ...variant, [field]: value } : variant
     ));
@@ -232,6 +340,7 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
   };
 
   const [expandedVariantIndex, setExpandedVariantIndex] = useState<number | null>(null);
+  const [showHelpTooltip, setShowHelpTooltip] = useState<number | null>(null);
 
   // Auto-expand first variant when variants are added
   useEffect(() => {
@@ -252,6 +361,26 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
       return current;
     });
   }, [variants.length]); // Only depend on variants.length to avoid unnecessary re-renders
+
+  // Close help tooltip when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showHelpTooltip !== null) {
+        const target = event.target as Element;
+        if (!target.closest('.help-tooltip-container')) {
+          setShowHelpTooltip(null);
+        }
+      }
+    };
+
+    if (showHelpTooltip !== null) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showHelpTooltip]);
+
+  // Limit childrenVariants fields to stock quantity when stockQuantity field is updated
+  // This is handled in the updateVariant function below
 
   // Helper function to format numbers with comma separators
   const formatPrice = (price: number | string): string => {
@@ -564,10 +693,18 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                               const useChildren = !variant.useChildrenVariants;
                               updateVariant(index, 'useChildrenVariants', useChildren);
                               if (useChildren) {
-                                // Always initialize with at least one empty field when enabling
-                                const currentChildren = variant.childrenVariants || [];
-                                if (currentChildren.length === 0 || currentChildren.every(c => !c.trim())) {
-                                  updateVariant(index, 'childrenVariants', ['']);
+                                // Initialize with one empty field (user can add more)
+                                const stockQuantity = variant.stockQuantity || 0;
+                                if (stockQuantity > 0) {
+                                  // Start with one empty field, user can add more up to stock quantity
+                                  const currentChildren = variant.childrenVariants || [];
+                                  if (currentChildren.length === 0) {
+                                    updateVariant(index, 'childrenVariants', ['']);
+                                  }
+                                } else {
+                                  toast.error('Please set stock quantity first before tracking individual items.');
+                                  // Don't enable if stock is 0
+                                  updateVariant(index, 'useChildrenVariants', false);
                                 }
                               } else {
                                 // Clear when disabling
@@ -596,9 +733,15 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                                 </div>
                               </div>
                               <div className="flex items-center gap-3">
-                                {variant.useChildrenVariants && variant.childrenVariants && variant.childrenVariants.filter(c => c.trim()).length > 0 && (
-                                  <div className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-full shadow-md">
-                                    {variant.childrenVariants.filter(c => c.trim()).length} item{variant.childrenVariants.filter(c => c.trim()).length !== 1 ? 's' : ''}
+                                {variant.useChildrenVariants && (
+                                  <div className={`px-3 py-1.5 text-white text-xs font-bold rounded-full shadow-md ${
+                                    (variant.childrenVariants || []).filter(c => c.trim()).length > (variant.stockQuantity || 0)
+                                      ? 'bg-red-600'
+                                      : (variant.childrenVariants || []).filter(c => c.trim()).length === (variant.stockQuantity || 0)
+                                      ? 'bg-green-600'
+                                      : 'bg-indigo-600'
+                                  }`}>
+                                    {(variant.childrenVariants || []).filter(c => c.trim()).length} / {variant.stockQuantity || 0} items
                                   </div>
                                 )}
                                 <div className={`w-12 h-6 rounded-full transition-all duration-300 ${
@@ -616,73 +759,157 @@ const ProductVariantsSection: React.FC<ProductVariantsSectionProps> = ({
                           {variant.useChildrenVariants && (
                             <div className="px-4 pb-4 space-y-3">
                               <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
-                                {((variant.childrenVariants && variant.childrenVariants.length > 0) ? variant.childrenVariants : ['']).map((child, childIndex) => (
-                                  <div 
-                                    key={childIndex} 
-                                    className="group relative flex items-center gap-2 p-2 bg-white rounded-xl border-2 border-gray-200 hover:border-indigo-300 transition-all shadow-sm hover:shadow-md"
-                                  >
-                                    <div className="w-8 h-8 flex items-center justify-center bg-indigo-100 rounded-lg text-xs font-bold text-indigo-700 flex-shrink-0">
-                                      {childIndex + 1}
-                                    </div>
-                                    <div className="flex-1 relative">
-                                      <QrCode className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                      <input
-                                        type="text"
-                                        value={child}
-                                        onChange={(e) => {
-                                          const newChildren = [...(variant.childrenVariants || [])];
-                                          newChildren[childIndex] = e.target.value;
-                                          updateVariant(index, 'childrenVariants', newChildren);
-                                        }}
-                                        placeholder={`Enter IMEI or Serial #${childIndex + 1}`}
-                                        className="w-full pl-10 pr-10 py-2.5 border-0 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm text-gray-900 bg-transparent font-medium"
-                                      />
-                                      {child.trim() && (
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                                          <Check className="w-4 h-4 text-green-500" />
-                                        </div>
-                                      )}
-                                    </div>
-                                    {(variant.childrenVariants?.length || 0) > 1 && (
+                                {(() => {
+                                  const stockQuantity = variant.stockQuantity || 0;
+                                  const currentChildren = variant.childrenVariants || [];
+                                  
+                                  // Show only existing fields (can be less than stock quantity)
+                                  return currentChildren.map((child, childIndex) => {
+                                    const isFilled = child && child.trim() !== '';
+                                    
+                                    return (
+                                    <div 
+                                      key={childIndex} 
+                                      className={`group relative flex items-center gap-2 p-2 rounded-xl border-2 transition-all shadow-sm hover:shadow-md ${
+                                        isFilled
+                                          ? 'bg-white border-indigo-200 hover:border-indigo-300'
+                                          : 'bg-gray-50 border-gray-200 hover:border-gray-300'
+                                      }`}
+                                    >
+                                      <div className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold flex-shrink-0 ${
+                                        isFilled
+                                          ? 'bg-indigo-100 text-indigo-700'
+                                          : 'bg-gray-200 text-gray-500'
+                                      }`}>
+                                        {childIndex + 1}
+                                      </div>
+                                      <div className="flex-1 relative">
+                                        <QrCode className={`absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                                          isFilled ? 'text-gray-400' : 'text-gray-300'
+                                        }`} />
+                                        <input
+                                          type="text"
+                                          value={child}
+                                          onChange={(e) => {
+                                            const newChildren = [...currentChildren];
+                                            newChildren[childIndex] = e.target.value;
+                                            updateVariant(index, 'childrenVariants', newChildren);
+                                          }}
+                                          placeholder={`Enter IMEI or Serial #${childIndex + 1}`}
+                                          className={`w-full pl-10 pr-10 py-2.5 border-0 rounded-lg focus:outline-none focus:ring-2 text-sm font-medium bg-transparent ${
+                                            isFilled
+                                              ? 'text-gray-900 focus:ring-indigo-500'
+                                              : 'text-gray-400 focus:ring-gray-400'
+                                          }`}
+                                        />
+                                        {isFilled && (
+                                          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                            <Check className="w-4 h-4 text-green-500" />
+                                          </div>
+                                        )}
+                                      </div>
                                       <button
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-                                          const newChildren = [...(variant.childrenVariants || [])];
+                                          const newChildren = [...currentChildren];
+                                          // Remove this field from the array
                                           newChildren.splice(childIndex, 1);
-                                          updateVariant(index, 'childrenVariants', newChildren.length > 0 ? newChildren : ['']);
+                                          updateVariant(index, 'childrenVariants', newChildren);
                                         }}
-                                        className="p-2 text-red-500 hover:text-white hover:bg-red-500 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                        title="Remove item"
+                                        className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all bg-red-100 text-red-600 hover:bg-red-200"
+                                        title="Remove this field"
                                       >
-                                        <X size={16} />
+                                        Skip
                                       </button>
-                                    )}
-                                  </div>
-                                ))}
+                                    </div>
+                                    );
+                                  });
+                                })()}
                               </div>
                               
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newChildren = [...(variant.childrenVariants || ['']), ''];
-                                  updateVariant(index, 'childrenVariants', newChildren);
-                                }}
-                                className="w-full px-4 py-3 border-2 border-dashed border-indigo-300 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 text-indigo-600 text-sm font-bold shadow-sm hover:shadow-md"
-                              >
-                                <Plus size={18} className="text-indigo-600" />
-                                Add Another Item
-                              </button>
+                              {/* Add Field Button */}
+                              {(() => {
+                                const stockQuantity = variant.stockQuantity || 0;
+                                const currentChildren = variant.childrenVariants || [];
+                                const currentCount = currentChildren.length;
+                                const canAddMore = currentCount < stockQuantity;
+                                const remaining = stockQuantity - currentCount;
+                                
+                                return (
+                                  canAddMore && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newChildren = [...(variant.childrenVariants || []), ''];
+                                        updateVariant(index, 'childrenVariants', newChildren);
+                                      }}
+                                      className="w-full px-4 py-3 border-2 border-dashed border-indigo-300 rounded-xl hover:border-indigo-500 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2 text-indigo-600 text-sm font-bold shadow-sm hover:shadow-md"
+                                    >
+                                      <Plus size={18} className="text-indigo-600" />
+                                      Add Field ({remaining} remaining)
+                                    </button>
+                                  )
+                                );
+                              })()}
                               
-                              <div className="flex items-start gap-2 p-3 bg-indigo-100/50 rounded-xl border border-indigo-200">
-                                <div className="w-5 h-5 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                  </svg>
+                              {/* Help Button with Tooltip */}
+                              <div className="flex items-center justify-between pt-2">
+                                <div className="text-xs font-semibold text-indigo-900">
+                                  Stock: {variant.stockQuantity || 0} items. Fields: {(variant.childrenVariants || []).length} / {variant.stockQuantity || 0}. Filled: {(variant.childrenVariants || []).filter(c => c.trim()).length}
                                 </div>
-                                <p className="text-xs text-indigo-800 leading-relaxed">
-                                  Each IMEI/Serial number will be created as a child variant. Stock quantity will be automatically calculated from the number of items added.
-                                </p>
+                                <div className="relative help-tooltip-container">
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowHelpTooltip(showHelpTooltip === index ? null : index)}
+                                    className="w-6 h-6 flex items-center justify-center rounded-full bg-indigo-100 hover:bg-indigo-200 text-indigo-600 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    title="Click for help"
+                                    aria-label="Show help information"
+                                    aria-expanded={showHelpTooltip === index}
+                                  >
+                                    <HelpCircle size={16} />
+                                  </button>
+                                  
+                                  {/* Tooltip - Show on click */}
+                                  {(showHelpTooltip === index) && (
+                                    <div className="absolute right-0 bottom-full mb-2 w-72 bg-white rounded-lg shadow-xl border-2 border-indigo-200 p-4 z-50">
+                                      <div className="absolute bottom-0 right-4 transform translate-y-full">
+                                        <div className="w-0 h-0 border-l-8 border-r-8 border-t-8 border-transparent border-t-indigo-200"></div>
+                                      </div>
+                                      <div className="relative">
+                                        <div className="flex items-center justify-between mb-2">
+                                          <h4 className="text-sm font-bold text-indigo-900">Track Individual Items</h4>
+                                          <button
+                                            type="button"
+                                            onClick={() => setShowHelpTooltip(null)}
+                                            className="text-indigo-400 hover:text-indigo-600 transition-colors"
+                                            aria-label="Close help"
+                                          >
+                                            <X size={14} />
+                                          </button>
+                                        </div>
+                                        <ul className="text-xs text-indigo-800 space-y-1.5">
+                                          <li className="flex items-start gap-2">
+                                            <span className="text-indigo-600 font-bold mt-0.5">•</span>
+                                            <span>Each IMEI/Serial number will be created as a child variant</span>
+                                          </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="text-indigo-600 font-bold mt-0.5">•</span>
+                                            <span>Add fields as needed (up to {variant.stockQuantity || 0} based on stock quantity)</span>
+                                          </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="text-indigo-600 font-bold mt-0.5">•</span>
+                                            <span>Use the "Skip" button to remove a field</span>
+                                          </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="text-indigo-600 font-bold mt-0.5">•</span>
+                                            <span>Stock quantity determines the maximum number of fields</span>
+                                          </li>
+                                        </ul>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )}

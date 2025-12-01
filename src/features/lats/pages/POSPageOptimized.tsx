@@ -115,6 +115,8 @@ import SuccessModal from '../../../components/ui/SuccessModal';
 import { useSuccessModal } from '../../../hooks/useSuccessModal';
 import { SuccessIcons } from '../../../components/ui/SuccessModalIcons';
 import ShareReceiptModal from '../../../components/ui/ShareReceiptModal';
+import GlobalSearchShortcut from '../../../features/shared/components/GlobalSearchShortcut';
+import QuickExpenseModal from '../../../components/QuickExpenseModal';
 import { 
   useDynamicPricingSettings,
   useGeneralSettings,
@@ -654,6 +656,7 @@ const POSPageOptimized: React.FC = () => {
   const [showCustomerDetailModal, setShowCustomerDetailModal] = useState(false);
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [showDraftNotification, setShowDraftNotification] = useState(false);
+  const [showQuickExpense, setShowQuickExpense] = useState(false);
   const [draftNotes, setDraftNotes] = useState('');
   const [showPOSSummaryModal, setShowPOSSummaryModal] = useState(false);
   const [showVariantSelectionModal, setShowVariantSelectionModal] = useState(false);
@@ -3213,6 +3216,7 @@ const POSPageOptimized: React.FC = () => {
         onRefreshData={handleRefreshData}
         onSettings={() => setShowSettings(true)}
         onOpenInstallments={() => setShowInstallmentManagement(true)}
+        onOpenExpense={() => setShowQuickExpense(true)}
         todaysSales={todaysSales}
         isDailyClosed={isDailyClosed}
         onCloseDay={() => setShowDailyClosingModal(true)}
@@ -5436,6 +5440,19 @@ const POSPageOptimized: React.FC = () => {
           }}
         />
       )}
+
+      {/* Global Search Modal */}
+      <GlobalSearchShortcut />
+
+      {/* Quick Expense Modal */}
+      <QuickExpenseModal
+        isOpen={showQuickExpense}
+        onClose={() => setShowQuickExpense(false)}
+        onSuccess={() => {
+          toast.success('Expense recorded successfully');
+          setShowQuickExpense(false);
+        }}
+      />
 
     </div>
   );

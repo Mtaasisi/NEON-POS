@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../context/AuthContext';
-import Modal from '../features/shared/components/ui/Modal';
-import GlassButton from '../features/shared/components/ui/GlassButton';
-import GlassInput from '../features/shared/components/ui/GlassInput';
-import GlassSelect from '../features/shared/components/ui/GlassSelect';
 import { 
   DollarSign, Zap, Building,
   CreditCard, FileText,
   Wallet, Smartphone, Banknote, AlertCircle, TrendingUp,
-  CheckCircle
+  CheckCircle, X, ChevronDown
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
@@ -29,13 +26,11 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
   const [dailySalesAmount, setDailySalesAmount] = useState(0);
   const [isLoadingDailySales, setIsLoadingDailySales] = useState(false);
 
-  // Prevent body scroll when modal is open
-  useBodyScrollLock(isOpen);
-
   // Form state with smart defaults
   const [formData, setFormData] = useState({
     account_id: '',
     category: '',
+    customCategory: '',
     description: '',
     amount: '',
     vendor_name: '',
@@ -235,6 +230,11 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
       const isAdmin = currentUser?.role === 'admin';
       const status = isAdmin ? 'approved' : 'pending';
 
+      // Determine the category to use (custom or selected)
+      const finalCategory = formData.category === 'custom' 
+        ? formData.customCategory.trim() 
+        : formData.category;
+
       // Insert expense
       const { error } = await supabase
         .from('account_transactions')
@@ -242,13 +242,13 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
           account_id: formData.account_id,
           transaction_type: 'expense',
           amount: amount,
-          description: formData.category 
-            ? `${formData.category}: ${formData.description}` 
+          description: finalCategory 
+            ? `${finalCategory}: ${formData.description}` 
             : formData.description,
           reference_number: reference,
           status: status,
           metadata: {
-            category: formData.category || 'Other',
+            category: finalCategory || 'Other',
             vendor_name: formData.vendor_name || null,
             expense_date: new Date().toISOString().split('T')[0],
             created_via: 'quick_expense',
@@ -279,6 +279,7 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
       setFormData({
         account_id: paymentAccounts.length > 0 ? paymentAccounts[0].id : '',
         category: '',
+        customCategory: '',
         description: '',
         amount: '',
         vendor_name: '',
@@ -298,6 +299,22 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
     }
   };
 
+  // Prevent body scroll when modal is open
+  useBodyScrollLock(isOpen);
+
+  // Additional scroll prevention for html element
+  useEffect(() => {
+    if (isOpen) {
+      // Prevent scrolling on html element as well
+      const originalHtmlOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      
+      return () => {
+        document.documentElement.style.overflow = originalHtmlOverflow;
+      };
+    }
+  }, [isOpen]);
+
   // Handle keyboard shortcuts
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && e.ctrlKey) {
@@ -305,23 +322,62 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
     }
   };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-gradient-to-br from-red-500 to-red-600 rounded-lg">
-            <Zap className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">Quick Expense</h3>
-            <p className="text-xs text-gray-500">Fast expense entry (Ctrl+Enter to save)</p>
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div 
+      className="fixed bg-black/60 flex items-center justify-center p-4 z-[99999]" 
+      style={{
+        top: 0, 
+        left: 0, 
+        right: 0,
+        bottom: 0,
+        overflow: 'hidden',
+        overscrollBehavior: 'none'
+      }}
+      role="dialog" 
+      aria-modal="true" 
+      aria-labelledby="expense-form-title"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden relative"
+        style={{ pointerEvents: 'auto' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close Button */}
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={isSubmitting}
+          className="absolute top-4 right-4 w-9 h-9 flex items-center justify-center bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors shadow-lg z-50"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Icon Header - Fixed */}
+        <div className="p-8 bg-white border-b border-gray-200 flex-shrink-0">
+          <div className="grid grid-cols-[auto,1fr] gap-6 items-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-lg">
+              <Zap className="w-8 h-8 text-white" />
+            </div>
+            
+            {/* Text */}
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2" id="expense-form-title">
+                Quick Expense
+              </h3>
+              <p className="text-sm text-gray-600">
+                Fast expense entry (Ctrl+Enter to save)
+              </p>
+            </div>
           </div>
         </div>
-      }
-    >
-      <div className="space-y-4" onKeyDown={handleKeyDown}>
+
+        {/* Form - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-6" onKeyDown={handleKeyDown}>
+          <div className="space-y-4">
         {/* Customer Care: Daily Sales Limit Banner */}
         {isCustomerCare && (
           <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-4">
@@ -346,23 +402,10 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
           </div>
         )}
 
-        {/* Admin: Info Banner */}
-        {isAdmin && (
-          <div className="bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-200 rounded-xl p-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-green-600" />
-              <span className="text-sm text-green-800">
-                Admin: Full access to all accounts with no limits
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Payment Account Buttons - Simple & Clean Design */}
         {!isCustomerCare && paymentAccounts.length > 1 && (
           <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-            <CreditCard className="w-4 h-4" />
+          <label className="block text-gray-700 mb-2 font-medium">
             Pay from Account
           </label>
           <div className="grid grid-cols-2 gap-3">
@@ -460,8 +503,7 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
         {/* Customer Care: Cash Account (Auto-selected) - Simple Design */}
         {isCustomerCare && paymentAccounts.length > 0 && (
           <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-              <Wallet className="w-4 h-4" />
+            <label className="block text-gray-700 mb-2 font-medium">
               Pay from Cash Account
             </label>
             
@@ -486,41 +528,82 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
           </div>
         )}
 
-        {/* Expense Category */}
-        <div>
-          <GlassSelect
-            label="Category"
-            value={formData.category}
-            onChange={(value) => handleInputChange('category', value)}
-            options={expenseCategories.map(category => ({
-              value: category.name,
-              label: category.name
-            }))}
-            placeholder="Select category..."
-            className="text-sm"
-          />
+        {/* Form Fields Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Expense Category */}
+          <div>
+            <label className="block text-gray-700 mb-2 font-medium">
+              Category
+            </label>
+            <div className="relative">
+              <select
+                value={formData.category}
+                onChange={(e) => handleInputChange('category', e.target.value)}
+                className="w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 appearance-none cursor-pointer"
+              >
+                <option value="">Select category...</option>
+                {expenseCategories.map(category => (
+                  <option key={category.id} value={category.name}>
+                    {category.name}
+                  </option>
+                ))}
+                <option value="custom">Custom...</option>
+              </select>
+              <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" size={18} />
+            </div>
+            {/* Custom Category Input */}
+            {formData.category === 'custom' && (
+              <div className="mt-2 relative">
+                <input
+                  type="text"
+                  value={formData.customCategory}
+                  onChange={(e) => handleInputChange('customCategory', e.target.value)}
+                  placeholder="Enter custom category name"
+                  className="w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200"
+                />
+                <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+              </div>
+            )}
+          </div>
+
+          {/* Vendor - Optional but visible */}
+          <div>
+            <label className="block text-gray-700 mb-2 font-medium">
+              Vendor <span className="text-gray-500 text-sm font-normal">(optional)</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                value={formData.vendor_name}
+                onChange={(e) => handleInputChange('vendor_name', e.target.value)}
+                placeholder="Supplier or vendor name"
+                className="w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200"
+              />
+              <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+            </div>
+          </div>
         </div>
 
-        {/* Amount - Large and prominent */}
+        {/* Amount - Large and prominent (Full width) */}
         <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-            <DollarSign className="w-4 h-4" />
-            Amount (TSh) *
+          <label className="block text-gray-700 mb-2 font-medium">
+            Amount (TSh) <span className="text-red-500">*</span>
             {isCustomerCare && (
-              <span className="text-xs text-blue-600 ml-auto">
+              <span className="text-xs text-blue-600 ml-2 font-normal">
                 (Max: TSh {dailySalesAmount.toLocaleString()})
               </span>
             )}
           </label>
           <div className="relative">
-            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
             <input
               type="text"
               value={formData.amount ? formatNumberWithCommas(formData.amount) : ''}
               onChange={handleAmountChange}
               placeholder="0"
               autoFocus
-              className="w-full pl-10 pr-4 py-3 text-2xl font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              className="w-full pl-12 pr-4 py-3 text-2xl font-bold border-2 rounded-xl focus:outline-none transition-colors text-gray-900 border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200"
             />
           </div>
           {/* Amount validation indicator for customer care */}
@@ -540,71 +623,57 @@ const QuickExpenseModal: React.FC<QuickExpenseModalProps> = ({ isOpen, onClose, 
           )}
         </div>
 
-        {/* Description */}
+        {/* Description (Full width) */}
         <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-            <FileText className="w-4 h-4" />
-            Description *
+          <label className="block text-gray-700 mb-2 font-medium">
+            Description <span className="text-red-500">*</span>
           </label>
-          <GlassInput
-            type="text"
-            value={formData.description}
-            onChange={(e) => handleInputChange('description', e.target.value)}
-            placeholder="What was this expense for?"
-            className="text-base"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              placeholder="What was this expense for?"
+              className="w-full py-3 pl-12 pr-4 border-2 rounded-xl focus:outline-none transition-colors text-gray-900 border-gray-300 focus:border-red-500 focus:ring-2 focus:ring-red-200"
+            />
+            <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+          </div>
+        </div>
+          </div>
         </div>
 
-        {/* Vendor - Optional but visible */}
-        <div>
-          <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1">
-            <Building className="w-4 h-4" />
-            Vendor (optional)
-          </label>
-          <GlassInput
-            type="text"
-            value={formData.vendor_name}
-            onChange={(e) => handleInputChange('vendor_name', e.target.value)}
-            placeholder="Supplier or vendor name"
-          />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex gap-2 pt-4 border-t">
-          <GlassButton
-            variant="secondary"
+        {/* Action Buttons - Fixed Footer */}
+        <div className="flex gap-3 pt-4 border-t border-gray-200 flex-shrink-0 bg-white px-6 pb-6">
+          <button
+            type="button"
             onClick={onClose}
-            className="flex-1"
             disabled={isSubmitting}
+            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
-          </GlassButton>
-          <GlassButton
+          </button>
+          <button
+            type="button"
             onClick={handleSubmit}
-            className="flex-1 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
             disabled={isSubmitting || (isCustomerCare && parseFloat(formData.amount) > dailySalesAmount)}
+            className="flex-1 px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold hover:from-red-600 hover:to-red-700 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isSubmitting ? (
               <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                 Recording...
               </>
             ) : (
               <>
-                <Zap className="w-4 h-4 mr-2" />
+                <Zap className="w-5 h-5" />
                 Record Expense
               </>
             )}
-          </GlassButton>
-        </div>
-
-        {/* Keyboard shortcut hint */}
-        <div className="text-center text-xs text-gray-500 pt-2 border-t flex items-center justify-center gap-2">
-          <Zap className="w-3 h-3" />
-          <span>Tip: Press <kbd className="px-2 py-1 bg-gray-100 rounded">Ctrl</kbd> + <kbd className="px-2 py-1 bg-gray-100 rounded">Enter</kbd> to save quickly</span>
+          </button>
         </div>
       </div>
-    </Modal>
+    </div>,
+    document.body
   );
 };
 

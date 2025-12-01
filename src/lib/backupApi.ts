@@ -571,36 +571,210 @@ export const getBackupFiles = async (): Promise<BackupFile[]> => {
 };
 
 /**
+ * Create a comprehensive backup of ALL tables in the database
+ * This function backs up everything - all tables, all data, all schema
+ */
+export const createFullDatabaseBackup = async (
+  onProgress?: (progress: number, status: string) => void
+): Promise<BackupResult> => {
+  try {
+    onProgress?.(0, 'Fetching database schema...');
+    
+    // Step 1: Get ALL tables from information_schema
+    // @ts-ignore - Neon query builder implements thenable interface
+    const { data: allTables, error: schemaError } = await supabase
+      .from('information_schema.tables')
+      .select('table_name')
+      .eq('table_schema', 'public')
+      .order('table_name');
+
+    if (schemaError) {
+      throw new Error(`Failed to fetch database schema: ${schemaError.message}`);
+    }
+
+    const tableNames = allTables?.map((t: any) => t.table_name) || [];
+    console.log(`📊 Found ${tableNames.length} tables in database (backing up ALL tables)`);
+    
+    onProgress?.(5, `Found ${tableNames.length} tables. Starting backup...`);
+
+    // Step 2: Get column definitions for ALL tables
+    // @ts-ignore - Neon query builder implements thenable interface
+    const { data: allColumns, error: columnsError } = await supabase
+      .from('information_schema.columns')
+      .select('table_name, column_name, data_type, is_nullable, column_default')
+      .eq('table_schema', 'public')
+      .order('table_name')
+      .order('ordinal_position');
+
+    if (columnsError) {
+      console.warn('Could not fetch column schema:', columnsError);
+    }
+
+    // Organize columns by table
+    const columnsByTable: any = {};
+    allColumns?.forEach((col: any) => {
+      if (!columnsByTable[col.table_name]) {
+        columnsByTable[col.table_name] = [];
+      }
+      columnsByTable[col.table_name].push({
+        name: col.column_name,
+        type: col.data_type,
+        nullable: col.is_nullable === 'YES',
+        default: col.column_default
+      });
+    });
+
+    onProgress?.(10, `Schema loaded. Backing up ${tableNames.length} tables...`);
+
+    const backup: any = {
+      timestamp: new Date().toISOString(),
+      backupType: 'FULL_SCHEMA_AND_DATA',
+      databaseInfo: {
+        totalTables: tableNames.length,
+        backupIncludes: 'All tables with full schema and data (including empty tables)'
+      },
+      schema: columnsByTable,
+      tables: {},
+      summary: { totalTables: 0, tablesWithData: 0, emptyTables: 0, totalRecords: 0 }
+    };
+
+    let totalRecords = 0;
+    let tablesWithData = 0;
+    let emptyTables = 0;
+    let processedTables = 0;
+
+    // Step 3: Backup all tables
+    for (const tableName of tableNames) {
+      try {
+        processedTables++;
+        const progress = 10 + ((processedTables / tableNames.length) * 85);
+        onProgress?.(progress, `Backing up: ${tableName} (${processedTables}/${tableNames.length})`);
+
+        const allRecords: any[] = [];
+        let from = 0;
+        const pageSize = 1000;
+
+        while (true) {
+          const { data, error } = await supabase
+            .from(tableName)
+            .select('*')
+            .range(from, from + pageSize - 1);
+
+          if (error) {
+            console.log(`⚠️ Could not read table '${tableName}':`, error.message);
+            backup.tables[tableName] = {
+              exists: true,
+              recordCount: 0,
+              schema: columnsByTable[tableName] || [],
+              data: [],
+              error: error.message
+            };
+            emptyTables++;
+            break;
+          }
+
+          if (!data || data.length === 0) {
+            if (from === 0) {
+              // Table exists but is empty
+              backup.tables[tableName] = {
+                exists: true,
+                recordCount: 0,
+                schema: columnsByTable[tableName] || [],
+                data: []
+              };
+              emptyTables++;
+            }
+            break;
+          }
+
+          allRecords.push(...data);
+          if (data.length < pageSize) break;
+          from += pageSize;
+          await new Promise(resolve => setTimeout(resolve, 30));
+        }
+
+        if (allRecords.length > 0) {
+          const recordCount = allRecords.length;
+          backup.tables[tableName] = {
+            exists: true,
+            recordCount,
+            schema: columnsByTable[tableName] || [],
+            data: allRecords
+          };
+          totalRecords += recordCount;
+          tablesWithData++;
+        }
+
+      } catch (error: any) {
+        backup.tables[tableName] = {
+          exists: true,
+          error: error?.message || 'Unknown error',
+          schema: columnsByTable[tableName] || [],
+          data: null
+        };
+        console.log(`❌ Error backing up '${tableName}': ${error.message}`);
+      }
+    }
+
+    backup.summary.totalTables = tableNames.length;
+    backup.summary.tablesWithData = tablesWithData;
+    backup.summary.emptyTables = emptyTables;
+    backup.summary.totalRecords = totalRecords;
+
+    // Save backup to local file system
+    onProgress?.(95, 'Saving backup file...');
+    
+    const date = new Date();
+    const dateStr = date.toISOString().split('T')[0];
+    const timeStr = date.toTimeString().split(' ')[0].replace(/:/g, '-');
+    const fileName = `database-backup-${dateStr}_${timeStr}.json`;
+    
+    const backupJson = JSON.stringify(backup, null, 2);
+    const blob = new Blob([backupJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    onProgress?.(100, `✅ Backup completed! ${totalRecords.toLocaleString()} records from ${tablesWithData} tables`);
+
+    const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+
+    return {
+      success: true,
+      message: `✅ Full backup completed! ${totalRecords.toLocaleString()} records from ${tablesWithData} tables (${emptyTables} empty tables included)`,
+      data: {
+        timestamp: new Date().toISOString(),
+        fileName,
+        fileSize: `${fileSizeMB} MB`,
+        totalTables: tableNames.length,
+        tablesWithData,
+        emptyTables,
+        totalRecords,
+        type: 'full'
+      }
+    };
+  } catch (error) {
+    console.error('Error creating full database backup:', error);
+    return {
+      success: false,
+      message: '❌ Backup failed',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+};
+
+/**
  * Run manual backup
  */
 export const runManualBackup = async (type: 'local' | 'dropbox' | 'complete'): Promise<BackupResult> => {
   try {
-    // Always run complete backup (local + cloud) for automatic cloud sync
-    const actualType = 'complete';
-    const backupTypes = {
-      local: 'Local backup with automatic cloud sync',
-      dropbox: 'Dropbox backup',
-      complete: 'Complete backup (Local + Dropbox)'
-    };
-
-    console.log(`🔄 Starting ${backupTypes[actualType]}...`);
-    console.log('📁 Creating local backup...');
-    console.log('☁️  Automatically syncing to Dropbox...');
-    
-    // Simulate backup process
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    return {
-      success: true,
-      message: `✅ ${backupTypes[actualType]} completed successfully with automatic cloud sync!`,
-      data: {
-        timestamp: new Date().toISOString(),
-        type: actualType,
-        size: '0.94 MB',
-        records: 1240,
-        cloudSync: true
-      }
-    };
+    // Use the comprehensive backup function
+    return await createFullDatabaseBackup();
   } catch (error) {
     console.error('Error running backup:', error);
     return {

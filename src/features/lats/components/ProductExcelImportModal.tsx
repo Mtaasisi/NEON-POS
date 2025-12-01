@@ -1129,6 +1129,43 @@ const ProductExcelImportModal: React.FC<ProductExcelImportModalProps> = ({
           }
         }
         
+        // ✅ Check for duplicate variant names within the product
+        if (variantsToCreate.length > 0) {
+          const variantNames = variantsToCreate.map(v => v.name?.toLowerCase().trim()).filter(Boolean);
+          const uniqueNames = new Set(variantNames);
+          
+          if (variantNames.length !== uniqueNames.size) {
+            const duplicateName = variantNames.find((name, index) => 
+              variantNames.indexOf(name) !== index
+            );
+            throw new Error(`Duplicate variant name "${duplicateName}" found in product "${product.name}". Each variant must have a unique name.`);
+          }
+          
+          // ✅ Check for duplicate IMEI/Serial numbers within the product
+          const allImeis: string[] = [];
+          for (const variant of variantsToCreate) {
+            const imei = variant.attributes?.imei || variant.attributes?.serial_number;
+            if (imei && typeof imei === 'string' && imei.trim()) {
+              allImeis.push(imei.trim());
+            }
+          }
+          
+          const imeiSet = new Set<string>();
+          const duplicateImeis: string[] = [];
+          for (const imei of allImeis) {
+            const lowerImei = imei.toLowerCase();
+            if (imeiSet.has(lowerImei)) {
+              duplicateImeis.push(imei);
+            } else {
+              imeiSet.add(lowerImei);
+            }
+          }
+          
+          if (duplicateImeis.length > 0) {
+            throw new Error(`Duplicate IMEI/Serial numbers found in product "${product.name}": ${duplicateImeis.join(', ')}. Each item must be unique.`);
+          }
+        }
+        
         // ✅ FIX: Ensure all variant SKUs are unique within the batch
         if (variantsToCreate.length > 0) {
           const usedVariantSkus = new Set<string>();

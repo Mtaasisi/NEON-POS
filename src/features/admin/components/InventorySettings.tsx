@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 // Removed GlassInput - using native inputs matching SetPricingModal style
 import { 
   Package, 
@@ -102,27 +102,29 @@ const InventorySettings: React.FC = () => {
     setExpandedSection(expandedSection === sectionId ? '' : sectionId);
   };
 
+  const handleSaveSettings = useCallback(async () => {
+    if (!settings) return;
+    
+    setSaving(true);
+    try {
+      await updateInventorySettings(settings);
+      setHasChanges(false);
+      setLastSaved(new Date());
+      toast.success('Inventory settings saved successfully!');
+    } catch (error) {
+      console.error('Error saving inventory settings:', error);
+      toast.error('Failed to save inventory settings');
+    } finally {
+      setSaving(false);
+    }
+  }, [settings, setHasChanges]);
+
   useEffect(() => {
     if (!settings) return;
     
-    const handleSaveSettings = async () => {
-      setSaving(true);
-      try {
-        await updateInventorySettings(settings);
-        setHasChanges(false);
-        setLastSaved(new Date());
-        toast.success('Inventory settings saved successfully!');
-      } catch (error) {
-        console.error('Error saving inventory settings:', error);
-        toast.error('Failed to save inventory settings');
-      } finally {
-        setSaving(false);
-      }
-    };
-    
     registerSaveHandler('inventory-settings', handleSaveSettings);
     return () => unregisterSaveHandler('inventory-settings');
-  }, [settings, registerSaveHandler, unregisterSaveHandler]);
+  }, [settings, handleSaveSettings, registerSaveHandler, unregisterSaveHandler]);
 
   useEffect(() => {
     if (settings) {
@@ -276,7 +278,7 @@ const InventorySettings: React.FC = () => {
                 </span>
               </div>
               <button
-                onClick={() => {}}
+                onClick={handleSaveSettings}
                 disabled={saving}
                 className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 font-semibold rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >

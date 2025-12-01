@@ -4,6 +4,7 @@ import { HardDrive, ExternalLink, Download, Clock, CheckCircle, AlertCircle } fr
 import { supabase } from '../../../../lib/supabaseClient';
 import Modal from '../../../shared/components/ui/Modal';
 import toast from 'react-hot-toast';
+import { createFullDatabaseBackup } from '../../../../lib/backupApi';
 
 interface BackupWidgetProps {
   className?: string;
@@ -29,6 +30,9 @@ export const BackupWidget: React.FC<BackupWidgetProps> = ({ className }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [showBackupModal, setShowBackupModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
+  const [backupStatus, setBackupStatus] = useState('');
 
   useEffect(() => {
     loadBackupData();
@@ -235,26 +239,77 @@ export const BackupWidget: React.FC<BackupWidgetProps> = ({ className }) => {
       </div>
 
       {/* Backup Now Modal */}
-      <Modal isOpen={showBackupModal} onClose={() => setShowBackupModal(false)} title="Create Backup" maxWidth="md">
+      <Modal isOpen={showBackupModal} onClose={() => !isBackingUp && setShowBackupModal(false)} title="Create Backup" maxWidth="md">
         <div className="p-4">
-          <p className="text-gray-600 mb-4">This will create a backup of your database.</p>
+          <p className="text-gray-600 mb-4">
+            This will create a <strong>complete backup</strong> of your entire database, including:
+          </p>
+          <ul className="text-sm text-gray-600 mb-4 space-y-1 list-disc list-inside">
+            <li>All tables (including empty ones)</li>
+            <li>All data records</li>
+            <li>Complete schema definitions</li>
+            <li>All columns, types, and constraints</li>
+          </ul>
+          
+          {isBackingUp && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-blue-900">{backupStatus || 'Starting backup...'}</span>
+                <span className="text-sm text-blue-700">{Math.round(backupProgress)}%</span>
+              </div>
+              <div className="w-full bg-blue-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${backupProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-end gap-2">
             <button
               onClick={() => setShowBackupModal(false)}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              disabled={isBackingUp}
+              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Cancel
+              {isBackingUp ? 'Backing up...' : 'Cancel'}
             </button>
-            <button
-              onClick={() => {
-                toast.success('Backup initiated');
-                setShowBackupModal(false);
-                loadBackupData();
-              }}
-              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black"
-            >
-              Start Backup
-            </button>
+            {!isBackingUp && (
+              <button
+                onClick={async () => {
+                  setIsBackingUp(true);
+                  setBackupProgress(0);
+                  setBackupStatus('Starting backup...');
+                  
+                  try {
+                    const result = await createFullDatabaseBackup((progress, status) => {
+                      setBackupProgress(progress);
+                      setBackupStatus(status);
+                    });
+                    
+                    if (result.success) {
+                      toast.success(result.message || '✅ Backup completed successfully!', { duration: 5000 });
+                      loadBackupData();
+                      setTimeout(() => {
+                        setShowBackupModal(false);
+                        setIsBackingUp(false);
+                        setBackupProgress(0);
+                        setBackupStatus('');
+                      }, 2000);
+                    } else {
+                      toast.error(result.error || 'Backup failed');
+                      setIsBackingUp(false);
+                    }
+                  } catch (error: any) {
+                    toast.error(`Backup failed: ${error.message}`);
+                    setIsBackingUp(false);
+                  }
+                }}
+                className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black"
+              >
+                Start Backup
+              </button>
+            )}
           </div>
         </div>
       </Modal>

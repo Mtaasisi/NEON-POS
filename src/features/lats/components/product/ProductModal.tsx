@@ -741,6 +741,21 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
     if (!editingVariantId || !editingVariantData) return;
     
     try {
+      // Check for duplicate variant name in the same product (case-insensitive)
+      // Exclude the current variant being edited
+      const trimmedName = editingVariantData.name.trim();
+      if (currentProduct.variants && currentProduct.variants.length > 0) {
+        const duplicateVariant = currentProduct.variants.find(v => 
+          v.id !== editingVariantId && 
+          (v.name || v.variant_name || '').toLowerCase().trim() === trimmedName.toLowerCase()
+        );
+        
+        if (duplicateVariant) {
+          toast.error(`A variant with the name "${trimmedName}" already exists in this product`);
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('lats_product_variants')
         .update({
@@ -825,6 +840,19 @@ Status: ${currentProduct.isActive ? 'Active' : 'Inactive'}
     }
 
     try {
+      // Check for duplicate variant name in the same product (case-insensitive)
+      const trimmedName = newVariantData.name.trim();
+      if (currentProduct.variants && currentProduct.variants.length > 0) {
+        const duplicateVariant = currentProduct.variants.find(v => 
+          (v.name || v.variant_name || '').toLowerCase().trim() === trimmedName.toLowerCase()
+        );
+        
+        if (duplicateVariant) {
+          toast.error(`A variant with the name "${trimmedName}" already exists in this product`);
+          return;
+        }
+      }
+
       // Get branch_id from product or localStorage
       const branchId = (product as any).branch_id || (product as any).branchId || localStorage.getItem('current_branch_id');
       
