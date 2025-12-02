@@ -18,6 +18,7 @@ import salesRoutes from './routes/sales.js';
 import cartRoutes from './routes/cart.js';
 import smsRoutes from './routes/sms.js';
 import backupRoutes from './routes/backup.js';
+import whatsappWebhookRoutes from './routes/whatsapp-webhook.js';
 import neonMigrationRouter from '../routes/neon-migration.mjs';
 
 // Load environment variables
@@ -61,6 +62,7 @@ app.use('/api/sales', salesRoutes);
 app.use('/api/cart', cartRoutes);
 app.use('/api', smsRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/whatsapp', whatsappWebhookRoutes);
 app.use('/api/neon', neonMigrationRouter);
 
 // 404 handler
